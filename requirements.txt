@@ -1,0 +1,4 @@
+# Une seule dépendance pour la Phase 0 : le SDK openai.
+# Il parle aussi bien à Ollama (en local) qu'aux API distantes —
+# c'est ce qui rend la bascule local <-> API indolore.
+openai>=1.0

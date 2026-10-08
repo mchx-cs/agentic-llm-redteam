@@ -1,0 +1,14 @@
+# Environnement virtuel
+.venv/
+venv/
+
+# Caches Python
+__python__/
+*.pyc
+
+# Secrets
+.env
+
+# Dossier d'éditeur
+.vscode/
+.idea/
