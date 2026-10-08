@@ -131,7 +131,11 @@ framework that governs any penetration testing engagement. Use it on your own
 deployments and purpose-built targets, never against a third-party service without
 permission.
 
+## License
+
+Released under the [MIT License](LICENSE).
+
 ## Author
 
 **Clément Monchaux** — cybersecurity student, focused on offensive security and AI security.
-[LinkedIn](https://www.linkedin.com/in/cl%C3%A9ment-monchaux/)
+[LinkedIn](https://www.linkedin.com/in/cl%C3%A9ment-monchaux-64695119a)
