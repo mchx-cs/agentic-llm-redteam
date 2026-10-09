@@ -96,7 +96,14 @@ and the judge's reasoned verdict.
 
 ### Switching to a hosted API
 
-Fill in the `api` profile in `config.py`, export your key, and change one line:
+The `api` profile reads its credentials from the environment — nothing is hardcoded:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export OPENAI_MODEL="<model-name>"
+```
+
+Then change one line in `config.py`:
 
 ```python
 PROFIL_ACTIF = "api"
