@@ -3,7 +3,7 @@
 venv/
 
 # Caches Python
-__python__/
+__pycache__/
 *.pyc
 
 # Secrets

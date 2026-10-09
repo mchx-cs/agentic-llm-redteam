@@ -23,7 +23,9 @@ PROFILS = {
     "api": {
         "base_url": "https://api.openai.com/v1",
         "api_key": os.environ.get("OPENAI_API_KEY", ""),
-        "modele": "gpt-6-sol",        # remplace par le nom exact du modèle voulu
+        # Le modèle est lu, comme la clé, depuis l'environnement : pas de nom
+        # figé dans le code, qui deviendrait obsolète au fil des sorties.
+        "modele": os.environ.get("OPENAI_MODEL", ""),
     },
 }
 
