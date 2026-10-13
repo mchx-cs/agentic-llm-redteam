@@ -116,11 +116,11 @@ PROFIL_ACTIF = "api"
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
 | **1** | Real prompt injection payload library | In progress |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | Planned |
-| **3** | Adaptive attacker: reformulate based on the target's previous reply | Planned |
+| **3** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | Planned |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | Planned |
 | **6** | Report generation with severity ranking | Planned |
-| **7** | Integrate [garak](https://github.com/NVIDIA/garak) for breadth and [PyRIT](https://github.com/Azure/PyRIT) for multi-turn orchestration | Planned |
+| **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
 
 ## Stack
 

@@ -65,11 +65,11 @@ Toute nouvelle boucle doit avoir sa propre limite.
 | 0 | Boucle d'agents, couche d'abstraction, LLM-as-judge, budget d'essais | **Fait** |
 | 1 | Bibliothèque de payloads de prompt injection réels | En cours |
 | 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | Prévu |
-| 3 | Attaquant adaptatif : reformuler selon la réponse précédente de la cible | Prévu |
+| 3 | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
 | 4 | Dissocier l'arbitre du modèle cible | Prévu |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | Prévu |
 | 6 | Génération de rapport avec classement par gravité | Prévu |
-| 7 | Intégrer garak (couverture large) et PyRIT (orchestration multi-tours) | Prévu |
+| 7 | Intégrer garak (couverture large) | Prévu |
 
 ## Décisions prises et leur raison
 
@@ -85,6 +85,18 @@ pour permettre cette dissociation.
 **Ne pas automatiser ce qu'on ne sait pas faire à la main.** Les vraies attaques
 attendent que l'auteur ait terminé le path AI Web Security de TryHackMe. Un agent dont
 on ne sait pas juger les hallucinations est inutilisable.
+
+**PyRIT arrive en Phase 3, pas en Phase 7.** La boucle maison reproduit en miniature
+les briques de PyRIT : `cible.py` correspond à un *target*, `main.py` à un
+orchestrateur, `arbitre.py` à un *scorer*. Elle reste en place pour les Phases 1 et 2
+(payloads, fiabilité de l'arbitre), parce que c'est là que se construit la
+compréhension du problème. L'attaquant adaptatif multi-tours de la Phase 3 est en
+revanche exactement ce que fournissent les attaques multi-tours de PyRIT. Le réécrire
+à la main coûterait cher pour peu d'apprentissage. On évalue donc PyRIT en
+**remplacement** de l'orchestrateur, pas en complément. Point à trancher à ce moment-là :
+PyRIT appelle les modèles via ses propres *targets*, ce qui contourne
+`demander_au_llm()`. La règle « aucun appel direct » devra être adaptée, par exemple
+en configurant les *targets* PyRIT depuis `config.py`.
 
 ## Cadre légal
 
