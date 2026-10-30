@@ -60,7 +60,7 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 - Jailbreaks — bypassing safety guardrails
 - System prompt leakage — extracting hidden instructions
 - Sensitive information disclosure
-- Insecure output handling
+- Insecure output handling *(planned)*
 
 ## Project structure
 
