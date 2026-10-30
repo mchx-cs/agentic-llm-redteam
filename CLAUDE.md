@@ -83,7 +83,7 @@ C'est l'objet de la Phase 4. `demander_au_llm()` accepte déjà un paramètre `m
 pour permettre cette dissociation.
 
 **Ne pas automatiser ce qu'on ne sait pas faire à la main.** Les vraies attaques
-attendent que l'auteur ait terminé le path AI Web Security de TryHackMe. Un agent dont
+attendent que l'auteur ait terminé le path AI Security de TryHackMe. Un agent dont
 on ne sait pas juger les hallucinations est inutilisable.
 
 **PyRIT arrive en Phase 3, pas en Phase 7.** La boucle maison reproduit en miniature
