@@ -76,8 +76,9 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 ├── payloads/
 │   └── bibliotheque.json      # attack techniques (by OWASP family) and objectives
 ├── evaluation/
-│   ├── echanges_etiquetes.json  # hand-labelled exchanges: ground truth for the judge
-│   └── evaluer_arbitre.py       # measures judge precision and recall
+│   ├── echanges_etiquetes.json  # hand-labelled exchanges (dev and frozen test sets)
+│   ├── evaluer_arbitre.py       # measures judge precision and recall
+│   └── journal_test.jsonl       # timestamped log of every test-set run
 └── main.py            # orchestrator: runs the campaign loop
 ```
 
@@ -104,8 +105,13 @@ To measure the judge against hand-labelled exchanges (precision, recall, and eve
 misclassification explained):
 
 ```bash
-python -m evaluation.evaluer_arbitre
+python -m evaluation.evaluer_arbitre          # development set: used to tune the judge
+python -m evaluation.evaluer_arbitre --test   # frozen test set: never used for tuning
 ```
+
+Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
+set cannot contain a mere rewording of a case the judge was tuned on. Every test-set
+run is logged with a timestamp in `evaluation/journal_test.jsonl`.
 
 ### Switching to a hosted API
 

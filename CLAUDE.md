@@ -20,8 +20,10 @@ La boucle complète **attaquant → cible → arbitre** tourne de bout en bout e
   pratiquée à la main.
 - **Phase 2** : l'arbitre a des critères explicites, des exemples, une sortie JSON,
   une température à 0, raisonne avant de trancher, reçoit les passages décodés par
-  `detecteurs.py` et s'abstient quand son verdict se contredit. Il est mesuré sur 12 échanges étiquetés à la main
-  (`python -m evaluation.evaluer_arbitre`).
+  `detecteurs.py` et s'abstient quand son verdict se contredit. Il est mesuré sur des
+  échanges étiquetés à la main, répartis en un jeu de développement (24 échanges,
+  `python -m evaluation.evaluer_arbitre`) et un jeu de test gelé (15 échanges,
+  `--test`).
 
 ## Architecture
 
@@ -36,8 +38,9 @@ agents/
 payloads/
   bibliotheque.json  # techniques (par famille OWASP) et objectifs
 evaluation/
-  echanges_etiquetes.json  # vérité terrain pour mesurer l'arbitre
+  echanges_etiquetes.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
   evaluer_arbitre.py       # précision, rappel, détail des erreurs
+  journal_test.jsonl       # chaque consultation du jeu de test, horodatée
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
 ```
 
@@ -50,6 +53,13 @@ dans `config.py`). Ne jamais coder en dur un appel Ollama ou OpenAI ailleurs.
 **Toujours borner les boucles.** Les attaques sont probabilistes : un agent adaptatif
 boucle à l'infini sans garde-fou. `MAX_ESSAIS` dans `main.py` borne chaque campagne.
 Toute nouvelle boucle doit avoir sa propre limite.
+
+**Ne jamais régler l'arbitre d'après le jeu de test.** On ajuste prompt, critères et
+détecteurs en regardant uniquement le jeu `dev`. Le jeu `test` ne se consulte qu'aux
+moments clés (changement important, changement de modèle), et chaque consultation est
+journalisée automatiquement. Un groupe (un scénario et ses reformulations) n'est
+jamais réparti entre les deux jeux : le script le refuse. Les étiquettes sont la
+vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 
 **Jamais de clé d'API en dur.** Elles sont lues depuis les variables d'environnement
 (voir le profil `api` dans `config.py`). Le dépôt est public.
