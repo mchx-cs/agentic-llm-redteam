@@ -109,6 +109,31 @@ PyRIT appelle les modèles via ses propres *targets*, ce qui contourne
 `demander_au_llm()`. La règle « aucun appel direct » devra être adaptée, par exemple
 en configurant les *targets* PyRIT depuis `config.py`.
 
+**Phase 5 : reconnaissance et planification choisissent les payloads.** La
+bibliothèque à trois axes (technique × objectif × transformation) est conçue pour
+qu'un agent choisisse chaque axe selon le contexte de la cible, au lieu de tout
+lancer à l'aveugle :
+- *Agent de reconnaissance* : il sonde la cible avec des questions anodines et produit
+  une **fiche cible** en JSON (rôle, outils, langue, situations de refus).
+- *Agent de planification* : à partir de la fiche, il écarte les familles hors sujet,
+  remplit `{objectif}` selon le contexte, choisit les transformations et classe les
+  combinaisons pour que les meilleures tiennent dans `MAX_ESSAIS`.
+
+Choix de conception :
+- **Hybride, pas tout LLM.** Le LLM extrait des *faits* vérifiables (la fiche cible) ;
+  des règles déterministes en déduisent les familles (pas d'outil détecté → LLM06
+  exclue). Un planificateur 100 % LLM peut halluciner un contexte et gaspiller le
+  budget. Une fiche cible se vérifie à la main, donc se mesure, comme l'arbitre.
+- **Planification ≠ adaptation.** La planification décide *avant* la campagne quoi
+  lancer (Phase 5, code maison). L'adaptation reformule *pendant* l'attaque selon la
+  réponse de la cible (Phase 3, PyRIT). PyRIT ne couvre pas la reconnaissance ni la
+  planification : c'est la valeur ajoutée propre du projet.
+- **Budget propre à la reconnaissance.** Sonder coûte des requêtes et peut déclencher
+  les défenses de la cible : la reconnaissance a sa propre limite d'essais.
+- **Calendrier.** À concevoir après les rooms AI Threat Modelling et AI System
+  Reconnaissance du path, et une fois les Phases 1 et 2 assez avancées pour qu'il y
+  ait de vrais payloads à choisir et un arbitre fiable pour juger.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
