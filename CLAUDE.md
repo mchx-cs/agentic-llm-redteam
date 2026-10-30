@@ -10,11 +10,17 @@ Projet personnel d'apprentissage **et** vitrine publique (dépôt public, lu par
 recruteurs). Les deux objectifs comptent : le code doit être propre et lisible, et
 le README doit rester honnête sur l'état d'avancement.
 
-## État actuel : Phase 0 terminée
+## État actuel : Phase 0 terminée, Phases 1 et 2 démarrées
 
 La boucle complète **attaquant → cible → arbitre** tourne de bout en bout en local.
-Les payloads d'attaque sont volontairement **anodins** (messages de test inoffensifs) :
-c'est la tuyauterie qui est validée, pas encore les attaques réelles.
+
+- **Phase 1** : la bibliothèque de payloads est structurée (technique × objectif ×
+  transformation), mais seule la technique `controle` (anodine) a des modèles. Les
+  familles OWASP sont déclarées vides : on les remplit une fois la technique
+  pratiquée à la main.
+- **Phase 2** : l'arbitre a des critères explicites, des exemples, une sortie JSON et
+  une température à 0. Il est mesuré sur 12 échanges étiquetés à la main
+  (`python -m evaluation.evaluer_arbitre`).
 
 ## Architecture
 
@@ -23,8 +29,13 @@ config.py          # point de bascule unique : modèle local (Ollama) ou API dis
 llm_client.py      # LA couche d'abstraction : demander_au_llm()
 cible.py           # le système testé (actuellement un leurre avec un secret à protéger)
 agents/
-  attaquant.py     # génère les tentatives d'attaque
-  arbitre.py       # LLM-as-judge : tranche succès / échec
+  attaquant.py     # construit les payloads : technique × objectif × transformation
+  arbitre.py       # LLM-as-judge : tranche succès / échec (sortie JSON)
+payloads/
+  bibliotheque.json  # techniques (par famille OWASP) et objectifs
+evaluation/
+  echanges_etiquetes.json  # vérité terrain pour mesurer l'arbitre
+  evaluer_arbitre.py       # précision, rappel, détail des erreurs
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
 ```
 
@@ -64,7 +75,7 @@ Toute nouvelle boucle doit avoir sa propre limite.
 |---|---|---|
 | 0 | Boucle d'agents, couche d'abstraction, LLM-as-judge, budget d'essais | **Fait** |
 | 1 | Bibliothèque de payloads de prompt injection réels | En cours |
-| 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | Prévu |
+| 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | En cours |
 | 3 | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
 | 4 | Dissocier l'arbitre du modèle cible | Prévu |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | Prévu |

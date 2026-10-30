@@ -70,8 +70,13 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 ├── llm_client.py      # the abstraction layer — every model call goes through here
 ├── cible.py           # the system under test (currently a guardrailed decoy)
 ├── agents/
-│   ├── attaquant.py   # generates attack attempts
-│   └── arbitre.py     # LLM-as-judge: rules on success or failure
+│   ├── attaquant.py   # builds payloads: technique × objective × transformation
+│   └── arbitre.py     # LLM-as-judge: rules on success or failure (JSON verdict)
+├── payloads/
+│   └── bibliotheque.json      # attack techniques (by OWASP family) and objectives
+├── evaluation/
+│   ├── echanges_etiquetes.json  # hand-labelled exchanges: ground truth for the judge
+│   └── evaluer_arbitre.py       # measures judge precision and recall
 └── main.py            # orchestrator: runs the campaign loop
 ```
 
@@ -94,6 +99,13 @@ python main.py
 Expected output is three test exchanges, each with the payload sent, the target's reply,
 and the judge's reasoned verdict.
 
+To measure the judge against hand-labelled exchanges (precision, recall, and every
+misclassification explained):
+
+```bash
+python -m evaluation.evaluer_arbitre
+```
+
 ### Switching to a hosted API
 
 The `api` profile reads its credentials from the environment — nothing is hardcoded:
@@ -115,7 +127,7 @@ PROFIL_ACTIF = "api"
 |---|---|---|
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
 | **1** | Real prompt injection payload library | In progress |
-| **2** | Judge reliability — measuring and reducing false positives/negatives | Planned |
+| **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | Planned |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | Planned |

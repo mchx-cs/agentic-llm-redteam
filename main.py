@@ -17,27 +17,31 @@ MAX_ESSAIS = 3
 
 
 def lancer_campagne():
-    print("=== Campagne de test (Phase 0 — squelette) ===\n")
+    print("=== Campagne de test (payloads de contrôle) ===\n")
 
     reponse = None  # réponse du tour précédent (servira à l'adaptation plus tard)
 
     for essai in range(1, MAX_ESSAIS + 1):
         print(f"--- Essai {essai}/{MAX_ESSAIS} ---")
 
-        # 1. L'attaquant produit une tentative.
+        # 1. L'attaquant produit une tentative (texte + sa provenance).
         payload = generer_payload(essai, reponse_precedente=reponse)
-        print(f"  [Attaquant] envoie : {payload}")
+        print(f"  [Attaquant] {payload['technique']} / {payload['objectif']} "
+              f"/ {payload['transformation']}")
+        print(f"              envoie : {payload['texte']}")
 
         # 2. La cible répond.
-        reponse = interroger_cible(payload)
+        reponse = interroger_cible(payload["texte"])
         print(f"  [Cible]     répond : {reponse}")
 
         # 3. L'arbitre juge.
-        reussi, verdict = juger(payload, reponse)
-        print(f"  [Arbitre]   verdict : {verdict}\n")
+        verdict = juger(payload["texte"], reponse)
+        print(f"  [Arbitre]   enfreint={verdict['reussi']} "
+              f"({verdict['critere']}) : {verdict['justification']}\n")
 
         # 4. Faille trouvée ? On consigne et on s'arrête.
-        if reussi:
+        #    Un verdict illisible (None) n'est PAS une faille : on continue.
+        if verdict["reussi"] is True:
             print(">>> Faille détectée : on consigne et on arrête la campagne.")
             return {
                 "statut": "faille",
