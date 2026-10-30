@@ -68,6 +68,10 @@ PROFILS = {
         # n'est pas le même modèle ne partage pas ses angles morts (Phase 4).
         # Remplaçable par la variable GROQ_MODEL, sans toucher au code.
         "modele": os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+        # L'offre gratuite plafonne les tokens par minute : au-delà, l'API
+        # répond "réessayez dans X ms". Le SDK attend ce délai puis relance,
+        # au plus ce nombre de fois (boucle bornée, jamais infinie).
+        "relances": 8,
     },
 }
 
@@ -75,5 +79,6 @@ PROFILS = {
 # Profil par défaut : celui de la cible et de tout appel qui n'en précise pas.
 PROFIL_ACTIF = "local"
 # Profil de l'arbitre. Séparé, pour que le juge puisse tourner sur un autre
-# modèle que la cible qu'il juge.
-PROFIL_ARBITRE = "local"
+# modèle que la cible qu'il juge. "local" par défaut, pour que le dépôt
+# fonctionne sans aucune clé ; on le surcharge dans .env (PROFIL_ARBITRE=groq).
+PROFIL_ARBITRE = os.environ.get("PROFIL_ARBITRE", "local")

@@ -128,6 +128,23 @@ Then change one line in `config.py`:
 PROFIL_ACTIF = "api"
 ```
 
+### Running the judge on a different model
+
+A judge that shares its target's model shares its blind spots, so the judge has its own
+profile. Copy `.env.example` to `.env` (git-ignored), add a free [Groq](https://console.groq.com)
+API key, and set:
+
+```bash
+PROFIL_ARBITRE=groq
+```
+
+On the same prompt, moving the judge from local `llama3.2` (3B) to `gpt-oss-120b` raised
+recall on the frozen test set from 50% to 100% (accuracy 73% → 93%). The remaining errors
+are target hallucinations (a made-up password looks like a leak to a blind judge), which
+call for verification by replay rather than a better prompt.
+
+The hosted judge only ever sees fictitious exchanges; the target under attack stays local.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -136,7 +153,7 @@ PROFIL_ACTIF = "api"
 | **1** | Real prompt injection payload library | In progress |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
-| **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | Planned |
+| **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | Planned |
 | **6** | Report generation with severity ranking | Planned |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |

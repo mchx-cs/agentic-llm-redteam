@@ -89,7 +89,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 1 | Bibliothèque de payloads de prompt injection réels | En cours |
 | 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | En cours |
 | 3 | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
-| 4 | Dissocier l'arbitre du modèle cible | Prévu |
+| 4 | Dissocier l'arbitre du modèle cible | En cours |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | Prévu |
 | 6 | Génération de rapport avec classement par gravité | Prévu |
 | 7 | Intégrer garak (couverture large) | Prévu |
@@ -100,10 +100,11 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 l'échange visible, comme en test boîte noire réel. C'est ce qui rend sa tâche
 difficile — et c'est le cœur technique du projet.
 
-**Arbitre et cible partagent actuellement le même modèle.** Pratique pour démarrer,
-mais c'est un biais connu : un juge identique à sa cible partage ses angles morts.
-C'est l'objet de la Phase 4. `demander_au_llm()` accepte déjà un paramètre `modele`
-pour permettre cette dissociation.
+**Arbitre et cible peuvent tourner sur des modèles différents.** Un juge identique à
+sa cible partage ses angles morts (Phase 4). `PROFIL_ARBITRE` est séparé de
+`PROFIL_ACTIF` dans `config.py`, et `demander_au_llm()` accepte un paramètre `profil`.
+Par défaut, tout reste en local (`llama3.2`) pour que le dépôt tourne sans clé ; le
+juge passe sur Groq avec `PROFIL_ARBITRE=groq` dans `.env`.
 
 **Ne pas automatiser ce qu'on ne sait pas faire à la main.** Les vraies attaques
 attendent que l'auteur ait terminé le path AI Security de TryHackMe. Un agent dont
@@ -162,6 +163,22 @@ du bruit. **Ne pas refaire ces essais sur llama3.2.** Le levier suivant est le m
 juge (Phase 4). Contrainte matérielle : un modèle local de 7–8 milliards de paramètres
 ne tient pas sur la machine de l'auteur. Restent un autre petit modèle (même taille,
 autre famille, ce qui dissocie aussi le juge de la cible) ou le profil `api`.
+
+**Le changement de modèle du juge a levé ce plafond (2026-10-30).** Même prompt, juge
+`openai/gpt-oss-120b` via l'offre gratuite de Groq :
+- jeu `dev` : précision 86 %, rappel 100 %, exactitude 92 % (contre 75 / 50 / 67 %) ;
+- jeu `test`, consulté pour ce changement de modèle : précision 89 %, rappel 100 %,
+  exactitude 93 % (contre 100 / 50 / 73 %).
+
+Les seules erreurs restantes sont les hallucinations de la cible (E08, E08-b, T10),
+limite structurelle du juge aveugle : à traiter par le rejeu, pas par le prompt.
+Contraintes de cet usage :
+- **Groq sert de juge, jamais de cible d'attaques réelles** : les conditions
+  d'utilisation interdisent de contourner les garde-fous du fournisseur.
+- **Données fictives uniquement** sur une offre gratuite.
+- La clé est dans `.env` (ignoré par git), jamais dans le code, le chat ou un commit.
+- L'offre gratuite plafonne à 8 000 tokens par minute : le profil `groq` relance
+  automatiquement après une erreur 429, au plus 8 fois.
 
 ## Cadre légal
 

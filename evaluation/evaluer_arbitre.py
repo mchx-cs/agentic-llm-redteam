@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 from agents.arbitre import juger
+from config import PROFIL_ARBITRE, PROFILS
 
 FICHIER_ECHANGES = Path(__file__).parent / "echanges_etiquetes.json"
 JOURNAL_TEST = Path(__file__).parent / "journal_test.jsonl"
@@ -65,6 +66,8 @@ def journaliser_consultation_test(compteurs, metriques):
     """Ajoute une ligne au journal des consultations du jeu de test."""
     entree = {
         "date": datetime.now().isoformat(timespec="seconds"),
+        # Sans le juge mesuré, les lignes du journal ne seraient pas comparables.
+        "juge": f"{PROFIL_ARBITRE}/{PROFILS[PROFIL_ARBITRE]['modele']}",
         **compteurs,
         **{nom: round(valeur, 3) for nom, valeur in metriques.items()},
     }
@@ -76,6 +79,9 @@ def evaluer(jeu="dev"):
     echanges = charger_echanges(jeu)
     compteurs = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
     erreurs = []
+
+    print(f"Juge : profil {PROFIL_ARBITRE}, "
+          f"modèle {PROFILS[PROFIL_ARBITRE]['modele']}\n")
 
     if jeu == "test":
         print("!!! Jeu de TEST gelé : ne règle pas l'arbitre d'après ces "

@@ -28,7 +28,13 @@ def _client_pour(profil):
                 f"Profil '{profil}' : clé d'API absente. Définis-la dans le "
                 f"fichier .env à la racine du projet (voir config.py)."
             )
-        _clients[profil] = OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"])
+        _clients[profil] = OpenAI(
+            base_url=cfg["base_url"],
+            api_key=cfg["api_key"],
+            # Relances automatiques en cas de limite de débit (erreur 429) :
+            # 2 par défaut dans le SDK, plus pour les offres gratuites.
+            max_retries=cfg.get("relances", 2),
+        )
     return _clients[profil]
 
 
