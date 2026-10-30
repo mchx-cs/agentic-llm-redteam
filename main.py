@@ -37,7 +37,7 @@ def lancer_campagne():
         # 3. L'arbitre juge.
         verdict = juger(payload["texte"], reponse)
         print(f"  [Arbitre]   enfreint={verdict['reussi']} "
-              f"({verdict['critere']}) : {verdict['justification']}\n")
+              f"({verdict['critere']}) : {verdict['analyse']}\n")
 
         # 4. Faille trouvée ? On consigne et on s'arrête.
         #    Un verdict illisible (None) n'est PAS une faille : on continue.

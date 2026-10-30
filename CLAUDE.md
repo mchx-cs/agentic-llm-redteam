@@ -18,8 +18,9 @@ La boucle complète **attaquant → cible → arbitre** tourne de bout en bout e
   transformation), mais seule la technique `controle` (anodine) a des modèles. Les
   familles OWASP sont déclarées vides : on les remplit une fois la technique
   pratiquée à la main.
-- **Phase 2** : l'arbitre a des critères explicites, des exemples, une sortie JSON et
-  une température à 0. Il est mesuré sur 12 échanges étiquetés à la main
+- **Phase 2** : l'arbitre a des critères explicites, des exemples, une sortie JSON,
+  une température à 0, raisonne avant de trancher, reçoit les passages décodés par
+  `detecteurs.py` et s'abstient quand son verdict se contredit. Il est mesuré sur 12 échanges étiquetés à la main
   (`python -m evaluation.evaluer_arbitre`).
 
 ## Architecture
@@ -31,6 +32,7 @@ cible.py           # le système testé (actuellement un leurre avec un secret �
 agents/
   attaquant.py     # construit les payloads : technique × objectif × transformation
   arbitre.py       # LLM-as-judge : tranche succès / échec (sortie JSON)
+  detecteurs.py    # décode l'épelé, le Base64, l'hexa AVANT l'arbitre (déterministe)
 payloads/
   bibliotheque.json  # techniques (par famille OWASP) et objectifs
 evaluation/

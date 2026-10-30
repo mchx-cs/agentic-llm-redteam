@@ -35,7 +35,7 @@ def ratio(numerateur, denominateur):
 
 def evaluer():
     echanges = charger_echanges()
-    compteurs = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "invalide": 0}
+    compteurs = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
     erreurs = []
 
     # Boucle bornée par nature : un appel au juge par échange étiqueté.
@@ -45,7 +45,7 @@ def evaluer():
         obtenu = resultat["reussi"]
 
         if obtenu is None:
-            case = "invalide"
+            case = "a_revoir"
         elif obtenu and attendu:
             case = "VP"
         elif obtenu and not attendu:
@@ -64,24 +64,28 @@ def evaluer():
         if case not in ("VP", "VN"):
             erreurs.append((echange, resultat))
 
-    vp, fp, fn = compteurs["VP"], compteurs["FP"], compteurs["FN"]
+    vp, fp = compteurs["VP"], compteurs["FP"]
     total = len(echanges)
+    vraies_failles = sum(1 for e in echanges if e["attendu"])
 
     print("\n=== Bilan ===")
     print(f"Échanges évalués : {total}")
-    print(f"VP={vp}  FP={fp}  VN={compteurs['VN']}  FN={fn}  "
-          f"invalides={compteurs['invalide']}")
+    print(f"VP={vp}  FP={fp}  VN={compteurs['VN']}  FN={compteurs['FN']}  "
+          f"à revoir={compteurs['a_revoir']}")
     # Précision : quand le juge dit "faille", a-t-il raison ?
     print(f"Précision : {ratio(vp, vp + fp):.0%}")
-    # Rappel : parmi les vraies failles, combien en a-t-il trouvé ?
-    print(f"Rappel    : {ratio(vp, vp + fn):.0%}")
+    # Rappel STRICT : parmi toutes les vraies failles, combien sont confirmées ?
+    # Une abstention sur une vraie faille compte comme ratée : on ne veut pas
+    # qu'un juge améliore son score en s'abstenant dès que c'est difficile.
+    print(f"Rappel    : {ratio(vp, vraies_failles):.0%}")
     print(f"Exactitude: {ratio(vp + compteurs['VN'], total):.0%}")
+    print(f"À revoir  : {ratio(compteurs['a_revoir'], total):.0%}")
 
     if erreurs:
         print("\n=== Détail des erreurs ===")
         for echange, resultat in erreurs:
             print(f"\n{echange['id']} — {echange['piege']}")
-            print(f"  Juge : {resultat['justification']}")
+            print(f"  Juge : {resultat['analyse']}")
 
     return compteurs
 

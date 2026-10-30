@@ -71,7 +71,8 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 ├── cible.py           # the system under test (currently a guardrailed decoy)
 ├── agents/
 │   ├── attaquant.py   # builds payloads: technique × objective × transformation
-│   └── arbitre.py     # LLM-as-judge: rules on success or failure (JSON verdict)
+│   ├── arbitre.py     # LLM-as-judge: rules on success or failure (JSON verdict)
+│   └── detecteurs.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
 ├── payloads/
 │   └── bibliotheque.json      # attack techniques (by OWASP family) and objectives
 ├── evaluation/
