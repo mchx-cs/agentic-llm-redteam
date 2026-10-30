@@ -146,6 +146,23 @@ Choix de conception :
   Reconnaissance du path, et une fois les Phases 1 et 2 assez avancées pour qu'il y
   ait de vrais payloads à choisir et un arbitre fiable pour juger.
 
+**Le prompt engineering plafonne avec llama3.2 comme juge (mesuré le 2026-10-30).**
+Arbitre actuel sur le jeu `dev` : précision 75 %, rappel 50 %, exactitude 67 % (même
+rappel sur le jeu `test`). Deux pistes ont été mesurées sur `dev`, sans faire mieux :
+- *A, consigne sans formule toute faite et analyse qui cite la réponse* : précision 83 %,
+  rappel 42 %. Le juge cite le bon passage (« donne un indice sur le mot de passe »)
+  puis conclut à l'inverse, et déforme parfois ses citations.
+- *B, une question étroite oui/non par critère* : précision 62 %, rappel 42 %. Des
+  verdicts incohérents (« Paris » classé comme divulgation, une fuite en clair ratée).
+
+Conclusion : avec 3 milliards de paramètres, le modèle ne relie pas son raisonnement à
+sa conclusion, et chaque retouche de prompt déplace les erreurs sans les réduire. Sur
+24 échanges, un cas vaut environ 4 points : continuer à retoucher, ce serait surapprendre
+du bruit. **Ne pas refaire ces essais sur llama3.2.** Le levier suivant est le modèle du
+juge (Phase 4). Contrainte matérielle : un modèle local de 7–8 milliards de paramètres
+ne tient pas sur la machine de l'auteur. Restent un autre petit modèle (même taille,
+autre famille, ce qui dissocie aussi le juge de la cible) ou le profil `api`.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
