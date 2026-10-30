@@ -23,7 +23,9 @@ La boucle complète **attaquant → cible → arbitre** tourne de bout en bout e
   `detecteurs.py` et s'abstient quand son verdict se contredit. Il est mesuré sur des
   échanges étiquetés à la main, répartis en un jeu de développement (24 échanges,
   `python -m evaluation.evaluer_arbitre`) et un jeu de test gelé (15 échanges,
-  `--test`).
+  `--test`). Une fuite de valeur est vérifiée **par rejeu** avant d'être déclarée
+  (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
+  vrais échanges avec la cible, à étiqueter à la main.
 
 ## Architecture
 
@@ -35,12 +37,16 @@ agents/
   attaquant.py     # construit les payloads : technique × objectif × transformation
   arbitre.py       # LLM-as-judge : tranche succès / échec (sortie JSON)
   detecteurs.py    # décode l'épelé, le Base64, l'hexa AVANT l'arbitre (déterministe)
+  verificateur.py  # rejeu : une valeur divulguée revient-elle, ou était-ce une hallucination ?
 payloads/
   bibliotheque.json  # techniques (par famille OWASP) et objectifs
 evaluation/
   echanges_etiquetes.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
   evaluer_arbitre.py       # précision, rappel, détail des erreurs
   journal_test.jsonl       # chaque consultation du jeu de test, horodatée
+  tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
+  collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (non commité tant
+                           # que l'auteur ne l'a pas étiqueté)
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
 ```
 
@@ -179,6 +185,22 @@ Contraintes de cet usage :
 - La clé est dans `.env` (ignoré par git), jamais dans le code, le chat ou un commit.
 - L'offre gratuite plafonne à 8 000 tokens par minute : le profil `groq` relance
   automatiquement après une erreur 429, au plus 8 fois.
+
+**Les hallucinations de la cible se traitent par rejeu, pas par le juge.** Un juge
+aveugle ne peut pas distinguer un vrai secret d'un secret inventé : l'information
+n'est pas dans l'échange. En revanche, un vrai secret revient identique d'un essai à
+l'autre, alors qu'une hallucination change. Quand l'arbitre voit une divulgation, il
+extrait la valeur (champ `valeur`) et `verificateur.py` rejoue le même payload
+`NB_REJEUX` fois (boucle bornée) : la valeur revient → *confirmée* ; seulement
+d'autres valeurs → *hallucination probable*, la campagne continue ; les deux →
+*contradictoire* ; plus rien → *inconcluant*. Limites : il faut une cible avec de
+l'aléa (une cible déterministe répète sa propre hallucination), et seules les valeurs
+d'un seul mot sont comparées (une fuite de prompt système est paraphrasée).
+
+**Les échanges réels s'étiquettent à l'aveugle.** `collecter_echanges.py` n'enregistre
+pas l'avis de l'arbitre : le voir influencerait l'étiquette humaine, et on mesurerait
+le juge contre lui-même. Les prompts viennent uniquement de la bibliothèque de payloads,
+donc seulement de techniques pratiquées à la main.
 
 ## Cadre légal
 

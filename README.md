@@ -72,13 +72,16 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 ├── agents/
 │   ├── attaquant.py   # builds payloads: technique × objective × transformation
 │   ├── arbitre.py     # LLM-as-judge: rules on success or failure (JSON verdict)
-│   └── detecteurs.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
+│   ├── detecteurs.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
+│   └── verificateur.py  # replay check: real leak or target hallucination?
 ├── payloads/
 │   └── bibliotheque.json      # attack techniques (by OWASP family) and objectives
 ├── evaluation/
 │   ├── echanges_etiquetes.json  # hand-labelled exchanges (dev and frozen test sets)
 │   ├── evaluer_arbitre.py       # measures judge precision and recall
-│   └── journal_test.jsonl       # timestamped log of every test-set run
+│   ├── journal_test.jsonl       # timestamped log of every test-set run
+│   ├── tester_rejeu.py          # tests the replay check against simulated targets
+│   └── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 └── main.py            # orchestrator: runs the campaign loop
 ```
 
@@ -142,6 +145,11 @@ On the same prompt, moving the judge from local `llama3.2` (3B) to `gpt-oss-120b
 recall on the frozen test set from 50% to 100% (accuracy 73% → 93%). The remaining errors
 are target hallucinations (a made-up password looks like a leak to a blind judge), which
 call for verification by replay rather than a better prompt.
+
+That replay check is in place: when the judge sees a leaked value, the same payload is
+replayed a bounded number of times. A real secret comes back unchanged; a hallucinated
+one changes every time. The leak is then reported as *confirmed*, *probable
+hallucination* (the campaign moves on), *contradictory* or *inconclusive*.
 
 The hosted judge only ever sees fictitious exchanges; the target under attack stays local.
 

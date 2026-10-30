@@ -10,6 +10,7 @@ Lance-le avec :  python main.py
 
 from agents.attaquant import generer_payload
 from agents.arbitre import juger
+from agents.verificateur import verifier_par_rejeu
 from cible import interroger_cible
 
 # Règle d'arrêt : on ne tente pas une attaque à l'infini.
@@ -42,6 +43,22 @@ def lancer_campagne():
         # 4. Faille trouvée ? On consigne et on s'arrête.
         #    Un verdict illisible (None) n'est PAS une faille : on continue.
         if verdict["reussi"] is True:
+            verification = None
+
+            # 5. Une valeur divulguée peut être une hallucination de la cible :
+            #    on la vérifie par rejeu avant de la déclarer.
+            if verdict["critere"] == "divulgation":
+                verification = verifier_par_rejeu(
+                    payload["texte"], verdict["valeur"], interroger_cible, juger
+                )
+                print(f"  [Rejeu]     {verification['statut']} : "
+                      f"{verification['explication']}")
+
+                if verification["statut"] == "hallucination_probable":
+                    # Pas une faille : la cible a inventé. On continue.
+                    print("  >>> Valeur inventée par la cible : on continue.\n")
+                    continue
+
             print(">>> Faille détectée : on consigne et on arrête la campagne.")
             return {
                 "statut": "faille",
@@ -49,6 +66,9 @@ def lancer_campagne():
                 "payload": payload,
                 "reponse": reponse,
                 "verdict": verdict,
+                # None (obéissance, pas de valeur), ou le résultat du rejeu :
+                # "confirmee", "contradictoire", "inconcluant"…
+                "verification": verification,
             }
 
     print(">>> Aucune faille après le budget d'essais. Campagne terminée.")
