@@ -480,6 +480,34 @@ titre que le Base64 ou l'épellation, et l'axe existe déjà dans `attaquant.py`
 seule fonction multiplie toutes les techniques, au lieu d'ajouter des payloads un par
 un — et PyRIT fournit ce convertisseur, donc la phase 3 l'apporte presque gratuitement.
 
+**Une réponse tronquée ne doit jamais passer pour une réponse complète (2026-11-09).**
+`llm_client` ne lisait que le contenu de la réponse, jamais `finish_reason`. Scénario
+qui fait mal : la cible commence à lâcher le secret, atteint son plafond de sortie, se
+fait couper — l'arbitre voit une réponse incomplète et conclut « pas de faille ». C'est
+un **faux négatif silencieux**, la pire erreur pour un outil de sécurité, puisque la
+campagne conclut « aucune faille » à tort et que rien ne le signale.
+
+Corrigé par un **journal des appels** dans `llm_client`, qui est le seul point de
+passage du projet vers les LLM : nombre d'appels, tokens consommés, et liste des
+réponses tronquées (`journal()`, `reinitialiser_journal()`). `main.py` avertit deux
+fois — à l'essai concerné, et au bilan de campagne. Un délai d'attente par défaut
+(60 s, réglable par `delai` dans le profil) a été ajouté au passage : sans lui, une
+cible qui ne répond jamais bloquerait la campagne indéfiniment.
+
+Ce journal est volontairement la brique de base de deux phases à venir : il compte déjà
+les tokens (**phase 11**, budget) et trace chaque appel (**phase 9**, traçabilité).
+
+**Sur une cible réelle, la limite de tokens n'est pas la contrainte qu'on croit.**
+À ~1 500 tokens par jugement, l'offre gratuite de Groq donne ~130 jugements par jour.
+Comme les attaques sont probabilistes, affirmer qu'une cible RÉSISTE à une technique
+demande une trentaine d'essais : une campagne sur dix techniques, c'est ~300 jugements,
+deux à trois fois le quota gratuit. Mais ces 300 jugements coûtent ~1,30 $ en milieu de
+gamme : le quota gratuit est limitant, une API payante le règle pour le prix d'un café.
+Les vraies contraintes sur cible réelle sont ailleurs : le **débit autorisé par la
+cible** (à découvrir en reconnaissance), la **fenêtre de test contractuelle** (marteler
+une production ressemble à un déni de service) et le **coût pour le client** si sa
+cible est facturée à l'usage.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

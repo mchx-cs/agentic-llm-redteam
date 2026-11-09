@@ -22,6 +22,25 @@ _HOTES_LOCAUX = ("localhost", "127.0.0.1")
 # sur une API distante, par exemple.
 _clients = {}
 
+# Journal des appels. Ce module étant le SEUL point de passage vers les LLM,
+# c'est ici qu'on sait tout : combien d'appels, combien de tokens, et surtout
+# lesquels ont été TRONQUÉS. Une réponse coupée au milieu d'une fuite se lit
+# comme une réponse normale : l'arbitre conclut "pas de faille", et rien ne
+# signale l'erreur. C'est le pire défaut possible pour un outil de sécurité.
+# Ce journal sert aussi de base aux phases 9 (traçabilité) et 11 (budget).
+_JOURNAL = {"appels": 0, "tokens": 0, "tronquees": []}
+
+
+def journal():
+    """Copie de l'état du journal depuis la dernière remise à zéro."""
+    return {"appels": _JOURNAL["appels"], "tokens": _JOURNAL["tokens"],
+            "tronquees": list(_JOURNAL["tronquees"])}
+
+
+def reinitialiser_journal():
+    """À appeler au début d'une campagne pour repartir d'un compteur net."""
+    _JOURNAL.update({"appels": 0, "tokens": 0, "tronquees": []})
+
 
 def _client_pour(profil):
     if profil not in _clients:
@@ -36,6 +55,9 @@ def _client_pour(profil):
         _clients[profil] = OpenAI(
             base_url=cfg["base_url"],
             api_key=cfg["api_key"],
+            # Sans délai d'attente, une cible qui ne répond jamais bloquerait
+            # la campagne indéfiniment.
+            timeout=cfg.get("delai", 60),
             # Relances automatiques en cas de limite de débit (erreur 429) :
             # 2 par défaut dans le SDK, plus pour les offres gratuites.
             max_retries=cfg.get("relances", 2),
@@ -44,7 +66,7 @@ def _client_pour(profil):
 
 
 def demander_au_llm(message, systeme=None, modele=None, temperature=None,
-                    format_json=False, profil=None):
+                    format_json=False, profil=None, max_tokens=None):
     """
     Envoie un message à un LLM et renvoie sa réponse (du texte).
 
@@ -57,6 +79,8 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
     - format_json : force le modèle à produire du JSON valide. Plus fiable que
                     de deviner OUI/NON dans une phrase libre.
     - profil      : le profil de config.py à utiliser ; sinon PROFIL_ACTIF.
+    - max_tokens  : plafond de la réponse. Attention : plafonner, c'est risquer
+                    de couper une fuite en deux (voir _JOURNAL ci-dessus).
     """
     profil = profil or PROFIL_ACTIF
     modele = modele or PROFILS[profil]["modele"]
@@ -74,6 +98,8 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
     if format_json:
         # Format OpenAI, compris aussi par Ollama et Groq.
         options["response_format"] = {"type": "json_object"}
+    if max_tokens is not None:
+        options["max_tokens"] = max_tokens
 
     try:
         reponse = _client_pour(profil).chat.completions.create(
@@ -88,7 +114,22 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
         # une consigne exploitable, en nommant le profil et le modèle fautifs.
         raise RuntimeError(_message_d_erreur(profil, modele, erreur)) from erreur
 
+    _enregistrer(reponse, profil, modele)
     return reponse.choices[0].message.content
+
+
+def _enregistrer(reponse, profil, modele):
+    """Consigne l'appel, et retient les réponses coupées en cours de route."""
+    _JOURNAL["appels"] += 1
+    usage = getattr(reponse, "usage", None)
+    if usage and getattr(usage, "total_tokens", None):
+        _JOURNAL["tokens"] += usage.total_tokens
+
+    # "length" = le modèle a atteint son plafond de sortie, sa réponse est
+    # incomplète. Les autres raisons d'arrêt ("stop", "tool_calls"…) sont
+    # normales. Un fournisseur qui ne renseigne rien ne déclenche rien.
+    if getattr(reponse.choices[0], "finish_reason", None) == "length":
+        _JOURNAL["tronquees"].append({"profil": profil, "modele": modele})
 
 
 def _message_d_erreur(profil, modele, erreur):

@@ -19,6 +19,7 @@ from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
 from agents.verificateur import verifier_par_rejeu
 from cible import interroger_cible
+from llm_client import journal, reinitialiser_journal
 
 # Règle d'arrêt : on ne tente pas une attaque à l'infini.
 MAX_ESSAIS = 3
@@ -26,6 +27,7 @@ MAX_ESSAIS = 3
 
 def lancer_campagne():
     print("=== Campagne ===\n")
+    reinitialiser_journal()
 
     # --- 1. Reconnaissance : qui est cette cible ? -------------------------
     print("--- Reconnaissance ---")
@@ -39,7 +41,7 @@ def lancer_campagne():
 
     if not plan["essais"]:
         print("\n>>> Aucun essai applicable à cette cible. Campagne terminée.")
-        return {"statut": "aucun_essai", "fiche": fiche, "plan": plan}
+        return _terminer({"statut": "aucun_essai", "fiche": fiche, "plan": plan})
 
     # --- 3. Attaque ---------------------------------------------------------
     print()
@@ -49,8 +51,15 @@ def lancer_campagne():
               f"/ {payload['transformation']}")
         print(f"              envoie : {payload['texte']}")
 
+        # Une réponse coupée par le plafond de sortie de la cible se lit comme
+        # une réponse complète : le verdict qui suit ne vaudrait alors rien.
+        tronquees_avant = len(journal()["tronquees"])
         reponse = interroger_cible(payload["texte"])
+        tronquee = len(journal()["tronquees"]) > tronquees_avant
         print(f"  [Cible]     répond : {reponse}")
+        if tronquee:
+            print("  /!\\        réponse TRONQUÉE : une fuite a pu être coupée "
+                  "en deux, le verdict ci-dessous n'est pas fiable.")
 
         verdict = juger(payload["texte"], reponse)
         print(f"  [Arbitre]   enfreint={verdict['reussi']} "
@@ -74,7 +83,7 @@ def lancer_campagne():
                 continue
 
         print(">>> Faille détectée : on consigne et on arrête la campagne.")
-        return {
+        return _terminer({
             "statut": "faille",
             "essai": numero,
             "payload": payload,
@@ -85,10 +94,26 @@ def lancer_campagne():
             "verification": verification,
             "fiche": fiche,
             "plan": plan,
-        }
+        })
 
     print(">>> Aucune faille après le budget d'essais. Campagne terminée.")
-    return {"statut": "aucune_faille", "fiche": fiche, "plan": plan}
+    return _terminer({"statut": "aucune_faille", "fiche": fiche, "plan": plan})
+
+
+def _terminer(resultat):
+    """Attache le journal des appels et avertit si des réponses ont été coupées."""
+    resultat["journal"] = journal()
+    tronquees = len(resultat["journal"]["tronquees"])
+
+    print(f"\n{resultat['journal']['appels']} appel(s) au LLM, "
+          f"{resultat['journal']['tokens']} tokens.")
+    if tronquees:
+        # Un « aucune faille » obtenu sur des réponses coupées ne vaut rien :
+        # le dire franchement plutôt que de laisser croire à une couverture.
+        print(f"/!\\ {tronquees} réponse(s) tronquée(s) : les verdicts "
+              f"correspondants sont peu fiables, et un « aucune faille » "
+              f"pourrait masquer une fuite coupée en deux.")
+    return resultat
 
 
 if __name__ == "__main__":
