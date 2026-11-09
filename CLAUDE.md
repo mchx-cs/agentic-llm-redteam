@@ -107,12 +107,13 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 3 | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
 | 4 | Dissocier l'arbitre du modèle cible | En cours |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
-| 6 | Génération de rapport avec classement par gravité | Prévu |
+| 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | Prévu |
 | 7 | Intégrer garak (couverture large) | Prévu |
 | 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | Prévu |
 | 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | Prévu |
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | Prévu |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | Prévu |
+| 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, enregistrement asciinema au README | Prévu |
 
 Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
 passage en production, et qu'une feuille de route centrée sur les attaques laissait
@@ -306,6 +307,52 @@ LLM05, LLM06 et LLM08 ne sont pas seulement non testés, ils sont **intestables*
 Ordre à respecter pour étendre la couverture : enrichir la cible → élargir les critères
 de l'arbitre → agrandir le corpus → ajouter les payloads. Prendre ces étapes dans
 l'autre sens produirait des mesures qui ne veulent rien dire.
+
+**Phase 6 : le JSON est la source de vérité, le rapport n'en est qu'un rendu.**
+La campagne produit d'abord un `resultat.json` structuré ; les formats lisibles en
+découlent, comme `bibliotheque.json` sépare déjà les données du code. Ajouter un format
+devient alors une fonction de plus, jamais une refonte :
+
+```
+campagne → resultat.json
+             ├→ rapport.md    (par défaut)
+             ├→ rapport.html  (si les rapports deviennent trop longs à lire à plat)
+             └→ rapport.pdf   (via pandoc, le jour d'une mission)
+```
+
+**Markdown par défaut**, pour deux raisons décisives ici :
+- **GitHub le rend nativement.** Un rapport d'exemple commité s'affiche directement
+  dans le navigateur du visiteur ; un `.html` commité s'afficherait en code source.
+  C'est tout le bénéfice vitrine du HTML, sans écrire une ligne de mise en forme.
+- **Il se compare.** Lancer une campagne, corriger la cible, relancer : un `git diff`
+  entre les deux rapports montre exactement ce qui a changé. Impossible avec du HTML
+  mis en forme ou un PDF binaire.
+
+Le PDF est bien le format attendu en mission réelle, mais il se fabrique depuis le
+Markdown avec `pandoc` le jour venu : inutile de concevoir pour ça aujourd'hui. Le
+rapport doit aussi dire **ce qui n'a PAS été testé** — le planificateur consigne déjà
+les familles écartées et leur motif.
+
+**Pas d'interface web.** Les outils offensifs du domaine (garak, PyRIT, nmap) sont en
+ligne de commande, et c'est ce qu'attend un lecteur du dépôt. Une interface ne
+s'automatise pas (il faudrait une API dessous, donc le travail deux fois), n'avance
+aucune phase, et serait elle-même une surface d'attaque sur un outil de red teaming.
+Elle ne deviendrait légitime que si le projet devenait un service multi-utilisateurs,
+ce qui n'est pas l'objectif.
+
+**Phase 12 : rendre la démonstration reproductible.** Un dépôt qu'on peut essayer en
+trente secondes se démarque bien plus qu'un dépôt qu'on regarde. Trois pièces, par
+ordre de valeur :
+1. **Une cible volontairement vulnérable livrée avec le projet**, pour que n'importe qui
+   reproduise une détection en une commande, sans clé ni configuration. C'est aussi la
+   cible de référence des tests de bout en bout.
+2. **Un enregistrement asciinema** d'une campagne complète, intégré au README : il
+   montre le déroulé reconnaissance → plan → attaque → verdict → rejeu, ce qu'aucune
+   capture d'écran ne rend.
+3. **Un rapport d'exemple commité**, rendu par GitHub.
+
+À faire après la phase 8 (adaptateur de cible) et la phase 6 : démontrer une campagne
+qui ne trouve que des payloads de contrôle n'aurait aucun intérêt.
 
 ## Cadre légal
 

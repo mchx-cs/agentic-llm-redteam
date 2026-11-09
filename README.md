@@ -176,12 +176,13 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **3** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
-| **6** | Report generation with severity ranking | Planned |
+| **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | Planned |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
 | **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | Planned |
 | **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | Planned |
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | Planned |
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | Planned |
+| **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, asciinema recording in this README | Planned |
 
 Phases 1, 6 and 8 are what it takes to run the tool against systems you own. Phases 2,
 9, 10 and 11 are what separates that from a tool fit for a client engagement: a
