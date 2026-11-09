@@ -10,7 +10,7 @@ C'est le garde-fou anti-"code en dur partout" dont on avait parlé.
 """
 
 from openai import (APIConnectionError, AuthenticationError, NotFoundError,
-                    OpenAI)
+                    OpenAI, RateLimitError)
 from config import PROFILS, PROFIL_ACTIF
 
 # Les profils locaux : ceux dont le serveur tourne sur la machine. Le conseil
@@ -81,7 +81,8 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
             messages=messages,
             **options,
         )
-    except (APIConnectionError, NotFoundError, AuthenticationError) as erreur:
+    except (APIConnectionError, NotFoundError, AuthenticationError,
+            RateLimitError) as erreur:
         # Les trois pannes de configuration les plus courantes. Le SDK les
         # signale par "Connection error." ou un code HTTP : on les traduit en
         # une consigne exploitable, en nommant le profil et le modèle fautifs.
@@ -104,6 +105,15 @@ def _message_d_erreur(profil, modele, erreur):
                     f"  S'il est éteint, lance : ollama serve")
         return (f"{entete} impossible de joindre le serveur.\n"
                 f"  Vérifie ta connexion et l'adresse 'base_url' dans config.py.")
+
+    if isinstance(erreur, RateLimitError):
+        # Le SDK relance tout seul sur les limites par minute (voir "relances"
+        # dans config.py). S'il abandonne, c'est que le quota JOURNALIER est
+        # atteint : relancer n'y changera rien, il faut attendre ou basculer.
+        return (f"{entete} quota du fournisseur atteint.\n"
+                f"  Attends la fenêtre indiquée, ou repasse l'arbitre en local\n"
+                f"  (PROFIL_ARBITRE=local dans .env).\n"
+                f"  Détail du fournisseur : {erreur}")
 
     if isinstance(erreur, NotFoundError):
         if local:
