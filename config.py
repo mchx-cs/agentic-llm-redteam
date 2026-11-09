@@ -54,6 +54,9 @@ PROFILS = {
         # Le modèle est lu, comme la clé, depuis l'environnement : pas de nom
         # figé dans le code, qui deviendrait obsolète au fil des sorties.
         "modele": os.environ.get("OPENAI_MODEL", ""),
+        # Comme pour groq : les API distantes plafonnent le débit, le SDK
+        # attend le délai annoncé puis relance, au plus ce nombre de fois.
+        "relances": 8,
     },
 
     # --- Profil GROQ : API distante avec offre gratuite ---
@@ -75,10 +78,27 @@ PROFILS = {
     },
 }
 
-# >>> LES LIGNES À CHANGER POUR BASCULER <<<
-# Profil par défaut : celui de la cible et de tout appel qui n'en précise pas.
-PROFIL_ACTIF = "local"
-# Profil de l'arbitre. Séparé, pour que le juge puisse tourner sur un autre
-# modèle que la cible qu'il juge. "local" par défaut, pour que le dépôt
-# fonctionne sans aucune clé ; on le surcharge dans .env (PROFIL_ARBITRE=groq).
+# >>> LES DEUX LEVIERS DE BASCULE <<<
+# Tous deux se règlent dans .env (hors git) : personne n'a besoin de modifier
+# un fichier suivi par git pour changer de fournisseur. "local" par défaut,
+# pour que le dépôt tourne sans aucune clé.
+
+# Profil par défaut : celui de la CIBLE et de tout appel qui n'en précise pas.
+# Attention : attaquer une API distante violerait les conditions d'utilisation
+# du fournisseur (voir "Cadre légal" dans CLAUDE.md). La cible reste locale.
+PROFIL_ACTIF = os.environ.get("PROFIL_ACTIF", "local")
+
+# Profil de l'ARBITRE (et de l'analyste de reconnaissance), séparé pour que le
+# juge puisse tourner sur un autre modèle que la cible qu'il juge — un juge
+# identique à sa cible partage ses angles morts.
 PROFIL_ARBITRE = os.environ.get("PROFIL_ARBITRE", "local")
+
+_profils_inconnus = [nom for nom in (PROFIL_ACTIF, PROFIL_ARBITRE)
+                     if nom not in PROFILS]
+if _profils_inconnus:
+    # Une faute de frappe dans .env donnerait sinon un KeyError nu, très loin
+    # d'ici, au premier appel au LLM.
+    raise ValueError(
+        f"Profil inconnu dans .env : {', '.join(_profils_inconnus)}. "
+        f"Profils disponibles : {', '.join(PROFILS)}."
+    )

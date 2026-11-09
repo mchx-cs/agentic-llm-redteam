@@ -131,18 +131,22 @@ run is logged with a timestamp in `evaluation/journal_test.jsonl`.
 
 ### Switching to a hosted API
 
-The `api` profile reads its credentials from the environment — nothing is hardcoded:
+Every provider setting lives in `.env` (git-ignored), so switching never means editing
+a tracked file. Copy `.env.example` to `.env` and fill in:
 
 ```bash
-export OPENAI_API_KEY="sk-..."
-export OPENAI_MODEL="<model-name>"
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=<model-name>
+PROFIL_ACTIF=api
 ```
 
-Then change one line in `config.py`:
+Two independent switches: `PROFIL_ACTIF` drives the target and anything unspecified,
+`PROFIL_ARBITRE` drives the judge. An unknown profile name fails at import with the
+list of valid ones, rather than hours later on the first model call.
 
-```python
-PROFIL_ACTIF = "api"
-```
+One asymmetry worth stating: **the target stays local.** Pointing real attacks at a
+hosted model would breach the provider's terms of service, so a hosted profile is for
+the judge and the reconnaissance analyst, not for the system under attack.
 
 ### Running the judge on a different model
 

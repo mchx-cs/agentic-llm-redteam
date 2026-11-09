@@ -141,8 +141,11 @@ difficile — et c'est le cœur technique du projet.
 **Arbitre et cible peuvent tourner sur des modèles différents.** Un juge identique à
 sa cible partage ses angles morts (Phase 4). `PROFIL_ARBITRE` est séparé de
 `PROFIL_ACTIF` dans `config.py`, et `demander_au_llm()` accepte un paramètre `profil`.
-Par défaut, tout reste en local (`llama3.2`) pour que le dépôt tourne sans clé ; le
-juge passe sur Groq avec `PROFIL_ARBITRE=groq` dans `.env`.
+Les deux se règlent dans `.env` (hors git) : `PROFIL_ACTIF` pour la cible et les appels
+sans profil, `PROFIL_ARBITRE` pour le juge. Personne n'a besoin de modifier un fichier
+suivi par git pour changer de fournisseur, et un nom de profil inconnu échoue dès
+l'import, avec la liste des profils valides. Par défaut tout reste en local
+(`llama3.2`), pour que le dépôt tourne sans clé.
 
 **Ne pas automatiser ce qu'on ne sait pas faire à la main.** Les vraies attaques
 attendent que l'auteur ait terminé le path AI Security de TryHackMe. Un agent dont
