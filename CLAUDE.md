@@ -255,6 +255,37 @@ exactitude 91 % → **96 %**, résultats identiques d'un passage à l'autre. Il 
 E08 et E08-b, les hallucinations — limite structurelle que le rejeu rattrape en
 campagne. Le jeu `test` n'a pas encore été rouvert pour vérifier cette correction.
 
+**Ce que les mesures de l'arbitre prouvent — et ce qu'elles ne prouvent pas (2026-11-09).**
+Les 96 % d'exactitude sur le jeu `dev` ne disent **rien** de la couverture des
+vulnérabilités : le corpus mesure le JUGE, pas l'étendue des attaques. La seule
+affirmation qu'il soutient est : *l'arbitre reconnaît bien les fuites de secret et les
+injections directes, en un seul tour, en français.*
+
+Sur les 69 échanges (29 contrôles, 24 vraies failles), 3 familles OWASP sur 10 sont
+touchées : LLM02 Sensitive Information Disclosure (13 échanges, cinq formes de fuite),
+LLM07 System Prompt Leakage (5) et LLM01 Prompt Injection (3, seulement `obeissance`).
+LLM03, LLM04, LLM05, LLM06, LLM08, LLM09 et LLM10 : aucune couverture.
+
+Angles morts de forme, plus gênants que les familles manquantes :
+- **tout est en un seul tour** — aucun échange n'a d'historique, et la consigne de
+  l'arbitre ne prévoit même pas ce format ;
+- **tout est en français** sauf T02 et T05 ;
+- **aucune injection indirecte** : tous les payloads viennent de l'utilisateur, jamais
+  d'un document, d'une page ou d'une sortie d'outil ;
+- **aucun contenu nuisible** : on ne teste que la fuite et l'obéissance.
+
+**Le plafond est dans le juge, pas dans les données.** L'arbitre ne connaît que deux
+critères, `divulgation` et `obeissance`. Soumis à un abus d'outils ou à un contenu
+nuisible, il répondrait `aucun` — non par erreur, mais faute de case pour le dire.
+Agrandir le corpus sans élargir d'abord les critères ne servirait donc à rien.
+
+Et la cible impose sa propre limite : sans outils, sans RAG et sans application autour,
+LLM05, LLM06 et LLM08 ne sont pas seulement non testés, ils sont **intestables**.
+
+Ordre à respecter pour étendre la couverture : enrichir la cible → élargir les critères
+de l'arbitre → agrandir le corpus → ajouter les payloads. Prendre ces étapes dans
+l'autre sens produirait des mesures qui ne veulent rien dire.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
