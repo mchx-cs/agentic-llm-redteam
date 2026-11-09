@@ -109,6 +109,27 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
 | 6 | Génération de rapport avec classement par gravité | Prévu |
 | 7 | Intégrer garak (couverture large) | Prévu |
+| 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | Prévu |
+| 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | Prévu |
+| 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | Prévu |
+| 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | Prévu |
+
+Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
+passage en production, et qu'une feuille de route centrée sur les attaques laissait
+invisibles.
+
+**Deux barres à ne pas confondre.**
+- *Utilisable sur ses propres systèmes* : phases 1, 6 et 8. L'outil vise une vraie
+  cible, trouve de vraies failles et produit un rapport lisible. C'est aussi ce qui se
+  démontre le mieux en vitrine.
+- *Utilisable en mission* : il faut y ajouter 2 (critères élargis), 9, 10 et 11. Un
+  rapport de pentest qui contient une fausse faille coûte la crédibilité de toute la
+  mission : 9 et 11 sont les moins visibles et les plus sous-estimés.
+
+**Ordre imposé par les dépendances**, à ne pas prendre à l'envers :
+8 (vraie cible) → 1 et 7 (payloads) → 2 (critères, une fois la cible enrichie) →
+3 (multi-tours) → 6 (rapport). 9, 10 et 11 peuvent avancer en parallèle.
+La phase 3 est la plus coûteuse, et la seule où PyRIT fait le gros du travail.
 
 ## Décisions prises et leur raison
 

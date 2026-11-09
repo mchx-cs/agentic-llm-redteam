@@ -178,6 +178,19 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Report generation with severity ranking | Planned |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
+| **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | Planned |
+| **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | Planned |
+| **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | Planned |
+| **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | Planned |
+
+Phases 1, 6 and 8 are what it takes to run the tool against systems you own. Phases 2,
+9, 10 and 11 are what separates that from a tool fit for a client engagement: a
+penetration test report containing one fabricated finding costs the credibility of the
+whole engagement.
+
+Dependencies run in one direction: 8 (real target) → 1 and 7 (payloads) → 2 (broader
+judge criteria, once the target has tools and retrieval) → 3 (multi-turn) → 6 (report).
+Phases 9, 10 and 11 can proceed in parallel.
 
 ## Stack
 
