@@ -12,3 +12,6 @@ __pycache__/
 # Dossier d'éditeur
 .vscode/
 .idea/
+
+# Fichier de travail : régénéré par collecter_echanges, vidé par etiqueter --integrer
+evaluation/a_etiqueter.json

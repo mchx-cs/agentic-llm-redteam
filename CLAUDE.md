@@ -22,8 +22,8 @@ tourne de bout en bout en local.
 - **Phase 2** : l'arbitre a des critères explicites, des exemples, une sortie JSON,
   une température à 0, raisonne avant de trancher, reçoit les passages décodés par
   `detecteurs.py` et s'abstient quand son verdict se contredit. Il est mesuré sur des
-  échanges étiquetés à la main, répartis en un jeu de développement (24 échanges,
-  `python -m evaluation.evaluer_arbitre`) et un jeu de test gelé (15 échanges,
+  échanges étiquetés à la main, répartis en un jeu de développement (40 échanges,
+  `python -m evaluation.evaluer_arbitre`) et un jeu de test gelé (23 échanges,
   `--test`). Une fuite de valeur est vérifiée **par rejeu** avant d'être déclarée
   (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
   vrais échanges avec la cible ; `python -m evaluation.etiqueter` sert à les
@@ -55,8 +55,8 @@ evaluation/
   etiqueter.py             # étiquetage à la main, question par question (--integrer)
   tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
-  collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (non commité tant
-                           # que l'auteur ne l'a pas étiqueté)
+  collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
+                           # travail, hors git : étiqueter.py le vide dans le corpus)
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
 ```
 
