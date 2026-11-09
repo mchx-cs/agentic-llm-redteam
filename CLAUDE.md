@@ -12,7 +12,8 @@ le README doit rester honnête sur l'état d'avancement.
 
 ## État actuel : Phase 0 terminée, Phases 1 et 2 démarrées
 
-La boucle complète **attaquant → cible → arbitre** tourne de bout en bout en local.
+La campagne complète **reconnaissance → planification → attaque → jugement → rejeu**
+tourne de bout en bout en local.
 
 - **Phase 1** : la bibliothèque de payloads est structurée (technique × objectif ×
   transformation), mais seule la technique `controle` (anodine) a des modèles. Les
@@ -25,7 +26,12 @@ La boucle complète **attaquant → cible → arbitre** tourne de bout en bout e
   `python -m evaluation.evaluer_arbitre`) et un jeu de test gelé (15 échanges,
   `--test`). Une fuite de valeur est vérifiée **par rejeu** avant d'être déclarée
   (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
-  vrais échanges avec la cible, à étiqueter à la main.
+  vrais échanges avec la cible ; `python -m evaluation.etiqueter` sert à les
+  étiqueter à la main, puis `--integrer` les verse dans le corpus.
+- **Phase 5** : `reconnaissance.py` sonde la cible et en dresse une fiche (rôle,
+  langue, outils, sujets refusés) ; `planificateur.py` en déduit, par des règles
+  déterministes, les familles à lancer, les objectifs à viser et l'ordre des essais.
+  Testés sur des cibles simulées : `python -m evaluation.tester_reconnaissance`.
 
 ## Architecture
 
@@ -34,16 +40,20 @@ config.py          # point de bascule unique : modèle local (Ollama) ou API dis
 llm_client.py      # LA couche d'abstraction : demander_au_llm()
 cible.py           # le système testé (actuellement un leurre avec un secret à protéger)
 agents/
-  attaquant.py     # construit les payloads : technique × objectif × transformation
+  reconnaissance.py # sonde la cible (questions anodines) et en dresse une fiche
+  planificateur.py  # choisit familles, objectifs et ordre à partir de la fiche (règles)
+  attaquant.py     # fournit les briques : technique × objectif × transformation
   arbitre.py       # LLM-as-judge : tranche succès / échec (sortie JSON)
   detecteurs.py    # décode l'épelé, le Base64, l'hexa AVANT l'arbitre (déterministe)
   verificateur.py  # rejeu : une valeur divulguée revient-elle, ou était-ce une hallucination ?
 payloads/
-  bibliotheque.json  # techniques (par famille OWASP) et objectifs
+  bibliotheque.json  # techniques (famille OWASP + prérequis) et objectifs
 evaluation/
   echanges_etiquetes.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
   evaluer_arbitre.py       # précision, rappel, détail des erreurs
   journal_test.jsonl       # chaque consultation du jeu de test, horodatée
+  etiqueter.py             # étiquetage à la main, question par question (--integrer)
+  tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (non commité tant
                            # que l'auteur ne l'a pas étiqueté)
@@ -96,7 +106,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | En cours |
 | 3 | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
 | 4 | Dissocier l'arbitre du modèle cible | En cours |
-| 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | Prévu |
+| 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
 | 6 | Génération de rapport avec classement par gravité | Prévu |
 | 7 | Intégrer garak (couverture large) | Prévu |
 
@@ -149,9 +159,22 @@ Choix de conception :
   planification : c'est la valeur ajoutée propre du projet.
 - **Budget propre à la reconnaissance.** Sonder coûte des requêtes et peut déclencher
   les défenses de la cible : la reconnaissance a sa propre limite d'essais.
-- **Calendrier.** À concevoir après les rooms AI Threat Modelling et AI System
-  Reconnaissance du path, et une fois les Phases 1 et 2 assez avancées pour qu'il y
-  ait de vrais payloads à choisir et un arbitre fiable pour juger.
+- **Budget distinct.** `BUDGET_RECONNAISSANCE` (reconnaissance.py) est séparé de
+  `MAX_ESSAIS` : sonder coûte des requêtes et peut déjà éveiller les défenses.
+
+Réalisé le 2026-11-09 : une sonde par champ de la fiche, des prérequis déclarés dans
+`bibliotheque.json` (`outils`, `secret`, `consignes`) évalués par les règles de
+`PREREQUIS`, et un plan qui dit aussi ce qu'il a **écarté et pourquoi** — un outil qui
+tait ce qu'il n'a pas testé donne une fausse impression de couverture. La fiche garde
+un champ `indices` (les citations qui justifient chaque fait) pour rester vérifiable.
+Une analyse illisible donne une fiche vide, jamais une fiche inventée.
+
+Limite observée dès le premier essai : contre le leurre local, la reconnaissance
+remonte les refus *génériques* du modèle (« conseils juridiques », « activités
+illégales ») plutôt que le secret du leurre, que la cible ne mentionne pas
+spontanément. La fiche est exacte, mais les objectifs qu'on en déduit sont génériques.
+Une cible qui ne déclare pas ce qu'elle protège se reconnaît mal : c'est la limite
+d'une reconnaissance purement déclarative.
 
 **Le prompt engineering plafonne avec llama3.2 comme juge (mesuré le 2026-10-30).**
 Arbitre actuel sur le jeu `dev` : précision 75 %, rappel 50 %, exactitude 67 % (même

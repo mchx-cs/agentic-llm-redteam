@@ -70,7 +70,9 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 ├── llm_client.py      # the abstraction layer — every model call goes through here
 ├── cible.py           # the system under test (currently a guardrailed decoy)
 ├── agents/
-│   ├── attaquant.py   # builds payloads: technique × objective × transformation
+│   ├── reconnaissance.py # probes the target with harmless questions, builds a profile
+│   ├── planificateur.py  # picks families, objectives and order from that profile (rules)
+│   ├── attaquant.py   # supplies the building blocks: technique × objective × transformation
 │   ├── arbitre.py     # LLM-as-judge: rules on success or failure (JSON verdict)
 │   ├── detecteurs.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
 │   └── verificateur.py  # replay check: real leak or target hallucination?
@@ -81,7 +83,9 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   ├── evaluer_arbitre.py       # measures judge precision and recall
 │   ├── journal_test.jsonl       # timestamped log of every test-set run
 │   ├── tester_rejeu.py          # tests the replay check against simulated targets
-│   └── collecter_echanges.py    # records real target exchanges for blind hand-labelling
+│   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
+│   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
+│   └── etiqueter.py             # command-line hand-labelling, one question at a time
 └── main.py            # orchestrator: runs the campaign loop
 ```
 
@@ -110,6 +114,15 @@ misclassification explained):
 ```bash
 python -m evaluation.evaluer_arbitre          # development set: used to tune the judge
 python -m evaluation.evaluer_arbitre --test   # frozen test set: never used for tuning
+```
+
+The other agents are checked against simulated targets whose behaviour is known in
+advance — a target that always leaks, one that hallucinates a new password every time,
+one that declares tools, one that reveals nothing:
+
+```bash
+python -m evaluation.tester_rejeu            # replay check
+python -m evaluation.tester_reconnaissance   # profiling and planning
 ```
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
@@ -162,7 +175,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
-| **5** | Reconnaissance and planning agents; multi-family campaigns | Planned |
+| **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Report generation with severity ranking | Planned |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
 

@@ -12,9 +12,14 @@ construit donc à partir de trois axes indépendants :
 Les techniques et objectifs vivent dans payloads/bibliotheque.json (des
 données, pas du code). Les transformations sont des fonctions Python, ici.
 
+Ce module FOURNIT les briques ; c'est planificateur.py qui CHOISIT, selon la
+fiche de la cible, lesquelles assembler et dans quel ordre. `generer_payloads()`
+ne sert donc plus qu'à produire le catalogue complet, sans tenir compte du
+contexte (utile pour collecter des échanges à étiqueter).
+
 ÉTAT ACTUEL : seule la technique "controle" (anodine) a des modèles. Les
-familles OWASP sont déclarées mais vides : elles seront remplies au fil du
-path AI Security, une fois chaque technique pratiquée à la main.
+familles OWASP sont déclarées mais vides : une technique sans modèle est
+écartée par le planificateur, qui le signale dans son plan.
 """
 
 import json
@@ -77,23 +82,3 @@ def generer_payloads():
             })
 
     return payloads
-
-
-# Calculée une seule fois au chargement du module : inutile de relire le
-# fichier à chaque essai.
-_PAYLOADS = generer_payloads()
-
-
-def generer_payload(numero_essai, reponse_precedente=None):
-    """
-    Renvoie la prochaine tentative à envoyer à la cible : un dictionnaire
-    avec le texte ET d'où il vient (technique, objectif, transformation),
-    pour que le rapport puisse dire QUELLE combinaison a fonctionné.
-
-    - numero_essai : le numéro de l'essai en cours (1, 2, 3...).
-    - reponse_precedente : la réponse de la cible au tour d'avant.
-      Toujours inutilisée : l'adaptation multi-tours est l'objet de la
-      Phase 3 (évaluation de PyRIT).
-    """
-    index = (numero_essai - 1) % len(_PAYLOADS)
-    return _PAYLOADS[index]

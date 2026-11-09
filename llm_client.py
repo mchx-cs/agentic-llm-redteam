@@ -9,8 +9,13 @@ touches qu'à config.py, et ce fichier — rien d'autre ne bouge.
 C'est le garde-fou anti-"code en dur partout" dont on avait parlé.
 """
 
-from openai import OpenAI
+from openai import (APIConnectionError, AuthenticationError, NotFoundError,
+                    OpenAI)
 from config import PROFILS, PROFIL_ACTIF
+
+# Les profils locaux : ceux dont le serveur tourne sur la machine. Le conseil
+# à donner diffère (« lance Ollama » plutôt que « vérifie ta connexion »).
+_HOTES_LOCAUX = ("localhost", "127.0.0.1")
 
 # Un client par profil, construit au premier usage puis réutilisé. Plusieurs
 # profils peuvent servir dans une même campagne : la cible en local, le juge
@@ -70,9 +75,42 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
         # Format OpenAI, compris aussi par Ollama et Groq.
         options["response_format"] = {"type": "json_object"}
 
-    reponse = _client_pour(profil).chat.completions.create(
-        model=modele,
-        messages=messages,
-        **options,
-    )
+    try:
+        reponse = _client_pour(profil).chat.completions.create(
+            model=modele,
+            messages=messages,
+            **options,
+        )
+    except (APIConnectionError, NotFoundError, AuthenticationError) as erreur:
+        # Les trois pannes de configuration les plus courantes. Le SDK les
+        # signale par "Connection error." ou un code HTTP : on les traduit en
+        # une consigne exploitable, en nommant le profil et le modèle fautifs.
+        raise RuntimeError(_message_d_erreur(profil, modele, erreur)) from erreur
+
     return reponse.choices[0].message.content
+
+
+def _message_d_erreur(profil, modele, erreur):
+    """Transforme une erreur du SDK en consigne claire pour l'utilisateur."""
+    cfg = PROFILS[profil]
+    url = cfg["base_url"]
+    entete = f"Profil '{profil}' (modèle '{modele}', {url}) :"
+    local = any(hote in url for hote in _HOTES_LOCAUX)
+
+    if isinstance(erreur, APIConnectionError):
+        if local:
+            return (f"{entete} le serveur ne répond pas.\n"
+                    f"  Ollama est-il lancé ? Vérifie avec : ollama list\n"
+                    f"  S'il est éteint, lance : ollama serve")
+        return (f"{entete} impossible de joindre le serveur.\n"
+                f"  Vérifie ta connexion et l'adresse 'base_url' dans config.py.")
+
+    if isinstance(erreur, NotFoundError):
+        if local:
+            return (f"{entete} ce modèle n'est pas installé.\n"
+                    f"  Télécharge-le avec : ollama pull {modele}")
+        return (f"{entete} ce modèle est inconnu du fournisseur.\n"
+                f"  Vérifie son nom exact (variable d'environnement du profil).")
+
+    return (f"{entete} clé d'API refusée.\n"
+            f"  Vérifie la clé dans le fichier .env à la racine du projet.")
