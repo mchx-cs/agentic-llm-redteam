@@ -397,6 +397,51 @@ c'est le socle du projet ; la cible déterministe, elle, tourne vraiment sans ri
 **Secrets factices uniquement** (type `TOPSECRET42`). Livrer une cible vulnérable dans
 un dépôt public est banal et sans risque ; y laisser une vraie valeur ne l'est pas.
 
+**Ce que coûte réellement une API payante (mesuré le 2026-11-09).** Les messages
+d'erreur 429 de Groq donnaient le nombre exact de tokens par requête (`Requested 1430`,
+`1553`, `1722`) : un appel à l'arbitre coûte **~1 500 tokens**, dont ~1 400 en entrée
+(la consigne et ses cinq exemples) et ~100 en sortie (le JSON).
+
+| Opération | Appels | Tokens |
+|---|---|---|
+| Évaluation jeu `dev` (46 échanges) | 46 | ~70 000 |
+| Évaluation jeu `test` (23 échanges) | 23 | ~35 000 |
+| Une campagne (reconnaissance + 3 essais + rejeu) | ~10 | ~12 000 |
+| `tester_rejeu` | 20 | ~30 000 |
+| `tester_reconnaissance` | 3 | ~7 500 |
+
+Une évaluation `dev` revient à ~0,01 $ sur un modèle d'entrée de gamme, ~0,18 $ en
+milieu de gamme, ~0,90 $ en haut de gamme. **Toute la séance du 2026-11-09** — trois
+évaluations `dev`, une `test`, plus les réglages — a épuisé le quota gratuit de
+200 000 tokens, soit **~0,56 $** sur une API payante de milieu de gamme.
+
+**Donc le risque n'est pas la facture, c'est la boucle qui s'emballe.** À l'échelle
+actuelle le coût est négligeable ; la phase 11 reste justifiée comme COUPE-CIRCUIT
+(agent adaptatif sans garde-fou, relance en cascade, rejeu dans un rejeu), pas comme
+économie. Le coût deviendra réel ailleurs : en **phase 3** (multi-tours — chaque tour
+reporte tout l'historique, la croissance est quadratique, pas linéaire) et en
+**phase 7** (garak — des centaines de sondes × plusieurs tentatives, de l'ordre de
+quelques dizaines d'euros par campagne complète). Les prix bougent vite : vérifier les
+pages officielles avant de budgéter.
+
+**Choix du fournisseur : la restriction porte sur le RÔLE, pas sur le fournisseur.**
+- *Arbitre et analyste* : **n'importe quelle API payante convient.** On lui demande
+  d'analyser du texte, c'est un usage ordinaire. Rien de particulier à vérifier.
+- *Cible* : trois cas distincts. (1) Le leurre local — aucun problème. (2) Une
+  **application cliente** bâtie sur une API : on teste SON prompt système et SES
+  garde-fous, avec son autorisation écrite et sur son compte — légitime, on n'attaque
+  pas le fournisseur mais la couche construite par le client. (3) Le **modèle brut**
+  d'un fournisseur qu'on cherche à faire déraper : hors du cadre contractuel, chez
+  pratiquement tous les fournisseurs. La porte d'entrée légitime existe : leurs
+  programmes officiels de red teaming et de bug bounty.
+
+Deux contraintes qui portent non sur le fournisseur mais sur ce qu'on lui envoie :
+- **les données du client** quittent son périmètre si l'arbitre tourne sur une API
+  distante — à prévoir au contrat (confidentialité, RGPD) ;
+- **les offres gratuites sont disqualifiées en mission** : plusieurs fournisseurs
+  s'autorisent à entraîner leurs modèles sur les requêtes gratuites. Sans importance
+  pour le leurre à secrets factices, rédhibitoire pour des données clientes.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
