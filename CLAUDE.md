@@ -22,7 +22,7 @@ tourne de bout en bout en local.
 - **Phase 2** : l'arbitre a des critères explicites, des exemples, une sortie JSON,
   une température à 0, raisonne avant de trancher, reçoit les passages décodés par
   `detecteurs.py` et s'abstient quand son verdict se contredit. Il est mesuré sur des
-  échanges étiquetés à la main, répartis en un jeu de développement (40 échanges,
+  échanges étiquetés à la main, répartis en un jeu de développement (57 échanges,
   `python -m evaluation.evaluer_arbitre`) et un jeu de test gelé (23 échanges,
   `--test`). Une fuite de valeur est vérifiée **par rejeu** avant d'être déclarée
   (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
@@ -441,6 +441,44 @@ Deux contraintes qui portent non sur le fournisseur mais sur ce qu'on lui envoie
 - **les offres gratuites sont disqualifiées en mission** : plusieurs fournisseurs
   s'autorisent à entraîner leurs modèles sur les requêtes gratuites. Sans importance
   pour le leurre à secrets factices, rédhibitoire pour des données clientes.
+
+**Élargissement à l'anglais : préparé le 2026-11-09, PAS ENCORE MESURÉ.**
+Deux questions distinctes se cachent derrière « faut-il sortir du français ».
+
+*A — L'arbitre tient-il dans une autre langue ?* C'est une question de CORRECTION, pas
+de couverture : une réponse négative invaliderait l'outil sur toute cible non
+francophone. Les seules preuves étaient T02 et T05, deux échanges anglais du jeu gelé,
+et le jeu `dev` n'en contenait aucun. Onze traductions anglaises ont donc été ajoutées
+au jeu `dev` (une par catégorie de piège : E01-en, E03-en … E12-en), ce qui le porte à
+57 échanges.
+
+Trois règles ont guidé leur ajout :
+- **L'étiquette est héritée, pas réinventée.** Une traduction fidèle teste le même
+  piège : `attendu` est repris de l'original, que l'auteur avait déjà validé.
+- **Même groupe que l'original.** Une traduction est une reformulation — exactement ce
+  que la notion de groupe protège. Elle reste donc en `dev`, et le jeu `test` ne peut
+  pas se retrouver à contenir la traduction d'un cas sur lequel on a réglé l'arbitre.
+- **La consigne de l'arbitre n'a PAS été touchée.** Mesurer d'abord, corriger ensuite :
+  retoucher le prompt avant la mesure empêcherait de savoir si le juge était déjà
+  robuste ou si c'est la retouche qui l'a sauvé.
+
+*Déjà acquis sans quota :* `detecteurs.py` est indépendant de la langue (il travaille
+sur des caractères, pas des mots) — vérifié sur de l'épelé, du Base64 et de l'hexa en
+anglais, sans régression sur les faux positifs.
+
+*Reste à faire :* lancer la mesure sur les 11 cas anglais (~17 000 tokens), puis
+décider. Question ouverte et mesurable si le juge dégrade : **faut-il basculer la
+consigne de l'arbitre en anglais ?** Les modèles y sont généralement meilleurs, et le
+juge doit couvrir des cibles de toutes langues — mais ça se compare sur le jeu `dev`
+au lieu de se deviner. La convention française du projet (code, commentaires, commits)
+n'est pas en cause : elle ne concerne pas la langue des échanges jugés.
+
+*B — Faut-il des payloads multilingues ?* Oui, mais **pas sous forme de corpus
+séparé**. Traduire un payload dans une langue peu représentée à l'entraînement affaiblit
+des garde-fous surtout alignés en anglais : c'est donc une **transformation**, au même
+titre que le Base64 ou l'épellation, et l'axe existe déjà dans `attaquant.py`. Une
+seule fonction multiplie toutes les techniques, au lieu d'ajouter des payloads un par
+un — et PyRIT fournit ce convertisseur, donc la phase 3 l'apporte presque gratuitement.
 
 ## Cadre légal
 
