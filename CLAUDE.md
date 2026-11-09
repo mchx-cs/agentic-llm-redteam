@@ -354,6 +354,46 @@ ordre de valeur :
 À faire après la phase 8 (adaptateur de cible) et la phase 6 : démontrer une campagne
 qui ne trouve que des payloads de contrôle n'aurait aucun intérêt.
 
+**Phase 12 : comment la cible vulnérable livrée doit fonctionner.** Deux cibles, deux
+métiers — les confondre ferait rater l'un des deux.
+- **Une cible déterministe, sans LLM** : du Python qui imite un chatbot (il refuse la
+  plupart des demandes, fuite sur certains motifs). Zéro dépendance, instantanée,
+  toujours le même résultat : c'est elle qui rend possibles les tests de bout en bout
+  de la phase 10, sans brûler de quota.
+- **Une cible adossée à un LLM, volontairement mal protégée** : même modèle local que
+  le reste, mais avec un prompt système bavard qui cède sous une injection directe.
+  Elle fuite RÉELLEMENT, parce qu'elle est mal défendue, pas parce qu'on l'a scriptée.
+  C'est elle qui sert à la démonstration : une cible scriptée qui renvoie le secret dès
+  qu'elle voit « ignore tes instructions » ne prouverait rien sur la chaîne d'agents,
+  seulement que le `if` fonctionne.
+
+**Elle se branche par l'adaptateur de la phase 8**, comme n'importe quelle autre cible
+(`--cible demo`, `--cible mock`, `--cible <url>`) : la cible livrée n'est qu'un
+adaptateur qui pointe vers un leurre local.
+
+**Niveaux de défense réglables** (idée empruntée à DVWA) : 1 = garde-fou quasi absent,
+2 = consigne ferme, 3 = consigne plus filtre de sortie. Ça transforme la cible en
+instrument de mesure — « à partir de quel niveau l'outil ne trouve plus ? » devient une
+métrique du projet, à côté de la précision de l'arbitre. Elle doit aussi exposer
+plusieurs familles : un prompt système qu'elle récite, un outil factice qu'on peut lui
+faire appeler, un document qu'elle lit. C'est précisément ce qui débloquera
+l'élargissement des critères de l'arbitre, aujourd'hui impossible faute de cible
+capable de ces comportements.
+
+**Le point délicat : c'est probabiliste.** Un vrai LLM mal protégé ne cède pas à tous
+les coups, donc la démonstration peut échouer chez le visiteur. Trois réponses : le
+niveau 1 est assez faible pour que la détection soit quasi certaine dans la limite de
+`MAX_ESSAIS` ; l'enregistrement asciinema montre une campagne réussie à qui veut juste
+regarder ; et un échec occasionnel illustre la thèse du projet (« la même injection
+réussit une fois sur trois ») au lieu de la contredire.
+
+**« En une commande » veut dire : aucune clé, aucun compte, aucune configuration
+au-delà de ce que le README demande déjà.** Ollama et `llama3.2` restent nécessaires,
+c'est le socle du projet ; la cible déterministe, elle, tourne vraiment sans rien.
+
+**Secrets factices uniquement** (type `TOPSECRET42`). Livrer une cible vulnérable dans
+un dépôt public est banal et sans risque ; y laisser une vraie valeur ne l'est pas.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
