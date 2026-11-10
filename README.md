@@ -68,7 +68,10 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 .
 ├── config.py          # single switch: local model vs hosted API
 ├── llm_client.py      # the abstraction layer — every model call goes through here
-├── cible.py           # the system under test (currently a guardrailed decoy)
+├── cibles/            # systems under test — one contract: interroger(message) -> str
+│   ├── leurre.py      # local decoy chatbot holding a fake secret (default)
+│   ├── mock.py        # deterministic, no LLM: free end-to-end tests
+│   └── http.py        # a real endpoint, described in .env (urllib, no new dependency)
 ├── agents/
 │   ├── reconnaissance.py # probes the target with harmless questions, builds a profile
 │   ├── planificateur.py  # picks families, objectives and order from that profile (rules)
@@ -83,6 +86,7 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   ├── evaluer_arbitre.py       # measures judge precision and recall
 │   ├── journal_test.jsonl       # timestamped log of every test-set run
 │   ├── tester_rejeu.py          # tests the replay check against simulated targets
+│   ├── tester_cibles.py         # tests the target adapters — no LLM calls at all
 │   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
 │   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 │   └── etiqueter.py             # command-line hand-labelling, one question at a time
@@ -123,11 +127,38 @@ one that declares tools, one that reveals nothing:
 ```bash
 python -m evaluation.tester_rejeu            # replay check
 python -m evaluation.tester_reconnaissance   # profiling and planning
+python -m evaluation.tester_cibles           # target adapters (no LLM, no quota)
 ```
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
 set cannot contain a mere rewording of a case the judge was tuned on. Every test-set
 run is logged with a timestamp in `evaluation/journal_test.jsonl`.
+
+### Pointing at a real target
+
+The target is an adapter, selected per run — nothing is hardcoded:
+
+```bash
+python main.py                          # the decoy, no setup required
+python main.py --cible mock             # deterministic, no LLM, no quota
+python main.py --cible https://host/chat  # a real endpoint
+```
+
+Applications all shape their JSON differently, so rather than guess, the shape is
+described in `.env`:
+
+```bash
+CIBLE_ENTETES={"Authorization": "Bearer xxx"}
+CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
+CIBLE_CHEMIN_REPONSE=choices.0.message.content
+```
+
+`{message}` is substituted into the parsed structure, not into raw text, so a payload
+full of quotes and newlines travels intact and cannot inject JSON. Every failure —
+HTTP error, unreachable host, non-JSON reply, wrong response path — is reported as an
+instruction rather than a stack trace.
+
+Only ever point this at a system you own or have **written authorisation** to test.
 
 ### Switching to a hosted API
 
@@ -182,7 +213,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | Planned |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
-| **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | Planned |
+| **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | **Done** |
 | **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | Planned |
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | Planned |
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | Planned |

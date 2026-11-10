@@ -38,7 +38,10 @@ tourne de bout en bout en local.
 ```
 config.py          # point de bascule unique : modèle local (Ollama) ou API distante
 llm_client.py      # LA couche d'abstraction : demander_au_llm()
-cible.py           # le système testé (actuellement un leurre avec un secret à protéger)
+cibles/            # les systèmes testés — contrat commun : interroger(message) -> str
+  leurre.py        # chatbot-jouet local avec un secret factice (défaut)
+  mock.py          # déterministe, sans LLM : tests de bout en bout gratuits
+  http.py          # un vrai endpoint, décrit dans .env (urllib, zéro dépendance)
 agents/
   reconnaissance.py # sonde la cible (questions anodines) et en dresse une fiche
   planificateur.py  # choisit familles, objectifs et ordre à partir de la fiche (règles)
@@ -55,6 +58,7 @@ evaluation/
   etiqueter.py             # étiquetage à la main, question par question (--integrer)
   tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
+  tester_cibles.py         # teste les adaptateurs de cible — AUCUN appel LLM
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
@@ -65,6 +69,12 @@ main.py            # orchestrateur : boucle de campagne avec budget d'essais
 **Aucun appel direct à un fournisseur de LLM.** Tout passe par `demander_au_llm()`
 dans `llm_client.py`. C'est ce qui rend la bascule local ↔ API indolore (une ligne
 dans `config.py`). Ne jamais coder en dur un appel Ollama ou OpenAI ailleurs.
+
+Précision apportée en phase 8 : cette règle vise les modèles **que nous utilisons**
+(arbitre, analyste, leurre), pour qu'ils restent interchangeables depuis `config.py`.
+Elle ne vise PAS la cible attaquée, qui est un système tiers arbitraire — souvent une
+application, pas un modèle nu. `cibles/http.py` l'appelle donc directement, en urllib,
+et c'est volontaire.
 
 **Toujours borner les boucles.** Les attaques sont probabilistes : un agent adaptatif
 boucle à l'infini sans garde-fou. `MAX_ESSAIS` dans `main.py` borne chaque campagne.
@@ -109,7 +119,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
 | 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | Prévu |
 | 7 | Intégrer garak (couverture large) | Prévu |
-| 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | Prévu |
+| 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | **Fait** |
 | 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | Prévu |
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | Prévu |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | Prévu |
@@ -152,7 +162,7 @@ attendent que l'auteur ait terminé le path AI Security de TryHackMe. Un agent d
 on ne sait pas juger les hallucinations est inutilisable.
 
 **PyRIT arrive en Phase 3, pas en Phase 7.** La boucle maison reproduit en miniature
-les briques de PyRIT : `cible.py` correspond à un *target*, `main.py` à un
+les briques de PyRIT : `cibles/` correspond à ses *targets*, `main.py` à un
 orchestrateur, `arbitre.py` à un *scorer*. Elle reste en place pour les Phases 1 et 2
 (payloads, fiabilité de l'arbitre), parce que c'est là que se construit la
 compréhension du problème. L'attaquant adaptatif multi-tours de la Phase 3 est en

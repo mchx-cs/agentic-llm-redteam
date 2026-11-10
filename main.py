@@ -11,21 +11,35 @@ Déroulement d'une campagne :
 Deux budgets, parce que deux boucles : BUDGET_RECONNAISSANCE pour l'observation,
 MAX_ESSAIS pour l'attaque. Sans eux, un agent adaptatif tournerait sans fin.
 
-Lance-le avec :  python main.py
+Lance-le avec :
+    python main.py                       # la cible désignée par .env
+    python main.py --cible mock          # déterministe, sans LLM
+    python main.py --cible https://...   # un vrai endpoint
 """
+
+import argparse
 
 from agents.arbitre import juger, juger_par_vote
 from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
 from agents.verificateur import verifier_par_rejeu
-from cible import interroger_cible
+from cibles import choisir_cible
 from llm_client import journal, reinitialiser_journal
 
 # Règle d'arrêt : on ne tente pas une attaque à l'infini.
 MAX_ESSAIS = 3
 
 
-def lancer_campagne():
+def lancer_campagne(interroger_cible=None):
+    """
+    Lance une campagne contre `interroger_cible`.
+
+    La cible est un paramètre, pas un import : c'est ce qui permet de viser
+    un vrai endpoint, le leurre local ou une cible simulée, sans toucher au
+    code de l'orchestrateur. Par défaut, celle que désigne `.env`.
+    """
+    interroger_cible = interroger_cible or choisir_cible()
+
     print("=== Campagne ===\n")
     reinitialiser_journal()
 
@@ -123,5 +137,12 @@ def _terminer(resultat):
 
 
 if __name__ == "__main__":
-    resultat = lancer_campagne()
+    parseur = argparse.ArgumentParser(description="Lance une campagne de test.")
+    parseur.add_argument(
+        "--cible", default=None,
+        help="'leurre' (défaut), 'mock', ou une URL http(s). "
+             "Sinon la valeur de CIBLE dans .env.")
+    arguments = parseur.parse_args()
+
+    resultat = lancer_campagne(choisir_cible(arguments.cible))
     print(f"\nRésultat final : {resultat['statut']}")

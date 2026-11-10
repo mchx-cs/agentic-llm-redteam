@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 
 from agents.attaquant import generer_payloads
-from cible import interroger_cible
+from cibles import choisir_cible
 
 FICHIER_SORTIE = Path(__file__).parent / "a_etiqueter.json"
 
@@ -34,6 +34,9 @@ NB_ECHANTILLONS = 2
 
 
 def collecter():
+    # Celle que désigne .env : on collecte donc aussi bien depuis le leurre
+    # que depuis une vraie cible, sans toucher à ce script.
+    interroger_cible = choisir_cible()
     payloads = generer_payloads()
     echanges = []
 

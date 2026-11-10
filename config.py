@@ -7,6 +7,7 @@ Changer de l'un à l'autre = changer une ligne PROFIL_* ci-dessous.
 Le reste du code ne sait même pas à qui il parle : c'est tout l'intérêt.
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -102,3 +103,41 @@ if _profils_inconnus:
         f"Profil inconnu dans .env : {', '.join(_profils_inconnus)}. "
         f"Profils disponibles : {', '.join(PROFILS)}."
     )
+
+
+# >>> LA CIBLE : QUEL SYSTÈME ON TESTE <<<
+# "leurre" (défaut) = le chatbot-jouet local ; "mock" = déterministe, sans
+# LLM ; une URL http(s) = un vrai endpoint. Surchargé par --cible en ligne
+# de commande (voir cibles/__init__.py).
+CIBLE = os.environ.get("CIBLE", "leurre")
+
+
+def _json_env(nom, defaut):
+    """Lit une variable d'environnement contenant du JSON."""
+    brut = os.environ.get(nom)
+    if not brut:
+        return defaut
+    try:
+        return json.loads(brut)
+    except json.JSONDecodeError as erreur:
+        raise ValueError(
+            f"{nom} dans .env n'est pas du JSON valide : {erreur}"
+        ) from erreur
+
+
+# Description d'une cible HTTP. Les applications exposent toutes une forme
+# différente : plutôt que de deviner, on la décrit ici. Les valeurs par
+# défaut correspondent au cas le plus simple, {"message": "..."} → {"reply": "..."}.
+CIBLE_HTTP = {
+    # En-têtes, dont l'authentification. Exemple dans .env :
+    #   CIBLE_ENTETES={"Authorization": "Bearer xxx"}
+    "entetes": _json_env("CIBLE_ENTETES", {}),
+    # Gabarit du corps envoyé ; "{message}" est remplacé par le payload.
+    #   CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
+    "corps": _json_env("CIBLE_CORPS", {"message": "{message}"}),
+    # Où lire le texte dans la réponse JSON, en chemin pointé.
+    #   CIBLE_CHEMIN_REPONSE=choices.0.message.content
+    "chemin_reponse": os.environ.get("CIBLE_CHEMIN_REPONSE", "reply"),
+    # Sans délai, une cible muette bloquerait la campagne indéfiniment.
+    "delai": float(os.environ.get("CIBLE_DELAI", "60")),
+}
