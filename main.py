@@ -89,7 +89,8 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
     print()
     for numero, payload in enumerate(plan["essais"], start=1):
         print(f"--- Essai {numero}/{len(plan['essais'])} ---")
-        print(f"  [Attaquant] {payload['technique']} / {payload['objectif']} "
+        print(f"  [Attaquant] {payload['technique']} / "
+              f"{payload['objectif'] or 'payload complet'} "
               f"/ {payload['transformation']}")
         print(f"              envoie : {payload['texte']}")
 

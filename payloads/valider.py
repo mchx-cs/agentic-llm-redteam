@@ -110,10 +110,18 @@ def valider(bibliotheque):
                         f"{nom} : accolade non échappée dans {modele[:40]!r} "
                         f"({erreur}). Doubler les accolades littérales.")
 
-        if not technique["modeles"] and technique["famille_owasp"]:
+        # Les payloads complets (venus de garak) ne portent PAS de
+        # `{objectif}` : ce sont des prompts entiers. Ils n'ont donc rien à
+        # faire dans `modeles`, et on vérifie seulement qu'ils sont du texte.
+        for payload in technique.get("payloads_complets", []):
+            if not isinstance(payload, str) or not payload.strip():
+                erreurs.append(f"{nom} : un payload complet est vide.")
+
+        if (not technique["modeles"] and not technique.get("payloads_complets")
+                and technique["famille_owasp"]):
             avertissements.append(
-                f"{nom} : aucun modèle, la technique ne sera jamais lancée "
-                f"(le planificateur le signalera dans le rapport).")
+                f"{nom} : aucun modèle ni payload, la technique ne sera jamais "
+                f"lancée (le planificateur le signalera dans le rapport).")
 
     # --- Objectifs ----------------------------------------------------------
     vus = set()
@@ -125,9 +133,11 @@ def valider(bibliotheque):
             erreurs.append(f"{nom} : identifiant en double.")
         vus.add(objectif.get("id"))
 
-    if not any(t["modeles"] for t in techniques if t.get("modeles")):
+    if not any(t.get("modeles") or t.get("payloads_complets")
+               for t in techniques):
         avertissements.append(
-            "Aucune technique n'a de modèle : une campagne n'enverra rien.")
+            "Aucune technique n'a de modèle ni de payload : une campagne "
+            "n'enverra rien.")
 
     return erreurs, avertissements
 
@@ -137,13 +147,22 @@ def principal():
     erreurs, avertissements = valider(bibliotheque)
 
     techniques = bibliotheque.get("techniques", [])
-    utilisables = [t for t in techniques if t.get("modeles")]
-    combinaisons = sum(len(t["modeles"]) for t in utilisables) \
-        * len(bibliotheque.get("objectifs", [])) * len(TRANSFORMATIONS)
+    utilisables = [t for t in techniques
+                   if t.get("modeles") or t.get("payloads_complets")]
+    objectifs = len(bibliotheque.get("objectifs", []))
+    combinaisons = len(TRANSFORMATIONS) * (
+        sum(len(t.get("modeles", [])) for t in utilisables) * objectifs
+        + sum(len(t.get("payloads_complets", [])) for t in utilisables))
+
+    source = ""
+    if bibliotheque.get("_garak"):
+        garak = bibliotheque["_garak"]
+        source = (f"\n  dont {garak['sondes']} sonde(s) garak "
+                  f"{garak['version']}, exportées le {garak['exporte_le']}")
 
     print(f"{FICHIER_BIBLIOTHEQUE.name} : {len(techniques)} technique(s), "
           f"dont {len(utilisables)} utilisable(s) — {combinaisons} payload(s) "
-          f"au catalogue.")
+          f"au catalogue.{source}")
 
     for message in avertissements:
         print(f"  [!]  {message}")

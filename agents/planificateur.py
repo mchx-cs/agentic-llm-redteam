@@ -83,7 +83,7 @@ def planifier(fiche, budget):
     for technique in bibliotheque["techniques"]:
         motifs = [texte for nom, (verifier, texte) in PREREQUIS.items()
                   if nom in technique["prerequis"] and not verifier(fiche)]
-        if not technique["modeles"]:
+        if not technique["modeles"] and not technique.get("payloads_complets"):
             motifs.append(MOTIF_SANS_MODELE)
 
         if motifs:
@@ -108,21 +108,71 @@ def planifier(fiche, budget):
                         "priorite": _priorite(technique, objectif, nom_transfo),
                     })
 
+        # Les payloads venus de l'extérieur (garak) sont des prompts complets :
+        # ils portent leur propre intention, donc pas d'axe objectif.
+        for payload in technique.get("payloads_complets", []):
+            for nom_transfo, transformer in TRANSFORMATIONS.items():
+                essais.append({
+                    "technique": technique["id"],
+                    "famille_owasp": technique["famille_owasp"],
+                    "objectif": None,
+                    "transformation": nom_transfo,
+                    "texte": transformer(payload),
+                    "source": technique.get("source"),
+                    "priorite": _priorite(technique, None, nom_transfo),
+                })
+
     # Tri stable : à priorité égale, l'ordre de la bibliothèque est conservé,
     # donc deux campagnes identiques produisent la même liste.
     essais.sort(key=lambda essai: essai["priorite"])
-    return {"essais": essais[:budget], "ecartees": ecartees}
+    return {"essais": _repartir(essais, budget), "ecartees": ecartees}
+
+
+def _repartir(essais, budget):
+    """
+    Répartit le budget ENTRE les techniques, au lieu de le donner à la
+    première.
+
+    Trier puis trancher paraissait suffisant tant que la bibliothèque tenait
+    en douze payloads. Avec 614, la première technique raflait les six essais
+    disponibles : on apprenait tout d'une sonde et rien des cinquante-deux
+    autres. Or un scanner doit d'abord balayer, puis creuser.
+
+    On prend donc un essai par technique, dans l'ordre de priorité, puis un
+    deuxième de chacune, et ainsi de suite. À budget égal, la couverture est
+    maximale — et le rapport peut enfin parler de plusieurs familles.
+    """
+    if budget <= 0:
+        return []
+
+    par_technique = {}
+    for essai in essais:                     # `essais` est déjà trié
+        par_technique.setdefault(essai["technique"], []).append(essai)
+
+    retenus = []
+    tours = max((len(v) for v in par_technique.values()), default=0)
+    for tour in range(tours):
+        for candidats in par_technique.values():
+            if tour < len(candidats):
+                retenus.append(candidats[tour])
+                if len(retenus) >= budget:
+                    return retenus
+    return retenus
 
 
 def _priorite(technique, objectif, nom_transformation):
     """
-    Plus le nombre est petit, plus l'essai passe tôt. Trois idées, dans
-    l'ordre : viser ce que la cible protège, attaquer avant de contrôler,
-    et commencer sans transformation (une attaque qui échoue en clair
-    n'échoue pas à cause de l'encodage).
+    Plus le nombre est petit, plus l'essai passe tôt. Quatre idées, dans
+    l'ordre : viser ce que la cible protège, préférer un payload éprouvé,
+    attaquer avant de contrôler, et commencer sans transformation (une
+    attaque qui échoue en clair n'échoue pas à cause de l'encodage).
+
+    `objectif` vaut None pour un payload complet, qui porte déjà sa propre
+    intention : il est traité comme ciblé, ni mieux ni moins bien qu'un
+    objectif issu de la reconnaissance.
     """
     priorite = 0
-    if objectif.get("origine") != "reconnaissance":
+    if objectif is not None and objectif.get("origine") != "reconnaissance":
         priorite += 4          # un objectif générique passe après un objectif ciblé
     if technique["id"] == "controle":
         priorite += 2          # le témoin n'est pas une attaque : il attend son tour
@@ -135,7 +185,8 @@ def resumer(plan):
     """Le plan en quelques lignes, pour l'affichage d'une campagne."""
     lignes = [f"  {len(plan['essais'])} essai(s) retenu(s) :"]
     for essai in plan["essais"]:
-        lignes.append(f"    - {essai['technique']} / {essai['objectif']} "
+        lignes.append(f"    - {essai['technique']} / "
+                      f"{essai['objectif'] or 'payload complet'} "
                       f"/ {essai['transformation']}")
     if plan["ecartees"]:
         lignes.append("  familles écartées :")

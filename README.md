@@ -89,7 +89,9 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   └── verificateur.py  # replay check: real leak or target hallucination?
 ├── payloads/
 │   ├── bibliotheque.json      # attack techniques (by OWASP family) and objectives
-│   └── valider.py             # validates the library before a campaign uses it
+│   ├── valider.py             # validates the library before a campaign uses it
+│   ├── source_garak.py        # inventories what garak offers, downloads nothing
+│   └── exporter_garak.py      # exports garak probes to a local, git-ignored snapshot
 ├── tests/             # pytest, no LLM calls — runs in CI on every push
 ├── evaluation/        # measurements that DO need a model — run by hand
 │   ├── echanges_etiquetes.json  # hand-labelled exchanges (dev and frozen test sets)
@@ -210,6 +212,38 @@ Every report ends with what was **not** tested and why — a tool that hides its
 gives a false sense of security, which is worse than no report at all. With the payload
 library still empty, that section is currently the longest part of the document.
 
+### Payloads: synced, not hand-written
+
+Hand-written payloads rot — a jailbreak that worked in 2026 fails in 2027, and the
+upkeep falls on one person forever. So the library is synced from
+[garak](https://github.com/NVIDIA/garak) (NVIDIA, Apache-2.0), on the model nuclei uses
+for its templates: acquisition and use are separated in time.
+
+```
+garak (throwaway venv)  →  exporter_garak.py  →  payloads/garak.json  →  campaigns
+   164 dependencies           once, offline          git-ignored          no network
+```
+
+The gigabytes are paid once by whoever syncs — never by someone cloning the repo, never
+during a campaign. Campaigns read a local snapshot, so two identical runs send identical
+payloads.
+
+```bash
+python -m payloads.source_garak --lister        # what garak offers; downloads nothing
+python -m venv venv-garak && venv-garak/bin/pip install garak
+venv-garak/bin/python payloads/exporter_garak.py
+python -m payloads.valider                      # check what you ended up with
+```
+
+Of garak's 191 probes, 173 expose static prompts (32,968 in total) and their tags
+already carry the OWASP mapping. Filtered to what this project can actually judge, that
+is 52 probes and 301 payloads. Probes whose declared goal is to elicit harmful content
+or slurs are excluded with a stated reason: they measure a model's moderation, not its
+resistance to injection, and the judge has no criterion for them.
+
+The snapshot stays out of git. garak's probes pull in third-party datasets with their
+own terms, so the repository points at the source rather than republishing it.
+
 ### Authorisation and audit trail
 
 The legal note at the bottom of this README used to be just a note. It is now a
@@ -310,7 +344,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
-| **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
+| **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | **Done** |
 | **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | **Done** |
 | **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | **Done** |
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | **Done** |

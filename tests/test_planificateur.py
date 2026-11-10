@@ -12,7 +12,20 @@ qu'il n'a pas testé donne une fausse impression de couverture.
 
 import pytest
 
+import agents.attaquant
 from agents.planificateur import objectifs_pour, planifier
+
+
+@pytest.fixture(autouse=True)
+def sans_instantane_garak(monkeypatch, tmp_path):
+    """
+    Isole les tests de l'instantané garak éventuellement présent en local.
+
+    Sans ça, ces tests passeraient ou non selon qu'on a lancé
+    `exporter_garak.py` — un test ne doit pas dépendre de ça.
+    """
+    monkeypatch.setattr(agents.attaquant, "FICHIER_GARAK",
+                        tmp_path / "absent.json")
 
 
 def fiche(role="assistant", outils=(), refuses=(), consignes=False):

@@ -23,6 +23,7 @@ familles OWASP sont déclarées mais vides : une technique sans modèle est
 """
 
 import json
+import re
 from itertools import product
 from pathlib import Path
 
@@ -49,11 +50,83 @@ TRANSFORMATIONS = {
 }
 
 
+# --- Instantané garak ---------------------------------------------------------
+# Produit par `payloads/exporter_garak.py`, lancé dans un venv séparé. Absent
+# du dépôt (voir .gitignore) : les sondes de garak incorporent des jeux de
+# données tiers, qu'on ne republie pas depuis un dépôt personnel. Qui veut
+# ces payloads resynchronise.
+
+FICHIER_GARAK = FICHIER_BIBLIOTHEQUE.parent / "garak.json"
+
+# Les tags de garak portent déjà la correspondance OWASP ; on la traduit dans
+# le vocabulaire du projet, et on en déduit le prérequis de la famille.
+FAMILLES_GARAK = {
+    "owasp:llm01": ("LLM01:2025 Prompt Injection", []),
+    "owasp:llm02": ("LLM02:2025 Sensitive Information Disclosure", ["secret"]),
+    "owasp:llm07": ("LLM07:2025 System Prompt Leakage", ["consignes"]),
+}
+
+
+# garak remplit ses propres emplacements à l'exécution. Les laisser tels
+# quels affaiblirait le payload : la cible verrait « {generator.name} » au
+# lieu d'un nom d'assistant, et bien des jailbreaks reposent sur ce nom.
+# Un remplacement neutre est préférable à un emplacement visible.
+EMPLACEMENTS_GARAK = {"{generator.name}": "the assistant"}
+
+
+def _remplir(payload):
+    for marqueur, valeur in EMPLACEMENTS_GARAK.items():
+        payload = payload.replace(marqueur, valeur)
+    return payload
+
+
+def _technique_depuis_sonde(sonde):
+    """Traduit une sonde garak en technique du projet."""
+    famille, prerequis = next(
+        (FAMILLES_GARAK[t] for t in sonde["familles_owasp"]
+         if t in FAMILLES_GARAK), (None, []))
+    identifiant = "garak-" + re.sub(
+        r"[^a-z0-9]+", "-", sonde["sonde"].replace("probes.", "").lower()
+    ).strip("-")
+    return {
+        "id": identifiant,
+        "famille_owasp": famille,
+        "description": sonde["objectif"] or sonde["sonde"],
+        "prerequis": prerequis,
+        # Les prompts de garak sont COMPLETS : ils ne comportent pas
+        # d'emplacement `{objectif}`, et n'ont donc rien à faire dans
+        # `modeles`, que le validateur contrôle sur ce point.
+        "modeles": [],
+        "payloads_complets": [_remplir(p) for p in sonde["payloads"]],
+        "source": f"garak {sonde['sonde']}",
+    }
+
+
 # --- Construction des payloads -----------------------------------------------
 
-def charger_bibliotheque():
+def charger_bibliotheque(avec_garak=True):
+    """
+    Charge la bibliothèque, enrichie de l'instantané garak s'il est présent.
+
+    L'instantané est optionnel par construction : sans lui, le dépôt tourne
+    exactement comme avant. C'est le modèle de nuclei — l'outil reste léger,
+    les payloads se synchronisent à part.
+    """
     with open(FICHIER_BIBLIOTHEQUE, encoding="utf-8") as f:
-        return json.load(f)
+        bibliotheque = json.load(f)
+
+    if avec_garak and FICHIER_GARAK.exists():
+        with open(FICHIER_GARAK, encoding="utf-8") as f:
+            instantane = json.load(f)
+        bibliotheque["techniques"] = bibliotheque["techniques"] + [
+            _technique_depuis_sonde(s) for s in instantane["sondes"]]
+        bibliotheque["_garak"] = {
+            "version": instantane.get("version_garak"),
+            "exporte_le": instantane.get("exporte_le"),
+            "sondes": len(instantane["sondes"]),
+        }
+
+    return bibliotheque
 
 
 def generer_payloads():
@@ -80,5 +153,21 @@ def generer_payloads():
                 "transformation": nom_transfo,
                 "texte": TRANSFORMATIONS[nom_transfo](texte),
             })
+
+        # Les payloads venus de l'extérieur sont des prompts COMPLETS : ils
+        # portent déjà leur propre intention, et ne se croisent donc pas avec
+        # l'axe des objectifs. D'où `objectif: None`.
+        for numero, payload in enumerate(
+                technique.get("payloads_complets", []), start=1):
+            for nom_transfo in TRANSFORMATIONS:
+                payloads.append({
+                    "technique": technique["id"],
+                    "famille_owasp": technique["famille_owasp"],
+                    "objectif": None,
+                    "transformation": nom_transfo,
+                    "texte": TRANSFORMATIONS[nom_transfo](payload),
+                    "source": technique.get("source"),
+                    "numero_payload": numero,
+                })
 
     return payloads

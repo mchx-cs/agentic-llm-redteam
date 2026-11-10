@@ -67,7 +67,9 @@ agents/
 payloads/
   bibliotheque.json  # techniques (famille OWASP + prérequis) et objectifs
   valider.py         # vérifie la bibliothèque — `python -m payloads.valider`
-  source_garak.py    # inventorie la source garak (--lister, --decrire), n'importe pas
+  source_garak.py    # inventorie la source garak (--lister, --decrire)
+  exporter_garak.py  # exporte les sondes en instantané local — venv garak, pas celui du projet
+  garak.json         # instantané produit, HORS GIT : resynchroniser plutôt que figer
 tests/             # pytest, AUCUN appel LLM : tourne en intégration continue
   test_detecteurs.py, test_verificateur.py, test_arbitre.py,
   test_planificateur.py, test_cibles.py, test_rapport.py,
@@ -141,7 +143,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 4 | Dissocier l'arbitre du modèle cible | En cours |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
 | 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | **Fait** |
-| 7 | Intégrer garak (couverture large) | Prévu |
+| 7 | Intégrer garak (couverture large) | **Fait** |
 | 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | **Fait** |
 | 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | **Fait** |
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
@@ -744,6 +746,61 @@ Les trois voies qui restent pour la phase 7, à trancher :
    chaîne (juge, rejeu, couverture) serait alors contournée, donc on perdrait la
    valeur ajoutée du projet ;
 3. renoncer à garak et remplir la bibliothèque à la main, au fil du path.
+
+**Phase 7 : garak comme source synchronisée, sur le modèle de nuclei (2026-11-10).**
+L'export fonctionne, et il répond aux deux exigences qui comptent sur la durée.
+
+*Maintien dans le temps.* Des payloads écrits à la main pourrissent : un jailbreak de
+2026 échoue en 2027, et l'entretien retombe indéfiniment sur une seule personne. garak
+est maintenu en amont par NVIDIA. L'instantané s'actualise par une commande.
+
+*Praticité à l'exécution.* L'acquisition et l'usage sont séparés dans le temps, comme
+les templates de nuclei : on synchronise une fois, les campagnes lisent un instantané
+LOCAL. Aucun réseau pendant une campagne, aucune latence, et deux campagnes identiques
+envoient les mêmes payloads.
+
+```
+garak (venv jetable)  ->  exporter_garak.py  ->  payloads/garak.json  ->  campagnes
+   164 dépendances          une fois, hors ligne      hors git            zéro réseau
+```
+
+Les gigaoctets sont payés une seule fois par qui synchronise — jamais par qui clone,
+jamais pendant une campagne. L'objection « 164 dépendances » portait sur le mauvais
+moment du cycle de vie.
+
+Faits mesurés : 191 sondes, dont 173 à prompts statiques, 32 968 prompts au total. Les
+tags portent la correspondance OWASP (`owasp:llm01` … `owasp:llm10`), rien à deviner.
+Filtré sur le périmètre du projet : **52 sondes, 301 payloads**.
+
+Cinq choix de conception :
+- **`exporter_garak.py` n'importe rien du projet** : il tourne dans le venv garak et ne
+  communique que par un fichier JSON. C'est ce qui garde les 164 dépendances dehors.
+- **L'instantané est hors git.** Les sondes incorporent des jeux tiers (JailbreakBench,
+  FigStep…) dont les conditions propres n'ont pas été vérifiées. On pointe vers la
+  source, on ne la republie pas depuis un dépôt personnel.
+- **Les prompts de garak sont COMPLETS**, sans emplacement `{objectif}`. D'où le champ
+  `payloads_complets`, à côté de `modeles` : ils ne se croisent pas avec l'axe des
+  objectifs, puisqu'ils portent déjà leur intention. Le validateur ne leur impose donc
+  pas `{objectif}`, à juste titre.
+- **Le filtre de périmètre travaille sur l'objectif DÉCLARÉ** par garak, et consigne
+  chaque exclusion avec son motif. Grossier mais auditable, et corrigé à l'usage :
+  « forbidden » a été ajouté après avoir vu passer `adaptive_attacks.AdaptiveAttacks`
+  en campagne. Les sondes écartées mesurent la modération du modèle, pas sa résistance
+  à l'injection — et **l'arbitre n'a aucun critère pour les juger**.
+- **Les emplacements de garak sont remplis** (`{generator.name}` apparaît dans 81
+  payloads sur 301). Les envoyer littéralement affaiblirait l'attaque : la cible verrait
+  un gabarit au lieu d'un nom d'assistant.
+
+**Le budget se répartit désormais ENTRE les techniques.** Trier puis trancher suffisait
+avec douze payloads ; avec 614, la première technique raflait les six essais du budget.
+On prend maintenant un essai par technique, puis un deuxième de chacune : à budget égal
+la couverture est maximale, et le rapport peut parler de plusieurs familles. C'est la
+vraie question d'optimisation — pas le temps de calcul, qui reste de 18 ms pour 7 200
+combinaisons.
+
+**Les tests ne dépendent pas de l'instantané.** Une fixture neutralise `FICHIER_GARAK` :
+sans elle, les tests passeraient ou non selon qu'on a lancé l'exportateur. Le dépôt
+fonctionne à l'identique avec ou sans synchronisation.
 
 ## Cadre légal
 

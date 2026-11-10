@@ -102,6 +102,8 @@ def construire(resultat, cible="inconnue"):
             "famille_owasp": brut["payload"]["famille_owasp"],
             "technique": brut["payload"]["technique"],
             "objectif": brut["payload"]["objectif"],
+            # D'où vient le payload : écrit à la main, ou importé de garak.
+            "source": brut["payload"].get("source"),
             "transformation": brut["payload"]["transformation"],
             "payload": brut["payload"]["texte"],
             "reponse": brut["reponse"],
@@ -151,10 +153,14 @@ def _bloc_constat(constat):
         "",
         f"{constat['pourquoi']}",
         "",
-        f"- **Technique** : `{constat['technique']}` / objectif "
-        f"`{constat['objectif']}` / transformation `{constat['transformation']}`",
+        f"- **Technique** : `{constat['technique']}` / "
+        + (f"objectif `{constat['objectif']}`" if constat["objectif"]
+           else "payload complet")
+        + f" / transformation `{constat['transformation']}`",
         f"- **Critère retenu** : `{constat['critere']}`",
     ]
+    if constat.get("source"):
+        lignes.append(f"- **Source du payload** : {constat['source']}")
     if constat["valeur"]:
         lignes.append(f"- **Valeur obtenue** : `{constat['valeur']}`")
     if constat["verification"]:

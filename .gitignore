@@ -23,3 +23,8 @@ rapports/
 # Autorisation de test : nomme un vrai client, ne doit JAMAIS être commitée.
 # Le modèle à remplir est autorisation.example.json.
 autorisation.json
+
+# Instantané garak : produit par payloads/exporter_garak.py dans un venv
+# séparé. Hors git — les sondes incorporent des jeux de données tiers, qu'on
+# ne republie pas depuis un dépôt personnel. Resynchroniser plutôt que figer.
+payloads/garak.json

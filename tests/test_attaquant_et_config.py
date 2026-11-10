@@ -10,8 +10,16 @@ import json
 
 import pytest
 
+import agents.attaquant
 from agents.attaquant import (FICHIER_BIBLIOTHEQUE, TRANSFORMATIONS,
                               charger_bibliotheque, generer_payloads)
+
+
+@pytest.fixture(autouse=True)
+def sans_instantane_garak(monkeypatch, tmp_path):
+    """Isole les tests de l'instantané garak éventuellement présent."""
+    monkeypatch.setattr(agents.attaquant, "FICHIER_GARAK",
+                        tmp_path / "absent.json")
 
 
 class TestBibliotheque:
@@ -60,10 +68,15 @@ class TestGenerationDesPayloads:
             assert {"technique", "famille_owasp", "objectif",
                     "transformation", "texte"} <= set(payload)
 
-    def test_le_catalogue_est_le_produit_des_trois_axes(self):
+    def test_le_catalogue_croise_bien_les_axes(self):
         bibliotheque = charger_bibliotheque()
-        attendu = sum(len(t["modeles"]) for t in bibliotheque["techniques"]) \
-            * len(bibliotheque["objectifs"]) * len(TRANSFORMATIONS)
+        gabarits = sum(len(t["modeles"]) for t in bibliotheque["techniques"])
+        complets = sum(len(t.get("payloads_complets", []))
+                       for t in bibliotheque["techniques"])
+        # Un gabarit se croise avec chaque objectif ; un payload complet
+        # porte déjà son intention et n'a que l'axe transformation.
+        attendu = len(TRANSFORMATIONS) * (
+            gabarits * len(bibliotheque["objectifs"]) + complets)
         assert len(generer_payloads()) == attendu
 
 
