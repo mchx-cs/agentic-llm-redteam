@@ -143,7 +143,12 @@ def valider(bibliotheque):
 
 
 def principal():
-    bibliotheque = json.loads(FICHIER_BIBLIOTHEQUE.read_text(encoding="utf-8"))
+    # On valide la bibliothèque TELLE QUE LA CAMPAGNE LA VERRA, instantané
+    # garak compris : une sonde mal traduite doit être repérée ici, pas au
+    # milieu d'une campagne.
+    from agents.attaquant import charger_bibliotheque
+
+    bibliotheque = charger_bibliotheque()
     erreurs, avertissements = valider(bibliotheque)
 
     techniques = bibliotheque.get("techniques", [])
