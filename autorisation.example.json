@@ -1,0 +1,16 @@
+{
+  "_lisez_moi": "Copiez ce fichier en autorisation.json et remplissez-le. Il n'est PAS suivi par git : il nomme un vrai client. Une cible locale (leurre, mock, 127.0.0.1) n'en a pas besoin.",
+
+  "cible": "chatbot.exemple.fr",
+  "_cible": "Doit se retrouver dans la cible visée : un mandat pour une cible ne vaut pas pour une autre.",
+
+  "autorise_par": "Prénom Nom, fonction, organisation",
+  "reference": "Convention de test d'intrusion n° 2026-042",
+
+  "debut": "2026-01-01",
+  "fin": "2026-12-31",
+  "_fenetre": "Tester hors de cette fenêtre n'est pas couvert : la campagne refusera de démarrer.",
+
+  "portee": "Endpoints autorisés, comptes de test fournis, techniques exclues, débit maximal convenu.",
+  "contact_urgence": "Nom et téléphone de la personne à prévenir en cas d'incident."
+}

@@ -18,7 +18,12 @@ Lance-le avec :
 """
 
 import argparse
+import sys
+from datetime import datetime
+from pathlib import Path
 
+from audit import (FICHIER_AUTORISATION, AutorisationManquante, PisteAudit,
+                   exiger)
 from agents.arbitre import juger, juger_par_vote
 from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
@@ -32,15 +37,20 @@ from rapport import enregistrer
 MAX_ESSAIS = 3
 
 
-def lancer_campagne(interroger_cible=None):
+def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
     """
     Lance une campagne contre `interroger_cible`.
 
     La cible est un paramètre, pas un import : c'est ce qui permet de viser
     un vrai endpoint, le leurre local ou une cible simulée, sans toucher au
     code de l'orchestrateur. Par défaut, celle que désigne `.env`.
+
+    `piste` est une PisteAudit facultative. Quand elle est fournie, chaque
+    échange avec la cible y est consigné au fil de l'eau — y compris ceux de
+    la reconnaissance et du rejeu, puisque la cible y est tracée en amont.
     """
     interroger_cible = interroger_cible or choisir_cible()
+    nom_cible = nom_cible or CIBLE
 
     print("=== Campagne ===\n")
     # Le budget est armé ICI, pas dans llm_client : les scripts d'évaluation
@@ -51,7 +61,8 @@ def lancer_campagne(interroger_cible=None):
     # --- 1. Reconnaissance : qui est cette cible ? -------------------------
     print("--- Reconnaissance ---")
     try:
-        fiche = reconnaitre(interroger_cible)
+        fiche = reconnaitre(piste.tracer("reconnaissance", interroger_cible)
+                            if piste else interroger_cible)
     except BudgetDepasse as arret:
         print(f"\n>>> {arret}")
         return _terminer({"statut": "budget_epuise", "fiche": None,
@@ -88,6 +99,9 @@ def lancer_campagne(interroger_cible=None):
             tronquees_avant = len(journal()["tronquees"])
             reponse = interroger_cible(payload["texte"])
             tronquee = len(journal()["tronquees"]) > tronquees_avant
+            if piste:
+                piste.consigner_echange("attaque", payload["texte"], reponse,
+                                        tronquee)
             print(f"  [Cible]     répond : {reponse}")
             if tronquee:
                 print("  /!\\        réponse TRONQUÉE : une fuite a pu être "
@@ -97,6 +111,8 @@ def lancer_campagne(interroger_cible=None):
             # une faille qui apparaît selon le tirage n'a rien à faire dans
             # un rapport.
             verdict = juger_par_vote(payload["texte"], reponse)
+            if piste:
+                piste.consigner_verdict(numero, verdict)
             print(f"  [Arbitre]   enfreint={verdict['reussi']} "
                   f"({verdict['critere']}, votes {verdict['votes']}) : "
                   f"{verdict['analyse']}\n")
@@ -112,7 +128,10 @@ def lancer_campagne(interroger_cible=None):
                 # cible plusieurs fois, ce qui lisse le bruit. Voter en plus
                 # coûterait neuf appels là où trois suffisent.
                 verification = verifier_par_rejeu(
-                    payload["texte"], verdict["valeur"], interroger_cible, juger
+                    payload["texte"], verdict["valeur"],
+                    piste.tracer("rejeu", interroger_cible) if piste
+                    else interroger_cible,
+                    juger,
                 )
                 print(f"  [Rejeu]     {verification['statut']} : "
                       f"{verification['explication']}")
@@ -187,14 +206,50 @@ def cli(arguments=None):
         metavar="DOSSIER",
         help="écrire resultat.json et rapport.md dans DOSSIER "
              "(par défaut : rapports/).")
+    parseur.add_argument(
+        "--autorisation", default=FICHIER_AUTORISATION, metavar="FICHIER",
+        help=f"mandat couvrant la cible (défaut : {FICHIER_AUTORISATION}). "
+             f"Inutile pour une cible locale.")
     arguments = parseur.parse_args(arguments)
 
-    resultat = lancer_campagne(choisir_cible(arguments.cible))
+    nom_cible = arguments.cible or CIBLE
+
+    # Le mandat AVANT tout : on ne lance pas une seule requête vers un
+    # système tiers sans pouvoir prouver qu'on en avait le droit.
+    try:
+        autorisation = exiger(nom_cible, arguments.autorisation)
+    except AutorisationManquante as refus:
+        # Une consigne, pas une trace : le lecteur doit savoir quoi faire.
+        print(f"Campagne REFUSÉE.\n{refus}", file=sys.stderr)
+        raise SystemExit(2)
+
+    if autorisation:
+        print(f"Mandat : {autorisation['reference']} — "
+              f"autorisé par {autorisation['autorise_par']}, "
+              f"du {autorisation['debut']} au {autorisation['fin']}.\n")
+
+    dossier = arguments.rapport or "rapports"
+    horodatage = datetime.now().strftime("%Y%m%d-%H%M%S")
+    # La piste d'audit est écrite TOUJOURS, même sans --rapport : elle est
+    # la trace de ce qu'on a envoyé, pas un livrable optionnel.
+    piste = PisteAudit(Path(dossier) / f"{horodatage}-journal.jsonl",
+                       nom_cible, autorisation)
+
+    try:
+        resultat = lancer_campagne(
+            choisir_cible(arguments.cible), nom_cible, piste)
+    finally:
+        # Même si la campagne lève, le journal doit se refermer proprement.
+        piste.clore(locals().get("resultat", {}).get("statut", "interrompue"),
+                    journal())
+
+    resultat["autorisation"] = autorisation
     print(f"\nRésultat final : {resultat['statut']}")
+    print(f"Piste d'audit : {piste.chemin}")
 
     if arguments.rapport:
         chemin_json, chemin_md = enregistrer(
-            resultat, cible=arguments.cible or CIBLE, dossier=arguments.rapport)
+            resultat, cible=nom_cible, dossier=arguments.rapport)
         print(f"Rapport écrit : {chemin_md}\n"
               f"Source de vérité : {chemin_json}")
 

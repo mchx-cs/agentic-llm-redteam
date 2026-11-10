@@ -98,6 +98,7 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
 │   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 │   └── etiqueter.py             # command-line hand-labelling, one question at a time
+├── audit.py           # authorisation gate + append-as-you-go JSONL audit trail
 ├── rapport.py         # resultat.json (source of truth) → rapport.md; rule-based severity
 └── main.py            # orchestrator: runs the campaign loop
 ```
@@ -208,6 +209,31 @@ Every report ends with what was **not** tested and why — a tool that hides its
 gives a false sense of security, which is worse than no report at all. With the payload
 library still empty, that section is currently the longest part of the document.
 
+### Authorisation and audit trail
+
+The legal note at the bottom of this README used to be just a note. It is now a
+precondition: against a remote target, the campaign refuses to start without a mandate.
+
+```bash
+cp autorisation.example.json autorisation.json   # then fill it in
+python main.py --cible https://chatbot.client.fr/api --rapport
+```
+
+The requirement scales with the risk. The bundled decoy, the deterministic target and
+anything on `localhost` need nothing — they are yours. Demanding the same paperwork for
+both would only teach people to click through, and would cost the repository its
+one-command demo.
+
+The mandate is checked, not merely present: it must name the target actually being
+attacked (a mandate for one client does not cover another), and today must fall inside
+the agreed window. A refusal exits with code 2 and an instruction, not a stack trace.
+`autorisation.json` is git-ignored — it names a real client.
+
+Every run also writes a JSONL audit trail, flushed line by line rather than at the end:
+if the campaign dies, the record of what was already sent survives, which is exactly
+when it matters. It holds the mandate, every exchange with the target across
+reconnaissance, attack and replay, every verdict with its votes, and the final usage.
+
 ### Bounding a campaign
 
 Every campaign runs under a ceiling, set in `.env` and enforced in `llm_client` — the
@@ -285,7 +311,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
 | **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | **Done** |
-| **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | Planned |
+| **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | **Done** |
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | **Done** |
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | **Done** |
 | **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, asciinema recording in this README | Planned |

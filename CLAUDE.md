@@ -28,6 +28,9 @@ tourne de bout en bout en local.
   (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
   vrais échanges avec la cible ; `python -m evaluation.etiqueter` sert à les
   étiqueter à la main, puis `--integrer` les verse dans le corpus.
+- **Phase 9** : `audit.py` refuse de démarrer contre une cible distante sans mandat
+  valide (`autorisation.json`, hors git), et consigne chaque échange avec la cible dans
+  une piste JSONL écrite au fil de l'eau.
 - **Phase 11** : budget de campagne appliqué dans `llm_client` (`BUDGET_APPELS`,
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
@@ -76,6 +79,7 @@ evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
+audit.py           # mandat exigé avant de démarrer + piste d'audit JSONL au fil de l'eau
 rapport.py         # resultat.json (vérité) → rapport.md (rendu), gravité par règles
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
 ```
@@ -137,7 +141,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | **Fait** |
 | 7 | Intégrer garak (couverture large) | Prévu |
 | 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | **Fait** |
-| 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | Prévu |
+| 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | **Fait** |
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | **Fait** |
 | 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, enregistrement asciinema au README | Prévu |
@@ -646,6 +650,40 @@ tout — juge, analyste, cible, rejeu et votes compris.
 Défauts larges mais FINIS (200 appels, 500 000 tokens) : une campagne normale en
 consomme ~10 et ~12 000, donc le plafond ne gêne jamais l'usage courant et n'arrête que
 ce qui s'emballe. `BUDGET_APPELS=0` désarme, à n'utiliser qu'en connaissance de cause.
+
+**Phase 9 : le cadre légal passe du texte au code (2026-11-10).** Le « Cadre légal »
+ci-dessous n'était qu'une phrase ; `audit.py` en fait une condition d'exécution.
+
+**L'exigence suit le risque.** Le leurre, la cible déterministe et tout ce qui tourne
+sur `localhost` / `127.0.0.1` ne demandent rien : ils sont à vous. Une cible distante
+exige un mandat. Imposer le même formulaire aux deux apprendrait surtout à cliquer sans
+lire, et le dépôt cesserait d'être essayable en une commande.
+
+**Le mandat n'est pas une case à cocher** : deux contrôles lui donnent sa valeur.
+- *La cible doit être couverte.* Un mandat pour `chatbot.client.fr` ne vaut pas pour
+  `autre-client.fr` — c'est ce qui empêche de le réutiliser ailleurs.
+- *La fenêtre doit être courante.* Tester hors des dates convenues n'est pas couvert.
+
+Un refus sort en code 2 avec une consigne (« copie autorisation.example.json… »), pas
+une trace d'exécution. `autorisation.json` est dans `.gitignore` : il nomme un vrai
+client. Le modèle à remplir, lui, est commité.
+
+**La piste d'audit s'écrit au fil de l'eau, et c'est tout l'intérêt.** Un JSONL vidé
+après chaque ligne : si la campagne tombe, on garde la trace de ce qui a DÉJÀ été
+envoyé — précisément le moment où on en a besoin. Elle consigne le mandat en ouverture,
+chaque échange avec la cible (reconnaissance, attaque, rejeu), chaque verdict avec ses
+votes, puis la consommation en clôture. Elle est écrite **toujours**, même sans
+`--rapport` : c'est une trace, pas un livrable optionnel.
+
+Deux choix d'implémentation :
+- **On trace les échanges avec la CIBLE, pas nos appels au juge.** C'est ce qu'on doit
+  pouvoir montrer si la campagne est contestée ; le reste est compté par `llm_client`.
+- **`piste.tracer(phase, cible)` enveloppe la cible** au lieu d'instrumenter chaque
+  agent. La cible reste une fonction `message -> str`, et `reconnaissance.py` comme
+  `verificateur.py` ignorent qu'elle est tracée — le contrat de la phase 8 tient.
+
+Enfin, le rapport cite le mandat sous lequel il a été produit : en mission, un rapport
+qui ne le dit pas n'est pas opposable.
 
 ## Cadre légal
 

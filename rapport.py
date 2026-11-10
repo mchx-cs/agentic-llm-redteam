@@ -125,6 +125,9 @@ def construire(resultat, cible="inconnue"):
                 c["essai"] for c in resultat["constats"]) or 0,
             # Non nul = la campagne s'est arrêtée avant la fin de son plan.
             "ecourtee": resultat.get("ecourtee"),
+            # Le mandat sous lequel la campagne a été menée. None pour une
+            # cible locale, qui n'en demande pas.
+            "autorisation": resultat.get("autorisation"),
         },
         "fiche_cible": resultat.get("fiche"),
         # La couverture est la moitié du rapport : sans elle, « aucune faille »
@@ -252,6 +255,20 @@ def rendre_markdown(rapport):
                           f"{' ; '.join(ecartee['motifs'])}")
     else:
         lignes.append("- aucune")
+
+    autorisation = campagne.get("autorisation")
+    if autorisation:
+        # En mission, un rapport qui ne dit pas sous quel mandat il a été
+        # produit n'est pas opposable.
+        lignes += [
+            "", "## Mandat", "",
+            f"- **Référence** : {autorisation['reference']}",
+            f"- **Autorisé par** : {autorisation['autorise_par']}",
+            f"- **Fenêtre** : du {autorisation['debut']} au "
+            f"{autorisation['fin']}",
+        ]
+        if autorisation.get("portee"):
+            lignes.append(f"- **Portée** : {autorisation['portee']}")
 
     if rapport["fiche_cible"]:
         fiche = rapport["fiche_cible"]
