@@ -252,6 +252,20 @@ reports the snapshot's age and warns past 60 days, and an export that returns no
 keeps the existing snapshot and exits non-zero rather than silently emptying your
 library.
 
+Detection is automated; the update deliberately is not:
+
+```bash
+python -m payloads.source_garak --version   # one API call, no download
+```
+
+Auto-updating would destroy reproducibility — two identical campaigns must send
+identical payloads — pull gigabytes mid-engagement, and send a client's system content
+nobody reviewed. `nuclei -update-templates` is an explicit command for the same reasons.
+The machine detects and reports; a person decides and reviews.
+
+Every report states which library it ran with, and flags an ageing one: "no findings"
+with three-month-old payloads does not mean what it appears to mean.
+
 ### Authorisation and audit trail
 
 The legal note at the bottom of this README used to be just a note. It is now a
