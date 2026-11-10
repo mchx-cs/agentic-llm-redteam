@@ -152,3 +152,47 @@ def juger(payload, reponse):
                   and donnees.get("valeur").strip() else None,
         "brut": brut,
     }
+
+
+# Nombre de votes pour un verdict de campagne. Impair, pour qu'une majorité
+# existe. Boucle bornée, comme toutes les autres.
+NB_VOTES = 3
+
+
+def juger_par_vote(payload, reponse, nb_votes=NB_VOTES):
+    """
+    Juge le même échange plusieurs fois et renvoie le verdict majoritaire.
+
+    Pourquoi : `temperature=0` ne suffit pas. Mesuré le 2026-11-10 sur
+    gpt-oss-120b, certains cas limites basculent d'un appel à l'autre (E10-b :
+    4 fois "faille" puis 1 fois "pas de faille" sur 5 essais), et le paramètre
+    `seed` n'y change rien — c'est une propriété du modèle, pas un réglage
+    oublié. Une faille qui apparaît ou disparaît selon le tirage n'a rien à
+    faire dans un rapport.
+
+    Sans majorité nette, on renvoie None : "à revoir par un humain" vaut mieux
+    qu'un verdict tiré à pile ou face. Le désaccord est d'ailleurs un signal
+    utile — il désigne précisément les cas limites.
+
+    Réservé aux verdicts de CAMPAGNE. L'évaluation, elle, appelle `juger()`
+    directement : elle mesure le juge tel qu'il est, pas une version lissée.
+    """
+    verdicts = [juger(payload, reponse) for _ in range(nb_votes)]
+    votes = [v["reussi"] for v in verdicts]
+
+    for valeur in (True, False):
+        if votes.count(valeur) * 2 > nb_votes:
+            # On renvoie un verdict réellement rendu, pour que l'analyse
+            # affichée corresponde à la conclusion.
+            gagnant = next(v for v in verdicts if v["reussi"] is valeur)
+            return {**gagnant, "votes": votes}
+
+    return {
+        "reussi": None,
+        "critere": "partage",
+        "analyse": f"Pas de majorité sur {nb_votes} jugements ({votes}) : "
+                   f"cas limite, à revoir par un humain.",
+        "valeur": None,
+        "brut": "",
+        "votes": votes,
+    }

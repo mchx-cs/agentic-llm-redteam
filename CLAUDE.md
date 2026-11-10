@@ -276,9 +276,14 @@ Trois réglages successifs ont été nécessaires, chacun révélant la limite d
    précise**. Décrire son rôle en termes généraux n'est pas énoncer une consigne.
 
 Jeu `dev` (46 échanges) : précision 83 % → **89 %**, rappel 94 % → **100 %**,
-exactitude 91 % → **96 %**, résultats identiques d'un passage à l'autre. Il ne reste que
-E08 et E08-b, les hallucinations — limite structurelle que le rejeu rattrape en
-campagne. Le jeu `test` n'a pas encore été rouvert pour vérifier cette correction.
+exactitude 91 % → **96 %**. Il ne reste que E08 et E08-b, les hallucinations — limite
+structurelle que le rejeu rattrape en campagne.
+
+**Validé sur le jeu de test le 2026-11-10**, sur des cas jamais regardés pendant les
+réglages : précision 80 % → **89 %**, exactitude 91 % → **96 %**, et R07-2, le cas qui
+avait révélé l'angle mort, est désormais correctement classé. Seul T10 (hallucination)
+subsiste. La méthode a donc tenu : corriger sur `dev` sans jamais ouvrir `test`
+produit bien une amélioration qui généralise.
 
 **Ce que les mesures de l'arbitre prouvent — et ce qu'elles ne prouvent pas (2026-11-09).**
 Les 96 % d'exactitude sur le jeu `dev` ne disent **rien** de la couverture des
@@ -507,6 +512,33 @@ Les vraies contraintes sur cible réelle sont ailleurs : le **débit autorisé p
 cible** (à découvrir en reconnaissance), la **fenêtre de test contractuelle** (marteler
 une production ressemble à un déni de service) et le **coût pour le client** si sa
 cible est facturée à l'usage.
+
+**L'arbitre n'est pas déterministe, même à température 0 (mesuré le 2026-11-10).**
+Découvert par accident : E10-b échouait sur un passage du jeu `dev` alors qu'il passait
+aux deux précédents, sans qu'on ait rien changé. Cinq appels successifs sur ce cas
+donnent `[True, True, True, True, False]`. Le paramètre `seed` n'y change rien — testé,
+il donne même `[False, False, True, True, False, True]`. C'est une propriété du modèle
+(gpt-oss-120b, mélange d'experts : le routage et le traitement par lots varient), pas
+un réglage oublié.
+
+Deux conséquences, à ne pas confondre :
+- **Sur la MESURE** : un cas sur ~57 peut basculer, soit environ ±2 points. Les écarts
+  fins (88 % contre 89 %) sont du bruit et ne doivent pas être interprétés. Les grands
+  écarts (rappel 50 % → 100 %) restent, eux, parfaitement réels.
+- **Sur les VERDICTS de campagne** : une faille qui apparaît ou disparaît selon le
+  tirage n'a rien à faire dans un rapport.
+
+Corrigé pour les campagnes par `juger_par_vote()` : le même échange est jugé `NB_VOTES`
+fois (3), la majorité l'emporte, et sans majorité nette le verdict devient `None`,
+« à revoir par un humain ». Le désaccord est lui-même un signal : il désigne les cas
+limites. Vérifié sur E10-b, qui donne `[True, True, False]` et tranche correctement.
+
+Deux choix délibérés :
+- **L'évaluation appelle `juger()` directement**, sans vote : elle doit mesurer le juge
+  tel qu'il est, pas une version lissée. Voter y masquerait l'instabilité au lieu de la
+  révéler, et triplerait le coût de chaque évaluation.
+- **Le rejeu aussi** : il interroge déjà la cible plusieurs fois, ce qui lisse le bruit.
+  Voter en plus coûterait neuf appels là où trois suffisent.
 
 ## Cadre légal
 

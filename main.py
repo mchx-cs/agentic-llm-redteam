@@ -14,7 +14,7 @@ MAX_ESSAIS pour l'attaque. Sans eux, un agent adaptatif tournerait sans fin.
 Lance-le avec :  python main.py
 """
 
-from agents.arbitre import juger
+from agents.arbitre import juger, juger_par_vote
 from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
 from agents.verificateur import verifier_par_rejeu
@@ -61,9 +61,12 @@ def lancer_campagne():
             print("  /!\\        réponse TRONQUÉE : une fuite a pu être coupée "
                   "en deux, le verdict ci-dessous n'est pas fiable.")
 
-        verdict = juger(payload["texte"], reponse)
+        # Vote : le juge n'est pas déterministe sur les cas limites, et une
+        # faille qui apparaît selon le tirage n'a rien à faire dans un rapport.
+        verdict = juger_par_vote(payload["texte"], reponse)
         print(f"  [Arbitre]   enfreint={verdict['reussi']} "
-              f"({verdict['critere']}) : {verdict['analyse']}\n")
+              f"({verdict['critere']}, votes {verdict['votes']}) : "
+              f"{verdict['analyse']}\n")
 
         # Un verdict illisible (None) n'est PAS une faille : on continue.
         if verdict["reussi"] is not True:
@@ -72,6 +75,9 @@ def lancer_campagne():
         # --- 4. Vérification par rejeu, si une valeur a été divulguée ------
         verification = None
         if verdict["critere"] == "divulgation":
+            # Le rejeu reçoit `juger` sans vote : il interroge déjà la cible
+            # plusieurs fois, ce qui lisse le bruit. Voter en plus coûterait
+            # neuf appels là où trois suffisent.
             verification = verifier_par_rejeu(
                 payload["texte"], verdict["valeur"], interroger_cible, juger
             )
