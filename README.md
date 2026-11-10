@@ -2,9 +2,13 @@
 
 A multi-agent system that automates adversarial security testing of LLM applications — give it an endpoint, get back a list of validated vulnerabilities.
 
-> **Status: Phase 0 — architecture validated, attack library in progress.**
-> The full agent loop (attacker → target → judge) runs end to end, but the attack
-> payloads are currently placeholders. Real attack families are the next milestone.
+> **Status: the campaign pipeline is complete; the attack library is not.**
+> Reconnaissance → planning → attack → judgement → replay verification runs end to end,
+> against the bundled decoy or any HTTP endpoint. The judge is measured on 80
+> hand-labelled exchanges, reaching 96% accuracy on the frozen test set; it classifies
+> translated cases in English as accurately as their French originals.
+> What is still missing is the attack content itself: the payload families are declared
+> but empty, so a campaign today only sends harmless control prompts.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
 
 ---
@@ -26,8 +30,9 @@ and the reason this repository exists.
 
 ## Architecture
 
-A set of specialised agents, each owning one phase, coordinated in a loop. Failed
-attempts are reformulated and retried within a fixed budget.
+A set of specialised agents, each owning one phase. The planner selects and orders the
+attempts; a fixed budget bounds every campaign. (Reformulating a failed attempt from the
+target's reply is phase 3 — the arrow below is the intended design, not today's code.)
 
 ```mermaid
 flowchart TD
@@ -43,10 +48,11 @@ flowchart TD
 
 Two design decisions worth calling out:
 
-**A single abstraction layer for every model call.** No agent ever talks to a provider
-directly — everything goes through `demander_au_llm()` in `llm_client.py`. Switching
-between a local model and a hosted API is a one-line change in `config.py`, and nothing
-else in the codebase moves.
+**A single abstraction layer for every model call.** Every call to a model *we* run —
+judge, reconnaissance analyst, decoy — goes through `demander_au_llm()` in
+`llm_client.py`, so switching provider is a `.env` change and nothing else in the
+codebase moves. The system *under test* is deliberately outside that rule: it is a
+third-party application, reached through its own adapter in `cibles/`.
 
 **An explicit retry budget.** Because attacks are probabilistic, an adaptive agent will
 happily loop forever. `MAX_ESSAIS` bounds every campaign — a correctness concern as much
@@ -66,7 +72,7 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 
 ```
 .
-├── config.py          # single switch: local model vs hosted API
+├── config.py          # provider profiles and target selection, all driven by .env
 ├── llm_client.py      # the abstraction layer — every model call goes through here
 ├── cibles/            # systems under test — one contract: interroger(message) -> str
 │   ├── leurre.py      # local decoy chatbot holding a fake secret (default)
@@ -109,8 +115,9 @@ ollama pull llama3.2
 python main.py
 ```
 
-Expected output is three test exchanges, each with the payload sent, the target's reply,
-and the judge's reasoned verdict.
+Expected output is the profile the reconnaissance agent built of the target, the plan
+derived from it — including which attack families were ruled out and why — then each
+attempt with the payload sent, the target's reply, and the judge's reasoned verdict.
 
 To measure the judge against hand-labelled exchanges (precision, recall, and every
 misclassification explained):
@@ -120,9 +127,9 @@ python -m evaluation.evaluer_arbitre          # development set: used to tune th
 python -m evaluation.evaluer_arbitre --test   # frozen test set: never used for tuning
 ```
 
-The other agents are checked against simulated targets whose behaviour is known in
-advance — a target that always leaks, one that hallucinates a new password every time,
-one that declares tools, one that reveals nothing:
+The other components are checked against targets whose behaviour is known in advance —
+one that always leaks, one that hallucinates a new password every time, one that
+declares tools, one that reveals nothing. The adapter tests need no model at all:
 
 ```bash
 python -m evaluation.tester_rejeu            # replay check
@@ -171,13 +178,15 @@ OPENAI_MODEL=<model-name>
 PROFIL_ACTIF=api
 ```
 
-Two independent switches: `PROFIL_ACTIF` drives the target and anything unspecified,
-`PROFIL_ARBITRE` drives the judge. An unknown profile name fails at import with the
-list of valid ones, rather than hours later on the first model call.
+Two independent switches: `PROFIL_ACTIF` drives the decoy and any call that does not
+name a profile, `PROFIL_ARBITRE` drives the judge. An unknown profile name fails at
+import with the list of valid ones, rather than hours later on the first model call.
 
-One asymmetry worth stating: **the target stays local.** Pointing real attacks at a
-hosted model would breach the provider's terms of service, so a hosted profile is for
-the judge and the reconnaissance analyst, not for the system under attack.
+One distinction worth stating: a hosted profile is for the models *we* run. Trying to
+make a provider's own model misbehave would breach their terms of service. Testing a
+client application that happens to be built on such a provider is a different matter —
+that is what the HTTP adapter above is for, and it needs the client's written
+authorisation.
 
 ### Running the judge on a different model
 
