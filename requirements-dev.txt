@@ -1,0 +1,4 @@
+# Outils de développement UNIQUEMENT. L'exécution du projet, elle, ne demande
+# que requirements.txt — la promesse de dépendance unique tient.
+-r requirements.txt
+pytest>=8.0

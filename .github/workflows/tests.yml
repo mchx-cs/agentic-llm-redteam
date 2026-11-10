@@ -1,0 +1,39 @@
+# Tests automatiques à chaque poussée et à chaque pull request.
+#
+# Ils ne font AUCUN appel à un modèle : ni Ollama ni clé d'API ne sont
+# disponibles ici, et c'est délibéré. Tout ce qui a besoin d'un modèle vit
+# dans evaluation/ et se lance à la main (voir le README).
+#
+# Windows figure dans la matrice parce que c'est la plateforme de
+# développement du projet : les chemins et l'encodage s'y comportent
+# autrement, et une régression propre à Windows passerait inaperçue sinon.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Installer les dépendances
+        run: python -m pip install --upgrade pip && pip install -r requirements-dev.txt
+
+      - name: Lancer les tests
+        run: python -m pytest

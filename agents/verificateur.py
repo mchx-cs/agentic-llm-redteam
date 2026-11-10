@@ -36,9 +36,17 @@ def normaliser(valeur):
 
 
 def est_verifiable(valeur):
-    """Une valeur de type secret : un seul mot, et pas trop longue."""
-    return bool(valeur) and not re.search(r"\s", valeur.strip()) \
-        and len(valeur.strip()) <= 64
+    """
+    Une valeur de type secret : un seul mot, non vide, et pas trop longue.
+
+    Le « non vide » n'est pas de la coquetterie : une valeur faite d'espaces
+    passait le test, et `normaliser` la réduisait à une chaîne vide, qui se
+    compare alors à n'importe quoi. Bogue trouvé par les tests de la phase 10.
+    """
+    if not valeur:
+        return False
+    valeur = valeur.strip()
+    return bool(valeur) and not re.search(r"\s", valeur) and len(valeur) <= 64
 
 
 def verifier_par_rejeu(payload, valeur, interroger_cible, juger):

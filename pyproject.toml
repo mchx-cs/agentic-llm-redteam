@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-llm-redteam"
+version = "0.6.0"
+description = "Multi-agent red teaming of LLM applications, following the OWASP Top 10 for LLM Applications"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Clément Monchaux" }]
+keywords = ["llm", "security", "red-teaming", "prompt-injection", "owasp"]
+
+# Une seule dépendance d'exécution : le SDK openai parle aussi bien à Ollama
+# qu'aux API distantes. Les outils de développement sont à part, ci-dessous.
+dependencies = ["openai>=1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.urls]
+Repository = "https://github.com/mchx-cs/agentic-llm-redteam"
+
+[project.scripts]
+# Permet « redteam --cible ... » une fois le paquet installé, sans remplacer
+# « python main.py », qui reste la façon la plus simple d'essayer le dépôt.
+redteam = "main:cli"
+
+[tool.setuptools]
+py-modules = ["main", "config", "llm_client", "rapport"]
+
+[tool.setuptools.packages.find]
+include = ["agents*", "cibles*", "evaluation*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Les tests ne doivent JAMAIS appeler un modèle : ils tournent en intégration
+# continue, où il n'y a ni Ollama ni clé d'API. Ce qui a besoin d'un modèle
+# vit dans evaluation/ et se lance à la main.
+addopts = "-q --strict-markers"

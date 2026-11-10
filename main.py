@@ -147,7 +147,8 @@ def _terminer(resultat):
     return resultat
 
 
-if __name__ == "__main__":
+def cli(arguments=None):
+    """Point d'entrée en ligne de commande (voir [project.scripts])."""
     parseur = argparse.ArgumentParser(description="Lance une campagne de test.")
     parseur.add_argument(
         "--cible", default=None,
@@ -158,7 +159,7 @@ if __name__ == "__main__":
         metavar="DOSSIER",
         help="écrire resultat.json et rapport.md dans DOSSIER "
              "(par défaut : rapports/).")
-    arguments = parseur.parse_args()
+    arguments = parseur.parse_args(arguments)
 
     resultat = lancer_campagne(choisir_cible(arguments.cible))
     print(f"\nRésultat final : {resultat['statut']}")
@@ -168,3 +169,9 @@ if __name__ == "__main__":
             resultat, cible=arguments.cible or CIBLE, dossier=arguments.rapport)
         print(f"Rapport écrit : {chemin_md}\n"
               f"Source de vérité : {chemin_json}")
+
+    return resultat
+
+
+if __name__ == "__main__":
+    cli()

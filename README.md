@@ -1,5 +1,7 @@
 # LLM Red Team Agents
 
+[![tests](https://github.com/mchx-cs/agentic-llm-redteam/actions/workflows/tests.yml/badge.svg)](https://github.com/mchx-cs/agentic-llm-redteam/actions/workflows/tests.yml)
+
 A multi-agent system that automates adversarial security testing of LLM applications — give it an endpoint, get back a list of validated vulnerabilities.
 
 > **Status: the campaign pipeline is complete; the attack library is not.**
@@ -87,13 +89,12 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   └── verificateur.py  # replay check: real leak or target hallucination?
 ├── payloads/
 │   └── bibliotheque.json      # attack techniques (by OWASP family) and objectives
-├── evaluation/
+├── tests/             # pytest, no LLM calls — runs in CI on every push
+├── evaluation/        # measurements that DO need a model — run by hand
 │   ├── echanges_etiquetes.json  # hand-labelled exchanges (dev and frozen test sets)
 │   ├── evaluer_arbitre.py       # measures judge precision and recall
 │   ├── journal_test.jsonl       # timestamped log of every test-set run
 │   ├── tester_rejeu.py          # tests the replay check against simulated targets
-│   ├── tester_cibles.py         # tests the target adapters — no LLM calls at all
-│   ├── tester_rapport.py        # tests severity rules, ordering and rendering — no LLM
 │   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
 │   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 │   └── etiqueter.py             # command-line hand-labelling, one question at a time
@@ -129,16 +130,33 @@ python -m evaluation.evaluer_arbitre          # development set: used to tune th
 python -m evaluation.evaluer_arbitre --test   # frozen test set: never used for tuning
 ```
 
-The other components are checked against targets whose behaviour is known in advance —
-one that always leaks, one that hallucinates a new password every time, one that
-declares tools, one that reveals nothing. The adapter tests need no model at all:
+Verification is split in two, and the split matters.
+
+**`tests/` never calls a model.** 124 pytest tests covering the detectors, the replay
+logic, verdict parsing and vote arithmetic, the planner's rules, the target adapters and
+the report's severity rules. They run in four seconds, cost nothing, and GitHub Actions
+runs them on every push across Ubuntu and Windows, Python 3.10 and 3.13:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+They earned their keep immediately: the first run found that a whitespace-only value
+passed as a verifiable secret, which would have let the replay check "confirm" a leak
+against an empty string.
+
+**`evaluation/` holds what genuinely needs a model** — judge accuracy, replay behaviour,
+profiling — so it costs quota and cannot run in CI. These are run by hand:
 
 ```bash
 python -m evaluation.tester_rejeu            # replay check
 python -m evaluation.tester_reconnaissance   # profiling and planning
-python -m evaluation.tester_cibles           # target adapters (no LLM, no quota)
-python -m evaluation.tester_rapport          # severity rules and rendering (no LLM)
 ```
+
+Those two use targets whose behaviour is known in advance: one that always leaks, one
+that hallucinates a new password every time, one that declares tools, one that reveals
+nothing.
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
 set cannot contain a mere rewording of a case the judge was tuned on. Every test-set
@@ -248,7 +266,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
 | **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | **Done** |
 | **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | Planned |
-| **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | Planned |
+| **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | **Done** |
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | Planned |
 | **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, asciinema recording in this README | Planned |
 

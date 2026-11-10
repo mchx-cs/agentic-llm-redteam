@@ -28,6 +28,9 @@ tourne de bout en bout en local.
   (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
   vrais échanges avec la cible ; `python -m evaluation.etiqueter` sert à les
   étiqueter à la main, puis `--integrer` les verse dans le corpus.
+- **Phase 10** : 124 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+  automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13).
+  `pyproject.toml` empaquette le projet et expose la commande `redteam`.
 - **Phase 6** : `rapport.py` produit `resultat.json` (source de vérité) et
   `rapport.md` (rendu), via `python main.py --rapport`. La gravité découle de règles
   déterministes, pas d'un LLM. La campagne va désormais au BOUT du plan et collecte
@@ -55,15 +58,17 @@ agents/
   verificateur.py  # rejeu : une valeur divulguée revient-elle, ou était-ce une hallucination ?
 payloads/
   bibliotheque.json  # techniques (famille OWASP + prérequis) et objectifs
-evaluation/
+tests/             # pytest, AUCUN appel LLM : tourne en intégration continue
+  test_detecteurs.py, test_verificateur.py, test_arbitre.py,
+  test_planificateur.py, test_cibles.py, test_rapport.py,
+  test_attaquant_et_config.py
+evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
   echanges_etiquetes.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
   evaluer_arbitre.py       # précision, rappel, détail des erreurs
   journal_test.jsonl       # chaque consultation du jeu de test, horodatée
   etiqueter.py             # étiquetage à la main, question par question (--integrer)
   tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
-  tester_cibles.py         # teste les adaptateurs de cible — AUCUN appel LLM
-  tester_rapport.py        # teste gravités, tri et rendu du rapport — AUCUN appel LLM
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
 rapport.py         # resultat.json (vérité) → rapport.md (rendu), gravité par règles
@@ -128,7 +133,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 7 | Intégrer garak (couverture large) | Prévu |
 | 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | **Fait** |
 | 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | Prévu |
-| 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | Prévu |
+| 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | Prévu |
 | 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, enregistrement asciinema au README | Prévu |
 
@@ -587,6 +592,31 @@ pas (avec seulement des payloads de contrôle, il n'y a rien à reformuler), et 
 ne pourrait pas mesurer le gain. La question qui compte — « l'adaptatif trouve-t-il plus
 de failles que le non-adaptatif, à budget égal ? » — exige de vrais payloads et une
 cible qui cède parfois.
+
+**Deux sortes de vérifications, à ne jamais mélanger (phase 10, 2026-11-10).**
+- `tests/` : **pytest, aucun appel à un modèle.** Rapides (4 s), gratuits, lancés à
+  chaque poussée par GitHub Actions. Ils vérifient ce qui doit être vrai quoi qu'un
+  modèle réponde : détecteurs, logique du rejeu, lecture du verdict et arithmétique du
+  vote, règles du planificateur, adaptateurs de cible, gravités du rapport.
+- `evaluation/` : les mesures qui **ont besoin d'un modèle** (`evaluer_arbitre`,
+  `tester_rejeu`, `tester_reconnaissance`). Elles coûtent du quota et ne peuvent pas
+  tourner en intégration continue. Elles se lancent à la main.
+
+Conséquence pratique : un test qui appellerait un modèle n'a rien à faire dans
+`tests/` — il échouerait en intégration continue, où il n'y a ni Ollama ni clé.
+
+Windows figure dans la matrice d'intégration continue parce que c'est la plateforme de
+développement du projet : chemins et encodage s'y comportent autrement, et une
+régression propre à Windows passerait inaperçue autrement.
+
+**Les tests ont immédiatement trouvé un bogue réel** : `est_verifiable("   ")` renvoyait
+`True`. Une valeur faite d'espaces passait donc pour un secret vérifiable, et
+`normaliser` la réduisait à une chaîne vide, qui se compare à n'importe quoi — soit une
+fuite « confirmée » à tort. Corrigé dans `verificateur.py`.
+
+**La dépendance unique tient toujours.** `requirements.txt` ne contient que `openai` ;
+`pytest` vit dans `requirements-dev.txt`. La promesse porte sur l'exécution, pas sur
+l'outillage de développement.
 
 ## Cadre légal
 
