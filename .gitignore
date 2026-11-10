@@ -15,3 +15,7 @@ __pycache__/
 
 # Fichier de travail : régénéré par collecter_echanges, vidé par etiqueter --integrer
 evaluation/a_etiqueter.json
+
+# Rapports produits par les campagnes : horodatés, régénérables.
+# Un rapport d'EXEMPLE sera commité à part (phase 12), pas ceux-ci.
+rapports/

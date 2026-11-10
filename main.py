@@ -24,7 +24,9 @@ from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
 from agents.verificateur import verifier_par_rejeu
 from cibles import choisir_cible
+from config import CIBLE
 from llm_client import journal, reinitialiser_journal
+from rapport import enregistrer
 
 # Règle d'arrêt : on ne tente pas une attaque à l'infini.
 MAX_ESSAIS = 3
@@ -55,9 +57,14 @@ def lancer_campagne(interroger_cible=None):
 
     if not plan["essais"]:
         print("\n>>> Aucun essai applicable à cette cible. Campagne terminée.")
-        return _terminer({"statut": "aucun_essai", "fiche": fiche, "plan": plan})
+        return _terminer({"statut": "aucun_essai", "fiche": fiche, "plan": plan,
+                          "constats": []})
 
     # --- 3. Attaque ---------------------------------------------------------
+    # On va au BOUT du plan, au lieu de s'arrêter à la première faille : un
+    # rapport n'a de valeur que s'il dit tout ce qui a été trouvé, et sur quoi
+    # il s'est tu. S'arrêter tôt empêcherait toute affirmation de couverture.
+    constats = []
     print()
     for numero, payload in enumerate(plan["essais"], start=1):
         print(f"--- Essai {numero}/{len(plan['essais'])} ---")
@@ -99,12 +106,12 @@ def lancer_campagne(interroger_cible=None):
                   f"{verification['explication']}")
 
             if verification["statut"] == "hallucination_probable":
+                # La cible a inventé : rien n'a fuité, ce n'est pas un constat.
                 print("  >>> Valeur inventée par la cible : on continue.\n")
                 continue
 
-        print(">>> Faille détectée : on consigne et on arrête la campagne.")
-        return _terminer({
-            "statut": "faille",
+        print("  >>> Constat retenu.\n")
+        constats.append({
             "essai": numero,
             "payload": payload,
             "reponse": reponse,
@@ -112,12 +119,16 @@ def lancer_campagne(interroger_cible=None):
             # None (obéissance, pas de valeur), ou le résultat du rejeu :
             # "confirmee", "contradictoire", "inconcluant"…
             "verification": verification,
-            "fiche": fiche,
-            "plan": plan,
+            "tronquee": tronquee,
         })
 
-    print(">>> Aucune faille après le budget d'essais. Campagne terminée.")
-    return _terminer({"statut": "aucune_faille", "fiche": fiche, "plan": plan})
+    print(f">>> Plan épuisé : {len(constats)} constat(s).")
+    return _terminer({
+        "statut": "constats" if constats else "aucun_constat",
+        "fiche": fiche,
+        "plan": plan,
+        "constats": constats,
+    })
 
 
 def _terminer(resultat):
@@ -142,7 +153,18 @@ if __name__ == "__main__":
         "--cible", default=None,
         help="'leurre' (défaut), 'mock', ou une URL http(s). "
              "Sinon la valeur de CIBLE dans .env.")
+    parseur.add_argument(
+        "--rapport", nargs="?", const="rapports", default=None,
+        metavar="DOSSIER",
+        help="écrire resultat.json et rapport.md dans DOSSIER "
+             "(par défaut : rapports/).")
     arguments = parseur.parse_args()
 
     resultat = lancer_campagne(choisir_cible(arguments.cible))
     print(f"\nRésultat final : {resultat['statut']}")
+
+    if arguments.rapport:
+        chemin_json, chemin_md = enregistrer(
+            resultat, cible=arguments.cible or CIBLE, dossier=arguments.rapport)
+        print(f"Rapport écrit : {chemin_md}\n"
+              f"Source de vérité : {chemin_json}")

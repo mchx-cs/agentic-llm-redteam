@@ -28,6 +28,10 @@ tourne de bout en bout en local.
   (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
   vrais échanges avec la cible ; `python -m evaluation.etiqueter` sert à les
   étiqueter à la main, puis `--integrer` les verse dans le corpus.
+- **Phase 6** : `rapport.py` produit `resultat.json` (source de vérité) et
+  `rapport.md` (rendu), via `python main.py --rapport`. La gravité découle de règles
+  déterministes, pas d'un LLM. La campagne va désormais au BOUT du plan et collecte
+  tous les constats, au lieu de s'arrêter au premier.
 - **Phase 5** : `reconnaissance.py` sonde la cible et en dresse une fiche (rôle,
   langue, outils, sujets refusés) ; `planificateur.py` en déduit, par des règles
   déterministes, les familles à lancer, les objectifs à viser et l'ordre des essais.
@@ -59,8 +63,10 @@ evaluation/
   tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
   tester_cibles.py         # teste les adaptateurs de cible — AUCUN appel LLM
+  tester_rapport.py        # teste gravités, tri et rendu du rapport — AUCUN appel LLM
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
+rapport.py         # resultat.json (vérité) → rapport.md (rendu), gravité par règles
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
 ```
 
@@ -118,7 +124,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 3b | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
 | 4 | Dissocier l'arbitre du modèle cible | En cours |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
-| 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | Prévu |
+| 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | **Fait** |
 | 7 | Intégrer garak (couverture large) | Prévu |
 | 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | **Fait** |
 | 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | Prévu |

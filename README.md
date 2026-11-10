@@ -93,9 +93,11 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   ├── journal_test.jsonl       # timestamped log of every test-set run
 │   ├── tester_rejeu.py          # tests the replay check against simulated targets
 │   ├── tester_cibles.py         # tests the target adapters — no LLM calls at all
+│   ├── tester_rapport.py        # tests severity rules, ordering and rendering — no LLM
 │   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
 │   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 │   └── etiqueter.py             # command-line hand-labelling, one question at a time
+├── rapport.py         # resultat.json (source of truth) → rapport.md; rule-based severity
 └── main.py            # orchestrator: runs the campaign loop
 ```
 
@@ -135,6 +137,7 @@ declares tools, one that reveals nothing. The adapter tests need no model at all
 python -m evaluation.tester_rejeu            # replay check
 python -m evaluation.tester_reconnaissance   # profiling and planning
 python -m evaluation.tester_cibles           # target adapters (no LLM, no quota)
+python -m evaluation.tester_rapport          # severity rules and rendering (no LLM)
 ```
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
@@ -166,6 +169,26 @@ HTTP error, unreachable host, non-JSON reply, wrong response path — is reporte
 instruction rather than a stack trace.
 
 Only ever point this at a system you own or have **written authorisation** to test.
+
+### Producing a report
+
+```bash
+python main.py --cible mock --rapport
+```
+
+The campaign runs its whole plan and collects every finding, then writes two files:
+`resultat.json` is the source of truth, `rapport.md` is one rendering of it. Adding a
+format later (HTML, or PDF through pandoc) is one more function, never a rewrite.
+
+Severity comes from rules, not from a model: a leak whose value comes back on replay is
+*high*; one the replay could not reproduce is *to verify*; obedience to an injected
+instruction is *medium*. A penetration test whose severities change between runs is
+indefensible, and the judge is already non-deterministic — stacking a second source of
+variance on top of it would be worse.
+
+Every report ends with what was **not** tested and why — a tool that hides its coverage
+gives a false sense of security, which is worse than no report at all. With the payload
+library still empty, that section is currently the longest part of the document.
 
 ### Switching to a hosted API
 
@@ -221,7 +244,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
-| **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | Planned |
+| **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | Planned |
 | **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | **Done** |
 | **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | Planned |
