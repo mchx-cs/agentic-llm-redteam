@@ -67,6 +67,7 @@ agents/
 payloads/
   bibliotheque.json  # techniques (famille OWASP + prérequis) et objectifs
   valider.py         # vérifie la bibliothèque — `python -m payloads.valider`
+  source_garak.py    # inventorie la source garak (--lister, --decrire), n'importe pas
 tests/             # pytest, AUCUN appel LLM : tourne en intégration continue
   test_detecteurs.py, test_verificateur.py, test_arbitre.py,
   test_planificateur.py, test_cibles.py, test_rapport.py,
@@ -702,6 +703,47 @@ l'état normal des familles pas encore remplies.
 
 Un test vérifie que la bibliothèque DU DÉPÔT est valide : une faute introduite en
 l'éditant fait échouer l'intégration continue, pas une campagne.
+
+**Phase 7 : ce que garak fournit réellement, et ce qu'il ne fournit pas
+(vérifié le 2026-11-10).** L'hypothèse de départ — « on récupère les payloads de
+garak sans l'installer » — est **fausse**, et le vérifier a évité de construire une
+intégration sans valeur.
+
+Faits établis :
+- Les payloads de garak vivent bien dans des fichiers JSON autonomes
+  (`garak/data/payloads/*.json`, 17 fichiers), lisibles sans installer le paquet.
+  Format : `garak_payload_name`, `payload_types`, `payloads`, `lang`, parfois `intent`
+  et `_payload_comments`.
+- **Mais ce ne sont pas des attaques, ce sont des INGRÉDIENTS** que les sondes
+  assemblent : `encoded.json` = 2 chaînes à forte perplexité,
+  `domains_latentinjection.json` = 3 domaines d'exemple, `normal_instructions.json` =
+  5 demandes anodines, `text_en.json` = 5 textes. Les gabarits d'attaque vivent dans
+  le code Python des sondes (`garak/probes/*.py`).
+- Installer garak coûte **164 paquets** (`torch`, `transformers`, `accelerate`,
+  `langchain`, `litellm`, `boto3`…), soit plusieurs gigaoctets. Incompatible avec la
+  promesse de dépendance unique du projet, donc à isoler dans un environnement dédié
+  si on y vient.
+- Licence Apache-2.0 pour le code. Les fichiers de données semblent provenir de jeux
+  tiers dont les conditions propres n'ont pas été vérifiées : **ne rien vendre dans le
+  dépôt**, pointer vers la source et récupérer à la demande.
+
+Ce qui reste exploitable tout de suite : `normal_instructions.json` et `text_en.json`
+pour enrichir la technique `controle`, et `garak/data/tags.misp.tsv` qui donne le
+vocabulaire OWASP (`owasp:llm01` … `owasp:llm10`) pour la correspondance des familles.
+
+`payloads/source_garak.py` inventorie la source (`--lister`, `--decrire`) sans rien
+télécharger d'offensif. Il écarte explicitement quatre fichiers hors périmètre
+(`harmful_behaviors.json`, les trois fichiers d'insultes) : ils mesurent la modération
+du modèle, pas sa résistance à l'injection, et **l'arbitre n'a aucun critère pour les
+juger** — les importer produirait des verdicts `aucun` systématiques.
+
+Les trois voies qui restent pour la phase 7, à trancher :
+1. garak dans un environnement séparé, pour exporter les prompts depuis le code des
+   sondes ;
+2. garak lancé comme scanner autonome, dont on ingérerait le rapport — mais notre
+   chaîne (juge, rejeu, couverture) serait alors contournée, donc on perdrait la
+   valeur ajoutée du projet ;
+3. renoncer à garak et remplir la bibliothèque à la main, au fil du path.
 
 ## Cadre légal
 

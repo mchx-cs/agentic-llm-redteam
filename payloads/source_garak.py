@@ -1,0 +1,158 @@
+"""
+payloads/source_garak.py — Inventorie la source garak (phase 7).
+
+garak (NVIDIA, Apache-2.0) maintient une collection de sondes tenue à jour
+au fil de l'évolution des modèles. Plutôt que d'écrire des payloads à la
+main — qui vieillissent vite et n'engagent que nous — on s'appuie sur cette
+source reconnue.
+
+**Sans installer garak.** Le paquet tire 164 dépendances, dont `torch` et
+`transformers` : plusieurs gigaoctets, qui ruineraient la promesse
+d'installation légère du projet. Or ses payloads vivent dans des fichiers
+JSON autonomes, qu'on peut lire directement.
+
+**Sans rien recopier dans le dépôt non plus**, le jour où on importera.
+Trois raisons :
+- le dépôt est public, et republier le corpus offensif d'un tiers depuis
+  un compte personnel n'est pas la même chose que d'y renvoyer ;
+- l'Apache-2.0 couvre le code de garak, mais plusieurs de ces fichiers de
+  données proviennent de jeux tiers dont les conditions propres n'ont pas
+  été vérifiées. Pointer vers la source évite la question ;
+- garak met ses sondes à jour : réimporter vaut mieux que figer une copie.
+
+Le SHA de chaque fichier est donné par l'inventaire : une campagne restera
+rattachable à une version précise de la source.
+
+**CE QUE CE MODULE FAIT AUJOURD'HUI : il inventorie, il n'importe pas.**
+L'inventaire a invalidé l'hypothèse de départ. Les fichiers de
+`garak/data/payloads/` ne sont pas des attaques, ce sont des INGRÉDIENTS que
+les sondes assemblent : `encoded.json` contient 2 chaînes à forte perplexité,
+`domains_latentinjection.json` 3 noms de domaine d'exemple,
+`normal_instructions.json` 5 demandes anodines. Les gabarits d'attaque, eux,
+vivent dans le code Python des sondes (`garak/probes/*.py`), donc derrière les
+164 dépendances.
+
+Conséquence : importer ces JSON ne donnerait aucune technique d'attaque. Reste
+utile ici — `normal_instructions.json` et `text_en.json` enrichiraient la
+technique `controle`, et `garak/data/tags.misp.tsv` fournit le vocabulaire
+OWASP (`owasp:llm01` … `owasp:llm10`) pour la correspondance des familles.
+
+    python -m payloads.source_garak --lister
+    python -m payloads.source_garak --decrire encoded.json
+"""
+
+import argparse
+import json
+import sys
+import urllib.error
+import urllib.request
+
+DEPOT = "NVIDIA/garak"
+CHEMIN_PAYLOADS = "garak/data/payloads"
+LICENCE_SOURCE = "garak (NVIDIA), Apache-2.0 — https://github.com/NVIDIA/garak"
+
+# Ce que ce projet teste : détournement d'instructions et fuite
+# d'information. Les fichiers de garak qui relèvent d'un tout autre sujet
+# (contenu nuisible, insultes) ne sont pas proposés par défaut : ils
+# mesureraient la modération du modèle, pas sa résistance à l'injection,
+# et l'arbitre n'a de toute façon aucun critère pour les juger.
+HORS_SUJET = {
+    "harmful_behaviors.json": "contenu nuisible — mesure la modération, "
+                              "pas l'injection ; aucun critère chez l'arbitre",
+    "slur_terms_en.json": "insultes — hors du périmètre du projet",
+    "rude_french.json": "insultes — hors du périmètre du projet",
+    "rude_chinese.json": "insultes — hors du périmètre du projet",
+}
+
+
+def _recuperer(url):
+    requete = urllib.request.Request(
+        url, headers={"User-Agent": "agentic-llm-redteam (importeur garak)"})
+    try:
+        with urllib.request.urlopen(requete, timeout=30) as reponse:
+            return reponse.read().decode("utf-8")
+    except urllib.error.HTTPError as erreur:
+        raise RuntimeError(
+            f"{url} : erreur HTTP {erreur.code}. Le dépôt garak a-t-il changé "
+            f"de structure ?") from erreur
+    except urllib.error.URLError as erreur:
+        raise RuntimeError(
+            f"{url} : injoignable ({erreur.reason}). Vérifie ta connexion."
+        ) from erreur
+
+
+def lister(ref="main"):
+    """Inventorie les fichiers de payloads disponibles, avec leur SHA."""
+    contenu = json.loads(_recuperer(
+        f"https://api.github.com/repos/{DEPOT}/contents/{CHEMIN_PAYLOADS}"
+        f"?ref={ref}"))
+    return sorted(
+        ({"nom": e["name"], "taille": e["size"], "sha": e["sha"]}
+         for e in contenu
+         if e["type"] == "file" and e["name"].endswith(".json")),
+        key=lambda e: e["nom"])
+
+
+def decrire(nom, ref="main"):
+    """Lit les MÉTADONNÉES d'un fichier de payloads, et compte ses entrées."""
+    donnees = json.loads(_recuperer(
+        f"https://raw.githubusercontent.com/{DEPOT}/{ref}/{CHEMIN_PAYLOADS}/{nom}"))
+    return {
+        "nom": nom,
+        "intitule": donnees.get("garak_payload_name", ""),
+        "types": donnees.get("payload_types", []),
+        "langue": donnees.get("lang", ""),
+        "intention": donnees.get("intent"),
+        "nombre": len(donnees.get("payloads", [])),
+        # Les commentaires de garak catégorisent souvent les payloads : ils
+        # disent de quoi il s'agit sans qu'on ait à afficher le contenu.
+        "categories": sorted({c.lstrip("# ").strip()
+                              for c in donnees.get("_payload_comments", [])
+                              if c.strip().startswith("#")}),
+    }
+
+
+def principal(arguments=None):
+    parseur = argparse.ArgumentParser(
+        description="Inventorie les payloads de garak, sans installer garak.")
+    parseur.add_argument("--lister", action="store_true",
+                         help="inventorier les fichiers disponibles")
+    parseur.add_argument("--decrire", metavar="FICHIER",
+                         help="métadonnées d'un fichier (sans son contenu)")
+    parseur.add_argument("--ref", default="main",
+                         help="branche ou tag de garak (défaut : main)")
+    arguments = parseur.parse_args(arguments)
+
+    if arguments.decrire:
+        fiche = decrire(arguments.decrire, arguments.ref)
+        print(f"{fiche['nom']} — {fiche['intitule']}")
+        print(f"  {fiche['nombre']} payload(s), langue '{fiche['langue']}', "
+              f"types {', '.join(fiche['types']) or '—'}")
+        if fiche["intention"]:
+            print(f"  intention : {fiche['intention']}")
+        if fiche["categories"]:
+            print(f"  catégories : {', '.join(fiche['categories'])}")
+        return 0
+
+    if not arguments.lister:
+        parseur.print_help()
+        return 1
+
+    fichiers = lister(arguments.ref)
+    print(f"{len(fichiers)} fichier(s) de payloads dans {DEPOT} "
+          f"({arguments.ref}) :\n")
+    for fichier in fichiers:
+        marque = "  " if fichier["nom"] not in HORS_SUJET else "x "
+        print(f"{marque}{fichier['nom']:<34} {fichier['taille']:>6} o")
+    if any(f["nom"] in HORS_SUJET for f in fichiers):
+        print("\nx = hors du périmètre de ce projet :")
+        for nom, raison in HORS_SUJET.items():
+            if any(f["nom"] == nom for f in fichiers):
+                print(f"    {nom} : {raison}")
+    print(f"\nSource : {LICENCE_SOURCE}")
+    print("Détail d'un fichier : --decrire <nom>")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(principal())
