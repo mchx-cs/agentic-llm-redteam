@@ -120,7 +120,11 @@ def construire(resultat, cible="inconnue"):
             "date": datetime.now().isoformat(timespec="seconds"),
             "cible": cible,
             "statut": resultat["statut"],
-            "essais_lances": len(plan["essais"]),
+            "essais_prevus": len(plan["essais"]),
+            "essais_lances": len(constats) and max(
+                c["essai"] for c in resultat["constats"]) or 0,
+            # Non nul = la campagne s'est arrêtée avant la fin de son plan.
+            "ecourtee": resultat.get("ecourtee"),
         },
         "fiche_cible": resultat.get("fiche"),
         # La couverture est la moitié du rapport : sans elle, « aucune faille »
@@ -185,10 +189,21 @@ def rendre_markdown(rapport):
         "",
         f"- **Cible** : `{campagne['cible']}`",
         f"- **Date** : {campagne['date']}",
-        f"- **Essais lancés** : {campagne['essais_lances']}",
+        f"- **Essais prévus au plan** : {campagne['essais_prevus']}",
         f"- **Constats** : {len(constats)}" + (f" ({resume})" if resume else ""),
         "",
     ]
+
+    if campagne.get("ecourtee"):
+        # En tête, en gras, avant tout le reste : lire les constats d'une
+        # campagne écourtée sans le savoir mènerait à une fausse conclusion.
+        lignes += [
+            f"> **Campagne ÉCOURTÉE — {campagne['ecourtee']}**",
+            "> Le plan n'est pas allé à son terme : les familles listées plus "
+            "bas comme « testées » ne l'ont été que partiellement, et "
+            "l'absence de constat ne prouve rien.",
+            "",
+        ]
 
     if rapport["journal"]:
         journal = rapport["journal"]
@@ -214,8 +229,15 @@ def rendre_markdown(rapport):
         "",
         "Un « aucun constat » ne vaut que par ce qui a été réellement tenté.",
         "",
-        "**Familles testées**", "",
     ]
+    if campagne.get("ecourtee"):
+        lignes += [
+            f"⚠️ La campagne s'est arrêtée avant la fin de son plan "
+            f"({campagne['ecourtee']}). La couverture ci-dessous est donc "
+            f"**incomplète**, y compris pour les familles dites testées.",
+            "",
+        ]
+    lignes += ["**Familles testées**", ""]
     lignes += [f"- `{f}`" for f in couverture["familles_testees"]] or \
               ["- aucune"]
     lignes += ["", "**Familles NON testées**", ""]

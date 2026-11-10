@@ -208,6 +208,26 @@ Every report ends with what was **not** tested and why — a tool that hides its
 gives a false sense of security, which is worse than no report at all. With the payload
 library still empty, that section is currently the longest part of the document.
 
+### Bounding a campaign
+
+Every campaign runs under a ceiling, set in `.env` and enforced in `llm_client` — the
+one place every model call passes through:
+
+```bash
+BUDGET_APPELS=200
+BUDGET_TOKENS=500000
+```
+
+This is a circuit breaker, not an economy measure: a campaign costs cents today. What
+it stops is a runaway loop — an adaptive agent with no guard, a replay inside a replay,
+a cascade of retries.
+
+Reaching the ceiling is a *normal* stop, not a failure, so the run keeps the findings it
+already has. What matters is that it never pretends to have finished: the status becomes
+`budget_epuise`, the report opens with a **campaign truncated** banner, and the coverage
+section flags itself as incomplete. A "no findings" result after three attempts out of
+twelve would otherwise read as a clean bill of health.
+
 ### Switching to a hosted API
 
 Every provider setting lives in `.env` (git-ignored), so switching never means editing
@@ -267,7 +287,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **8** | Target adapter — point the tool at a real endpoint (URL, auth, error handling) | **Done** |
 | **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | Planned |
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | **Done** |
-| **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | Planned |
+| **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | **Done** |
 | **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, asciinema recording in this README | Planned |
 
 Phases 1, 6 and 8 are what it takes to run the tool against systems you own. Phases 2,

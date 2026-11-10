@@ -28,8 +28,13 @@ tourne de bout en bout en local.
   (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
   vrais échanges avec la cible ; `python -m evaluation.etiqueter` sert à les
   étiqueter à la main, puis `--integrer` les verse dans le corpus.
-- **Phase 10** : 124 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
-  automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13).
+- **Phase 11** : budget de campagne appliqué dans `llm_client` (`BUDGET_APPELS`,
+  `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
+  exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
+  et le rapport annonce en tête qu'elle a été **écourtée**.
+- **Phase 10** : 133 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+  automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
+  les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
 - **Phase 6** : `rapport.py` produit `resultat.json` (source de vérité) et
   `rapport.md` (rendu), via `python main.py --rapport`. La gravité découle de règles
@@ -134,7 +139,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 8 | **Adaptateur de cible** : viser un vrai endpoint (URL, authentification, erreurs) | **Fait** |
 | 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | Prévu |
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
-| 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | Prévu |
+| 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | **Fait** |
 | 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, enregistrement asciinema au README | Prévu |
 
 Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
@@ -617,6 +622,30 @@ fuite « confirmée » à tort. Corrigé dans `verificateur.py`.
 **La dépendance unique tient toujours.** `requirements.txt` ne contient que `openai` ;
 `pytest` vit dans `requirements-dev.txt`. La promesse porte sur l'exécution, pas sur
 l'outillage de développement.
+
+**Le budget est un coupe-circuit, et son arrêt doit être PROPRE (phase 11, 2026-11-10).**
+Appliqué dans `llm_client`, seul point de passage vers les modèles : il attrape donc
+tout — juge, analyste, cible, rejeu et votes compris.
+
+- **`BudgetDepasse` est une exception distincte des pannes.** Atteindre son plafond est
+  un arrêt normal, pas une erreur. Sans cette distinction, l'orchestrateur ne pourrait
+  pas conclure « écourtée » plutôt que « plantée ».
+- **Le budget est armé par l'ORCHESTRATEUR**, via `reinitialiser_journal(appels,
+  tokens)`, pas par `llm_client` lui-même. Les scripts d'évaluation consomment bien
+  plus qu'une campagne (57 jugements pour le seul jeu `dev`) et n'ont aucune raison
+  d'être coupés au milieu d'une mesure : sans plafond, rien n'est limité.
+- **Le plafond en tokens peut être dépassé d'un appel, jamais plus.** Le coût d'un
+  appel ne se connaît qu'une fois celui-ci terminé : on vérifie donc ce qui a déjà été
+  consommé. C'est assumé et testé.
+- **Une campagne écourtée ne se présente JAMAIS comme terminée.** Statut
+  `budget_epuise`, avertissement en tête du rapport, et surtout la section Couverture
+  se dénonce elle-même : « la couverture ci-dessous est incomplète, y compris pour les
+  familles dites testées ». Sans ça, un « aucun constat » obtenu après trois essais sur
+  douze laisserait croire à une cible sûre.
+
+Défauts larges mais FINIS (200 appels, 500 000 tokens) : une campagne normale en
+consomme ~10 et ~12 000, donc le plafond ne gêne jamais l'usage courant et n'arrête que
+ce qui s'emballe. `BUDGET_APPELS=0` désarme, à n'utiliser qu'en connaissance de cause.
 
 ## Cadre légal
 

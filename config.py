@@ -112,6 +112,21 @@ if _profils_inconnus:
 CIBLE = os.environ.get("CIBLE", "leurre")
 
 
+# >>> BUDGET D'UNE CAMPAGNE <<<
+# Coupe-circuit, pas économie : à l'échelle actuelle une campagne coûte des
+# centimes. Ce qui est dangereux, c'est la boucle qui s'emballe — agent
+# adaptatif sans garde-fou, rejeu dans un rejeu, relance en cascade.
+# Les plafonds sont donc larges mais FINIS. `0` ou vide = aucune limite,
+# à n'utiliser qu'en connaissance de cause.
+def _entier_env(nom, defaut):
+    valeur = int(os.environ.get(nom, defaut))
+    return valeur if valeur > 0 else None
+
+
+BUDGET_APPELS = _entier_env("BUDGET_APPELS", 200)
+BUDGET_TOKENS = _entier_env("BUDGET_TOKENS", 500_000)
+
+
 def _json_env(nom, defaut):
     """Lit une variable d'environnement contenant du JSON."""
     brut = os.environ.get(nom)

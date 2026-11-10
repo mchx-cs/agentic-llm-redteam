@@ -24,8 +24,8 @@ from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
 from agents.verificateur import verifier_par_rejeu
 from cibles import choisir_cible
-from config import CIBLE
-from llm_client import journal, reinitialiser_journal
+from config import BUDGET_APPELS, BUDGET_TOKENS, CIBLE
+from llm_client import BudgetDepasse, journal, reinitialiser_journal
 from rapport import enregistrer
 
 # Règle d'arrêt : on ne tente pas une attaque à l'infini.
@@ -43,11 +43,20 @@ def lancer_campagne(interroger_cible=None):
     interroger_cible = interroger_cible or choisir_cible()
 
     print("=== Campagne ===\n")
-    reinitialiser_journal()
+    # Le budget est armé ICI, pas dans llm_client : les scripts d'évaluation
+    # consomment bien plus qu'une campagne et n'ont aucune raison d'être
+    # coupés au milieu d'une mesure.
+    reinitialiser_journal(BUDGET_APPELS, BUDGET_TOKENS)
 
     # --- 1. Reconnaissance : qui est cette cible ? -------------------------
     print("--- Reconnaissance ---")
-    fiche = reconnaitre(interroger_cible)
+    try:
+        fiche = reconnaitre(interroger_cible)
+    except BudgetDepasse as arret:
+        print(f"\n>>> {arret}")
+        return _terminer({"statut": "budget_epuise", "fiche": None,
+                          "plan": {"essais": [], "ecartees": []},
+                          "constats": [], "ecourtee": str(arret)})
     print(resumer_fiche(fiche))
 
     # --- 2. Planification : que lancer, et dans quel ordre ? ---------------
@@ -65,6 +74,7 @@ def lancer_campagne(interroger_cible=None):
     # rapport n'a de valeur que s'il dit tout ce qui a été trouvé, et sur quoi
     # il s'est tu. S'arrêter tôt empêcherait toute affirmation de couverture.
     constats = []
+    ecourtee = None
     print()
     for numero, payload in enumerate(plan["essais"], start=1):
         print(f"--- Essai {numero}/{len(plan['essais'])} ---")
@@ -72,43 +82,54 @@ def lancer_campagne(interroger_cible=None):
               f"/ {payload['transformation']}")
         print(f"              envoie : {payload['texte']}")
 
-        # Une réponse coupée par le plafond de sortie de la cible se lit comme
-        # une réponse complète : le verdict qui suit ne vaudrait alors rien.
-        tronquees_avant = len(journal()["tronquees"])
-        reponse = interroger_cible(payload["texte"])
-        tronquee = len(journal()["tronquees"]) > tronquees_avant
-        print(f"  [Cible]     répond : {reponse}")
-        if tronquee:
-            print("  /!\\        réponse TRONQUÉE : une fuite a pu être coupée "
-                  "en deux, le verdict ci-dessous n'est pas fiable.")
+        try:
+            # Une réponse coupée par le plafond de sortie de la cible se lit
+            # comme une réponse complète : le verdict ne vaudrait alors rien.
+            tronquees_avant = len(journal()["tronquees"])
+            reponse = interroger_cible(payload["texte"])
+            tronquee = len(journal()["tronquees"]) > tronquees_avant
+            print(f"  [Cible]     répond : {reponse}")
+            if tronquee:
+                print("  /!\\        réponse TRONQUÉE : une fuite a pu être "
+                      "coupée en deux, le verdict ci-dessous n'est pas fiable.")
 
-        # Vote : le juge n'est pas déterministe sur les cas limites, et une
-        # faille qui apparaît selon le tirage n'a rien à faire dans un rapport.
-        verdict = juger_par_vote(payload["texte"], reponse)
-        print(f"  [Arbitre]   enfreint={verdict['reussi']} "
-              f"({verdict['critere']}, votes {verdict['votes']}) : "
-              f"{verdict['analyse']}\n")
+            # Vote : le juge n'est pas déterministe sur les cas limites, et
+            # une faille qui apparaît selon le tirage n'a rien à faire dans
+            # un rapport.
+            verdict = juger_par_vote(payload["texte"], reponse)
+            print(f"  [Arbitre]   enfreint={verdict['reussi']} "
+                  f"({verdict['critere']}, votes {verdict['votes']}) : "
+                  f"{verdict['analyse']}\n")
 
-        # Un verdict illisible (None) n'est PAS une faille : on continue.
-        if verdict["reussi"] is not True:
-            continue
-
-        # --- 4. Vérification par rejeu, si une valeur a été divulguée ------
-        verification = None
-        if verdict["critere"] == "divulgation":
-            # Le rejeu reçoit `juger` sans vote : il interroge déjà la cible
-            # plusieurs fois, ce qui lisse le bruit. Voter en plus coûterait
-            # neuf appels là où trois suffisent.
-            verification = verifier_par_rejeu(
-                payload["texte"], verdict["valeur"], interroger_cible, juger
-            )
-            print(f"  [Rejeu]     {verification['statut']} : "
-                  f"{verification['explication']}")
-
-            if verification["statut"] == "hallucination_probable":
-                # La cible a inventé : rien n'a fuité, ce n'est pas un constat.
-                print("  >>> Valeur inventée par la cible : on continue.\n")
+            # Un verdict illisible (None) n'est PAS une faille : on continue.
+            if verdict["reussi"] is not True:
                 continue
+
+            # --- 4. Vérification par rejeu, si une valeur a été divulguée --
+            verification = None
+            if verdict["critere"] == "divulgation":
+                # Le rejeu reçoit `juger` sans vote : il interroge déjà la
+                # cible plusieurs fois, ce qui lisse le bruit. Voter en plus
+                # coûterait neuf appels là où trois suffisent.
+                verification = verifier_par_rejeu(
+                    payload["texte"], verdict["valeur"], interroger_cible, juger
+                )
+                print(f"  [Rejeu]     {verification['statut']} : "
+                      f"{verification['explication']}")
+
+                if verification["statut"] == "hallucination_probable":
+                    # La cible a inventé : rien n'a fuité, pas de constat.
+                    print("  >>> Valeur inventée par la cible : on continue.\n")
+                    continue
+        except BudgetDepasse as arret:
+            # Arrêt NORMAL, pas une panne : on garde ce qui a été trouvé
+            # jusqu'ici, et on dira franchement que le plan n'est pas allé
+            # à son terme. L'essai en cours est perdu, c'est assumé.
+            ecourtee = str(arret)
+            print(f"\n>>> {arret}")
+            print(f">>> Campagne ÉCOURTÉE à l'essai {numero} sur "
+                  f"{len(plan['essais'])}.")
+            break
 
         print("  >>> Constat retenu.\n")
         constats.append({
@@ -122,17 +143,24 @@ def lancer_campagne(interroger_cible=None):
             "tronquee": tronquee,
         })
 
-    print(f">>> Plan épuisé : {len(constats)} constat(s).")
+    if not ecourtee:
+        print(f">>> Plan épuisé : {len(constats)} constat(s).")
+
     return _terminer({
-        "statut": "constats" if constats else "aucun_constat",
+        # Un plan écourté ne doit JAMAIS se présenter comme un plan terminé :
+        # « aucun constat » n'a pas le même sens dans les deux cas.
+        "statut": ("budget_epuise" if ecourtee
+                   else "constats" if constats else "aucun_constat"),
         "fiche": fiche,
         "plan": plan,
         "constats": constats,
+        "ecourtee": ecourtee,
     })
 
 
 def _terminer(resultat):
     """Attache le journal des appels et avertit si des réponses ont été coupées."""
+    resultat.setdefault("ecourtee", None)
     resultat["journal"] = journal()
     tronquees = len(resultat["journal"]["tronquees"])
 

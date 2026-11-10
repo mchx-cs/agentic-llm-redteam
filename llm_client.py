@@ -22,24 +22,66 @@ _HOTES_LOCAUX = ("localhost", "127.0.0.1")
 # sur une API distante, par exemple.
 _clients = {}
 
+class BudgetDepasse(RuntimeError):
+    """
+    Le plafond d'appels ou de tokens de la campagne est atteint.
+
+    Exception DISTINCTE des pannes (serveur injoignable, clé refusée…) :
+    atteindre son budget est un arrêt normal, pas une erreur. L'orchestrateur
+    doit pouvoir faire la différence, pour conclure « campagne écourtée » au
+    lieu de « campagne terminée » — ce qui ne veut pas dire la même chose
+    dans un rapport.
+    """
+
+
 # Journal des appels. Ce module étant le SEUL point de passage vers les LLM,
 # c'est ici qu'on sait tout : combien d'appels, combien de tokens, et surtout
 # lesquels ont été TRONQUÉS. Une réponse coupée au milieu d'une fuite se lit
 # comme une réponse normale : l'arbitre conclut "pas de faille", et rien ne
 # signale l'erreur. C'est le pire défaut possible pour un outil de sécurité.
-# Ce journal sert aussi de base aux phases 9 (traçabilité) et 11 (budget).
-_JOURNAL = {"appels": 0, "tokens": 0, "tronquees": []}
+# C'est aussi ici qu'on applique le budget (phase 11), et que la phase 9
+# viendra puiser sa piste d'audit.
+_JOURNAL = {"appels": 0, "tokens": 0, "tronquees": [],
+            "max_appels": None, "max_tokens": None}
 
 
 def journal():
     """Copie de l'état du journal depuis la dernière remise à zéro."""
-    return {"appels": _JOURNAL["appels"], "tokens": _JOURNAL["tokens"],
-            "tronquees": list(_JOURNAL["tronquees"])}
+    return dict(_JOURNAL, tronquees=list(_JOURNAL["tronquees"]))
 
 
-def reinitialiser_journal():
-    """À appeler au début d'une campagne pour repartir d'un compteur net."""
-    _JOURNAL.update({"appels": 0, "tokens": 0, "tronquees": []})
+def reinitialiser_journal(max_appels=None, max_tokens=None):
+    """
+    Repart d'un compteur net, et arme le budget de la campagne qui suit.
+
+    Sans plafond (valeur par défaut), rien n'est limité : les scripts
+    d'évaluation consomment bien plus qu'une campagne, et n'ont aucune raison
+    d'être coupés au milieu d'une mesure. C'est donc l'orchestrateur qui arme
+    le budget, délibérément.
+    """
+    _JOURNAL.update({"appels": 0, "tokens": 0, "tronquees": [],
+                     "max_appels": max_appels, "max_tokens": max_tokens})
+
+
+def _verifier_budget():
+    """
+    Lève BudgetDepasse si le plafond est atteint, AVANT de lancer l'appel.
+
+    Le coût d'un appel ne se connaît qu'une fois celui-ci terminé : on vérifie
+    donc ce qui a DÉJÀ été consommé. Conséquence assumée : le plafond en
+    tokens peut être dépassé d'un appel au plus.
+    """
+    maximum = _JOURNAL["max_appels"]
+    if maximum is not None and _JOURNAL["appels"] >= maximum:
+        raise BudgetDepasse(
+            f"Budget atteint : {_JOURNAL['appels']} appel(s), "
+            f"plafond {maximum}.")
+
+    maximum = _JOURNAL["max_tokens"]
+    if maximum is not None and _JOURNAL["tokens"] >= maximum:
+        raise BudgetDepasse(
+            f"Budget atteint : {_JOURNAL['tokens']} tokens, "
+            f"plafond {maximum}.")
 
 
 def _client_pour(profil):
@@ -100,6 +142,11 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
         options["response_format"] = {"type": "json_object"}
     if max_tokens is not None:
         options["max_tokens"] = max_tokens
+
+    # Avant tout : le budget. Une boucle qui s'emballe (agent adaptatif,
+    # rejeu dans un rejeu, relance en cascade) doit buter ici, pas sur la
+    # facture ou le quota du fournisseur.
+    _verifier_budget()
 
     try:
         reponse = _client_pour(profil).chat.completions.create(
