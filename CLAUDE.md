@@ -114,7 +114,8 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 0 | Boucle d'agents, couche d'abstraction, LLM-as-judge, budget d'essais | **Fait** |
 | 1 | Bibliothèque de payloads de prompt injection réels | En cours |
 | 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | En cours |
-| 3 | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
+| 3a | **Réordonner le plan selon la réponse de la cible** (déterministe, extension de la phase 5) | Prévu |
+| 3b | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
 | 4 | Dissocier l'arbitre du modèle cible | En cours |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
 | 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | Prévu |
@@ -549,6 +550,37 @@ Deux choix délibérés :
   révéler, et triplerait le coût de chaque évaluation.
 - **Le rejeu aussi** : il interroge déjà la cible plusieurs fois, ce qui lisse le bruit.
   Voter en plus coûterait neuf appels là où trois suffisent.
+
+**« Attaquant adaptatif » recouvre trois niveaux, pas un (consigné le 2026-11-10).**
+Les confondre fait sous-estimer la phase 3 d'un ordre de grandeur.
+
+| Niveau | Ce que ça fait | Coût | Où |
+|---|---|---|---|
+| **A** | l'essai échoue, on passe au suivant du plan | **déjà fait** | `main.py` |
+| **B** | réordonner le plan d'après la réponse de la cible | faible | phase 3a |
+| **C** | l'attaquant lit la réponse et rédige le tour suivant, avec historique | élevé | phase 3b |
+
+**Le niveau B mérite d'arriver tôt.** C'est de la logique déterministe qui réutilise le
+planificateur : si la cible refuse en nommant ce qu'elle protège, on remonte la famille
+`divulgation` ; si elle n'a aucun outil, on écarte `abus-outils`. C'est l'idée de la
+fiche cible appliquée PENDANT la campagne au lieu d'avant, et c'est une valeur ajoutée
+propre au projet — PyRIT ne la couvre pas. Condition : que la bibliothèque ait du
+contenu, sinon il n'y a rien à réordonner.
+
+**Le coût caché du niveau C n'est pas l'orchestrateur, c'est l'ARBITRE.** Sa consigne
+attend aujourd'hui exactement deux lignes (« Utilisateur : X », « Chatbot : Y ») et ne
+prévoit aucun historique ; les 80 échanges du corpus sont tous en un seul tour. Le
+multi-tours impose donc de réécrire le format et les critères du juge, de **reconstruire
+un corpus de conversations étiquetées à la main** (par l'auteur, comme toujours), et de
+tout remesurer — les 96 % actuels ne voudront plus rien dire sur ce format. PyRIT
+fournit l'orchestration, pas le juge : ce travail de corpus reste à faire quoi qu'il
+arrive, et c'est la partie la plus longue.
+
+**Pourquoi la phase 3 vient après les payloads** : on ne peut pas adapter ce qu'on n'a
+pas (avec seulement des payloads de contrôle, il n'y a rien à reformuler), et surtout on
+ne pourrait pas mesurer le gain. La question qui compte — « l'adaptatif trouve-t-il plus
+de failles que le non-adaptatif, à budget égal ? » — exige de vrais payloads et une
+cible qui cède parfois.
 
 ## Cadre légal
 

@@ -217,7 +217,8 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
 | **1** | Real prompt injection payload library | In progress |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
-| **3** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
+| **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | Planned |
+| **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | Planned |
@@ -234,8 +235,15 @@ penetration test report containing one fabricated finding costs the credibility 
 whole engagement.
 
 Dependencies run in one direction: 8 (real target) → 1 and 7 (payloads) → 2 (broader
-judge criteria, once the target has tools and retrieval) → 3 (multi-turn) → 6 (report).
+judge criteria, once the target has tools and retrieval) → 3 (adaptation) → 6 (report).
 Phases 9, 10 and 11 can proceed in parallel.
+
+Phase 3 is split because "adaptive attacker" hides two very different price tags. 3a
+reorders an existing plan from what the target just said — deterministic, cheap, and
+something PyRIT does not do for you. 3b is genuine multi-turn conversation, and its real
+cost is not the orchestrator but the judge: its prompt takes exactly one exchange today,
+and all 80 labelled exchanges are single-turn, so the corpus has to be rebuilt and
+relabelled by hand before any figure means anything again.
 
 ## Stack
 
