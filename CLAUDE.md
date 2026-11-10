@@ -802,6 +802,32 @@ combinaisons.
 sans elle, les tests passeraient ou non selon qu'on a lancé l'exportateur. Le dépôt
 fonctionne à l'identique avec ou sans synchronisation.
 
+**À quelle fréquence resynchroniser les payloads (mesuré le 2026-11-10).**
+garak publie **tous les 37 jours en médiane** (douze dernières versions, API GitHub).
+Il n'y a pas de bon calendrier, seulement des déclencheurs :
+- **avant une mission réelle**, systématiquement ;
+- **quand garak publie** — toutes les versions ne touchent pas aux sondes, mais c'est
+  le moment de regarder ;
+- **quand les mesures se dégradent** : si la cible vulnérable cède de moins en moins,
+  ce sont les payloads qui vieillissent, pas elle qui se renforce. C'est le seul
+  déclencheur fondé sur des faits, et il demande la phase 12 avec ses niveaux.
+
+Coût réel : la première synchronisation est lourde (~4 Go, plusieurs minutes), les
+suivantes beaucoup moins si le venv garak est gardé **à côté du dépôt** et non dans un
+dossier temporaire, et si le cache HuggingFace est chaud.
+
+Deux garde-fous ajoutés le 2026-11-10 :
+- **L'âge de l'instantané est visible.** `charger_bibliotheque()` calcule
+  `age_jours`, et le validateur avertit au-delà de `AGE_INSTANTANE_SUSPECT` (60 jours,
+  soit environ deux versions manquées). Signalé, jamais bloquant.
+- **Un export qui ne ramène rien CONSERVE l'instantané existant** et sort en code 1.
+  Sans ça, une réorganisation de `garak._plugins` — API privée, c'est la fragilité
+  connue de l'intégration — écraserait les payloads en silence, et un « aucun constat »
+  passerait pour un bon résultat.
+
+Le second cas est le plus insidieux : il ne lève aucune exception, et c'est exactement
+le genre d'échec muet que ce projet s'attache à rendre bruyant.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

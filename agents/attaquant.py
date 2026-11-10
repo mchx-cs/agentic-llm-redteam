@@ -24,6 +24,7 @@ familles OWASP sont déclarées mais vides : une technique sans modèle est
 
 import json
 import re
+from datetime import datetime
 from itertools import product
 from pathlib import Path
 
@@ -80,6 +81,20 @@ def _remplir(payload):
     return payload
 
 
+# garak publie environ tous les 37 jours (médiane mesurée le 2026-11-10 sur
+# ses douze dernières versions). Au-delà de deux mois, un instantané a donc
+# probablement manqué une version ou deux : on le signale, sans rien bloquer.
+AGE_INSTANTANE_SUSPECT = 60
+
+
+def _age_en_jours(horodatage):
+    """Âge de l'instantané, ou None s'il est illisible."""
+    try:
+        return (datetime.now() - datetime.fromisoformat(horodatage)).days
+    except (TypeError, ValueError):
+        return None
+
+
 def _technique_depuis_sonde(sonde):
     """Traduit une sonde garak en technique du projet."""
     famille, prerequis = next(
@@ -124,6 +139,7 @@ def charger_bibliotheque(avec_garak=True):
             "version": instantane.get("version_garak"),
             "exporte_le": instantane.get("exporte_le"),
             "sondes": len(instantane["sondes"]),
+            "age_jours": _age_en_jours(instantane.get("exporte_le")),
         }
 
     return bibliotheque

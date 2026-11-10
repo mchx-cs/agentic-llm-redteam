@@ -12,6 +12,7 @@ import pytest
 
 import agents.attaquant
 from agents.attaquant import _technique_depuis_sonde, charger_bibliotheque
+from payloads.exporter_garak import principal as exporter
 from payloads.source_garak import HORS_SUJET
 from payloads.valider import valider
 
@@ -107,6 +108,70 @@ class TestFusion:
         instantane([_sonde(), _sonde(nom="probes.leakreplay.Guardrail",
                                      familles=["owasp:llm02"])])
         assert valider(charger_bibliotheque())[0] == []
+
+
+class TestFraicheur:
+    """
+    garak publie environ tous les 37 jours (médiane mesurée le 2026-11-10 sur
+    ses douze dernières versions). Un instantané vieux de plusieurs mois a
+    donc manqué des sondes — on le signale sans rien bloquer.
+    """
+
+    def _instantane_date(self, instantane, jours):
+        from datetime import datetime, timedelta
+        import json as _json
+        chemin = instantane([_sonde()])
+        contenu = _json.loads(chemin.read_text(encoding="utf-8"))
+        contenu["exporte_le"] = (
+            datetime.now() - timedelta(days=jours)).isoformat(timespec="seconds")
+        chemin.write_text(_json.dumps(contenu), encoding="utf-8")
+
+    def test_l_age_est_calcule(self, instantane):
+        self._instantane_date(instantane, 42)
+        assert charger_bibliotheque()["_garak"]["age_jours"] == 42
+
+    def test_un_instantane_recent_ne_declenche_rien(self, instantane):
+        self._instantane_date(instantane, 3)
+        avertissements = valider(charger_bibliotheque())[1]
+        assert not any("vieux de" in a for a in avertissements)
+
+    def test_un_instantane_ancien_est_signale(self, instantane):
+        self._instantane_date(instantane, 95)
+        avertissements = valider(charger_bibliotheque())[1]
+        assert any("vieux de 95 jours" in a for a in avertissements)
+
+    def test_une_date_illisible_ne_fait_pas_tomber_le_chargement(
+            self, instantane, monkeypatch):
+        import json as _json
+        chemin = instantane([_sonde()])
+        contenu = _json.loads(chemin.read_text(encoding="utf-8"))
+        contenu["exporte_le"] = "pas une date"
+        chemin.write_text(_json.dumps(contenu), encoding="utf-8")
+        assert charger_bibliotheque()["_garak"]["age_jours"] is None
+
+
+class TestExportVide:
+    def test_un_export_sans_sonde_ne_remplace_pas_l_instantane(
+            self, monkeypatch, tmp_path):
+        """
+        Si garak réorganise son API privée, la collecte peut ne plus rien
+        ramener SANS lever d'exception. Écraser alors l'instantané priverait
+        les campagnes de leurs payloads, et un « aucun constat » passerait
+        pour un bon résultat.
+        """
+        import sys
+        import types
+
+        import payloads.exporter_garak as module
+        faux = types.ModuleType("garak")
+        faux.__version__ = "0.17.1"
+        monkeypatch.setitem(sys.modules, "garak", faux)
+        monkeypatch.setattr(module, "collecter",
+                            lambda **k: ([], [{"nom": "x", "motif": "y"}]))
+
+        sortie = tmp_path / "garak.json"
+        assert exporter(["--sortie", str(sortie)]) == 1
+        assert not sortie.exists()
 
 
 class TestPerimetre:

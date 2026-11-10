@@ -167,6 +167,19 @@ def principal(arguments=None):
         actives_seulement=not arguments.toutes,
         maximum_par_sonde=arguments.max_par_sonde)
 
+    # Garde-fou : si garak réorganise son API privée (`_plugins`), la
+    # collecte peut ne plus rien ramener SANS lever d'exception. Écraser
+    # alors l'instantané existant priverait silencieusement les campagnes de
+    # leurs payloads, et un « aucun constat » passerait pour un bon résultat.
+    if not retenues:
+        print("Aucune sonde retenue : l'instantane existant est CONSERVE.\n"
+              f"  {len(ecartees)} sonde(s) ecartee(s). Causes probables :\n"
+              "  - l'API de garak a change (ce script utilise garak._plugins,\n"
+              "    qui est privee) ;\n"
+              "  - les familles retenues ne correspondent plus a ses tags.",
+              file=sys.stderr)
+        return 1
+
     instantane = construire_instantane(retenues, ecartees)
     chemin = Path(arguments.sortie)
     chemin.parent.mkdir(parents=True, exist_ok=True)

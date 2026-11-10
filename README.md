@@ -244,6 +244,14 @@ resistance to injection, and the judge has no criterion for them.
 The snapshot stays out of git. garak's probes pull in third-party datasets with their
 own terms, so the repository points at the source rather than republishing it.
 
+**When to resync.** garak ships every 37 days on median, so there is no right calendar,
+only triggers: before any real engagement, when garak publishes, and — the only one
+grounded in evidence — when your own measurements start declining, because that means
+the payloads are ageing rather than the target hardening. Two guards help: the validator
+reports the snapshot's age and warns past 60 days, and an export that returns no probes
+keeps the existing snapshot and exits non-zero rather than silently emptying your
+library.
+
 ### Authorisation and audit trail
 
 The legal note at the bottom of this README used to be just a note. It is now a

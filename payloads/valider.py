@@ -20,7 +20,8 @@ import json
 import re
 import sys
 
-from agents.attaquant import FICHIER_BIBLIOTHEQUE, TRANSFORMATIONS
+from agents.attaquant import (AGE_INSTANTANE_SUSPECT, FICHIER_BIBLIOTHEQUE,
+                              TRANSFORMATIONS)
 
 # Les familles OWASP acceptées. Une famille inconnue n'est pas forcément une
 # faute — la liste évolue — mais elle mérite qu'on la signale.
@@ -139,6 +140,16 @@ def valider(bibliotheque):
             "Aucune technique n'a de modèle ni de payload : une campagne "
             "n'enverra rien.")
 
+    # Fraîcheur de l'instantané garak : il publie environ tous les 37 jours
+    # (médiane mesurée le 2026-11-10 sur ses douze dernières versions), donc
+    # au-delà de deux mois une version a sans doute été manquée. On signale,
+    # on ne bloque pas.
+    age = (bibliotheque.get("_garak") or {}).get("age_jours")
+    if age is not None and age > AGE_INSTANTANE_SUSPECT:
+        avertissements.append(
+            f"instantané garak vieux de {age} jours : une resynchronisation "
+            f"vaut sans doute le coup (voir payloads/exporter_garak.py).")
+
     return erreurs, avertissements
 
 
@@ -162,8 +173,10 @@ def principal():
     source = ""
     if bibliotheque.get("_garak"):
         garak = bibliotheque["_garak"]
+        age = garak.get("age_jours")
         source = (f"\n  dont {garak['sondes']} sonde(s) garak "
-                  f"{garak['version']}, exportées le {garak['exporte_le']}")
+                  f"{garak['version']}, exportées le {garak['exporte_le']}"
+                  + (f" (il y a {age} jour(s))" if age is not None else ""))
 
     print(f"{FICHIER_BIBLIOTHEQUE.name} : {len(techniques)} technique(s), "
           f"dont {len(utilisables)} utilisable(s) — {combinaisons} payload(s) "
