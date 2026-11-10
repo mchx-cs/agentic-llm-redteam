@@ -174,6 +174,62 @@ class TestExportVide:
         assert not sortie.exists()
 
 
+class TestDetectionDeVersion:
+    """
+    On DÉTECTE qu'une mise à jour existe ; on ne la fait pas. Automatiser la
+    mise à jour casserait la reproductibilité (deux campagnes identiques
+    doivent envoyer les mêmes payloads), exigerait les 164 dépendances de
+    garak dans le venv du projet, téléchargerait des gigaoctets pendant une
+    mission, et enverrait à la cible du contenu non relu.
+    """
+
+    @pytest.mark.parametrize("locale, distante, attendu", [
+        ("0.17.1", "0.18.0", True),
+        ("0.9.0", "0.17.1", True),      # comparaison numérique, pas textuelle
+        ("0.17.1", "0.17.1", False),
+        ("0.18.0", "0.17.1", False),
+    ])
+    def test_le_retard_est_detecte(self, monkeypatch, locale, distante,
+                                   attendu):
+        import payloads.source_garak as source
+        monkeypatch.setattr(source, "derniere_version", lambda delai=10: distante)
+        assert source.comparer_a_l_instantane(locale)[1] is attendu
+
+    def test_un_reseau_indisponible_ne_bloque_rien(self, monkeypatch):
+        # Une campagne ne doit pas dépendre de GitHub.
+        import payloads.source_garak as source
+        monkeypatch.setattr(source, "_recuperer",
+                            lambda *a, **k: (_ for _ in ()).throw(
+                                RuntimeError("hors ligne")))
+        assert source.derniere_version() is None
+        assert source.comparer_a_l_instantane("0.17.1") == (None, False)
+
+
+class TestProvenanceDansLeRapport:
+    def _rapport(self, payloads):
+        from rapport import construire, rendre_markdown
+        return rendre_markdown(construire({
+            "statut": "aucun_constat", "fiche": None,
+            "plan": {"essais": [], "ecartees": []}, "constats": [],
+            "journal": {}, "ecourtee": None, "payloads": payloads},
+            cible="essai"))
+
+    def test_le_rapport_dit_avec_quoi_il_a_teste(self):
+        texte = self._rapport({"version": "0.17.1", "sondes": 52,
+                               "age_jours": 3, "perime": False})
+        assert "garak 0.17.1" in texte and "52 sonde(s)" in texte
+
+    def test_une_bibliotheque_vieillissante_est_signalee(self):
+        # Un « aucun constat » obtenu avec des payloads de trois mois ne dit
+        # pas la même chose qu'avec des payloads du jour.
+        texte = self._rapport({"version": "0.14.0", "sondes": 48,
+                               "age_jours": 94, "perime": True})
+        assert "vieillissante" in texte
+
+    def test_sans_instantane_aucune_ligne_parasite(self):
+        assert "Payloads :" not in self._rapport(None)
+
+
 class TestPerimetre:
     def test_les_sujets_hors_perimetre_sont_nommes(self):
         # Ils mesurent la modération du modèle, pas sa résistance à

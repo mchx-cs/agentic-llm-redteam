@@ -130,6 +130,9 @@ def construire(resultat, cible="inconnue"):
             # Le mandat sous lequel la campagne a été menée. None pour une
             # cible locale, qui n'en demande pas.
             "autorisation": resultat.get("autorisation"),
+            # Avec QUOI on a testé : un « aucun constat » obtenu avec une
+            # bibliothèque de trois mois ne dit pas la même chose.
+            "payloads": resultat.get("payloads"),
         },
         "fiche_cible": resultat.get("fiche"),
         # La couverture est la moitié du rapport : sans elle, « aucune faille »
@@ -223,6 +226,20 @@ def rendre_markdown(rapport):
             ligne += (f" **{tronquees} réponse(s) tronquée(s)** : les verdicts "
                       f"correspondants sont peu fiables.")
         lignes += [ligne, ""]
+
+    payloads = campagne.get("payloads")
+    if payloads and payloads.get("version"):
+        age = payloads.get("age_jours")
+        ligne = (f"Payloads : garak {payloads['version']}, "
+                 f"{payloads['sondes']} sonde(s)")
+        if age is not None:
+            ligne += f", exportés il y a {age} jour(s)"
+        if payloads.get("perime"):
+            ligne += (". **Bibliothèque vieillissante** : les payloads perdent "
+                      "de leur efficacité à mesure que les modèles sont "
+                      "corrigés, ce qui affaiblit la portée d'un « aucun "
+                      "constat »")
+        lignes += [ligne + ".", ""]
 
     lignes += ["## Constats", ""]
     if constats:

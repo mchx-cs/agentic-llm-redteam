@@ -181,6 +181,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
 def _terminer(resultat):
     """Attache le journal des appels et avertit si des réponses ont été coupées."""
     resultat.setdefault("ecourtee", None)
+    resultat.setdefault("payloads", _provenance_des_payloads())
     resultat["journal"] = journal()
     tronquees = len(resultat["journal"]["tronquees"])
 
@@ -193,6 +194,18 @@ def _terminer(resultat):
               f"correspondants sont peu fiables, et un « aucune faille » "
               f"pourrait masquer une fuite coupée en deux.")
     return resultat
+
+
+def _provenance_des_payloads():
+    """Avec quelle bibliothèque la campagne a travaillé, et de quand date-t-elle."""
+    from agents.attaquant import AGE_INSTANTANE_SUSPECT, charger_bibliotheque
+
+    garak = charger_bibliotheque().get("_garak")
+    if not garak:
+        return None
+    age = garak.get("age_jours")
+    return {**garak,
+            "perime": age is not None and age > AGE_INSTANTANE_SUSPECT}
 
 
 def cli(arguments=None):

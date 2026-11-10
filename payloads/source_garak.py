@@ -65,11 +65,11 @@ HORS_SUJET = {
 }
 
 
-def _recuperer(url):
+def _recuperer(url, delai=30):
     requete = urllib.request.Request(
         url, headers={"User-Agent": "agentic-llm-redteam (importeur garak)"})
     try:
-        with urllib.request.urlopen(requete, timeout=30) as reponse:
+        with urllib.request.urlopen(requete, timeout=delai) as reponse:
             return reponse.read().decode("utf-8")
     except urllib.error.HTTPError as erreur:
         raise RuntimeError(
@@ -79,6 +79,48 @@ def _recuperer(url):
         raise RuntimeError(
             f"{url} : injoignable ({erreur.reason}). Vérifie ta connexion."
         ) from erreur
+
+
+def derniere_version(delai=10):
+    """
+    Dernière version publiée de garak, ou None si l'appel échoue.
+
+    Un seul appel à l'API GitHub, aucun téléchargement : on DÉTECTE qu'une
+    mise à jour existe, on ne la fait pas. La mise à jour reste un acte
+    délibéré — elle change les payloads envoyés, et une campagne doit rester
+    reproductible. C'est la même règle que `nuclei -update-templates`.
+
+    Ne lève jamais : un réseau indisponible ne doit pas gêner une campagne.
+    """
+    try:
+        donnees = json.loads(_recuperer(
+            f"https://api.github.com/repos/{DEPOT}/releases/latest", delai))
+        return donnees.get("tag_name", "").lstrip("v") or None
+    except Exception:
+        return None
+
+
+def comparer_a_l_instantane(version_locale, delai=10):
+    """
+    Renvoie (version_distante, en_retard) — ou (None, False) si on ne sait pas.
+
+    Dire « une version plus récente existe » vaut mieux qu'un compteur de
+    jours : garak publie tous les 37 jours en médiane, mais toutes ses
+    versions ne touchent pas aux sondes.
+    """
+    distante = derniere_version(delai)
+    if not distante or not version_locale:
+        return distante, False
+    return distante, _rang(distante) > _rang(version_locale)
+
+
+def _rang(version):
+    """Version en tuple d'entiers, pour comparer 0.9.0 et 0.17.1 correctement."""
+    nombres = []
+    for morceau in str(version).split("."):
+        chiffres = "".join(c for c in morceau if c.isdigit())
+        nombres.append(int(chiffres) if chiffres else 0)
+    return tuple(nombres)
 
 
 def lister(ref="main"):
@@ -121,7 +163,30 @@ def principal(arguments=None):
                          help="métadonnées d'un fichier (sans son contenu)")
     parseur.add_argument("--ref", default="main",
                          help="branche ou tag de garak (défaut : main)")
+    parseur.add_argument("--version", action="store_true",
+                         help="comparer la version de l'instantané local à la "
+                              "dernière publiée (aucun téléchargement)")
     arguments = parseur.parse_args(arguments)
+
+    if arguments.version:
+        from agents.attaquant import charger_bibliotheque
+
+        locale = (charger_bibliotheque().get("_garak") or {}).get("version")
+        distante, en_retard = comparer_a_l_instantane(locale)
+        print(f"instantané local : garak {locale or 'aucun'}")
+        print(f"dernière publiée : garak {distante or 'inconnue (hors ligne ?)'}")
+        if en_retard:
+            print("\nUne version plus récente existe. Pour resynchroniser :\n"
+                  "  python -m venv venv-garak\n"
+                  "  venv-garak/Scripts/pip install -U garak\n"
+                  "  venv-garak/Scripts/python payloads/exporter_garak.py\n"
+                  "\nRelis ce que l'export retient avant de lancer une "
+                  "campagne : une nouvelle version peut ajouter des sondes "
+                  "hors périmètre.")
+            return 1
+        if distante and locale:
+            print("\nL'instantané est à jour.")
+        return 0
 
     if arguments.decrire:
         fiche = decrire(arguments.decrire, arguments.ref)

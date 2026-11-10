@@ -828,6 +828,40 @@ Deux garde-fous ajoutés le 2026-11-10 :
 Le second cas est le plus insidieux : il ne lève aucune exception, et c'est exactement
 le genre d'échec muet que ce projet s'attache à rendre bruyant.
 
+**On automatise la DÉTECTION d'une mise à jour, jamais la mise à jour elle-même
+(2026-11-10).** La question s'est posée : pourquoi avertir au lieu de resynchroniser
+tout seul ? Quatre raisons, la première décisive.
+
+1. **La reproductibilité disparaîtrait.** Tout l'intérêt de l'instantané est que deux
+   campagnes identiques envoient les mêmes payloads. Une mise à jour automatique rendrait
+   incomparables une campagne de lundi et une de mardi — alors que la piste d'audit
+   enregistre justement la version de garak pour cette raison.
+2. **Elle ne pourrait pas tourner là où il faudrait** : la mise à jour exige les 164
+   dépendances de garak, que le venv du projet n'a pas, par construction.
+3. **Télécharger plusieurs gigaoctets pendant une mission est inacceptable**, sur le
+   poste d'un pentesteur, peut-être sur un réseau restreint.
+4. **On enverrait du contenu non relu.** Une nouvelle version peut ajouter des sondes
+   hors périmètre ; le filtre est à base de mots-clés et a dû être corrigé après coup.
+
+C'est la pratique du domaine : `nuclei -update-templates` est une commande explicite,
+jamais un effet de bord d'un scan.
+
+Ce qui EST automatisé, parce que c'est gratuit et sans risque :
+- `python -m payloads.source_garak --version` compare l'instantané local à la dernière
+  version publiée — **un appel à l'API GitHub, aucun téléchargement**. Dire « une version
+  plus récente existe » vaut mieux qu'un compteur de jours, puisque toutes les versions
+  ne touchent pas aux sondes. Sort en code 1 s'il y a du retard, et affiche la commande
+  exacte à lancer. Un réseau indisponible ne lève jamais : une campagne ne doit pas
+  dépendre de GitHub.
+- **Le rapport dit avec quoi il a testé** (`garak 0.17.1, 52 sondes, exportés il y a
+  N jours`) et signale une bibliothèque vieillissante. Un « aucun constat » obtenu avec
+  des payloads de trois mois ne dit pas la même chose qu'avec ceux du jour : le lecteur
+  doit pouvoir en juger.
+
+Principe retenu : **la machine détecte et signale, l'humain décide et relit.** Même
+logique que le garde-fou d'autorisation — l'outil refuse de partir sans mandat, mais il
+ne signe pas le mandat à votre place.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
