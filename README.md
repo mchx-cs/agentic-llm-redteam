@@ -88,7 +88,8 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   ├── detecteurs.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
 │   └── verificateur.py  # replay check: real leak or target hallucination?
 ├── payloads/
-│   └── bibliotheque.json      # attack techniques (by OWASP family) and objectives
+│   ├── bibliotheque.json      # attack techniques (by OWASP family) and objectives
+│   └── valider.py             # validates the library before a campaign uses it
 ├── tests/             # pytest, no LLM calls — runs in CI on every push
 ├── evaluation/        # measurements that DO need a model — run by hand
 │   ├── echanges_etiquetes.json  # hand-labelled exchanges (dev and frozen test sets)

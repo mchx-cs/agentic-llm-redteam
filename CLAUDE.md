@@ -66,6 +66,7 @@ agents/
   verificateur.py  # rejeu : une valeur divulguée revient-elle, ou était-ce une hallucination ?
 payloads/
   bibliotheque.json  # techniques (famille OWASP + prérequis) et objectifs
+  valider.py         # vérifie la bibliothèque — `python -m payloads.valider`
 tests/             # pytest, AUCUN appel LLM : tourne en intégration continue
   test_detecteurs.py, test_verificateur.py, test_arbitre.py,
   test_planificateur.py, test_cibles.py, test_rapport.py,
@@ -684,6 +685,23 @@ Deux choix d'implémentation :
 
 Enfin, le rapport cite le mandat sous lequel il a été produit : en mission, un rapport
 qui ne le dit pas n'est pas opposable.
+
+**La bibliothèque se valide, parce que ses erreurs sont SILENCIEUSES (2026-11-10).**
+`payloads/bibliotheque.json` est un fichier de données, édité à la main ou alimenté
+depuis l'extérieur. Aucune de ses fautes ne lève d'exception — elles produisent une
+campagne qui ne teste pas ce qu'on croit :
+- un modèle sans `{objectif}` enverrait toujours le même texte ;
+- un prérequis mal orthographié serait **ignoré en silence** par le planificateur, et
+  la technique partirait contre des cibles où elle n'a aucun sens ;
+- un identifiant en double rendrait les rapports illisibles.
+
+D'où `python -m payloads.valider`, à lancer après chaque modification. Sortie en code 1
+si quelque chose cloche, donc enchaînable en script. Erreurs et avertissements sont
+distingués : une technique sans modèle est un simple avertissement, puisque c'est
+l'état normal des familles pas encore remplies.
+
+Un test vérifie que la bibliothèque DU DÉPÔT est valide : une faute introduite en
+l'éditant fait échouer l'intégration continue, pas une campagne.
 
 ## Cadre légal
 
