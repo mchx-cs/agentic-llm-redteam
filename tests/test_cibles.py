@@ -17,6 +17,7 @@ import pytest
 
 from cibles import choisir_cible
 from cibles.http import (CHEMIN_TEXTE_BRUT, MESSAGE_DE_TEST,
+                         PROFIL_PAR_TYPE_ANNONCE, _profil_conseille,
                          PROFILS_CIBLE, _diagnostiquer,
                          lire_reponse,
                          construire_cible_http,
@@ -507,3 +508,64 @@ class TestReponsesNonJSON:
         message = _diagnostiquer('data: {"a":1}')
         assert "@flux:" in message
         assert "openai-flux" in message
+
+
+class TestFormatAnnonceParLaCible:
+    """
+    Une application DÉCLARE son format dans l'en-tete `Content-Type` de sa
+    reponse. L'adaptateur jetait cet en-tete et reniflait les premiers
+    caracteres du corps : une deduction la ou une ligne plus haut donnait la
+    reponse. Ajoute le 2026-11-11.
+
+    La declaration ne BASCULE jamais le mode de lecture, elle ne fait que
+    conseiller — c'est le point delicat, teste plus bas.
+    """
+
+    @pytest.mark.parametrize("type_annonce, profil, chemin", [
+        ("text/event-stream", "openai-flux", "@flux:"),
+        ("text/event-stream; charset=utf-8", "openai-flux", "@flux:"),
+        ("text/plain; charset=utf-8", "texte", "@brut"),
+    ])
+    def test_le_type_annonce_nomme_le_profil(self, type_annonce, profil,
+                                             chemin):
+        message = _diagnostiquer("peu importe le corps", type_annonce)
+        assert "ANNONCE" in message
+        assert f"--profil-cible {profil}" in message
+        assert chemin in message
+
+    def test_le_profil_conseille_existe_vraiment(self):
+        # Conseiller un profil inexistant serait pire que ne rien conseiller.
+        for profil in PROFIL_PAR_TYPE_ANNONCE.values():
+            if profil is not None:
+                assert profil in PROFILS_CIBLE
+
+    def test_du_html_annonce_reste_une_erreur_d_adresse(self):
+        # text/html n'a PAS de profil : c'est qu'on a vise la page.
+        message = _diagnostiquer("sans aucune balise", "text/html")
+        assert "PAGE WEB" in message
+        assert "profil-cible" not in message
+
+    def test_un_content_type_MENTEUR_ne_fait_pas_juger_du_html(self):
+        # LE garde-fou. Bien des passerelles renvoient une page d'erreur
+        # annoncee `application/json`. Si la declaration faisait basculer le
+        # mode de lecture, l'arbitre se retrouverait a juger du HTML.
+        message = _diagnostiquer("<html>502 Bad Gateway</html>",
+                                 "application/json")
+        assert "PAGE WEB" in message
+
+    def test_sans_annonce_on_retombe_sur_le_corps(self):
+        # Une cible qui n'annonce rien doit rester diagnosticable.
+        assert "FLUX" in _diagnostiquer('data: {"a":1}', "")
+        assert "PAGE WEB" in _diagnostiquer("<html></html>", "")
+
+    def test_le_type_annonce_figure_dans_l_erreur(self, base):
+        # Bout en bout : l'erreur cite ce que la cible a declare, pour qu'on
+        # puisse la confronter a ce qu'elle a reellement envoye.
+        interroger = construire_cible_http(f"{base}/pasjson")
+        with pytest.raises(RuntimeError) as echec:
+            interroger("bonjour")
+        assert "Annoncé par la cible" in str(echec.value)
+
+    def test_un_type_inconnu_ne_conseille_rien(self):
+        for inconnu in ("application/xml", "image/png", "", None):
+            assert _profil_conseille(inconnu) is None

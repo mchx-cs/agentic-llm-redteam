@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 442 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 451 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1495,6 +1495,27 @@ Trois décisions sur ces deux ajouts :
 - **un fragment de flux illisible est IGNORÉ, pas fatal.** Un flux contient des
   commentaires, des pings et des événements de contrôle ; s'arrêter au premier perdrait
   la réponse entière alors qu'elle est là.
+
+**Le format n'avait pas à être deviné : la cible le DÉCLARE (2026-11-11).** Question
+posée : « comment le format de la réponse est-il déterminé par l'application ? » Il l'est
+à trois niveaux, et le troisième était une lacune :
+1. l'application fixe ce qu'elle sait produire — son code, on n'y touche pas ;
+2. la requête peut parfois choisir parmi ces formats (`"stream": true/false`) ;
+3. **et l'application l'annonce dans son en-tête `Content-Type`** — que l'adaptateur
+   jetait. Le diagnostic reniflait les premiers caractères du corps là où une ligne plus
+   haut donnait la réponse.
+
+`PROFIL_PAR_TYPE_ANNONCE` fait donc le lien : `text/event-stream` → `openai-flux`,
+`text/plain` → `texte`, `text/html` → aucun profil, c'est une erreur d'adresse. Le
+message nomme le profil et la ligne `.env` à copier, au lieu de laisser rapprocher un
+diagnostic d'un catalogue.
+
+**Mais la déclaration CONSEILLE, elle ne bascule jamais le mode de lecture**, et c'est
+le point délicat. Bien des passerelles renvoient une page d'erreur annoncée
+`application/json` : basculer sur la foi de l'en-tête ferait passer du HTML pour la
+réponse d'un chatbot, et l'arbitre jugerait du HTML. L'ordre est donc : la déclaration
+si elle est exploitable, sinon le reniflage du corps — qui, lui, ne ment pas. Un test
+couvre explicitement le cas du `Content-Type` menteur.
 
 Ce qui reste hors de portée, et qui demanderait un adaptateur à part : `multipart`, GET,
 et WebSocket (celui-là ajouterait une dépendance). Le contrat

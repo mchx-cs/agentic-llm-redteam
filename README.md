@@ -373,10 +373,16 @@ good, but they used to arrive mid-campaign, after a payload had gone out — on 
 target, under mandate, that spends authorised traffic and writes an audit-trail entry to
 discover a typo.
 
-When the reply isn't JSON at all, it names the likely cause rather than just the fact —
-HTML means you gave it the page instead of the endpoint, `data:` lines mean the API
-streams and needs `"stream": false`, and an empty body usually means the wrong URL or
-method. Those three are the confusions that cost the most time on a first wiring.
+When the reply isn't JSON at all, it names the likely cause rather than just the fact.
+It asks the target first: a response declares its own format in `Content-Type`, so
+`text/event-stream` gets you told to use `--profil-cible openai-flux`, and `text/plain`
+points at `texte`. Failing that it sniffs the body — HTML means you gave it the page
+instead of the endpoint, `data:` lines mean a stream, an empty body usually means the
+wrong URL or method.
+
+The declaration only ever *advises*; it never switches the parsing mode. Plenty of
+gateways return an error page labelled `application/json`, and trusting that header
+would feed HTML to the judge as though it were a chatbot's answer.
 
 One failure mode deserves its own mention, because nothing about it looks wrong: a
 `CIBLE_CORPS` with no `{message}` in it. Payload substitution silently left the body

@@ -206,19 +206,61 @@ def lire_reponse(brut, chemin_reponse):
     return _extraire(json.loads(brut), chemin_reponse)
 
 
-def _diagnostiquer(brut):
+# Ce que la cible DÉCLARE dans son en-tête `Content-Type`, et le profil qui
+# correspond. C'est la source la plus fiable : une application annonce son
+# format, on n'a pas à le renifler.
+#
+# Jamais utilisée pour BASCULER de mode de lecture, seulement pour conseiller.
+# Un `Content-Type` menteur — une page d'erreur annoncée `application/json`,
+# ce qui arrive chez bien des passerelles — ferait alors juger du HTML à
+# l'arbitre. La déclaration guide le lecteur ; c'est lui qui règle.
+PROFIL_PAR_TYPE_ANNONCE = {
+    "text/event-stream": "openai-flux",
+    "text/plain": "texte",
+    "text/html": None,          # pas un profil : une erreur d'adresse
+}
+
+
+def _profil_conseille(type_annonce):
+    """Le profil que suggère le Content-Type déclaré, ou None."""
+    base = (type_annonce or "").split(";")[0].strip().lower()
+    return PROFIL_PAR_TYPE_ANNONCE.get(base)
+
+
+def _diagnostiquer(brut, type_annonce=""):
     """
     Nomme la cause probable d'une réponse qui n'est pas du JSON.
 
     « JSON attendu » est exact mais ne dit pas quoi faire, et deux confusions
     reviennent sans cesse quand on branche une cible pour la première fois :
     donner l'adresse de la PAGE du chatbot au lieu de son endpoint, et viser
-    une API qui répond en flux. Les deux se reconnaissent aux premiers
-    caractères de la réponse, donc autant le dire.
+    une API qui répond en flux.
+
+    DEUX sources, dans cet ordre : ce que la cible DÉCLARE
+    (`Content-Type`), puis à défaut ce que le corps laisse deviner. La
+    déclaration a été ajoutée le 2026-11-11, après la question « comment le
+    format est-il déterminé par l'application ? » — il l'était déjà, dans un
+    en-tête que l'adaptateur jetait, et on reniflait les premiers caractères
+    là où une ligne plus haut donnait la réponse.
     """
     debut = brut.lstrip()[:400].lower()
 
-    if debut.startswith(("<!doctype", "<html", "<?xml")) or "<body" in debut:
+    # La déclaration d'abord : elle est explicite là où le reniflage déduit.
+    conseille = _profil_conseille(type_annonce)
+    if conseille:
+        reglages = PROFILS_CIBLE[conseille]
+        return (f"  La cible ANNONCE « {type_annonce.split(';')[0].strip()} » : "
+                f"ce n'est pas un objet JSON.\n"
+                f"  Le profil correspondant existe —\n"
+                f"    --profil-cible {conseille}\n"
+                f"    ou CIBLE_CHEMIN_REPONSE={reglages['chemin_reponse']}\n"
+                f"  ({reglages['description']})")
+
+    annonce_du_html = (type_annonce or "").split(";")[0].strip().lower() \
+        == "text/html"
+    if (annonce_du_html
+            or debut.startswith(("<!doctype", "<html", "<?xml"))
+            or "<body" in debut):
         return ("  C'est une PAGE WEB, pas un endpoint d'API : cet outil "
                 "envoie un POST JSON.\n"
                 "  Il faut l'adresse que la page appelle elle-même. Pour la "
@@ -338,6 +380,10 @@ def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
         try:
             with urllib.request.urlopen(requete, timeout=delai) as reponse:
                 brut = reponse.read().decode("utf-8")
+                # Ce que la cible DÉCLARE être son format. On ne s'en sert
+                # jamais pour changer de mode de lecture — seulement pour
+                # mieux expliquer un échec. Voir `_diagnostiquer`.
+                type_annonce = reponse.headers.get("Content-Type", "")
         except urllib.error.HTTPError as erreur:
             # Le corps d'une erreur HTTP contient souvent l'explication utile
             # (clé refusée, format invalide, quota) : on la remonte.
@@ -356,8 +402,9 @@ def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
         except json.JSONDecodeError as erreur:
             raise RuntimeError(
                 f"Cible {url} : réponse illisible (JSON attendu).\n"
+                f"  Annoncé par la cible : {type_annonce or 'rien'}\n"
                 f"  Reçu : {brut[:200]}\n"
-                f"{_diagnostiquer(brut)}"
+                f"{_diagnostiquer(brut, type_annonce)}"
             ) from erreur
         except ValueError as erreur:
             # Chemin de réponse mal décrit : l'erreur dit déjà quoi corriger.
