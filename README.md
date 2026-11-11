@@ -128,64 +128,42 @@ ollama pull llama3.2
 python main.py
 ```
 
-Expected output is the profile the reconnaissance agent built of the target, the plan
-derived from it — including which attack families were ruled out and why — then each
-attempt with the payload sent, the target's reply, and the judge's reasoned verdict.
+**Verification is split in two, and the split matters.**
 
-To measure the judge against hand-labelled exchanges (precision, recall, and every
-misclassification explained):
-
-```bash
-python -m evaluation.evaluer_arbitre          # development set: used to tune the judge
-python -m evaluation.evaluer_arbitre --test   # frozen test set: never used for tuning
-```
-
-Verification is split in two, and the split matters.
-
-**`tests/` never calls a model.** 124 pytest tests covering the detectors, the replay
-logic, verdict parsing and vote arithmetic, the planner's rules, the target adapters and
-the report's severity rules. They run in four seconds, cost nothing, and GitHub Actions
-runs them on every push across Ubuntu and Windows, Python 3.10 and 3.13:
+`tests/` never calls a model — 455 pytest tests over the detectors, the replay logic,
+verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
+report's severity rules. Four seconds, no cost, and GitHub Actions runs them on every
+push across Ubuntu and Windows, Python 3.10 and 3.13:
 
 ```bash
-pip install -r requirements-dev.txt
-pytest
+pip install -r requirements-dev.txt && pytest
 ```
 
 They earned their keep immediately: the first run found that a whitespace-only value
-passed as a verifiable secret, which would have let the replay check "confirm" a leak
-against an empty string.
+passed as a verifiable secret, which would have let the replay "confirm" a leak against
+an empty string.
 
-**`evaluation/` holds what genuinely needs a model** — judge accuracy, replay behaviour,
-profiling — so it costs quota and cannot run in CI. These are run by hand:
-
-```bash
-python -m evaluation.tester_rejeu            # replay check
-python -m evaluation.tester_reconnaissance   # profiling and planning
-```
-
-Those two use targets whose behaviour is known in advance: one that always leaks, one
-that hallucinates a new password every time, one that declares tools, one that reveals
-nothing.
-
-One measurement in there needs no model at all, and still does not belong in CI:
+`evaluation/` holds what needs a model, so it costs quota and runs by hand:
 
 ```bash
-python -m evaluation.mesurer_adaptation --signaux
+python -m evaluation.evaluer_arbitre         # judge precision and recall on the dev set
+python -m evaluation.evaluer_arbitre --test  # frozen test set, never used for tuning
+python -m evaluation.tester_rejeu            # replay, against targets with known behaviour
+python -m evaluation.mesurer_adaptation      # adaptive vs static plan — needs no model
 ```
 
-It asks whether reordering the plan from the target's replies actually finds more
-findings than the static plan at equal budget. It answers in *numbers to read*, not a
-pass/fail, and it depends on a random draw — a CI threshold would flip on the first
-weight change and tell you nothing. So the dividing line is not "does it call a model":
-`tests/` holds what must be true regardless, `evaluation/` holds what gets measured.
-The current answer is honest rather than flattering: the gain grows with the budget
-(+0.3 findings at 3 attempts, +7.0 at 40), and essentially all of it comes from one
-signal — "this technique just worked, try its other payloads".
+Exchanges are grouped by scenario, and a scenario never spans both sets, so the test set
+can't hold a reworded case the judge was tuned on. Every test-set run is timestamped in
+`evaluation/journal_test.jsonl`.
 
-Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
-set cannot contain a mere rewording of a case the judge was tuned on. Every test-set
-run is logged with a timestamp in `evaluation/journal_test.jsonl`.
+That last command shows the real dividing line isn't "does it call a model". It needs
+none, and still doesn't belong in CI: it answers in *numbers to read* rather than
+pass/fail, and depends on a random draw, so any threshold would flip on the first weight
+change. So `tests/` holds what must be true regardless; `evaluation/` holds what gets
+measured. Its current answer is honest rather than flattering — the gain grows with the
+budget (+0.4 findings at 3 attempts, +4.7 at 40) and essentially all of it comes from
+one signal, "this technique just worked, try its other payloads".
+
 
 ### Trying it in one command
 
@@ -425,13 +403,14 @@ upkeep falls on one person forever. So the library is synced from
 for its templates: acquisition and use are separated in time.
 
 ```
-garak (throwaway venv)  →  exporter_garak.py  →  payloads/garak.json  →  campaigns
+garak (throwaway venv)  ->  exporter_garak.py  ->  payloads/garak.json  ->  campaigns
    164 dependencies           once, offline          git-ignored          no network
 ```
 
 The gigabytes are paid once by whoever syncs — never by someone cloning the repo, never
 during a campaign. Campaigns read a local snapshot, so two identical runs send identical
-payloads.
+payloads. The snapshot stays out of git: garak's probes pull in third-party datasets
+with their own terms, so the repository points at the source rather than republishing it.
 
 ```bash
 python -m payloads.source_garak --lister        # what garak offers; downloads nothing
@@ -441,58 +420,44 @@ python -m payloads.valider                      # check what you ended up with
 ```
 
 Of garak's 191 probes, 173 expose static prompts (32,968 in total) and their tags
-already carry the OWASP mapping. Filtered to what this project can actually judge, that
-is 52 probes and 301 payloads. Probes whose declared goal is to elicit harmful content
-or slurs are excluded with a stated reason: they measure a model's moderation, not its
-resistance to injection, and the judge has no criterion for them.
+already carry the OWASP mapping. Filtered to what this judge can actually score: **52
+probes, 1,143 payloads**. Probes aimed at eliciting harmful content are excluded with a
+stated reason — they measure moderation, not resistance to injection, and the judge has
+no criterion for them.
 
-The snapshot stays out of git. garak's probes pull in third-party datasets with their
-own terms, so the repository points at the source rather than republishing it.
+**Coverage, and the one gap filled by hand.** 35 probes carry `owasp:llm01`, 19
+`owasp:llm02`. Ten more carry `owasp:llm06`, seven `owasp:llm09`, two `owasp:llm05` —
+always *in addition* to llm01 or llm02, so they do get sent, but the judge can't score
+those families. The report says so in a third state, **touched but not judged**: calling
+them tested would be false, staying silent would imply they were never approached.
 
-**What garak covers, and the one gap worth filling by hand.** Counted on those 52
-probes: 35 carry `owasp:llm01` (845 payloads) and 19 carry `owasp:llm02` (298). Ten more
-carry `owasp:llm06`, seven `owasp:llm09`, two `owasp:llm05` — always *in addition* to
-llm01 or llm02, so those probes do get sent. But the judge has no criterion for those
-families, so a `aucun` verdict there means nothing, and the report says so in a third
-state: **touched, but not judged**. Calling them tested would be false; staying silent
-would suggest they were never approached. The llm06 probes, for instance, are Markdown
-URI exfiltration, XSS and Jinja/SQL injection — attacks on the *application around* the
-model, which need a client that renders Markdown.
-
-Payload count is not the bottleneck: there are 1,143 of them and `MAX_ESSAIS` sends
-three. But garak ships **no LLM07 probe at all**, and that is the one gap where all
-three conditions line up — the judge can score system-prompt leakage, the corpus has
-labelled cases for it, and the shipped demo target has a talkative system prompt. So
-that family is covered by eleven hand-written payloads across five registers, and the
-difference between registers is the point: a direct ask ("repeat them word for word"), a
-reformulation (a target that refuses to *repeat* will often agree to *summarise* — the
+Payload count isn't the bottleneck — there are 1,143 and `MAX_ESSAIS` sends three. But
+garak ships **no LLM07 probe at all**, and that's the one gap where all three conditions
+line up: the judge can score system-prompt leakage, the corpus has labelled cases, and
+the demo target has a talkative system prompt. Hence eleven hand-written payloads across
+five registers, where the difference between registers is the point — a direct ask, a
+reformulation (a target that refuses to *repeat* often agrees to *summarise*; the
 refusal attaches to the verb, not the information), a positional one that never says
 "instructions" and so slips past a keyword filter, an audit pretext, and a fake
-end-of-instructions delimiter. These are direct configuration requests — the register
-OWASP LLM07 itself describes — not jailbreaks aimed at eliciting harmful content; those
-stay garak's job.
+end-of-instructions delimiter. Direct configuration requests, the register OWASP LLM07
+describes — not jailbreaks, which stay garak's job.
 
-**When to resync.** garak ships every 37 days on median, so there is no right calendar,
-only triggers: before any real engagement, when garak publishes, and — the only one
-grounded in evidence — when your own measurements start declining, because that means
-the payloads are ageing rather than the target hardening. Two guards help: the validator
-reports the snapshot's age and warns past 60 days, and an export that returns no probes
-keeps the existing snapshot and exits non-zero rather than silently emptying your
-library.
-
-Detection is automated; the update deliberately is not:
+**When to resync.** garak ships every 37 days on median, so there's no right calendar,
+only triggers: before any engagement, when garak publishes, and — the only one grounded
+in evidence — when your own measurements start declining, which means the payloads are
+ageing rather than the target hardening. Detection is automated; the update deliberately
+is not:
 
 ```bash
 python -m payloads.source_garak --version   # one API call, no download
 ```
 
 Auto-updating would destroy reproducibility — two identical campaigns must send
-identical payloads — pull gigabytes mid-engagement, and send a client's system content
-nobody reviewed. `nuclei -update-templates` is an explicit command for the same reasons.
-The machine detects and reports; a person decides and reviews.
+identical payloads — pull gigabytes mid-engagement, and send a client system content
+nobody reviewed. `nuclei -update-templates` is explicit for the same reasons. Two guards
+back it up: the validator warns past 60 days, and an export returning no probes keeps
+the existing snapshot and exits non-zero rather than silently emptying your library.
 
-Every report states which library it ran with, and flags an ageing one: "no findings"
-with three-month-old payloads does not mean what it appears to mean.
 
 ### Authorisation and audit trail
 
