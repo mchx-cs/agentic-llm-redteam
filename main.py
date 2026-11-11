@@ -24,6 +24,7 @@ from pathlib import Path
 
 from audit import (FICHIER_AUTORISATION, AutorisationManquante, PisteAudit,
                    exiger)
+from agents.adaptation import cumuler, observer, prochain
 from agents.arbitre import juger, juger_par_vote
 from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
@@ -66,7 +67,8 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
     except BudgetDepasse as arret:
         print(f"\n>>> {arret}")
         return _terminer({"statut": "budget_epuise", "fiche": None,
-                          "plan": {"essais": [], "ecartees": []},
+                          "plan": {"essais": [], "candidats": [],
+                                   "ecartees": []},
                           "constats": [], "ecourtee": str(arret)})
     print(resumer_fiche(fiche))
 
@@ -81,17 +83,38 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
                           "constats": []})
 
     # --- 3. Attaque ---------------------------------------------------------
-    # On va au BOUT du plan, au lieu de s'arrêter à la première faille : un
+    # On va au BOUT du budget, au lieu de s'arrêter à la première faille : un
     # rapport n'a de valeur que s'il dit tout ce qui a été trouvé, et sur quoi
     # il s'est tu. S'arrêter tôt empêcherait toute affirmation de couverture.
+    #
+    # Le prochain essai n'est pas lu dans une liste figée : il est CHOISI à
+    # chaque tour dans le vivier du planificateur, d'après ce que la cible a
+    # déjà répondu (phase 3a, agents/adaptation.py). La boucle reste bornée
+    # par MAX_ESSAIS — l'adaptation change l'ordre, jamais le nombre d'essais.
     constats = []
+    observations = []       # ce qu'on a appris de la cible, cumulé
+    lances = []             # les essais réellement envoyés, dans l'ordre
     ecourtee = None
     print()
-    for numero, payload in enumerate(plan["essais"], start=1):
-        print(f"--- Essai {numero}/{len(plan['essais'])} ---")
+    for numero in range(1, MAX_ESSAIS + 1):
+        payload = prochain(plan["candidats"], observations, lances)
+        if payload is None:
+            print(">>> Vivier épuisé : plus aucun essai applicable.")
+            break
+        lances.append(payload)
+
+        print(f"--- Essai {numero}/{MAX_ESSAIS} ---")
         print(f"  [Attaquant] {payload['technique']} / "
               f"{payload['objectif'] or 'payload complet'} "
               f"/ {payload['transformation']}")
+        if payload.get("raisons_adaptation"):
+            # Le solde d'abord : un essai peut cumuler bonus et malus, et sans
+            # lui les raisons semblent se contredire.
+            print(f"  [Adaptation] solde {payload['score_adaptation']:+d} "
+                  f"sur sa priorité de départ "
+                  f"({payload['priorite']}) :")
+            for raison in payload["raisons_adaptation"]:
+                print(f"               - {raison}")
         print(f"              envoie : {payload['texte']}")
 
         try:
@@ -117,6 +140,12 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
             print(f"  [Arbitre]   enfreint={verdict['reussi']} "
                   f"({verdict['critere']}, votes {verdict['votes']}) : "
                   f"{verdict['analyse']}\n")
+
+            # Ce que cet échange nous apprend, pour le choix du prochain
+            # essai. Enregistré AVANT tout `continue` : un échec instruit
+            # autant qu'un succès, et c'est même sa seule utilité.
+            observations = cumuler(observations,
+                                   observer(payload, reponse, verdict))
 
             # Un verdict illisible (None) n'est PAS une faille : on continue.
             if verdict["reussi"] is not True:
@@ -148,7 +177,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
             ecourtee = str(arret)
             print(f"\n>>> {arret}")
             print(f">>> Campagne ÉCOURTÉE à l'essai {numero} sur "
-                  f"{len(plan['essais'])}.")
+                  f"{MAX_ESSAIS}.")
             break
 
         print("  >>> Constat retenu.\n")
@@ -164,7 +193,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
         })
 
     if not ecourtee:
-        print(f">>> Plan épuisé : {len(constats)} constat(s).")
+        print(f">>> Budget d'essais épuisé : {len(constats)} constat(s).")
 
     return _terminer({
         # Un plan écourté ne doit JAMAIS se présenter comme un plan terminé :
@@ -174,6 +203,12 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
         "fiche": fiche,
         "plan": plan,
         "constats": constats,
+        # Les essais RÉELLEMENT envoyés, et ce qu'on a appris en route. C'est
+        # d'eux que le rapport tire sa couverture : depuis l'adaptation, le
+        # plan initial n'est plus ce qui a été lancé, et annoncer la
+        # couverture du plan serait un mensonge par omission.
+        "lances": lances,
+        "observations": observations,
         "ecourtee": ecourtee,
     })
 
@@ -181,6 +216,8 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
 def _terminer(resultat):
     """Attache le journal des appels et avertit si des réponses ont été coupées."""
     resultat.setdefault("ecourtee", None)
+    resultat.setdefault("lances", [])
+    resultat.setdefault("observations", [])
     resultat.setdefault("payloads", _provenance_des_payloads())
     resultat["journal"] = journal()
     tronquees = len(resultat["journal"]["tronquees"])

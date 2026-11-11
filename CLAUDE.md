@@ -13,7 +13,8 @@ le README doit rester honnête sur l'état d'avancement.
 ## État actuel : Phase 0 terminée, Phases 1 et 2 démarrées
 
 La campagne complète **reconnaissance → planification → attaque → jugement → rejeu**
-tourne de bout en bout en local.
+tourne de bout en bout en local, et le prochain essai est désormais choisi d'après ce
+que la cible a déjà répondu (phase 3a).
 
 - **Phase 1** : la bibliothèque de payloads est structurée (technique × objectif ×
   transformation), mais seule la technique `controle` (anodine) a des modèles. Les
@@ -40,7 +41,7 @@ tourne de bout en bout en local.
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 133 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 295 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -66,6 +67,7 @@ cibles/            # les systèmes testés — contrat commun : interroger(messa
 agents/
   reconnaissance.py # sonde la cible (questions anodines) et en dresse une fiche
   planificateur.py  # choisit familles, objectifs et ordre à partir de la fiche (règles)
+  adaptation.py     # réordonne le vivier PENDANT la campagne selon les réponses (règles)
   attaquant.py     # fournit les briques : technique × objectif × transformation
   arbitre.py       # LLM-as-judge : tranche succès / échec (sortie JSON)
   detecteurs.py    # décode l'épelé, le Base64, l'hexa AVANT l'arbitre (déterministe)
@@ -79,7 +81,7 @@ payloads/
 tests/             # pytest, AUCUN appel LLM : tourne en intégration continue
   test_detecteurs.py, test_verificateur.py, test_arbitre.py,
   test_planificateur.py, test_cibles.py, test_rapport.py,
-  test_attaquant_et_config.py
+  test_attaquant_et_config.py, test_adaptation.py
 evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
   echanges_etiquetes.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
   evaluer_arbitre.py       # précision, rappel, détail des erreurs
@@ -87,6 +89,7 @@ evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
   etiqueter.py             # étiquetage à la main, question par question (--integrer)
   tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
+  mesurer_adaptation.py    # adaptatif contre plan statique, à budget égal (SANS LLM)
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
 audit.py           # mandat exigé avant de démarrer + piste d'audit JSONL au fil de l'eau
@@ -146,7 +149,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 0 | Boucle d'agents, couche d'abstraction, LLM-as-judge, budget d'essais | **Fait** |
 | 1 | Bibliothèque de payloads de prompt injection réels | En cours |
 | 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | En cours |
-| 3a | **Réordonner le plan selon la réponse de la cible** (déterministe, extension de la phase 5) | Prévu |
+| 3a | **Réordonner le plan selon la réponse de la cible** (déterministe, extension de la phase 5) | **Fait** |
 | 3b | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
 | 4 | Dissocier l'arbitre du modèle cible | En cours |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
@@ -589,7 +592,7 @@ Les confondre fait sous-estimer la phase 3 d'un ordre de grandeur.
 | Niveau | Ce que ça fait | Coût | Où |
 |---|---|---|---|
 | **A** | l'essai échoue, on passe au suivant du plan | **déjà fait** | `main.py` |
-| **B** | réordonner le plan d'après la réponse de la cible | faible | phase 3a |
+| **B** | réordonner le plan d'après la réponse de la cible | faible | **phase 3a, faite** |
 | **C** | l'attaquant lit la réponse et rédige le tour suivant, avec historique | élevé | phase 3b |
 
 **Le niveau B mérite d'arriver tôt.** C'est de la logique déterministe qui réutilise le
@@ -598,6 +601,135 @@ planificateur : si la cible refuse en nommant ce qu'elle protège, on remonte la
 fiche cible appliquée PENDANT la campagne au lieu d'avant, et c'est une valeur ajoutée
 propre au projet — PyRIT ne la couvre pas. Condition : que la bibliothèque ait du
 contenu, sinon il n'y a rien à réordonner.
+
+**Phase 3a réalisée le 2026-11-11 : `agents/adaptation.py`.** Le prochain essai n'est
+plus lu dans une liste figée : il est CHOISI à chaque tour dans le vivier complet du
+planificateur, d'après ce que la cible a déjà répondu. Quatre signaux déterministes,
+lus par motifs — pas par un LLM, puisque le juge a déjà rendu son verdict et que lui
+confier en plus le choix du prochain essai reviendrait à le laisser dépenser le budget
+en suppositions :
+
+| Signal | Lu dans la réponse | Effet |
+|---|---|---|
+| `technique_efficace` | verdict positif | la technique qui marche passe devant (−3) |
+| `technique_bloquee` | motif de refus | elle passe derrière, à peine (+1) |
+| `secret_evoque` | refus qui NOMME ce qu'il protège | LLM02 et LLM07 remontent (−2) |
+| `outil_declenche` | appel d'outil visible | LLM06 remonte (−2) |
+
+Quatre décisions de conception, dans l'ordre d'importance :
+
+- **On réordonne, on n'écarte JAMAIS.** Un malus déplace un essai dans la file, il ne le
+  supprime pas, et le vivier n'est pas tronqué au budget — un essai relégué doit pouvoir
+  remonter. Les attaques sont probabilistes : une technique qui échoue au premier coup
+  peut réussir au troisième. Écarter sur un seul refus reviendrait à annoncer une
+  couverture qu'on n'a pas. D'où aussi le malus de refus volontairement FAIBLE (+1
+  contre −3 pour un succès) : un refus est un indice, pas une démonstration.
+- **La diversité est dans le score, pas à côté.** Chaque essai déjà lancé sur une
+  technique renchérit le suivant (`POIDS_DIVERSITE`). C'est le tour de rôle de
+  `_repartir` exprimé dans le score : sans lui, un premier succès enfermerait la
+  campagne dans une seule technique et le rapport ne parlerait que d'une famille.
+- **Un fait appris trois fois reste un seul fait.** `cumuler()` dédoublonne par
+  (signal, technique). Sans ça, une cible qui refuse en nommant son secret à chaque
+  tour accumulerait le bonus jusqu'à écraser toute autre considération, diversité
+  comprise. L'acharnement, lui, est déjà compté par `POIDS_DIVERSITE`.
+- **À score égal, l'ordre du vivier tranche** (tri stable). Deux campagnes identiques
+  envoient donc les mêmes payloads — c'est la condition pour comparer deux rapports par
+  `git diff`, qui est tout l'intérêt du Markdown.
+
+**Correction imposée par la mise en œuvre : la couverture ne peut plus se déduire du
+plan.** `rapport.py` tirait `familles_testees` de `plan["essais"]`. Avec l'adaptation,
+le plan initial n'est plus ce qui a été lancé : le rapport aurait annoncé des familles
+jamais touchées, et des essais réellement envoyés auraient disparu de la couverture.
+C'est précisément le mensonge par omission que la section Couverture existe pour
+empêcher. La campagne renvoie donc `lances` (les essais réels), d'où la couverture se
+déduit, avec repli sur le plan pour les `resultat.json` antérieurs. Au passage,
+`essais_lances` ne se déduit plus du dernier constat — trois essais sans aucune faille
+s'affichaient comme zéro essai lancé.
+
+**Le rapport consigne ce qui a été appris**, section « Adaptation en cours de campagne ».
+Une campagne qui réordonne ses essais sans dire pourquoi est une boîte noire : la trace
+est ce qui rend le choix contestable, donc vérifiable. Chaque essai affiche aussi le
+SOLDE de son score — un essai peut cumuler un bonus et un malus (« cette technique
+marche » et « on l'a déjà essayée »), et sans le solde les deux raisons semblent se
+contredire.
+
+**Les tests ont attrapé un test tautologique, par mutation.** Mettre
+`BONUS_FAMILLE_DESIGNEE` à zéro ne faisait échouer aucun test : deux d'entre eux
+comparaient `delta == BONUS_FAMILLE_DESIGNEE`, soit `0 == 0`. Réécrits pour vérifier le
+CLASSEMENT (un candidat LLM02 passe-t-il devant un candidat mieux classé au départ ?),
+ils mordent. Leçon à garder : un test qui compare un résultat à la constante qui l'a
+produit ne teste rien. Les quatre constantes sont désormais vérifiées par mutation.
+
+**Deuxième angle mort trouvé en lançant pour de vrai : les motifs de refus étaient trop
+étroits.** L'adaptation réagissait parfaitement aux refus SIMULÉS des tests et restait
+muette sur la cible réelle — pas une ligne `[Adaptation]` sur une campagne entière.
+Cause : la cible refusait par « il est donc impossible d'en discuter » et « sont
+protégées par la loi », deux formes IMPERSONNELLES qu'aucun motif ne couvrait (ils
+étaient tous à la première personne, « je ne peux pas… »). Corrigé, et les réponses
+verbatim de cette campagne sont désormais dans `tests/test_adaptation.py`
+(`TestReponsesReellesObservees`) : toute nouvelle forme vue en campagne y atterrit.
+
+Choix maintenu en revanche : un outil DÉCRIT n'est pas un outil déclenché. La cible a
+écrit `` `OUTIL : afficher_code_ansi(code)` `` pour expliquer son outil ; les crochets
+restent exigés dans `MOTIF_OUTIL`. C'est la frontière D18 du corpus de l'arbitre, et la
+relâcher produirait du bruit, pas du signal.
+
+**L'adaptation rapporte-t-elle vraiment ? Mesuré le 2026-11-11, et c'est plus modeste
+qu'espéré.** `python -m evaluation.mesurer_adaptation` compare adaptatif et plan
+statique à budget égal, sans aucun appel LLM. Techniques vulnérables tirées AU HASARD,
+150 tirages.
+
+| Budget | Écart moyen | Mieux | Pire | Égal |
+|---|---|---|---|---|
+| 3 | +0,29 | 63 | 28 | 59 |
+| 6 | +0,65 | 81 | 42 | 27 |
+| 10 | +1,26 | 100 | 32 | 18 |
+| 20 | +2,23 | 103 | 31 | 16 |
+| 40 | **+6,96** | 146 | **1** | 3 |
+
+**Le gain croît avec le budget, et à `MAX_ESSAIS=3` il est marginal** (+0,3 constat, un
+tirage sur cinq perdant). Logique : pour exploiter une piste, il faut pouvoir y revenir,
+et trois essais sur cinquante-trois techniques ne le permettent pas. L'intérêt de la
+phase 3a se révélera donc surtout quand le budget d'essais grandira.
+
+**Et c'est `technique_efficace` qui porte TOUT le gain** (mesuré en neutralisant les
+signaux un par un, `--signaux`) :
+
+| Variante | b3 | b10 | b40 | tirages perdants |
+|---|---|---|---|---|
+| tous les signaux | +0,29 | +1,26 | +6,96 | 28 / 32 / 1 |
+| `technique_efficace` seul | +0,34 | +1,26 | +5,32 | **0 / 0 / 0** |
+| `secret_evoque` seul | 0,00 | −0,01 | −0,14 | 32 / 53 / 63 |
+| sans `technique_bloquee` | +0,29 | +1,26 | +6,96 | inchangé |
+
+- **`technique_efficace` ne perd JAMAIS** : « cette technique vient de marcher » est une
+  déduction, pas un pari.
+- **`secret_evoque` seul n'apporte rien et crée de la variance.** Il mise sur la
+  correspondance OWASP déclarée par garak pour prédire ce qui fera céder la cible. En
+  revanche il aide COMBINÉ à `technique_efficace` à grand budget (+6,96 contre +5,32) :
+  concentrer sur LLM02 augmente la chance de retomber sur une technique déjà efficace.
+  Conservé pour cette synergie, en sachant que c'est le signal fragile.
+- **`technique_bloquee` n'a aucun effet mesurable** : son malus (+1) est écrasé par la
+  diversité (+2). Conservé pour la TRACE — il explique au lecteur pourquoi une technique
+  a reculé — mais l'augmenter reviendrait à écarter une technique sur un seul refus, ce
+  que le garde-fou « on n'écarte jamais » interdit.
+
+**Deux pièges de méthode rencontrés en faisant cette mesure, consignés dans le script.**
+- *Première version CIRCULAIRE* : la cible simulée cédait exactement aux sondes que
+  `secret_evoque` remonte. Gain spectaculaire, et sans aucune valeur — on mesurait que
+  le code fait ce qu'on a codé. D'où le tirage au hasard, qui est l'hypothèse
+  PESSIMISTE : la réalité est probablement meilleure, une sonde LLM02 cherchant
+  effectivement à faire fuiter de l'information.
+- *Conclusion hâtive sur UN tirage* : un tirage donnait « l'adaptation perd 2 constats »,
+  ce qui m'a fait croire un moment qu'elle nuisait à petit budget. C'était du bruit.
+  Même discipline que pour l'instabilité de l'arbitre : un écart isolé ne s'interprète
+  pas.
+
+**Ce que cette mesure ne dit PAS.** Elle compare deux stratégies sur une cible SIMULÉE,
+dont on décrète quelles techniques cèdent. Elle ne dit rien du gain sur une cible
+réelle, où la correspondance OWASP a probablement une valeur prédictive. La mesure qui
+trancherait — campagne à budget 20 contre `--cible demo`, avec et sans adaptation —
+coûte ~90 000 tokens de quota : elle reste à faire.
 
 **Le coût caché du niveau C n'est pas l'orchestrateur, c'est l'ARBITRE.** Sa consigne
 attend aujourd'hui exactement deux lignes (« Utilisateur : X », « Chatbot : Y ») et ne
@@ -625,6 +757,15 @@ cible qui cède parfois.
 
 Conséquence pratique : un test qui appellerait un modèle n'a rien à faire dans
 `tests/` — il échouerait en intégration continue, où il n'y a ni Ollama ni clé.
+
+**Le vrai critère n'est pourtant pas le modèle, c'est la NATURE du résultat
+(précisé le 2026-11-11).** `evaluation/mesurer_adaptation.py` ne consulte aucun modèle,
+et il n'a quand même rien à faire dans `tests/` : il ne produit pas un verdict
+vrai/faux mais des CHIFFRES à interpréter, et il dépend d'un tirage aléatoire. En
+intégration continue il faudrait fixer un seuil — « l'adaptation gagne au moins
++0,2 constat » — qui basculerait au premier réglage de poids et ne dirait rien de juste.
+Donc : `tests/` pour ce qui doit être VRAI quoi qu'il arrive, `evaluation/` pour ce qui
+se MESURE et se lit.
 
 Windows figure dans la matrice d'intégration continue parce que c'est la plateforme de
 développement du projet : chemins et encodage s'y comportent autrement, et une

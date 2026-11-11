@@ -33,8 +33,10 @@ and the reason this repository exists.
 ## Architecture
 
 A set of specialised agents, each owning one phase. The planner selects and orders the
-attempts; a fixed budget bounds every campaign. (Reformulating a failed attempt from the
-target's reply is phase 3 — the arrow below is the intended design, not today's code.)
+attempts; a fixed budget bounds every campaign. Each next attempt is now *chosen* from
+the planner's full pool according to what the target has already replied — deterministic
+rules, not a model (phase 3a). Having the attacker *rewrite* the next turn from that
+reply, with conversation history, is phase 3b and is not implemented.
 
 ```mermaid
 flowchart TD
@@ -44,7 +46,8 @@ flowchart TD
     D --> E[Target responds]
     E --> F{Judge<br/><i>LLM-as-judge: did it break?</i>}
     F -->|vulnerability confirmed| G[Report<br/><i>findings with evidence</i>]
-    F -->|no breach, retry budget left| D
+    F -->|no breach, retry budget left| D2[Adaptation<br/><i>reorder remaining attempts</i>]
+    D2 --> D
     F -->|budget exhausted| G
 ```
 
@@ -84,6 +87,7 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 ├── agents/
 │   ├── reconnaissance.py # probes the target with harmless questions, builds a profile
 │   ├── planificateur.py  # picks families, objectives and order from that profile (rules)
+│   ├── adaptation.py   # reorders the remaining attempts from the target's replies (rules)
 │   ├── attaquant.py   # supplies the building blocks: technique × objective × transformation
 │   ├── arbitre.py     # LLM-as-judge: rules on success or failure (JSON verdict)
 │   ├── detecteurs.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
@@ -100,6 +104,7 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 │   ├── journal_test.jsonl       # timestamped log of every test-set run
 │   ├── tester_rejeu.py          # tests the replay check against simulated targets
 │   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
+│   ├── mesurer_adaptation.py    # adaptive vs static plan at equal budget (no LLM)
 │   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 │   └── etiqueter.py             # command-line hand-labelling, one question at a time
 ├── audit.py           # authorisation gate + append-as-you-go JSONL audit trail
@@ -162,6 +167,21 @@ python -m evaluation.tester_reconnaissance   # profiling and planning
 Those two use targets whose behaviour is known in advance: one that always leaks, one
 that hallucinates a new password every time, one that declares tools, one that reveals
 nothing.
+
+One measurement in there needs no model at all, and still does not belong in CI:
+
+```bash
+python -m evaluation.mesurer_adaptation --signaux
+```
+
+It asks whether reordering the plan from the target's replies actually finds more
+findings than the static plan at equal budget. It answers in *numbers to read*, not a
+pass/fail, and it depends on a random draw — a CI threshold would flip on the first
+weight change and tell you nothing. So the dividing line is not "does it call a model":
+`tests/` holds what must be true regardless, `evaluation/` holds what gets measured.
+The current answer is honest rather than flattering: the gain grows with the budget
+(+0.3 findings at 3 attempts, +7.0 at 40), and essentially all of it comes from one
+signal — "this technique just worked, try its other payloads".
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
 set cannot contain a mere rewording of a case the judge was tuned on. Every test-set
@@ -392,7 +412,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
 | **1** | Real prompt injection payload library | In progress |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
-| **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | Planned |
+| **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** |
 | **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |

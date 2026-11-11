@@ -96,6 +96,11 @@ def construire(resultat, cible="inconnue"):
     découle, et rien ne s'y ajoute qui ne soit déjà ici.
     """
     plan = resultat.get("plan") or {"essais": [], "ecartees": []}
+    # Depuis la phase 3a, le prochain essai est choisi pendant la campagne :
+    # le plan initial n'est donc plus ce qui a été lancé, et c'est des essais
+    # RÉELS que la couverture doit se déduire. Repli sur le plan pour les
+    # resultat.json produits avant l'adaptation.
+    lances = resultat.get("lances") or plan["essais"]
     constats = []
 
     for numero, brut in enumerate(resultat.get("constats", []), start=1):
@@ -129,8 +134,7 @@ def construire(resultat, cible="inconnue"):
             "cible": cible,
             "statut": resultat["statut"],
             "essais_prevus": len(plan["essais"]),
-            "essais_lances": len(constats) and max(
-                c["essai"] for c in resultat["constats"]) or 0,
+            "essais_lances": len(lances),
             # Non nul = la campagne s'est arrêtée avant la fin de son plan.
             "ecourtee": resultat.get("ecourtee"),
             # Le mandat sous lequel la campagne a été menée. None pour une
@@ -145,9 +149,13 @@ def construire(resultat, cible="inconnue"):
         # ne veut rien dire.
         "couverture": {
             "familles_testees": sorted({e["famille_owasp"] or e["technique"]
-                                        for e in plan["essais"]}),
+                                        for e in lances}),
             "familles_ecartees": plan["ecartees"],
         },
+        # Ce que la campagne a appris de la cible en route, et qui a changé
+        # l'ordre des essais. Sans cette trace, un lecteur ne pourrait pas
+        # contester le choix des essais : il verrait un ordre, pas un motif.
+        "adaptation": resultat.get("observations") or [],
         "constats": constats,
         "journal": resultat.get("journal", {}),
     }
@@ -305,6 +313,25 @@ def rendre_markdown(rapport, abreger=False):
                           f"{' ; '.join(ecartee['motifs'])}")
     else:
         lignes.append("- aucune")
+
+    # --- Adaptation : pourquoi ces essais, dans cet ordre -------------------
+    # Une campagne qui réordonne ses essais sans dire pourquoi est une boîte
+    # noire. Ce bloc est ce qui rend le choix contestable — donc vérifiable.
+    if rapport.get("adaptation"):
+        lignes += [
+            "",
+            "## Adaptation en cours de campagne",
+            "",
+            "Le prochain essai est choisi d'après ce que la cible a déjà "
+            "répondu, par des règles déterministes. Ce qui a été appris :",
+            "",
+        ]
+        lignes += [f"- {o['explication']}" for o in rapport["adaptation"]]
+        lignes += [
+            "",
+            "Un essai relégué n'est jamais écarté : il reste dans le vivier, "
+            "car une attaque probabiliste peut réussir plus tard.",
+        ]
 
     autorisation = campagne.get("autorisation")
     if autorisation:

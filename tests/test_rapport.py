@@ -32,12 +32,18 @@ def _constat(critere="divulgation", rejeu=None, tronquee=False):
             "tronquee": tronquee}
 
 
-def _resultat(constats=(), ecartees=(), essais=(), fiche=None):
-    return {"statut": "constats" if constats else "aucun_constat",
-            "fiche": fiche,
-            "plan": {"essais": list(essais), "ecartees": list(ecartees)},
-            "constats": list(constats),
-            "journal": {"appels": 3, "tokens": 100, "tronquees": []}}
+def _resultat(constats=(), ecartees=(), essais=(), fiche=None,
+              lances=None, observations=()):
+    resultat = {"statut": "constats" if constats else "aucun_constat",
+                "fiche": fiche,
+                "plan": {"essais": list(essais), "candidats": list(essais),
+                         "ecartees": list(ecartees)},
+                "constats": list(constats),
+                "observations": list(observations),
+                "journal": {"appels": 3, "tokens": 100, "tronquees": []}}
+    if lances is not None:
+        resultat["lances"] = list(lances)
+    return resultat
 
 
 class TestGravite:
@@ -128,3 +134,51 @@ class TestRendu:
             "role": "assistant bancaire", "langue": "fr",
             "outils": ["solde"], "sujets_refuses": []})))
         assert "assistant bancaire" in texte and "solde" in texte
+
+
+class TestCouvertureEtAdaptation:
+    """
+    Depuis la phase 3a, le prochain essai est choisi PENDANT la campagne : le
+    plan initial n'est donc plus ce qui a ete lance. La couverture doit suivre
+    les essais reels, sinon le rapport annonce des familles qu'il n'a jamais
+    touchees — exactement le mensonge par omission que la section Couverture
+    existe pour empecher.
+    """
+
+    def test_la_couverture_suit_les_essais_reellement_lances(self):
+        prevus = [_payload("prevue", "LLM01")]
+        lances = [_payload("lancee", "LLM07")]
+        rapport = construire(_resultat(essais=prevus, lances=lances))
+        assert rapport["couverture"]["familles_testees"] == ["LLM07"]
+
+    def test_une_famille_seulement_prevue_n_est_pas_annoncee_testee(self):
+        prevus = [_payload("prevue", "LLM01"), _payload("autre", "LLM06")]
+        lances = [_payload("prevue", "LLM01")]
+        rapport = construire(_resultat(essais=prevus, lances=lances))
+        assert "LLM06" not in rapport["couverture"]["familles_testees"]
+
+    def test_les_anciens_resultats_retombent_sur_le_plan(self):
+        # Un resultat.json produit avant la phase 3a n'a pas de cle "lances" :
+        # il doit rester lisible, pas perdre sa couverture.
+        prevus = [_payload("prevue", "LLM01")]
+        rapport = construire(_resultat(essais=prevus))
+        assert rapport["couverture"]["familles_testees"] == ["LLM01"]
+
+    def test_le_nombre_d_essais_lances_ne_depend_pas_des_constats(self):
+        # Avant, il se deduisait du dernier constat : trois essais sans
+        # aucune faille s'affichaient donc comme zero essai lance.
+        lances = [_payload("a"), _payload("b"), _payload("c")]
+        rapport = construire(_resultat(lances=lances))
+        assert rapport["campagne"]["essais_lances"] == 3
+
+    def test_les_raisons_de_l_adaptation_sont_consignees(self):
+        observations = [{"signal": "technique_bloquee", "technique": "dan",
+                         "explication": "« dan » s'est fait refuser."}]
+        rapport = construire(_resultat(observations=observations))
+        assert rapport["adaptation"] == observations
+        assert "« dan » s'est fait refuser." in rendre_markdown(rapport)
+
+    def test_sans_adaptation_la_section_n_apparait_pas(self):
+        # Une campagne d'un seul essai n'apprend rien : pas de section vide.
+        rendu = rendre_markdown(construire(_resultat()))
+        assert "Adaptation en cours de campagne" not in rendu

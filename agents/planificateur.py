@@ -66,14 +66,20 @@ def objectifs_pour(fiche, bibliotheque):
 
 def planifier(fiche, budget):
     """
-    Renvoie {"essais": [...], "ecartees": [...]}.
+    Renvoie {"essais": [...], "candidats": [...], "ecartees": [...]}.
 
-    - essais   : les payloads à lancer, les mieux classés d'abord, au plus
-                 `budget` (le planificateur ne décide jamais de dépasser la
-                 limite de la campagne).
-    - ecartees : les techniques non retenues ET pourquoi. Un outil de sécurité
-                 qui ne dit pas ce qu'il n'a PAS testé donne une fausse
-                 impression de couverture.
+    - essais    : le plan INITIAL, les mieux classés d'abord, au plus `budget`
+                  (le planificateur ne décide jamais de dépasser la limite de
+                  la campagne). C'est ce qu'on lancerait sans rien apprendre
+                  de la cible.
+    - candidats : le VIVIER complet, trié. La campagne y pioche au fur et à
+                  mesure, en réordonnant d'après les réponses déjà obtenues
+                  (agents/adaptation.py). Il n'est pas tronqué : un essai
+                  relégué au-delà du budget initial doit pouvoir remonter si
+                  la cible révèle qu'il est pertinent.
+    - ecartees  : les techniques non retenues ET pourquoi. Un outil de sécurité
+                  qui ne dit pas ce qu'il n'a PAS testé donne une fausse
+                  impression de couverture.
     """
     bibliotheque = charger_bibliotheque()
     objectifs = objectifs_pour(fiche, bibliotheque)
@@ -131,7 +137,9 @@ def planifier(fiche, budget):
     # Tri stable : à priorité égale, l'ordre de la bibliothèque est conservé,
     # donc deux campagnes identiques produisent la même liste.
     essais.sort(key=lambda essai: essai["priorite"])
-    return {"essais": _repartir(essais, budget), "ecartees": ecartees}
+    return {"essais": _repartir(essais, budget),
+            "candidats": essais,
+            "ecartees": ecartees}
 
 
 def _repartir(essais, budget):

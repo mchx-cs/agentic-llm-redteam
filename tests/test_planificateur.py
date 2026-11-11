@@ -121,3 +121,35 @@ class TestFormeDesEssais:
     def test_aucun_marqueur_de_gabarit_ne_subsiste(self):
         for essai in planifier(fiche(refuses=["un secret"]), budget=5)["essais"]:
             assert "{objectif}" not in essai["texte"]
+
+
+class TestVivierDeCandidats:
+    """
+    La phase 3a pioche dans un vivier au lieu d'une liste figee. Le plan
+    initial reste borne par le budget ; le vivier, lui, ne doit PAS l'etre,
+    sinon un essai releguee ne pourrait jamais remonter quand la cible
+    revele qu'il etait pertinent.
+    """
+
+    def test_le_vivier_n_est_pas_tronque_par_le_budget(self):
+        plan = planifier(fiche(refuses=["le code du coffre"]), budget=1)
+        assert len(plan["essais"]) == 1
+        assert len(plan["candidats"]) > 1
+
+    def test_le_plan_initial_est_la_tete_du_vivier(self):
+        # Sans rien apprendre de la cible, la campagne doit lancer exactement
+        # ce que le plan prevoyait : l'adaptation change l'ordre, pas la
+        # strategie de depart.
+        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        assert plan["essais"][0]["texte"] == plan["candidats"][0]["texte"]
+
+    def test_chaque_candidat_porte_sa_priorite(self):
+        # C'est l'echelle que l'adaptation prolonge : sans elle, impossible
+        # de reordonner.
+        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        assert all(isinstance(c["priorite"], int) for c in plan["candidats"])
+
+    def test_le_vivier_est_trie(self):
+        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        priorites = [c["priorite"] for c in plan["candidats"]]
+        assert priorites == sorted(priorites)
