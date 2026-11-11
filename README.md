@@ -316,8 +316,29 @@ python main.py --cible https://host/chat --profil-cible openai
 ```
 
 `openai` covers OpenAI, Groq, Together, vLLM, LM Studio and most gateways; `ollama`,
-`anthropic` and `simple` cover the rest of what turns up. Anything bespoke is described
-in `.env`, and what you set there always wins over a profile:
+`anthropic` and `simple` cover the rest of what turns up. Two more exist for replies
+that aren't a single JSON object — `openai-flux` reads a server-sent-event stream
+fragment by fragment, and `texte` takes the body as-is:
+
+| Profile | Response read as |
+|---|---|
+| `openai` | `choices.0.message.content` |
+| `ollama` | `response` |
+| `anthropic` | `content.0.text` |
+| `simple` | `reply` |
+| `openai-flux` | `@flux:choices.0.delta.content` — SSE stream, reassembled |
+| `texte` | `@brut` — the whole body, not parsed |
+
+Streaming matters more than it looks: "just set `stream: false`" assumes you control the
+request body, which you often don't when the thing under test is a client's own
+application. Either way the *request* stays JSON, so an attack payload full of quotes,
+braces and newlines still travels intact — that is the property worth protecting, and
+it's why a non-JSON reply remains an error unless you ask for one of these two
+explicitly. Guessing would let an HTML error page pass as a chatbot's answer, and the
+judge would end up scoring HTML.
+
+Anything bespoke is described in `.env`, and what you set there always wins over a
+profile:
 
 ```bash
 CIBLE_ENTETES={"Authorization": "Bearer xxx"}

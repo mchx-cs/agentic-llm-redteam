@@ -16,7 +16,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from cibles import choisir_cible
-from cibles.http import (MESSAGE_DE_TEST, PROFILS_CIBLE, _diagnostiquer,
+from cibles.http import (CHEMIN_TEXTE_BRUT, MESSAGE_DE_TEST,
+                         PROFILS_CIBLE, _diagnostiquer,
+                         lire_reponse,
                          construire_cible_http,
                          tester as verifier_branchement,
                          verifier_gabarit)
@@ -408,3 +410,100 @@ class TestDiagnosticDUneReponseNonJSON:
         texte = str(echec.value)
         assert "JSON attendu" in texte        # le fait
         assert "PAGE WEB" in texte            # la cause probable
+
+
+FLUX_OPENAI = (
+    ": ping\n\n"                                       # commentaire SSE
+    'data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n'   # pas de contenu
+    'data: {"choices":[{"delta":{"content":"Le code "}}]}\n\n'
+    'data: {"choices":[{"delta":{"content":"est "}}]}\n\n'
+    'data: {"choices":[{"delta":{"content":"ARCHIVES-7731."}}]}\n\n'
+    "data: [DONE]\n\n"
+)
+CHEMIN_FLUX_OPENAI = "@flux:choices.0.delta.content"
+
+
+class TestReponsesNonJSON:
+    """
+    L'adaptateur n'acceptait que du JSON, et c'est le bon defaut : travailler
+    sur la structure deserialisee est ce qui rend l'injection de payload SURE.
+    Mais deux formes se rencontrent vraiment face a un chatbot, et toutes deux
+    ne concernent que la LECTURE de la reponse — l'envoi reste du JSON, donc
+    rien n'est echappe a la main.
+    """
+
+    # --- Texte brut --------------------------------------------------------
+
+    def test_le_corps_entier_est_pris_tel_quel(self):
+        assert lire_reponse("Bonjour, je suis le bot.",
+                            CHEMIN_TEXTE_BRUT) == "Bonjour, je suis le bot."
+
+    def test_le_texte_brut_n_essaie_meme_pas_de_lire_du_json(self):
+        # Une application maison peut renvoyer n'importe quoi : des accolades
+        # dans la phrase du bot ne doivent pas devenir une erreur de parsing.
+        phrase = 'Il a dit {"bonjour"} puis est parti.'
+        assert lire_reponse(phrase, CHEMIN_TEXTE_BRUT) == phrase
+
+    # --- Flux SSE ----------------------------------------------------------
+
+    def test_les_fragments_sont_recolles_dans_l_ordre(self):
+        assert lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI) == (
+            "Le code est ARCHIVES-7731.")
+
+    def test_les_lignes_de_controle_sont_ignorees(self):
+        # Un flux contient des commentaires, des pings, des evenements sans
+        # contenu et une sentinelle : s'arreter au premier perdrait la
+        # reponse entiere alors qu'elle est la.
+        assert "ping" not in lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
+        assert "[DONE]" not in lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
+        assert "assistant" not in lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
+
+    def test_un_fragment_illisible_ne_perd_pas_les_autres(self):
+        flux = (FLUX_OPENAI.replace("data: [DONE]",
+                                    "data: {ceci n'est pas du json}\n\n"
+                                    "data: [DONE]"))
+        assert lire_reponse(flux, CHEMIN_FLUX_OPENAI) == (
+            "Le code est ARCHIVES-7731.")
+
+    def test_un_chemin_interne_faux_le_dit_clairement(self):
+        # Erreur la plus probable : le chemin DANS chaque fragment est
+        # different de celui d'une reponse complete (delta, pas message).
+        with pytest.raises(ValueError, match="aucun fragment lisible"):
+            lire_reponse(FLUX_OPENAI, "@flux:choices.0.message.content")
+
+    def test_un_flux_sans_aucun_contenu_echoue(self):
+        with pytest.raises(ValueError, match="aucun fragment lisible"):
+            lire_reponse("data: [DONE]\n\n", CHEMIN_FLUX_OPENAI)
+
+    # --- Le JSON reste le defaut ------------------------------------------
+
+    def test_un_chemin_ordinaire_est_inchange(self):
+        assert lire_reponse('{"reply": "salut"}', "reply") == "salut"
+
+    def test_une_reponse_non_json_reste_une_ERREUR_par_defaut(self):
+        # Deviner ferait passer une page d'erreur HTML pour la reponse d'un
+        # chatbot, et l'arbitre jugerait du HTML. Les deux formes ci-dessus
+        # sont des cas DECLARES, jamais devines.
+        with pytest.raises(json.JSONDecodeError):
+            lire_reponse("<html>erreur</html>", "reply")
+
+    # --- Profils correspondants -------------------------------------------
+
+    @pytest.mark.parametrize("profil, chemin", [
+        ("openai-flux", CHEMIN_FLUX_OPENAI),
+        ("texte", CHEMIN_TEXTE_BRUT),
+    ])
+    def test_un_profil_existe_pour_chaque_forme(self, profil, chemin):
+        assert PROFILS_CIBLE[profil]["chemin_reponse"] == chemin
+        verifier_gabarit(PROFILS_CIBLE[profil]["corps"])
+
+    def test_le_profil_de_flux_demande_bien_un_flux(self):
+        # Incoherent autrement : lire un flux en demandant du non-flux.
+        assert PROFILS_CIBLE["openai-flux"]["corps"]["stream"] is True
+
+    def test_le_diagnostic_propose_la_lecture_du_flux(self, base):
+        # Avant, il ne proposait que « stream: false », ce qui suppose qu'on
+        # controle le corps — faux quand on teste l'application d'un client.
+        message = _diagnostiquer('data: {"a":1}')
+        assert "@flux:" in message
+        assert "openai-flux" in message

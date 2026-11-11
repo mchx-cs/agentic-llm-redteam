@@ -57,6 +57,20 @@ PROFILS_CIBLE = {
         "chemin_reponse": "reply",
         "description": "application maison : {\"message\": …} → {\"reply\": …}",
     },
+    # Pour une application dont on ne contrôle pas le corps de la requête, et
+    # qui streame sans qu'on puisse l'en empêcher — le cas d'une application
+    # cliente testée sous mandat.
+    "openai-flux": {
+        "corps": {"messages": [{"role": "user", "content": MARQUEUR_MESSAGE}],
+                  "stream": True},
+        "chemin_reponse": "@flux:choices.0.delta.content",
+        "description": "API de type OpenAI qui répond en flux (SSE)",
+    },
+    "texte": {
+        "corps": {"message": MARQUEUR_MESSAGE},
+        "chemin_reponse": "@brut",
+        "description": "réponse en texte brut, sans JSON autour",
+    },
 }
 
 
@@ -111,6 +125,87 @@ def _injecter(gabarit, message):
     return gabarit
 
 
+# --- Formes de réponse autres que « un objet JSON » --------------------------
+# L'adaptateur n'acceptait que du JSON, et c'est le bon défaut : travailler sur
+# la structure désérialisée est ce qui rend l'injection de payload SÛRE — le
+# marqueur est remplacé dans l'arbre analysé, donc un payload bourré de
+# guillemets et de retours à la ligne voyage intact et ne peut rien casser.
+#
+# Mais deux formes se rencontrent vraiment face à un chatbot, et toutes deux
+# s'obtiennent sans rien échapper à la main, puisqu'elles ne concernent QUE la
+# lecture de la réponse — l'envoi reste du JSON.
+
+# Chemin spécial : prendre le corps entier, tel qu'il est arrivé. Pour une
+# application maison qui renvoie simplement la phrase du bot.
+CHEMIN_TEXTE_BRUT = "@brut"
+
+# Chemin spécial : la réponse est un flux d'événements (server-sent events).
+# Le conseil « ajoute "stream": false » suppose qu'on contrôle le corps de la
+# requête ; quand on teste l'APPLICATION d'un client — le cas le plus
+# légitime — l'endpoint streame parfois sans qu'on puisse l'en empêcher.
+CHEMIN_FLUX = "@flux:"
+
+
+def _texte_du_flux(brut, chemin_interne):
+    """
+    Recolle les fragments d'un flux SSE en un seul texte.
+
+    Format : des lignes « data: … », séparées par des lignes vides, et une
+    sentinelle finale (`[DONE]` chez la plupart des fournisseurs). Chaque
+    fragment porte un morceau de la réponse, à l'endroit décrit par
+    `chemin_interne` — `choices.0.delta.content` dans le dialecte OpenAI.
+
+    Les fragments illisibles sont IGNORÉS, pas fatals : un flux contient des
+    commentaires, des pings et des événements de contrôle, et s'arrêter au
+    premier perdrait la réponse entière alors qu'elle est là.
+    """
+    morceaux = []
+    for ligne in brut.splitlines():
+        ligne = ligne.strip()
+        if not ligne.startswith("data:"):
+            continue
+        charge = ligne[len("data:"):].strip()
+        if not charge or charge == "[DONE]":
+            continue
+        try:
+            fragment = _extraire(json.loads(charge), chemin_interne)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(fragment, str):
+            morceaux.append(fragment)
+
+    if not morceaux:
+        raise ValueError(
+            f"Flux reçu, mais aucun fragment lisible en "
+            f"'{chemin_interne}'.\n"
+            f"  Vérifie le chemin INTERNE après « {CHEMIN_FLUX} » : pour une "
+            f"API de type OpenAI,\n"
+            f"  c'est choices.0.delta.content."
+        )
+    return "".join(morceaux)
+
+
+def lire_reponse(brut, chemin_reponse):
+    """
+    Extrait le texte d'une réponse, selon ce que `chemin_reponse` décrit.
+
+    - "@brut"                      → le corps entier, sans l'analyser ;
+    - "@flux:choices.0.delta.content" → un flux SSE, recollé fragment à
+      fragment ;
+    - "choices.0.message.content"  → un chemin pointé dans un objet JSON.
+
+    Les deux premiers sont des cas particuliers DÉCLARÉS, jamais devinés : une
+    réponse qui n'est pas du JSON reste une erreur par défaut, avec son
+    diagnostic. Deviner ferait passer une page d'erreur HTML pour la réponse
+    d'un chatbot, et l'arbitre jugerait du HTML.
+    """
+    if chemin_reponse == CHEMIN_TEXTE_BRUT:
+        return brut
+    if chemin_reponse.startswith(CHEMIN_FLUX):
+        return _texte_du_flux(brut, chemin_reponse[len(CHEMIN_FLUX):])
+    return _extraire(json.loads(brut), chemin_reponse)
+
+
 def _diagnostiquer(brut):
     """
     Nomme la cause probable d'une réponse qui n'est pas du JSON.
@@ -133,11 +228,16 @@ def _diagnostiquer(brut):
                 "  envoie un message, et relève l'URL de la requête POST.")
 
     if debut.startswith("data:") or "\ndata:" in debut:
-        return ("  Cette API répond en FLUX (server-sent events) : un seul "
-                "objet JSON est attendu.\n"
-                "  Cherche de quoi le désactiver dans le corps, par exemple "
-                '"stream": false\n'
-                "  dans CIBLE_CORPS.")
+        return ("  Cette API répond en FLUX (server-sent events).\n"
+                "  Deux issues : désactiver le flux si le corps te le permet "
+                '("stream": false dans\n'
+                "  CIBLE_CORPS), ou lire le flux tel quel —\n"
+                f"    CIBLE_CHEMIN_REPONSE={CHEMIN_FLUX}"
+                "choices.0.delta.content\n"
+                "    ou --profil-cible openai-flux\n"
+                "  La seconde est la bonne quand tu testes l'application d'un "
+                "client, qui ne\n"
+                "  propose pas toujours de désactiver le flux.")
 
     if not debut:
         return ("  La réponse est VIDE. Vérifie que l'URL est bien celle de "
@@ -252,7 +352,7 @@ def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
             ) from erreur
 
         try:
-            texte = _extraire(json.loads(brut), chemin_reponse)
+            texte = lire_reponse(brut, chemin_reponse)
         except json.JSONDecodeError as erreur:
             raise RuntimeError(
                 f"Cible {url} : réponse illisible (JSON attendu).\n"

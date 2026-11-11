@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 429 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 442 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1471,9 +1471,34 @@ ce sont celles qui coûtent le plus de temps au premier branchement :
 - des lignes `data:` → l'API répond en FLUX, il faut chercher `"stream": false` ;
 - un corps vide → mauvaise URL ou mauvaise méthode.
 
-Limite assumée de l'adaptateur, visible ici : il ne parle que **POST + JSON**. Une API
-en `multipart`, en GET, ou en flux non désactivable demanderait un adaptateur à part —
-le contrat `interroger(message) -> str` le permet sans toucher au reste.
+**Deux de ces formes ont été levées le 2026-11-11, après la question « il faut
+forcément du JSON ? ».** Réponse : à l'envoi oui, et c'est délibéré ; en RÉPONSE, plus
+tout à fait.
+
+- `@brut` prend le corps entier sans l'analyser — une application maison qui renvoie
+  simplement la phrase du bot. Profil `texte`.
+- `@flux:choices.0.delta.content` recolle les fragments d'un flux SSE. Profil
+  `openai-flux`. Ça compte plus qu'il n'y paraît : le conseil « ajoute
+  `"stream": false` » suppose qu'on contrôle le corps de la requête, ce qui est faux
+  précisément dans le cas le plus légitime — tester l'application d'un client, qui ne
+  propose pas toujours de désactiver le flux. Le diagnostic propose donc les deux issues.
+
+Trois décisions sur ces deux ajouts :
+- **l'ENVOI reste du JSON**, toujours. C'est lui qui rend l'injection de payload sûre :
+  le marqueur est remplacé dans la structure analysée, donc un payload bourré de
+  guillemets, d'accolades et de retours à la ligne voyage intact. En texte brut il
+  faudrait échapper à la main, et un payload d'attaque est fait pour tordre les
+  échappements. Un test vérifie l'intégrité du payload avec les deux nouveaux profils ;
+- **ce sont des cas DÉCLARÉS, jamais devinés.** Une réponse non-JSON reste une erreur
+  par défaut, avec son diagnostic. Deviner ferait passer une page d'erreur HTML pour la
+  réponse d'un chatbot, et l'arbitre jugerait du HTML ;
+- **un fragment de flux illisible est IGNORÉ, pas fatal.** Un flux contient des
+  commentaires, des pings et des événements de contrôle ; s'arrêter au premier perdrait
+  la réponse entière alors qu'elle est là.
+
+Ce qui reste hors de portée, et qui demanderait un adaptateur à part : `multipart`, GET,
+et WebSocket (celui-là ajouterait une dépendance). Le contrat
+`interroger(message) -> str` le permet sans toucher au reste du projet.
 
 Deux choses vérifiées au passage, et la seconde par accident :
 - **la piste d'audit se referme même sur une panne**, statut `interrompue`. C'est
