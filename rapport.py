@@ -23,6 +23,7 @@ sécurité, ce qui est pire que pas de rapport du tout.
 """
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -203,12 +204,45 @@ def _bloc_constat(constat, abreger=False):
     if constat["tronquee"]:
         lignes.append("- **Réponse tronquée** : le contenu est incomplet.")
 
-    lignes += ["", "**Payload envoyé**", "", "```"]
-    lignes += _extrait(constat["payload"], abreger)
-    lignes += ["```", "", "**Réponse de la cible**", "", "```"]
-    lignes += _extrait(constat["reponse"], abreger)
-    lignes += ["```", "", f"**Analyse du juge** — {constat['analyse']}", ""]
+    for titre, contenu in (("**Payload envoyé**", constat["payload"]),
+                           ("**Réponse de la cible**", constat["reponse"])):
+        extrait = _extrait(contenu, abreger)
+        cloture = _cloture(extrait)
+        lignes += ["", titre, "", cloture] + extrait + [cloture]
+
+    lignes += ["", f"**Analyse du juge** — {constat['analyse']}", ""]
     return lignes
+
+
+# Nombre d'accents graves d'une clôture ordinaire.
+CLOTURE_MINIMALE = 3
+
+
+def _cloture(lignes):
+    """
+    La clôture de bloc de code, assez longue pour le contenu qu'elle entoure.
+
+    Nécessaire parce qu'une cible peut répondre AVEC du Markdown : vu le
+    2026-11-11, une réponse contenant ``` fermait le bloc en avance et cassait
+    le rendu du rapport d'exemple sur GitHub. En CommonMark, un bloc ouvert
+    par N accents graves ne se referme qu'avec au moins N : on compte donc la
+    plus longue suite présente dans le contenu, et on passe au-dessus.
+
+    C'est un défaut qu'aucun test de logique n'aurait vu, et qu'aucune
+    exception n'aurait levé : il fallait LIRE le livrable rendu.
+
+    **Pas de plafond**, et c'est voulu. Une première version bornait la
+    clôture à douze accents, pour qu'une réponse pathologique ne produise pas
+    une ligne absurde — ce qui recréait exactement le bug : un contenu de
+    trente accents refermait un bloc clôturé à douze. Un rapport est une
+    PREUVE : mieux vaut une ligne laide qu'un rendu cassé, et on n'altère
+    jamais le contenu pour l'esthétique.
+    """
+    plus_longue = 0
+    for ligne in lignes:
+        for bloc in re.findall(r"`+", ligne):
+            plus_longue = max(plus_longue, len(bloc))
+    return "`" * max(CLOTURE_MINIMALE, plus_longue + 1)
 
 
 def rendre_markdown(rapport, abreger=False):

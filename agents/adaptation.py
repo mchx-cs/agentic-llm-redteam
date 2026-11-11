@@ -152,7 +152,7 @@ def observer(payload, reponse, verdict):
 def cumuler(observations, nouvelles):
     """
     Mémoire de campagne : les observations déjà faites, plus les nouvelles,
-    sans doublon.
+    sans doublon et sans contradiction.
 
     Pourquoi dédoublonner par (signal, technique) : sans ça, une cible qui
     refuse en nommant son secret à chaque tour accumulerait le bonus
@@ -160,13 +160,41 @@ def cumuler(observations, nouvelles):
     compris la diversité. Un fait appris trois fois reste un seul fait.
     L'acharnement sur une technique, lui, est déjà traité par POIDS_DIVERSITE,
     qui compte les essais réellement lancés.
+
+    Pourquoi un succès CHASSE un blocage sur la même technique : repéré dans
+    un rapport du 2026-11-11, qui affichait côte à côte « ses variantes
+    passent devant » et « ses variantes passent derrière » pour la même
+    technique. Le score restait cohérent (−3 puis +1), mais la trace devenait
+    illisible — et c'est un rapport destiné à être lu.
+
+    La règle n'est pas qu'un arrangement d'affichage : **« cette technique a
+    déjà produit un constat » est un fait acquis**, et qu'elle se fasse
+    refuser ensuite est le comportement NORMAL d'une attaque probabiliste —
+    ça ne l'invalide pas. L'inverse n'est pas vrai : un succès après des
+    refus, lui, apprend quelque chose de neuf. L'exclusion est donc à sens
+    unique.
     """
-    cumulees = list(observations)
+    cumulees = [o for o in observations]
+    efficaces = {o["technique"] for o in cumulees
+                 if o["signal"] == "technique_efficace"}
     connues = {(o["signal"], o["technique"]) for o in cumulees}
+
     for observation in nouvelles:
-        cle = (observation["signal"], observation["technique"])
-        if cle not in connues:
-            connues.add(cle)
+        signal, technique = observation["signal"], observation["technique"]
+
+        if signal == "technique_bloquee" and technique in efficaces:
+            continue                  # le succès acquis l'emporte
+
+        if signal == "technique_efficace":
+            # Un succès efface le blocage éventuellement déjà noté.
+            cumulees = [o for o in cumulees
+                        if not (o["signal"] == "technique_bloquee"
+                                and o["technique"] == technique)]
+            connues.discard(("technique_bloquee", technique))
+            efficaces.add(technique)
+
+        if (signal, technique) not in connues:
+            connues.add((signal, technique))
             cumulees.append(observation)
     return cumulees
 

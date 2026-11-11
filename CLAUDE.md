@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 295 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 308 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -724,6 +724,49 @@ signaux un par un, `--signaux`) :
   ce qui m'a fait croire un moment qu'elle nuisait à petit budget. C'était du bruit.
   Même discipline que pour l'instabilité de l'arbitre : un écart isolé ne s'interprète
   pas.
+
+**Troisième défaut, et c'est le RAPPORT qui l'a montré.** La section « Adaptation »
+affichait côte à côte, pour la même technique : « ses variantes passent devant » et
+« ses variantes passent derrière ». Cause : `cumuler` dédoublonnait par
+(signal, technique), et `technique_efficace` / `technique_bloquee` sont deux signaux
+distincts — ils coexistaient donc. Le score restait cohérent (−3 puis +1), mais la
+trace devenait illisible, dans un document destiné à être lu.
+
+La règle retenue n'est pas un arrangement d'affichage : **un succès est un fait ACQUIS**,
+et qu'une technique se fasse refuser ensuite est le comportement NORMAL d'une attaque
+probabiliste — ça ne l'invalide pas. L'inverse, un succès après des refus, apprend au
+contraire quelque chose de neuf. L'exclusion est donc **à sens unique** : un succès
+chasse le blocage, jamais le contraire. Les chiffres de la mesure sont inchangés, ce qui
+confirme au passage que `technique_bloquee` ne pesait rien.
+
+Leçon de méthode : les deux premiers défauts (motifs trop étroits, test tautologique)
+se sont vus en lançant et en mutant le code ; celui-ci ne pouvait se voir qu'en LISANT
+le livrable. Trois façons différentes de trouver trois défauts — aucune n'aurait suffi.
+
+**Quatrième défaut, trouvé de la même façon : le rapport cassait son propre rendu.**
+La cible a répondu AVEC du Markdown — une réponse contenant ``` ``` ``` — qui refermait
+en avance le bloc de code du rapport. Tout ce qui suivait (analyse du juge, couverture,
+fiche) se retrouvait affiché comme du code source sur GitHub, c'est-à-dire sur la pièce
+vitrine du dépôt. Aucune exception, aucun test de logique : il fallait lire le rendu.
+
+Corrigé par `_cloture()` : on compte la plus longue suite d'accents graves du contenu et
+on clôture au-dessus (règle CommonMark — un bloc ouvert par N accents ne se referme
+qu'avec au moins N). **Et sans plafond**, après une erreur de ma part qui mérite d'être
+notée : une première version bornait la clôture à douze accents pour éviter une ligne
+absurde, ce qui **recréait exactement le bug** — un contenu de trente accents refermait
+un bloc clôturé à douze. Un garde-fou mal placé fabrique le problème qu'il devait
+empêcher. Un rapport est une PREUVE : correct d'abord, joli ensuite, et on n'altère
+jamais le contenu pour l'esthétique.
+
+Le test de ce défaut a lui aussi dû être réécrit : compter les lignes faites d'accents
+graves ramasse aussi celles du CONTENU. Il applique maintenant la règle CommonMark pour
+vérifier la seule propriété qui compte — qu'aucun bloc ne reste ouvert, et que les
+titres qui suivent sont bien rendus comme du texte.
+
+**Le rapport d'exemple a été regénéré SANS relancer de campagne**, depuis le
+`resultat.json` déjà produit. C'est la première fois que le choix « le JSON est la
+source de vérité, le Markdown n'en est qu'un rendu » se paie comptant : corriger le
+rendu n'a coûté aucun appel au modèle, alors que le quota du jour était épuisé.
 
 **Ce que cette mesure ne dit PAS.** Elle compare deux stratégies sur une cible SIMULÉE,
 dont on décrète quelles techniques cèdent. Elle ne dit rien du gain sur une cible
