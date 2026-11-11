@@ -57,9 +57,62 @@ class TestTraductionDUneSonde:
     def test_le_tag_owasp_donne_la_famille_et_le_prerequis(
             self, tag, famille, prerequis):
         # garak porte déjà la correspondance OWASP : on ne la devine pas.
-        technique = _technique_depuis_sonde(_sonde(familles=[tag]))
+        # Sonde d'un module SANS prérequis propre, pour isoler cette source
+        # de l'autre (voir la classe TestPertinenceParModule).
+        technique = _technique_depuis_sonde(
+            _sonde(nom="probes.encoding.InjectBase64", familles=[tag]))
         assert technique["famille_owasp"] == famille
         assert technique["prerequis"] == prerequis
+
+
+class TestPertinenceParModule:
+    """
+    Deux sources de prérequis, qui ne disent PAS la même chose et se cumulent :
+    la famille OWASP dit ce que l'attaque CHERCHE (un secret, des consignes),
+    le module garak ce qu'elle EXIGE du contexte (du code, un terminal).
+
+    Jusqu'au 2026-11-11 seule la première existait, et comme `owasp:llm01`
+    n'exige rien, 73 % des payloads (845/1 143) partaient contre n'importe
+    quelle cible — « print ANSI terminal codes » compris, contre un chatbot
+    de bibliothèque.
+    """
+
+    @pytest.mark.parametrize("module, prerequis", [
+        ("dan", "consignes"),
+        ("phrasing", "consignes"),
+        ("sata", "consignes"),
+        ("packagehallucination", "produit-du-code"),
+        ("latentinjection", "traite-des-documents"),
+        ("ansiescape", "terminal"),
+        ("web_injection", "rendu-riche"),
+        ("exploitation", "base-donnees"),
+    ])
+    def test_le_module_impose_son_prerequis(self, module, prerequis):
+        technique = _technique_depuis_sonde(_sonde(nom=f"probes.{module}.X"))
+        assert prerequis in technique["prerequis"]
+
+    @pytest.mark.parametrize("module", ["encoding", "goodside", "promptinject"])
+    def test_un_module_universel_n_exige_rien(self, module):
+        # Le bon défaut : ces sondes s'appliquent à tout modèle. Ajouter un
+        # prérequis « par précaution » coûterait une faille non trouvée, ce qui
+        # est plus grave qu'un essai gaspillé.
+        technique = _technique_depuis_sonde(_sonde(nom=f"probes.{module}.X"))
+        assert technique["prerequis"] == []
+
+    def test_les_deux_sources_se_cumulent(self):
+        # `dan` exige des consignes, `owasp:llm02` un secret : les deux.
+        technique = _technique_depuis_sonde(
+            _sonde(nom="probes.dan.DanInTheWild", familles=["owasp:llm02"]))
+        assert technique["prerequis"] == ["consignes", "secret"]
+
+    def test_le_groupe_et_le_prerequis_lisent_le_meme_module(self):
+        # Un seul endroit sait extraire un module d'un nom de sonde : si les
+        # deux divergeaient, le tour de rôle et la pertinence ne parleraient
+        # plus de la même chose.
+        technique = _technique_depuis_sonde(
+            _sonde(nom="probes.web_injection.MarkdownXSS"))
+        assert technique["groupe"] == "web_injection"
+        assert "rendu-riche" in technique["prerequis"]
 
     @pytest.mark.parametrize("tag, famille", [
         ("owasp:llm05", "LLM05:2025 Improper Output Handling"),

@@ -27,7 +27,8 @@ from audit import (FICHIER_AUTORISATION, AutorisationManquante, PisteAudit,
 from agents.adaptation import cumuler, observer, prochain
 from agents.arbitre import juger, juger_par_vote
 from agents.planificateur import planifier, resumer as resumer_plan
-from agents.reconnaissance import reconnaitre, resumer as resumer_fiche
+from agents.reconnaissance import (CONTEXTES_CONNUS, reconnaitre,
+                                    resumer as resumer_fiche)
 from agents.verificateur import verifier_par_rejeu
 from cibles import choisir_cible
 from config import BUDGET_APPELS, BUDGET_TOKENS, CIBLE
@@ -38,7 +39,8 @@ from rapport import enregistrer
 MAX_ESSAIS = 3
 
 
-def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
+def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
+                    contexte=()):
     """
     Lance une campagne contre `interroger_cible`.
 
@@ -70,6 +72,11 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None):
                           "plan": {"essais": [], "candidats": [],
                                    "ecartees": []},
                           "constats": [], "ecourtee": str(arret)})
+    # Le contexte vient de l'OPÉRATEUR, pas d'une sonde : une cible ne sait
+    # pas dans quoi sa sortie est rendue, et le lui demander inviterait à
+    # l'hallucination. On le verse donc après coup, sans toucher aux faits
+    # observés.
+    fiche["contexte"] = list(contexte)
     print(resumer_fiche(fiche))
 
     # --- 2. Planification : que lancer, et dans quel ordre ? ---------------
@@ -263,12 +270,31 @@ def cli(arguments=None):
              "un rapport sans réponses verbatim, ou publier un exemple). "
              "resultat.json garde tout.")
     parseur.add_argument(
+        "--contexte", default="", metavar="LISTE",
+        help="ce que l'application AUTOUR de la cible fait de sa sortie, "
+             "séparé par des virgules : "
+             + ", ".join(CONTEXTES_CONNUS)
+             + ". Certaines familles de sondes n'ont aucun sens sans ça, et "
+               "une cible ne peut pas le déclarer elle-même.")
+    parseur.add_argument(
         "--autorisation", default=FICHIER_AUTORISATION, metavar="FICHIER",
         help=f"mandat couvrant la cible (défaut : {FICHIER_AUTORISATION}). "
              f"Inutile pour une cible locale.")
     arguments = parseur.parse_args(arguments)
 
     nom_cible = arguments.cible or CIBLE
+
+    # Un nom de contexte inconnu est une FAUTE DE FRAPPE, pas un contexte
+    # absent : l'accepter en silence écarterait des familles entières sans que
+    # personne comprenne pourquoi. Même logique que le profil inconnu, qui
+    # échoue dès l'import avec la liste des valeurs valides.
+    contexte = [c.strip() for c in arguments.contexte.split(",") if c.strip()]
+    inconnus = [c for c in contexte if c not in CONTEXTES_CONNUS]
+    if inconnus:
+        print(f"Contexte inconnu : {', '.join(inconnus)}.\n"
+              f"Valeurs acceptées : {', '.join(CONTEXTES_CONNUS)}.",
+              file=sys.stderr)
+        raise SystemExit(2)
 
     # Le mandat AVANT tout : on ne lance pas une seule requête vers un
     # système tiers sans pouvoir prouver qu'on en avait le droit.
@@ -293,7 +319,7 @@ def cli(arguments=None):
 
     try:
         resultat = lancer_campagne(
-            choisir_cible(arguments.cible), nom_cible, piste)
+            choisir_cible(arguments.cible), nom_cible, piste, contexte)
     finally:
         # Même si la campagne lève, le journal doit se refermer proprement.
         piste.clore(locals().get("resultat", {}).get("statut", "interrompue"),

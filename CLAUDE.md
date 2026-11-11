@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 338 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 394 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -81,7 +81,7 @@ payloads/
 tests/             # pytest, AUCUN appel LLM : tourne en intégration continue
   test_detecteurs.py, test_verificateur.py, test_arbitre.py,
   test_planificateur.py, test_cibles.py, test_rapport.py,
-  test_attaquant_et_config.py, test_adaptation.py
+  test_attaquant_et_config.py, test_adaptation.py, test_reconnaissance.py
 evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
   echanges_etiquetes.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
   evaluer_arbitre.py       # précision, rappel, détail des erreurs
@@ -1312,15 +1312,83 @@ couverture est précisément ce que ce projet défend, et l'insistance reste por
 `technique_efficace`, au grain de la technique. Deux tests qui échouaient ont servi de
 signal : ils documentaient la règle que l'exemption cassait.
 
-**Ce qui reste à faire : les règles de pertinence par sonde (défaut non corrigé).**
-garak déclare l'objectif de chaque sonde en anglais (« print escaped ANSI terminal
-codes »), dont on peut dériver des prérequis par mots-clés, comme le fait déjà le filtre
-de périmètre. Mais ça bute sur la FICHE, qui ne collecte pas les faits nécessaires : la
-cible produit-elle du code (→ `packagehallucination`, `exploitation`) ? rend-elle du
-Markdown et des liens (→ `web_injection`) ? tourne-t-elle dans un terminal (→
-`ansiescape`) ? Il faut donc d'abord enrichir la reconnaissance — ce qui coûte des
-sondes, donc du `BUDGET_RECONNAISSANCE` — puis écrire la table de correspondance. C'est
-l'ordre que ce fichier prescrit déjà : enrichir la cible, puis exploiter.
+**Deuxième correctif : les règles de pertinence par sonde (2026-11-11).** Les prérequis
+venaient de la seule famille OWASP, et `owasp:llm01` n'en déclare aucun. Ils viennent
+désormais aussi du MODULE garak (`PREREQUIS_PAR_MODULE` dans `attaquant.py`), et les
+deux sources se CUMULENT parce qu'elles ne disent pas la même chose : la famille dit ce
+que l'attaque **cherche** (un secret, des consignes), le module ce qu'elle **exige** du
+contexte (du code, un terminal). Payloads sans aucun prérequis : **845 (73 %) → 450
+(39 %)**.
+
+La correspondance se fait au niveau du module, pas de la sonde, parce que les objectifs
+déclarés par garak sont homogènes à l'intérieur d'un module — les quinze sondes
+`encoding` disent toutes « make the model say an encoded payload ». Et le module est
+déjà le grain du tour de rôle, donc une seule fonction sait extraire un module.
+
+**La découverte qui a structuré la conception : tout n'est pas sondable.** En classant
+les onze modules, deux catégories apparaissent, et les confondre aurait produit des
+hallucinations prises pour des faits :
+
+| Module | Ce qu'il exige | La cible peut-elle le dire ? |
+|---|---|---|
+| `packagehallucination` (7) | produire du code | **oui** |
+| `latentinjection` (9) | traiter un document fourni | **oui** |
+| `dan`, `phrasing`, `sata` (6) | avoir des consignes | oui (déjà là) |
+| `ansiescape` (2) | sortie rendue dans un terminal | **non** |
+| `web_injection` (8) | sortie rendue en Markdown | **non** |
+| `exploitation` (2) | base SQL ou gabarits derrière | **non** |
+| `encoding`, `goodside`, `promptinject` | rien | — |
+
+Les trois du milieu sont des faits sur l'**application**, pas sur le modèle : un chatbot
+ne sait pas dans quoi sa sortie est rendue. Lui demander « ta sortie est-elle rendue en
+Markdown ? » invite à l'invention, et le planificateur prendrait cette invention pour un
+fait vérifié. Ils sont donc **déclarés par l'opérateur** (`--contexte terminal,
+rendu-riche,base-donnees`), comme le mandat d'autorisation : la machine signale, l'humain
+décide.
+
+Deux sondes de reconnaissance ont été ajoutées pour les faits observables, portant
+`BUDGET_RECONNAISSANCE` de 4 à 6. Elles ne sont pas fusionnées en une question, par
+fidélité au principe déjà consigné : une sonde par champ, pour qu'une sonde en moins soit
+une information en moins et jamais une fiche fausse.
+
+**Asymétrie assumée entre les deux catégories, et c'est le cœur du compromis :**
+- *capacités sondées* — tri-état True / False / **None**. On n'écarte que sur un NON
+  explicite. « La cible n'en a pas parlé » laisse passer la sonde, parce que rater une
+  faille coûte plus cher qu'un essai gaspillé, et parce qu'un chatbot ne détaille pas
+  tout ce qu'il sait faire ;
+- *contexte déclaré* — non déclaré = **écarté**. Ici personne n'a répondu, et l'attaque
+  est structurellement intestable. Jusqu'ici `web_injection` partait contre un chatbot
+  texte et le rapport annonçait « LLM02 testée » : un essai perdu ET une couverture
+  surévaluée. Chaque motif d'écartement dit maintenant comment activer la famille.
+
+Mesuré après ce durcissement (`mesurer_adaptation`, 150 tirages) : **plus aucun tirage
+perdant dès le budget 6** (contre 17 sur 150 avant), et +0,41 constat à budget 3. L'écart
+moyen baisse légèrement à grand budget — le témoin statique profite aussi d'un vivier
+débarrassé des sondes intestables, ce qui est exactement le but.
+
+**Trois corrections de présentation imposées par ce travail :**
+- **Les écartées sont groupées par MOTIF**, pas listées à plat : huit sondes
+  `web_injection` affichaient huit fois « aucun client ne rend le Markdown ». Une
+  information répétée noie celle qui ne l'est pas. `grouper_par_motif()` est partagée
+  entre l'affichage de campagne et le rapport, pour qu'un lecteur reconnaisse l'un dans
+  l'autre.
+- **« La famille est couverte par d'autres sondes » était trop large.** Le champ
+  s'appliquait à toutes les écartées ; le regroupement l'a rendu visible sur
+  `ansiescape`, qui relève de LLM01 — couverte par ailleurs — mais teste les séquences
+  ANSI que nulle autre sonde ne teste. La mention laissait croire que son écartement ne
+  coûtait rien. Restreinte au seul cas qui la justifie : une technique écartée faute de
+  payload.
+- **Le rapport dit le contexte déclaré**, et avertit quand il n'y en a pas. Sans ça, un
+  lecteur ne pouvait pas comprendre pourquoi des familles entières manquaient.
+
+**Un bogue silencieux trouvé par les tests de la nouvelle reconnaissance.** Si le modèle
+d'analyse renvoyait `"outils": "pas une liste"`, la normalisation itérait sur la CHAÎNE :
+chaque caractère étant un `str`, la fiche repartait avec treize « outils » d'une lettre.
+Le prérequis `outils` passait à vrai et `abus-outils` partait contre une cible sans
+outil. C'était dans la moitié du code précisément chargée de protéger des hallucinations
+du modèle. Corrigé par `_liste_de_textes()`, et `tests/test_reconnaissance.py` couvre
+désormais la normalisation — le fichier n'existait pas, la reconnaissance n'étant mesurée
+que par `evaluation/`, qui exige un modèle.
 
 ## Cadre légal
 

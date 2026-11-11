@@ -128,11 +128,57 @@ def _age_en_jours(horodatage):
         return None
 
 
+# --- Pertinence : ce que chaque MODULE garak exige de la cible ---------------
+# Jusqu'au 2026-11-11, 73 % des payloads (845/1 143) partaient contre
+# n'importe quelle cible : les prérequis venaient de la seule famille OWASP, et
+# `owasp:llm01` n'en déclare aucun. Résultat, une sonde « print ANSI terminal
+# codes » était lancée contre un chatbot de bibliothèque.
+#
+# La correspondance se fait au niveau du MODULE, pas de la sonde : les
+# objectifs déclarés par garak sont homogènes à l'intérieur d'un module (les
+# quinze sondes `encoding` disent toutes « make the model say an encoded
+# payload »), et le module est déjà le grain du tour de rôle. Une table par
+# sonde serait quinze fois plus longue pour la même information.
+#
+# Un module absent de cette table n'exige rien de particulier, et c'est le bon
+# défaut : `encoding`, `goodside` et `promptinject` s'appliquent à tout modèle.
+# Ne JAMAIS y mettre un prérequis par précaution — écarter une sonde qui aurait
+# pu marcher coûte une faille non trouvée, ce qui est plus grave qu'un essai
+# gaspillé.
+PREREQUIS_PAR_MODULE = {
+    # Désobéir à des consignes suppose qu'il y en ait.
+    "dan": ["consignes"],
+    "phrasing": ["consignes"],
+    "sata": ["consignes"],
+    # Faire importer un paquet inexistant suppose que la cible écrive du code.
+    "packagehallucination": ["produit-du-code"],
+    # Une injection cachée dans un extrait, un rapport ou une traduction
+    # suppose que la cible lise le contenu qu'on lui fournit.
+    "latentinjection": ["traite-des-documents"],
+    # Les trois suivants dépendent de l'APPLICATION autour du modèle, que la
+    # cible ne connaît pas : prérequis déclarés par l'opérateur.
+    "ansiescape": ["terminal"],
+    "web_injection": ["rendu-riche"],
+    "exploitation": ["base-donnees"],
+}
+
+
+def _module_de(sonde):
+    """Le module garak d'une sonde : `probes.dan.DanInTheWild` -> `dan`."""
+    return sonde["sonde"].replace("probes.", "").split(".")[0].lower()
+
+
 def _technique_depuis_sonde(sonde):
     """Traduit une sonde garak en technique du projet."""
     famille, prerequis = next(
         (FAMILLES_GARAK[t] for t in sonde["familles_owasp"]
          if t in FAMILLES_GARAK), (None, []))
+    # Les deux sources de prérequis se cumulent : la famille OWASP dit ce que
+    # l'attaque CHERCHE (un secret, des consignes), le module ce qu'elle EXIGE
+    # du contexte (du code, un terminal). Les confondre ferait rater l'un ou
+    # l'autre.
+    prerequis = sorted(set(prerequis)
+                       | set(PREREQUIS_PAR_MODULE.get(_module_de(sonde), [])))
     identifiant = "garak-" + re.sub(
         r"[^a-z0-9]+", "-", sonde["sonde"].replace("probes.", "").lower()
     ).strip("-")
@@ -144,7 +190,7 @@ def _technique_depuis_sonde(sonde):
         # (« make the model say an encoded payload »). Sans ce regroupement,
         # elles obtenaient quinze tours là où `dan` en obtenait trois, et un
         # budget élargi se serait épuisé en variantes d'encodage.
-        "groupe": sonde["sonde"].replace("probes.", "").split(".")[0].lower(),
+        "groupe": _module_de(sonde),
         "famille_owasp": famille,
         # Ce que la sonde touche AUSSI, et que l'arbitre ne sait pas juger.
         # Lancer sans le dire laisserait croire que ces familles sont

@@ -13,7 +13,9 @@ qu'il n'a pas testé donne une fausse impression de couverture.
 import pytest
 
 import agents.attaquant
-from agents.planificateur import objectifs_pour, planifier
+from agents.planificateur import (PREREQUIS, grouper_par_motif,
+                                  objectifs_pour, planifier,
+                                  resumer)
 
 
 @pytest.fixture(autouse=True)
@@ -28,9 +30,14 @@ def sans_instantane_garak(monkeypatch, tmp_path):
                         tmp_path / "absent.json")
 
 
-def fiche(role="assistant", outils=(), refuses=(), consignes=False):
+def fiche(role="assistant", outils=(), refuses=(), consignes=False,
+          code=None, documents=None, contexte=()):
+    # `code` et `documents` sont des TRI-ÉTATS : None = la cible n'en a rien
+    # dit, ce qui n'est pas « elle ne sait pas faire ».
     return {"role": role, "langue": "fr", "outils": list(outils),
             "sujets_refuses": list(refuses), "mentionne_consignes": consignes,
+            "produit_du_code": code, "traite_des_documents": documents,
+            "contexte": list(contexte),
             "indices": [], "echanges": [], "avertissement": None}
 
 
@@ -286,3 +293,126 @@ class TestTourDeRoleParModule:
         if par_groupe:
             assert list(par_groupe) == ["encoding"]
             assert len(par_groupe["encoding"]) > 1
+
+
+class TestReglesDePertinence:
+    """
+    Les prerequis de CAPACITE et de CONTEXTE, ajoutes le 2026-11-11. Ils ne se
+    comportent pas pareil, et l'asymetrie est le coeur de la conception.
+    """
+
+    # --- Capacites sondees : on n'ecarte que sur un NON explicite ----------
+
+    def test_un_non_explicite_ecarte(self):
+        # La cible a repondu « je n'ecris pas de code » : la sonde est inutile.
+        regles = dict(PREREQUIS)
+        verifier, _ = regles["produit-du-code"]
+        assert verifier(fiche(code=False)) is False
+
+    def test_un_oui_laisse_passer(self):
+        verifier, _ = PREREQUIS["produit-du-code"]
+        assert verifier(fiche(code=True)) is True
+
+    def test_un_silence_laisse_passer(self):
+        # Decision assumee : rater une faille coute plus cher qu'un essai
+        # gaspille, et un chatbot ne detaille pas tout ce qu'il sait faire.
+        verifier, _ = PREREQUIS["produit-du-code"]
+        assert verifier(fiche(code=None)) is True
+
+    def test_les_documents_suivent_la_meme_regle(self):
+        verifier, _ = PREREQUIS["traite-des-documents"]
+        assert verifier(fiche(documents=None)) is True
+        assert verifier(fiche(documents=False)) is False
+
+    # --- Contexte declare : non declare = ecarte ---------------------------
+
+    @pytest.mark.parametrize("prerequis", ["terminal", "rendu-riche",
+                                           "base-donnees"])
+    def test_un_contexte_non_declare_ecarte(self, prerequis):
+        # Asymetrie VOLONTAIRE avec les capacites : ici personne n'a repondu,
+        # parce qu'une cible ne sait pas dans quoi sa sortie est rendue, et
+        # l'attaque est structurellement intestable sans ce contexte.
+        verifier, _ = PREREQUIS[prerequis]
+        assert verifier(fiche()) is False
+
+    @pytest.mark.parametrize("prerequis", ["terminal", "rendu-riche",
+                                           "base-donnees"])
+    def test_un_contexte_declare_laisse_passer(self, prerequis):
+        verifier, _ = PREREQUIS[prerequis]
+        assert verifier(fiche(contexte=[prerequis])) is True
+
+    @pytest.mark.parametrize("prerequis", ["terminal", "rendu-riche",
+                                           "base-donnees"])
+    def test_le_motif_dit_comment_activer(self, prerequis):
+        # Un ecartement muet ferait croire a un trou de couverture definitif.
+        _, motif = PREREQUIS[prerequis]
+        assert "--contexte" in motif
+
+    def test_un_contexte_ne_debloque_pas_les_autres(self):
+        verifier, _ = PREREQUIS["rendu-riche"]
+        assert verifier(fiche(contexte=["terminal"])) is False
+
+    # --- Effet sur un plan reel -------------------------------------------
+
+    def test_les_familles_ecartees_disent_leur_motif(self):
+        plan = planifier(fiche(consignes=True), budget=5)
+        for ecartee in plan["ecartees"]:
+            assert ecartee["motifs"], ecartee["technique"]
+
+    def test_une_cible_sans_contexte_garde_des_essais(self):
+        # Le durcissement ne doit pas vider le plan : les modules universels
+        # (`encoding`, `goodside`, `promptinject`) restent disponibles.
+        plan = planifier(fiche(consignes=True, refuses=["le code"]), budget=3)
+        assert plan["essais"]
+
+
+class TestMentionCouverteAilleurs:
+    """
+    « La famille est couverte par d'autres sondes » ne vaut QUE pour une
+    technique ecartee faute de payload. Le champ s'appliquait a toutes les
+    ecartees, ce qui est devenu visible — et faux — avec les regles de
+    pertinence : `ansiescape` releve de LLM01, couverte par ailleurs, mais
+    elle teste les sequences ANSI que nulle autre sonde ne teste. La mention
+    laissait croire que son ecartement ne coutait rien.
+    """
+
+    def test_un_ecartement_pour_non_pertinence_ne_porte_pas_la_mention(self):
+        plan = planifier(fiche(consignes=True), budget=3)
+        par_nom = {e["technique"]: e for e in plan["ecartees"]}
+        for nom, ecartee in par_nom.items():
+            if nom.startswith("garak-"):
+                assert ecartee["famille_couverte_ailleurs"] is False, nom
+
+    def test_une_technique_sans_payload_la_porte_encore(self):
+        plan = planifier(fiche(consignes=True, refuses=["le code"]), budget=3)
+        par_nom = {e["technique"]: e for e in plan["ecartees"]}
+        familles = {c["famille_owasp"] for c in plan["candidats"]}
+        if "LLM01:2025 Prompt Injection" in familles:
+            assert par_nom["jailbreak"]["famille_couverte_ailleurs"] is True
+
+
+class TestGroupementDesEcartees:
+    def test_les_motifs_identiques_sont_regroupes(self):
+        ecartees = [
+            {"technique": "a", "famille_owasp": None, "motifs": ["meme motif"]},
+            {"technique": "b", "famille_owasp": None, "motifs": ["meme motif"]},
+            {"technique": "c", "famille_owasp": None, "motifs": ["autre"]},
+        ]
+        groupes = grouper_par_motif(ecartees)
+        assert groupes == [("meme motif", ["a", "b"]), ("autre", ["c"])]
+
+    def test_l_ordre_d_apparition_est_conserve(self):
+        # Deux campagnes identiques doivent produire le meme rapport, donc le
+        # groupement ne doit pas trier arbitrairement.
+        ecartees = [
+            {"technique": "z", "famille_owasp": None, "motifs": ["second"]},
+            {"technique": "a", "famille_owasp": None, "motifs": ["premier"]},
+        ]
+        assert [m for m, _ in grouper_par_motif(ecartees)] == ["second",
+                                                               "premier"]
+
+    def test_le_resume_ne_repete_pas_un_motif(self):
+        rendu = resumer(planifier(fiche(consignes=True), budget=3))
+        for motif in ("aucun client ne rend le Markdown",
+                      "la cible dit ne pas écrire de code"):
+            assert rendu.count(motif) <= 1, motif

@@ -38,6 +38,42 @@ PREREQUIS = {
         lambda fiche: fiche["mentionne_consignes"] or bool(fiche["sujets_refuses"]),
         "la cible n'évoque aucune consigne interne",
     ),
+
+    # --- Capacités de la cible, sondées en reconnaissance -------------------
+    # Tri-état assumé : on n'écarte que sur un NON explicite. « La cible n'en a
+    # pas parlé » (None) laisse passer la sonde, parce que rater une faille
+    # coûte plus cher qu'un essai gaspillé — et parce qu'un chatbot ne détaille
+    # pas forcément tout ce qu'il sait faire.
+    "produit-du-code": (
+        lambda fiche: fiche.get("produit_du_code") is not False,
+        "la cible dit ne pas écrire de code",
+    ),
+    "traite-des-documents": (
+        lambda fiche: fiche.get("traite_des_documents") is not False,
+        "la cible dit ne pas traiter de document fourni",
+    ),
+
+    # --- Contexte d'exécution, DÉCLARÉ par l'opérateur ----------------------
+    # Asymétrie volontaire avec les capacités ci-dessus : ici, non déclaré veut
+    # dire écarté. Une cible ne sait pas dans quoi sa sortie est rendue, donc
+    # personne n'a répondu — et l'attaque est structurellement intestable sans
+    # ce contexte. Jusqu'au 2026-11-11, `web_injection` partait contre un
+    # chatbot texte et le rapport annonçait « LLM02 testée » : un essai perdu
+    # ET une couverture surévaluée. Le motif dit comment l'activer.
+    "terminal": (
+        lambda fiche: "terminal" in (fiche.get("contexte") or []),
+        "sortie non rendue dans un terminal (--contexte terminal pour l'activer)",
+    ),
+    "rendu-riche": (
+        lambda fiche: "rendu-riche" in (fiche.get("contexte") or []),
+        "aucun client ne rend le Markdown de la sortie "
+        "(--contexte rendu-riche pour l'activer)",
+    ),
+    "base-donnees": (
+        lambda fiche: "base-donnees" in (fiche.get("contexte") or []),
+        "aucune base ni moteur de gabarits déclaré derrière la cible "
+        "(--contexte base-donnees pour l'activer)",
+    ),
 }
 
 # Une technique sans modèle de texte ne peut rien produire : on le dit
@@ -108,8 +144,16 @@ def planifier(fiche, budget):
     familles_retenues = {t["famille_owasp"] for t in retenues
                          if t["famille_owasp"]}
     for ecartee in ecartees:
+        # Réservé au SEUL cas qui le justifie : une technique écartée faute de
+        # payload, dont la famille est traitée ailleurs. Le champ s'appliquait
+        # à toutes les écartées, ce qui est devenu visible — et faux — avec les
+        # règles de pertinence du 2026-11-11 : `ansiescape` relève de LLM01,
+        # couverte par ailleurs, mais elle teste les séquences ANSI que nulle
+        # autre sonde ne teste. Dire « couverte ailleurs » laissait croire que
+        # son écartement ne coûtait rien.
         ecartee["famille_couverte_ailleurs"] = (
-            ecartee["famille_owasp"] in familles_retenues)
+            MOTIF_SANS_MODELE in ecartee["motifs"]
+            and ecartee["famille_owasp"] in familles_retenues)
 
     essais = []
     for technique in retenues:
@@ -241,8 +285,30 @@ def resumer(plan):
                       f"{essai['objectif'] or 'payload complet'} "
                       f"/ {essai['transformation']}")
     if plan["ecartees"]:
-        lignes.append("  familles écartées :")
-        for ecartee in plan["ecartees"]:
-            lignes.append(f"    - {ecartee['technique']} : "
-                          f"{' ; '.join(ecartee['motifs'])}")
+        # Groupé par MOTIF, pas par technique : depuis les règles de
+        # pertinence, ce sont des modules entiers qui sont écartés, et huit
+        # sondes `web_injection` affichaient huit fois « aucun client ne rend
+        # le Markdown ». Une information répétée noie celle qui ne l'est pas.
+        lignes.append("  écartées :")
+        for motif, techniques in grouper_par_motif(plan["ecartees"]):
+            lignes.append(f"    - {len(techniques)} technique(s) : {motif}")
+            apercu = ", ".join(techniques[:3])
+            if len(techniques) > 3:
+                apercu += f", +{len(techniques) - 3} autre(s)"
+            lignes.append(f"      ({apercu})")
     return "\n".join(lignes)
+
+
+def grouper_par_motif(ecartees):
+    """
+    [(motif, [techniques])], dans l'ordre d'apparition des motifs.
+
+    Partagé entre l'affichage de campagne et le rapport : les deux doivent
+    grouper de la même façon, sinon un lecteur qui a vu la campagne ne
+    reconnaîtrait pas le rapport.
+    """
+    groupes = {}
+    for ecartee in ecartees:
+        motif = " ; ".join(ecartee["motifs"])
+        groupes.setdefault(motif, []).append(ecartee["technique"])
+    return list(groupes.items())

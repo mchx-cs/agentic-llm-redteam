@@ -24,6 +24,7 @@ sécurité, ce qui est pire que pas de rapport du tout.
 
 import json
 import re
+from agents.planificateur import grouper_par_motif
 from datetime import datetime
 from pathlib import Path
 
@@ -226,6 +227,16 @@ def _bloc_constat(constat, abreger=False):
 CLOTURE_MINIMALE = 3
 
 
+def _declare(tri_etat):
+    """
+    Rend un tri-état lisible. « non déclaré » n'est PAS « non » : le premier
+    laisse passer les sondes concernées, le second les écarte, et confondre
+    les deux dans le rapport ferait mal comprendre la couverture.
+    """
+    return {True: "oui", False: "non", None: "non déclaré"}.get(tri_etat,
+                                                                "non déclaré")
+
+
 def _cloture(lignes):
     """
     La clôture de bloc de code, assez longue pour le contenu qu'elle entoure.
@@ -356,19 +367,22 @@ def rendre_markdown(rapport, abreger=False):
 
     lignes += ["", "**Familles NON testées**", ""]
     if couverture["familles_ecartees"]:
-        for ecartee in couverture["familles_ecartees"]:
-            # La technique d'abord : deux d'entre elles peuvent relever de la
-            # même famille OWASP, et n'afficher que la famille donnerait deux
-            # lignes identiques sans dire laquelle a été écartée.
-            famille = (f" ({ecartee['famille_owasp']})"
-                       if ecartee["famille_owasp"] else "")
+        # Groupé par MOTIF : depuis les règles de pertinence, ce sont des
+        # modules entiers qui sont écartés, et une liste plate répétait huit
+        # fois « aucun client ne rend le Markdown ». Le motif porte
+        # l'information, les techniques ne sont que le détail.
+        for motif, techniques in grouper_par_motif(
+                couverture["familles_ecartees"]):
             # Une technique maison encore vide dont la famille est par
             # ailleurs couverte n'est PAS un trou : l'annoncer comme tel
             # contredirait la liste des familles testées, juste au-dessus.
-            ailleurs = (" — la famille est couverte par d'autres sondes"
-                        if ecartee.get("famille_couverte_ailleurs") else "")
-            lignes.append(f"- `{ecartee['technique']}`{famille} — "
-                          f"{' ; '.join(ecartee['motifs'])}{ailleurs}")
+            ailleurs = " — la famille est couverte par d'autres sondes" if all(
+                e.get("famille_couverte_ailleurs")
+                for e in couverture["familles_ecartees"]
+                if e["technique"] in techniques) else ""
+            lignes.append(f"- **{motif}**{ailleurs}")
+            lignes.append(f"  - {len(techniques)} technique(s) : "
+                          + ", ".join(f"`{t}`" for t in techniques))
     else:
         lignes.append("- aucune")
 
@@ -417,7 +431,27 @@ def rendre_markdown(rapport, abreger=False):
             f"{', '.join(fiche.get('outils') or []) or 'aucun'}",
             f"- **Sujets refusés** : "
             f"{', '.join(fiche.get('sujets_refuses') or []) or 'aucun'}",
+            f"- **Écrit du code** : {_declare(fiche.get('produit_du_code'))}",
+            f"- **Lit des documents fournis** : "
+            f"{_declare(fiche.get('traite_des_documents'))}",
         ]
+        # Le contexte conditionne des familles entières de sondes, et il vient
+        # de l'OPÉRATEUR, pas de la cible. Un rapport qui le taisait laissait
+        # son lecteur sans moyen de comprendre pourquoi `web_injection` ou
+        # `ansiescape` ont été écartées.
+        contexte = fiche.get("contexte") or []
+        lignes.append(
+            f"- **Contexte déclaré par l'opérateur** : "
+            f"{', '.join(contexte) if contexte else 'aucun'}")
+        if not contexte:
+            lignes += [
+                "",
+                "> Aucun contexte d'exécution déclaré. Les familles qui en "
+                "dépendent (sortie rendue dans un terminal, Markdown rendu "
+                "par un client, base de données derrière) ont été écartées : "
+                "elles ne sont pas testables sans cette information, et la "
+                "cible ne peut pas la fournir elle-même. Voir `--contexte`.",
+            ]
 
     return "\n".join(lignes) + "\n"
 
