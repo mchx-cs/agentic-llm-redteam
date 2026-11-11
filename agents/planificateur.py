@@ -16,7 +16,7 @@ Planification ≠ adaptation. On décide ici AVANT la campagne. Reformuler
 pendant l'attaque, selon la réponse de la cible, c'est la Phase 3 (PyRIT).
 """
 
-from agents.attaquant import TRANSFORMATIONS, charger_bibliotheque
+from agents.attaquant import (TRANSFORMATIONS, charger_bibliotheque, composer)
 
 # Chaque prérequis est une question posée à la fiche cible. Ajouter une
 # famille d'attaque = ajouter son prérequis ici, et rien d'autre.
@@ -111,16 +111,22 @@ def planifier(fiche, budget):
         # Les payloads venus de l'extérieur (garak) sont des prompts complets :
         # ils portent leur propre intention, donc pas d'axe objectif.
         for payload in technique.get("payloads_complets", []):
-            for nom_transfo, transformer in TRANSFORMATIONS.items():
-                essais.append({
-                    "technique": technique["id"],
-                    "famille_owasp": technique["famille_owasp"],
-                    "objectif": None,
-                    "transformation": nom_transfo,
-                    "texte": transformer(payload),
-                    "source": technique.get("source"),
-                    "priorite": _priorite(technique, None, nom_transfo),
-                })
+            # Un payload complet sert de PRÉAMBULE : seul, il mesure la
+            # résistance au détournement ; composé avec un objectif issu de
+            # la reconnaissance, il va chercher ce que la cible protège.
+            variantes = [(o, composer(payload, o)) for o in objectifs]
+            variantes.append((None, payload))
+            for objectif, texte in variantes:
+                for nom_transfo, transformer in TRANSFORMATIONS.items():
+                    essais.append({
+                        "technique": technique["id"],
+                        "famille_owasp": technique["famille_owasp"],
+                        "objectif": objectif["id"] if objectif else None,
+                        "transformation": nom_transfo,
+                        "texte": transformer(texte),
+                        "source": technique.get("source"),
+                        "priorite": _priorite(technique, objectif, nom_transfo),
+                    })
 
     # Tri stable : à priorité égale, l'ordre de la bibliothèque est conservé,
     # donc deux campagnes identiques produisent la même liste.
@@ -172,7 +178,12 @@ def _priorite(technique, objectif, nom_transformation):
     objectif issu de la reconnaissance.
     """
     priorite = 0
-    if objectif is not None and objectif.get("origine") != "reconnaissance":
+    if objectif is None:
+        # Un payload complet SEUL mesure la résistance au détournement. Utile,
+        # mais moins que le même payload chargé de réclamer ce que la cible
+        # protège : à priorité égale, le tour de rôle ne retiendrait que lui.
+        priorite += 1
+    elif objectif.get("origine") != "reconnaissance":
         priorite += 4          # un objectif générique passe après un objectif ciblé
     if technique["id"] == "controle":
         priorite += 2          # le témoin n'est pas une attaque : il attend son tour
