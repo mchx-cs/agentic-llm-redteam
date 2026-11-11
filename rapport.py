@@ -149,7 +149,22 @@ def construire(resultat, cible="inconnue"):
 
 # --- Rendu Markdown ----------------------------------------------------------
 
-def _bloc_constat(constat):
+# Longueur d'un extrait abrégé. Assez pour reconnaître le payload et juger
+# du contexte, trop court pour republier une attaque ou les réponses
+# verbatim d'un client.
+LONGUEUR_EXTRAIT = 300
+
+
+def _extrait(texte, abreger):
+    """Tronque un bloc en le disant, ou le laisse entier."""
+    if not abreger or len(texte) <= LONGUEUR_EXTRAIT:
+        return [texte]
+    return [texte[:LONGUEUR_EXTRAIT].rstrip(),
+            f"[… abrégé, {len(texte)} caractères au total — "
+            f"contenu entier dans resultat.json]"]
+
+
+def _bloc_constat(constat, abreger=False):
     lignes = [
         f"### {constat['id']} — {ETIQUETTES[constat['gravite']]} : "
         f"{constat['famille_owasp'] or constat['technique']}",
@@ -174,17 +189,23 @@ def _bloc_constat(constat):
     if constat["tronquee"]:
         lignes.append("- **Réponse tronquée** : le contenu est incomplet.")
 
-    lignes += [
-        "",
-        "**Payload envoyé**", "", "```", constat["payload"], "```", "",
-        "**Réponse de la cible**", "", "```", constat["reponse"], "```", "",
-        f"**Analyse du juge** — {constat['analyse']}", "",
-    ]
+    lignes += ["", "**Payload envoyé**", "", "```"]
+    lignes += _extrait(constat["payload"], abreger)
+    lignes += ["```", "", "**Réponse de la cible**", "", "```"]
+    lignes += _extrait(constat["reponse"], abreger)
+    lignes += ["```", "", f"**Analyse du juge** — {constat['analyse']}", ""]
     return lignes
 
 
-def rendre_markdown(rapport):
-    """Rend le rapport en Markdown."""
+def rendre_markdown(rapport, abreger=False):
+    """
+    Rend le rapport en Markdown.
+
+    `abreger` tronque payloads et réponses. Deux usages réels : partager un
+    rapport sans les réponses verbatim d'un client, et publier un exemple
+    sans republier une attaque intégrale. La source de vérité, elle, garde
+    tout — `resultat.json` n'est jamais abrégé.
+    """
     campagne = rapport["campagne"]
     constats = rapport["constats"]
     couverture = rapport["couverture"]
@@ -244,7 +265,7 @@ def rendre_markdown(rapport):
     lignes += ["## Constats", ""]
     if constats:
         for constat in constats:
-            lignes += _bloc_constat(constat)
+            lignes += _bloc_constat(constat, abreger)
     else:
         lignes += ["Aucun constat. Voir la couverture ci-dessous avant d'en "
                    "conclure que la cible est sûre.", ""]
@@ -310,7 +331,7 @@ def rendre_markdown(rapport):
     return "\n".join(lignes) + "\n"
 
 
-def enregistrer(resultat, cible="inconnue", dossier="rapports"):
+def enregistrer(resultat, cible="inconnue", dossier="rapports", abreger=False):
     """
     Écrit `resultat.json` et `rapport.md`, et renvoie leurs chemins.
 
@@ -327,6 +348,6 @@ def enregistrer(resultat, cible="inconnue", dossier="rapports"):
 
     chemin_json.write_text(
         json.dumps(rapport, ensure_ascii=False, indent=2), encoding="utf-8")
-    chemin_md.write_text(rendre_markdown(rapport), encoding="utf-8")
+    chemin_md.write_text(rendre_markdown(rapport, abreger), encoding="utf-8")
 
     return chemin_json, chemin_md

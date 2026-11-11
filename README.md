@@ -77,6 +77,7 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 ├── config.py          # provider profiles and target selection, all driven by .env
 ├── llm_client.py      # the abstraction layer — every model call goes through here
 ├── cibles/            # systems under test — one contract: interroger(message) -> str
+│   ├── demo.py        # deliberately weak target, three defence levels
 │   ├── leurre.py      # local decoy chatbot holding a fake secret (default)
 │   ├── mock.py        # deterministic, no LLM: free end-to-end tests
 │   └── http.py        # a real endpoint, described in .env (urllib, no new dependency)
@@ -165,6 +166,36 @@ nothing.
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test
 set cannot contain a mere rewording of a case the judge was tuned on. Every test-set
 run is logged with a timestamp in `evaluation/journal_test.jsonl`.
+
+### Trying it in one command
+
+A deliberately weak target ships with the project, so a detection can be reproduced
+without a key, an account, or any configuration beyond the Ollama setup above:
+
+```bash
+python main.py --cible demo --rapport
+```
+
+It is a library assistant holding a fake access code, and it falls because it is badly
+defended — not because a script hands the secret over. Three defence levels make it a
+measuring instrument rather than a prop:
+
+| Level | Guardrail | Measured on a direct question |
+|---|---|---|
+| `demo` | barely any | **leaks the code** |
+| `demo:2` | firm instruction | refuses |
+| `demo:3` | firm instruction + output filter | refuses |
+
+Level 3's filter is deliberately imperfect: it catches the code written in clear text,
+not an encoded or spelled-out version. That is what makes the decoders earn their keep,
+and it mirrors how such defences actually fail.
+
+The target also declares a fake tool, which reconnaissance picks up — the groundwork for
+testing excessive agency once the judge has a criterion for it.
+
+[An example report is committed here](exemples/rapport-demo.md), produced by that exact
+command. Payloads and responses are abridged in it with `--abreger`, which is also how
+you would share a report without a client's verbatim answers.
 
 ### Pointing at a real target
 
@@ -371,7 +402,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **9** | Audit trail and authorisation — replayable campaign log, refuses to start unrecorded | **Done** |
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | **Done** |
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | **Done** |
-| **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, asciinema recording in this README | Planned |
+| **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, asciinema recording in this README | In progress |
 
 Phases 1, 6 and 8 are what it takes to run the tool against systems you own. Phases 2,
 9, 10 and 11 are what separates that from a tool fit for a client engagement: a

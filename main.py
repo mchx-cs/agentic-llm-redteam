@@ -221,6 +221,11 @@ def cli(arguments=None):
         help="écrire resultat.json et rapport.md dans DOSSIER "
              "(par défaut : rapports/).")
     parseur.add_argument(
+        "--abreger", action="store_true",
+        help="tronquer payloads et réponses dans rapport.md (pour partager "
+             "un rapport sans réponses verbatim, ou publier un exemple). "
+             "resultat.json garde tout.")
+    parseur.add_argument(
         "--autorisation", default=FICHIER_AUTORISATION, metavar="FICHIER",
         help=f"mandat couvrant la cible (défaut : {FICHIER_AUTORISATION}). "
              f"Inutile pour une cible locale.")
@@ -263,7 +268,8 @@ def cli(arguments=None):
 
     if arguments.rapport:
         chemin_json, chemin_md = enregistrer(
-            resultat, cible=nom_cible, dossier=arguments.rapport)
+            resultat, cible=nom_cible, dossier=arguments.rapport,
+            abreger=arguments.abreger)
         print(f"Rapport écrit : {chemin_md}\n"
               f"Source de vérité : {chemin_json}")
 

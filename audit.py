@@ -37,8 +37,18 @@ class AutorisationManquante(RuntimeError):
 
 
 def est_locale(nom_cible):
-    """Une cible livrée avec le projet, ou servie depuis cette machine."""
-    if nom_cible in ("leurre", "mock"):
+    """
+    Une cible livrée avec le projet, ou servie depuis cette machine.
+
+    Les cibles nommées du paquet `cibles` sont à vous par construction : elles
+    tournent en local et ne contiennent que des secrets factices. La liste est
+    demandée à `cibles` plutôt que recopiée ici — sinon elle dériverait, et
+    une cible livrée finirait par exiger un mandat (c'est arrivé avec `demo`
+    le 2026-11-11, ce qui cassait la démonstration en une commande).
+    """
+    from cibles import est_cible_livree
+
+    if est_cible_livree(nom_cible):
         return True
     return any(marque in nom_cible for marque in _MARQUES_LOCALES)
 
