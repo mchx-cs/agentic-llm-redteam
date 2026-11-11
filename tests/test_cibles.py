@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from cibles import choisir_cible
-from cibles.http import (MESSAGE_DE_TEST, PROFILS_CIBLE,
+from cibles.http import (MESSAGE_DE_TEST, PROFILS_CIBLE, _diagnostiquer,
                          construire_cible_http,
                          tester as verifier_branchement,
                          verifier_gabarit)
@@ -364,3 +364,47 @@ class TestEchecDeCibleEnCampagne:
         assert "REFUSÉE" in capsys.readouterr().err
         # Et rien n'a ete ecrit : pas meme une piste d'audit.
         assert list(tmp_path.glob("*.jsonl")) == []
+
+
+class TestDiagnosticDUneReponseNonJSON:
+    """
+    « JSON attendu » est exact mais ne dit pas quoi faire. Deux confusions
+    reviennent sans cesse au premier branchement, et toutes deux se
+    reconnaissent aux premiers caracteres de la reponse : donner l'adresse de
+    la PAGE du chatbot au lieu de son endpoint, et viser une API qui repond
+    en flux.
+    """
+
+    @pytest.mark.parametrize("brut, attendu", [
+        ("<!DOCTYPE html><html><body>Bienvenue</body></html>", "PAGE WEB"),
+        ("<html><title>chat</title></html>", "PAGE WEB"),
+        ("  \n<?xml version='1.0'?><erreur/>", "PAGE WEB"),
+        ('data: {"delta":"bon"}\n\ndata: [DONE]', "FLUX"),
+        ("", "VIDE"),
+        ("   ", "VIDE"),
+    ])
+    def test_la_cause_probable_est_nommee(self, brut, attendu):
+        assert attendu in _diagnostiquer(brut)
+
+    def test_le_diagnostic_page_dit_comment_trouver_l_endpoint(self):
+        # Sans ca, « ce n'est pas une API » laisse le lecteur sans issue.
+        message = _diagnostiquer("<html></html>")
+        assert "Réseau" in message            # l'onglet du navigateur
+        assert "POST" in message
+
+    def test_le_diagnostic_flux_nomme_le_reglage(self):
+        assert '"stream": false' in _diagnostiquer('data: {"a":1}')
+
+    def test_un_cas_inconnu_reste_utile(self):
+        # Ni page, ni flux, ni vide : on ne devine pas, mais on oriente.
+        message = _diagnostiquer("une réponse en texte brut")
+        assert "endpoint" in message
+
+    def test_le_diagnostic_accompagne_l_erreur_reelle(self, base):
+        # Bout en bout : le message d'origine ET le diagnostic.
+        interroger = construire_cible_http(f"{base}/pasjson")
+        with pytest.raises(RuntimeError) as echec:
+            interroger("bonjour")
+        texte = str(echec.value)
+        assert "JSON attendu" in texte        # le fait
+        assert "PAGE WEB" in texte            # la cause probable

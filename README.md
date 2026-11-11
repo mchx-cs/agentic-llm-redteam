@@ -325,6 +325,10 @@ CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
 CIBLE_CHEMIN_REPONSE=choices.0.message.content
 ```
 
+**What goes in is the endpoint's exact URL** — the address the chat UI itself calls,
+not the page you'd open in a browser. If you only have the page, open it, press F12,
+go to the Network tab, send a message, and read off the POST request's URL.
+
 **Check the wiring before you attack anything.** One harmless message, then it stops:
 
 ```bash
@@ -347,6 +351,11 @@ Header *values* are never printed, only their names. The error messages were alr
 good, but they used to arrive mid-campaign, after a payload had gone out — on a client's
 target, under mandate, that spends authorised traffic and writes an audit-trail entry to
 discover a typo.
+
+When the reply isn't JSON at all, it names the likely cause rather than just the fact —
+HTML means you gave it the page instead of the endpoint, `data:` lines mean the API
+streams and needs `"stream": false`, and an empty body usually means the wrong URL or
+method. Those three are the confusions that cost the most time on a first wiring.
 
 One failure mode deserves its own mention, because nothing about it looks wrong: a
 `CIBLE_CORPS` with no `{message}` in it. Payload substitution silently left the body

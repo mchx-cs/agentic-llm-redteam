@@ -111,6 +111,43 @@ def _injecter(gabarit, message):
     return gabarit
 
 
+def _diagnostiquer(brut):
+    """
+    Nomme la cause probable d'une réponse qui n'est pas du JSON.
+
+    « JSON attendu » est exact mais ne dit pas quoi faire, et deux confusions
+    reviennent sans cesse quand on branche une cible pour la première fois :
+    donner l'adresse de la PAGE du chatbot au lieu de son endpoint, et viser
+    une API qui répond en flux. Les deux se reconnaissent aux premiers
+    caractères de la réponse, donc autant le dire.
+    """
+    debut = brut.lstrip()[:400].lower()
+
+    if debut.startswith(("<!doctype", "<html", "<?xml")) or "<body" in debut:
+        return ("  C'est une PAGE WEB, pas un endpoint d'API : cet outil "
+                "envoie un POST JSON.\n"
+                "  Il faut l'adresse que la page appelle elle-même. Pour la "
+                "trouver : ouvre le\n"
+                "  chatbot dans un navigateur, outils de développement "
+                "(F12), onglet Réseau,\n"
+                "  envoie un message, et relève l'URL de la requête POST.")
+
+    if debut.startswith("data:") or "\ndata:" in debut:
+        return ("  Cette API répond en FLUX (server-sent events) : un seul "
+                "objet JSON est attendu.\n"
+                "  Cherche de quoi le désactiver dans le corps, par exemple "
+                '"stream": false\n'
+                "  dans CIBLE_CORPS.")
+
+    if not debut:
+        return ("  La réponse est VIDE. Vérifie que l'URL est bien celle de "
+                "l'endpoint, et que\n"
+                "  la méthode attendue est un POST.")
+
+    return ("  Vérifie que cette URL est l'endpoint de l'API, et non une "
+            "page ou un proxy.")
+
+
 def _premier_defini(*valeurs):
     """La première valeur non-None. `{}` et `""` restent des choix valides."""
     return next((v for v in valeurs if v is not None), None)
@@ -219,7 +256,8 @@ def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
         except json.JSONDecodeError as erreur:
             raise RuntimeError(
                 f"Cible {url} : réponse illisible (JSON attendu).\n"
-                f"  Reçu : {brut[:200]}"
+                f"  Reçu : {brut[:200]}\n"
+                f"{_diagnostiquer(brut)}"
             ) from erreur
         except ValueError as erreur:
             # Chemin de réponse mal décrit : l'erreur dit déjà quoi corriger.

@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 419 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 429 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1460,6 +1460,20 @@ Cible http://… : réponse illisible (JSON attendu).
 Vérifie le branchement sans rien attaquer :
   python main.py --cible http://… --tester-cible
 ```
+
+**Et « c'est bien l'URL exacte de l'endpoint en entrée ? » — oui, et l'outil le dit
+maintenant quand ce n'est pas le cas.** « JSON attendu » était exact mais sans issue
+pour le lecteur. Trois causes se reconnaissent aux premiers caractères de la réponse, et
+ce sont celles qui coûtent le plus de temps au premier branchement :
+- du HTML → c'est la PAGE du chatbot, pas son endpoint. Le message explique comment
+  trouver la bonne adresse : ouvrir la page, F12, onglet Réseau, envoyer un message,
+  relever l'URL du POST ;
+- des lignes `data:` → l'API répond en FLUX, il faut chercher `"stream": false` ;
+- un corps vide → mauvaise URL ou mauvaise méthode.
+
+Limite assumée de l'adaptateur, visible ici : il ne parle que **POST + JSON**. Une API
+en `multipart`, en GET, ou en flux non désactivable demanderait un adaptateur à part —
+le contrat `interroger(message) -> str` le permet sans toucher au reste.
 
 Deux choses vérifiées au passage, et la seconde par accident :
 - **la piste d'audit se referme même sur une panne**, statut `interrompue`. C'est
