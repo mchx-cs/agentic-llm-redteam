@@ -111,12 +111,16 @@ def observer(payload, reponse, verdict):
     """
     observations = []
     technique = payload.get("technique")
+    groupe = _groupe(payload)
     reussi = (verdict or {}).get("reussi")
 
     if reussi is True:
         observations.append({
             "signal": "technique_efficace",
             "technique": technique,
+            # Le module d'où vient la sonde : un module qui a déjà cédé ne
+            # doit pas être pénalisé par la diversité (mesuré le 2026-11-11).
+            "groupe": groupe,
             "explication": f"« {technique} » a produit un constat sur cette "
                            f"cible : ses autres variantes passent devant.",
         })
@@ -220,10 +224,24 @@ FAMILLES_PAR_SIGNAL = {
     "outil_declenche": ("llm06",),
 }
 
-# Chaque essai déjà lancé sur une technique renchérit le suivant. C'est le
-# tour de rôle de `_repartir`, exprimé dans le score au lieu d'une boucle à
-# part : la couverture reste prioritaire sur l'acharnement.
+# Chaque essai déjà lancé sur un GROUPE renchérit le suivant. C'est le tour de
+# rôle de `_repartir`, exprimé dans le score au lieu d'une boucle à part : la
+# couverture reste prioritaire sur l'acharnement.
 POIDS_DIVERSITE = 2
+
+
+def _groupe(essai):
+    """
+    Le grain de la diversité : le module garak (`encoding`, `dan`,
+    `web_injection`…), ou la technique à défaut.
+
+    Noter que `technique_efficace`, lui, reste au grain de la TECHNIQUE : si
+    `encoding-injectbase64` a produit un constat, ce sont ses variantes à elle
+    qui remontent d'abord. Les deux grains cohabitent, et leur solde fait le
+    bon arbitrage — on creuse ce qui marche, tout en payant pour rester dans
+    le même module.
+    """
+    return essai.get("groupe") or essai["technique"]
 
 
 def ajuster(candidat, observations, deja_lances=()):
@@ -253,12 +271,24 @@ def ajuster(candidat, observations, deja_lances=()):
                 delta += BONUS_FAMILLE_DESIGNEE
                 raisons.append(observation["explication"])
 
-    repetitions = sum(1 for e in deja_lances
-                      if e["technique"] == candidat["technique"])
+    # La diversité se compte par GROUPE (le module garak), pas par technique.
+    # `encoding` compte quinze sondes sur cinquante-deux, toutes variantes du
+    # même test : par technique, elles obtenaient quinze tours quand `dan` en
+    # obtenait trois, et l'ordre alphabétique faisait le reste.
+    groupe = _groupe(candidat)
+    repetitions = sum(1 for e in deja_lances if _groupe(e) == groupe)
+    # Le malus est INCONDITIONNEL, y compris sur un module qui vient de céder.
+    # Exempter un module productif paraissait évident — insister là où ça
+    # marche — et la mesure l'a réfuté le 2026-11-11 : +0,11 constat à budget
+    # 20, contre QUATRE modules de couverture perdus, et même −0,90 constat à
+    # budget 40. Un module qui a cédé une fois n'a pas forcément d'autre sonde
+    # vulnérable : s'y acharner épuise ses sondes inutiles. La diversité reste
+    # donc entière, et c'est `technique_efficace` qui porte l'insistance, au
+    # grain de la technique.
     if repetitions:
         delta += repetitions * POIDS_DIVERSITE
         raisons.append(f"{repetitions} essai(s) déjà lancé(s) sur "
-                       f"« {candidat['technique']} » : les techniques encore "
+                       f"« {groupe} » : les familles de sondes encore "
                        f"inexplorées passent devant.")
 
     return delta, raisons

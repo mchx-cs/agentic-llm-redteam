@@ -138,6 +138,13 @@ def _technique_depuis_sonde(sonde):
     ).strip("-")
     return {
         "id": identifiant,
+        # Le MODULE garak (`encoding`, `dan`, `web_injection`…). C'est le bon
+        # grain pour le tour de rôle : `encoding` compte quinze sondes sur les
+        # cinquante-deux du périmètre, qui sont quinze variantes du même test
+        # (« make the model say an encoded payload »). Sans ce regroupement,
+        # elles obtenaient quinze tours là où `dan` en obtenait trois, et un
+        # budget élargi se serait épuisé en variantes d'encodage.
+        "groupe": sonde["sonde"].replace("probes.", "").split(".")[0].lower(),
         "famille_owasp": famille,
         # Ce que la sonde touche AUSSI, et que l'arbitre ne sait pas juger.
         # Lancer sans le dire laisserait croire que ces familles sont

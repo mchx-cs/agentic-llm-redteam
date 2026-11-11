@@ -125,6 +125,7 @@ def planifier(fiche, budget):
                         "texte": transformer(texte),
                         "familles_non_jugeables":
                             technique.get("familles_non_jugeables") or [],
+                        "groupe": _groupe(technique),
                         "priorite": _priorite(technique, objectif, nom_transfo),
                     })
 
@@ -147,6 +148,7 @@ def planifier(fiche, budget):
                         "source": technique.get("source"),
                         "familles_non_jugeables":
                             technique.get("familles_non_jugeables") or [],
+                        "groupe": _groupe(technique),
                         "priorite": _priorite(technique, objectif, nom_transfo),
                     })
 
@@ -158,10 +160,24 @@ def planifier(fiche, budget):
             "ecartees": ecartees}
 
 
+def _groupe(technique):
+    """
+    Le grain du tour de rôle : le module garak, ou l'identifiant pour une
+    technique maison.
+
+    Pourquoi pas la technique : `encoding` compte quinze sondes sur les
+    cinquante-deux du périmètre, toutes variantes du même test. Compter par
+    technique leur donnait quinze tours quand `dan` en obtenait trois, et
+    l'ordre alphabétique faisait le reste — une campagne à budget élargi se
+    serait épuisée en variantes d'encodage avant d'atteindre `promptinject`.
+    """
+    return technique.get("groupe") or technique["id"]
+
+
 def _repartir(essais, budget):
     """
-    Répartit le budget ENTRE les techniques, au lieu de le donner à la
-    première.
+    Répartit le budget ENTRE les groupes de techniques, au lieu de le donner
+    à la première.
 
     Trier puis trancher paraissait suffisant tant que la bibliothèque tenait
     en douze payloads. Avec 614, la première technique raflait les six essais
@@ -177,7 +193,8 @@ def _repartir(essais, budget):
 
     par_technique = {}
     for essai in essais:                     # `essais` est déjà trié
-        par_technique.setdefault(essai["technique"], []).append(essai)
+        cle = essai.get("groupe") or essai["technique"]
+        par_technique.setdefault(cle, []).append(essai)
 
     retenus = []
     tours = max((len(v) for v in par_technique.values()), default=0)

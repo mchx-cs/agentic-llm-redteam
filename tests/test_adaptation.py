@@ -454,3 +454,76 @@ class TestContradictionsDansLaTrace:
             for signal, technique in paires:
                 if signal == "technique_efficace":
                     assert ("technique_bloquee", technique) not in paires
+
+
+class TestGrainDeLaDiversite:
+    """
+    La diversite se compte par MODULE garak, pas par sonde. `encoding` compte
+    quinze sondes sur les cinquante-deux du perimetre, toutes variantes du
+    meme test (« make the model say an encoded payload ») : par sonde, elles
+    obtenaient quinze tours quand `dan` en obtenait trois, et l'ordre
+    alphabetique faisait le reste. Mesure du 2026-11-11 : le regroupement
+    porte l'adaptatif de 3,15 a 3,72 constats a budget 10, et de 6,24 a 7,12
+    a budget 20.
+    """
+
+    @staticmethod
+    def _sonde(groupe, nom, priorite=0):
+        return {"technique": nom, "groupe": groupe, "texte": nom,
+                "priorite": priorite, "famille_owasp": None,
+                "objectif": None, "transformation": "identite"}
+
+    def test_le_malus_compte_les_essais_du_meme_module(self):
+        lances = [self._sonde("encoding", "base64"),
+                  self._sonde("encoding", "base32")]
+        delta, _ = ajuster(self._sonde("encoding", "ascii85"), (), lances)
+        assert delta == 2 * POIDS_DIVERSITE
+
+    def test_un_autre_module_ne_paie_pas_pour_lui(self):
+        lances = [self._sonde("encoding", "base64"),
+                  self._sonde("encoding", "base32")]
+        delta, raisons = ajuster(self._sonde("dan", "dan11"), (), lances)
+        assert (delta, raisons) == (0, [])
+
+    def test_le_balayage_change_de_module_au_lieu_de_varier_l_encodage(self):
+        vivier = [self._sonde("encoding", "base64"),
+                  self._sonde("encoding", "base32"),
+                  self._sonde("encoding", "ascii85"),
+                  self._sonde("dan", "dan11")]
+        lances = [vivier[0]]
+        # Sans le regroupement, « base32 » suivait « base64 » : trois tours
+        # d'encodage avant d'atteindre `dan`.
+        assert prochain(vivier, (), lances)["texte"] == "dan11"
+
+    def test_une_technique_maison_sert_de_son_propre_groupe(self):
+        # Pas de champ `groupe` : on retombe sur l'identifiant, sinon toutes
+        # les techniques maison compteraient comme un seul groupe.
+        a = {"technique": "fuite-prompt-systeme", "texte": "a", "priorite": 0,
+             "famille_owasp": None, "objectif": None,
+             "transformation": "identite"}
+        b = dict(a, technique="controle", texte="b")
+        delta, raisons = ajuster(b, (), [a])
+        assert (delta, raisons) == (0, [])
+
+    def test_un_module_productif_reste_penalise(self):
+        # Exempter un module qui vient de ceder paraissait evident, et la
+        # mesure l'a refute : +0,11 constat a budget 20 contre QUATRE modules
+        # de couverture perdus, et -0,90 constat a budget 40. Un module qui a
+        # cede une fois n'a pas forcement d'autre sonde vulnerable.
+        observations = observer(self._sonde("encoding", "base64"),
+                                "Le code est ARCHIVES-7731.", {"reussi": True})
+        lances = [self._sonde("encoding", "base64")]
+        delta, _ = ajuster(self._sonde("encoding", "base32"), observations,
+                           lances)
+        # -3 pour une technique efficace... mais ce n'est PAS la meme sonde,
+        # donc seul le malus de module s'applique.
+        assert delta == POIDS_DIVERSITE
+
+    def test_l_insistance_passe_par_la_technique_pas_par_le_module(self):
+        # C'est `technique_efficace` qui fait creuser, au grain de la sonde.
+        observations = observer(self._sonde("encoding", "base64"),
+                                "Le code est ARCHIVES-7731.", {"reussi": True})
+        lances = [self._sonde("encoding", "base64")]
+        delta, _ = ajuster(self._sonde("encoding", "base64", priorite=0),
+                           observations, lances)
+        assert delta == BONUS_TECHNIQUE_EFFICACE + POIDS_DIVERSITE

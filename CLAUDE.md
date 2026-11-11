@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 308 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 338 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1261,6 +1261,66 @@ produit aussi ses variantes composées. Il passait quand même, parce que la fix
 neutralise l'instantané garak et qu'aucune technique MAISON n'avait de payload complet :
 le terme valait zéro. Les payloads LLM07 l'ont réveillé. Leçon : une fixture qui isole
 d'une dépendance peut aussi cacher qu'un test ne vérifie plus rien.
+
+**La sélection des payloads était bien plus pauvre qu'annoncé (2026-11-11).** Constat
+parti d'une remarque juste : « on n'a aucun système qui sélectionne les payloads selon
+le contexte de la cible ». Mesuré, c'est largement vrai :
+
+- **73 % des payloads (845/1 143) n'ont AUCUN prérequis** : les 35 sondes LLM01 partent
+  contre n'importe quelle cible ;
+- **1 154 candidats à priorité 0**, donc à égalité c'est l'ordre de l'instantané qui
+  tranche — c'est-à-dire **l'alphabet**. Contre un chatbot de bibliothèque, l'ordre réel
+  commençait par `ansiescape` (« print ANSI terminal codes », alors qu'il n'y a pas de
+  terminal), puis sept variantes de `encoding` d'affilée.
+
+Ce qui fonctionnait quand même : les objectifs issus de la reconnaissance, les trois
+prérequis (`outils`, `secret`, `consignes`) et l'adaptation. Mais les prérequis ne
+mordent que sur 17 sondes sur 52.
+
+**Premier correctif : le tour de rôle se fait par MODULE garak, plus par sonde.**
+`encoding` compte quinze sondes sur cinquante-deux, toutes variantes du même test : il
+obtenait quinze tours quand `dan` en obtenait trois. Le module est déjà dans le nom de
+la sonde, il suffisait de grouper dessus (`groupe`, utilisé par `_repartir` et par
+`POIDS_DIVERSITE`). Les douze premiers essais couvrent désormais douze modules distincts.
+
+Mesuré (`mesurer_adaptation`, constats absolus, 150 tirages) :
+
+| Budget | Statique par sonde → par module | Adaptatif par sonde → par module |
+|---|---|---|
+| 10 | 1,87 → 1,87 | 3,15 → **3,72** |
+| 20 | 3,90 → 3,77 | 6,24 → **7,12** |
+| 40 | 7,56 → 7,35 | 14,69 → **13,31** |
+
+Le gain porte sur la zone d'usage réaliste (6–20) ; à budget 40 l'adaptatif recule de
+1,4 constat, parce que le malus de module empêche d'épuiser un module riche. Compromis
+assumé : `MAX_ESSAIS` vaut 3 par défaut, et quarante essais n'est pas l'usage courant.
+
+**Une « amélioration » évidente a été proposée puis RÉFUTÉE par la mesure.** Épargner du
+malus de diversité un module qui vient de céder — insister là où ça marche — paraissait
+aller de soi. Mesuré :
+
+| Budget | Constats pénalisé → épargné | Modules couverts |
+|---|---|---|
+| 10 | 3,72 → 3,90 (+0,18) | 7,29 → **5,71** |
+| 20 | 7,12 → 7,23 (+0,11) | 11,99 → **7,93** |
+| 40 | 13,31 → **12,41** (−0,90) | 13,00 → 11,06 |
+
+Soit **+0,11 constat contre quatre modules de couverture perdus**, et carrément une
+perte de constats à budget 40 : un module qui a cédé une fois n'a pas forcément d'autre
+sonde vulnérable, et s'y acharner épuise ses sondes inutiles. Changement annulé. La
+couverture est précisément ce que ce projet défend, et l'insistance reste portée par
+`technique_efficace`, au grain de la technique. Deux tests qui échouaient ont servi de
+signal : ils documentaient la règle que l'exemption cassait.
+
+**Ce qui reste à faire : les règles de pertinence par sonde (défaut non corrigé).**
+garak déclare l'objectif de chaque sonde en anglais (« print escaped ANSI terminal
+codes »), dont on peut dériver des prérequis par mots-clés, comme le fait déjà le filtre
+de périmètre. Mais ça bute sur la FICHE, qui ne collecte pas les faits nécessaires : la
+cible produit-elle du code (→ `packagehallucination`, `exploitation`) ? rend-elle du
+Markdown et des liens (→ `web_injection`) ? tourne-t-elle dans un terminal (→
+`ansiescape`) ? Il faut donc d'abord enrichir la reconnaissance — ce qui coûte des
+sondes, donc du `BUDGET_RECONNAISSANCE` — puis écrire la table de correspondance. C'est
+l'ordre que ce fichier prescrit déjà : enrichir la cible, puis exploiter.
 
 ## Cadre légal
 

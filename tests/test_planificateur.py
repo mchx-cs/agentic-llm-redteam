@@ -239,3 +239,50 @@ class TestFuiteDePromptSysteme:
         # sont parfois ecrits en francais seulement.
         assert any("you were given" in p or "system prompt" in p
                    for p in technique["payloads_complets"])
+
+
+class TestTourDeRoleParModule:
+    """
+    `_repartir` repartit le budget entre les MODULES garak, pas entre les
+    sondes. Sans ca, les quinze sondes `encoding` raflaient quinze tours
+    quand `dan` en obtenait trois.
+    """
+
+    def test_le_tour_de_role_est_equilibre_entre_les_modules(self):
+        # Formule a tenir avec OU sans l'instantane garak (la fixture de ce
+        # fichier le neutralise, donc il ne reste que les groupes maison) :
+        # aucun module ne prend un deuxieme tour avant que tous aient eu le
+        # leur, donc les comptes ne diffèrent jamais de plus de un.
+        from collections import Counter
+        plan = planifier(fiche(consignes=True, refuses=["le code"]), budget=10)
+        comptes = Counter(e.get("groupe") for e in plan["essais"])
+        assert max(comptes.values()) - min(comptes.values()) <= 1
+
+    def test_deux_modules_disponibles_alternent(self):
+        plan = planifier(fiche(consignes=True), budget=2)
+        groupes = [e.get("groupe") for e in plan["essais"]]
+        assert len(set(groupes)) == 2
+
+    def test_chaque_essai_porte_son_groupe(self):
+        plan = planifier(fiche(consignes=True), budget=5)
+        assert all(e.get("groupe") for e in plan["essais"])
+
+    def test_une_technique_maison_a_son_propre_groupe(self):
+        plan = planifier(fiche(consignes=True), budget=30)
+        maison = [e for e in plan["candidats"]
+                  if not e["technique"].startswith("garak-")]
+        assert maison
+        assert all(e["groupe"] == e["technique"] for e in maison)
+
+    def test_les_sondes_d_un_meme_module_partagent_leur_groupe(self):
+        plan = planifier(fiche(consignes=True), budget=3)
+        par_groupe = {}
+        for candidat in plan["candidats"]:
+            if candidat["technique"].startswith("garak-encoding-"):
+                par_groupe.setdefault(candidat["groupe"], set()).add(
+                    candidat["technique"])
+        # S'il y a un instantane garak, toutes les sondes d'encodage doivent
+        # tomber dans un seul groupe.
+        if par_groupe:
+            assert list(par_groupe) == ["encoding"]
+            assert len(par_groupe["encoding"]) > 1
