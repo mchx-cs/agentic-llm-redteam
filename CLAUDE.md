@@ -32,8 +32,8 @@ que la cible a déjà répondu (phase 3a).
 - **Phase 12** : `cibles/demo.py` est la cible volontairement mal protégée, à trois
   niveaux de défense (`--cible demo`, `demo:2`, `demo:3`). Mesuré le 2026-11-11 : le
   niveau 1 lâche le code sur une simple question, les niveaux 2 et 3 refusent. Un
-  rapport d'exemple abrégé est commité dans `exemples/`. Reste l'enregistrement
-  asciinema.
+  rapport d'exemple abrégé est commité dans `exemples/`, et le README montre un
+  extrait de sortie de campagne.
 - **Phase 9** : `audit.py` refuse de démarrer contre une cible distante sans mandat
   valide (`autorisation.json`, hors git), et consigne chaque échange avec la cible dans
   une piste JSONL écrite au fil de l'eau.
@@ -159,7 +159,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 9 | **Traçabilité et autorisation** : journal rejouable, refus de démarrer sans autorisation | **Fait** |
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | **Fait** |
-| 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, enregistrement asciinema au README | En cours |
+| 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, extrait de sortie au README | **Fait** |
 
 Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
 passage en production, et qu'une feuille de route centrée sur les attaques laissait
@@ -400,10 +400,10 @@ ordre de valeur :
 1. **Une cible volontairement vulnérable livrée avec le projet**, pour que n'importe qui
    reproduise une détection en une commande, sans clé ni configuration. C'est aussi la
    cible de référence des tests de bout en bout.
-2. **Un enregistrement asciinema** d'une campagne complète, intégré au README : il
-   montre le déroulé reconnaissance → plan → attaque → verdict → rejeu, ce qu'aucune
-   capture d'écran ne rend.
-3. **Un rapport d'exemple commité**, rendu par GitHub.
+2. **Un rapport d'exemple commité**, rendu par GitHub.
+3. **Un extrait de sortie de campagne au README**, pour montrer le DÉROULÉ —
+   reconnaissance → plan → attaque → adaptation → verdict → rejeu — que le rapport
+   final, lui, ne montre pas.
 
 À faire après la phase 8 (adaptateur de cible) et la phase 6 : démontrer une campagne
 qui ne trouve que des payloads de contrôle n'aurait aucun intérêt.
@@ -437,13 +437,38 @@ capable de ces comportements.
 **Le point délicat : c'est probabiliste.** Un vrai LLM mal protégé ne cède pas à tous
 les coups, donc la démonstration peut échouer chez le visiteur. Trois réponses : le
 niveau 1 est assez faible pour que la détection soit quasi certaine dans la limite de
-`MAX_ESSAIS` ; l'enregistrement asciinema montre une campagne réussie à qui veut juste
+`MAX_ESSAIS` ; l'extrait du README montre une campagne réussie à qui veut juste
 regarder ; et un échec occasionnel illustre la thèse du projet (« la même injection
 réussit une fois sur trois ») au lieu de la contredire.
 
 **« En une commande » veut dire : aucune clé, aucun compte, aucune configuration
 au-delà de ce que le README demande déjà.** Ollama et `llama3.2` restent nécessaires,
 c'est le socle du projet ; la cible déterministe, elle, tourne vraiment sans rien.
+
+**L'asciinema est ABANDONNÉ au profit d'un extrait de sortie (2026-11-11).** La
+décision est prise, pour ne pas la reprendre dans six mois.
+
+Le besoin, lui, était réel et reste satisfait : un visiteur ne clonera pas le dépôt, ne
+posera pas Ollama et ne téléchargera pas deux gigaoctets de modèle. La promesse
+« essayable en une commande » n'est donc vérifiée par presque personne, et il faut
+montrer le DÉROULÉ — ce que le rapport final, qui ne montre que le résultat, ne fait
+pas. Un extrait de sortie collé au README le fait aussi bien, et le reste du temps mieux :
+
+- **il se `git diff`**, donc une régression de présentation se voit — c'est exactement
+  l'argument qui avait fait choisir le Markdown pour les rapports, et il vaut ici ;
+- **il est indexable et copiable**, ce qu'aucune vidéo n'est ;
+- **il se régénère en relançant une commande**, sans outillage ;
+- **asciinema n'est pas supporté sur Windows**, la plateforme de développement du
+  projet : il aurait fallu passer par WSL pour la pièce la moins probante des trois.
+
+Et il faut dire ce qui est perdu : l'animation et le sentiment de durée. Pour un outil
+en ligne de commande dont la valeur est le raisonnement affiché, et non la vitesse, ça
+pèse peu. Un enregistrement ne prouve rien de toute façon — il se met en scène, alors
+que le code et les 308 tests en intégration continue, eux, se vérifient.
+
+Correction d'ordre au passage : la hiérarchie initiale plaçait l'asciinema avant le
+rapport d'exemple. C'était faux. Le rapport commité est lisible sans cliquer, indexé et
+diffable ; l'enregistrement n'a aucune de ces trois propriétés.
 
 **Secrets factices uniquement** (type `TOPSECRET42`). Livrer une cible vulnérable dans
 un dépôt public est banal et sans risque ; y laisser une vraie valeur ne l'est pas.
