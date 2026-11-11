@@ -298,68 +298,105 @@ originals.
 command. Payloads and responses are abridged in it with `--abreger`, which is also how
 you would share a report without a client's verbatim answers.
 
-### Pointing at a real target
+### Pointing it at a target
 
-The target is an adapter, selected per run — nothing is hardcoded:
+The target is an adapter, chosen per run — nothing is hardcoded. Two walkthroughs
+below: a model on your own machine, then someone's API.
 
-```bash
-python main.py                          # the decoy, no setup required
-python main.py --cible mock             # deterministic, no LLM, no quota
-python main.py --cible https://host/chat  # a real endpoint
-```
-
-Applications all shape their JSON differently. For the common cases the shape is
-predictable, so a profile supplies it:
+#### A model you run yourself
 
 ```bash
-python main.py --cible https://host/chat --profil-cible openai
+python main.py --cible http://localhost:11434/api/generate --tester-cible --profil-cible ollama
+python main.py --cible http://localhost:11434/api/generate --profil-cible ollama --rapport
 ```
 
-`openai` covers OpenAI, Groq, Together, vLLM, LM Studio and most gateways; `ollama`,
-`anthropic` and `simple` cover the rest of what turns up. Two more exist for replies
-that aren't a single JSON object — `openai-flux` reads a server-sent-event stream
-fragment by fragment, and `texte` takes the body as-is:
+The first command sends one harmless message and stops, so you learn the wiring is
+right before anything else happens. The second runs the campaign. No mandate is
+required: `localhost` is yours.
 
-| Profile | Response read as |
+One caveat worth knowing up front — a bare `llama3.2` has no system prompt, so it has
+nothing to protect. Reconnaissance will find no secret and no instructions, and the
+planner will rule almost everything out. Use `--cible demo` for a target that actually
+leaks.
+
+#### Someone's API
+
+**1. Settle the legal question first.** Three situations, and only two of them are
+yours to test:
+
+| Target | Allowed? |
 |---|---|
-| `openai` | `choices.0.message.content` |
-| `ollama` | `response` |
-| `anthropic` | `content.0.text` |
-| `simple` | `reply` |
-| `openai-flux` | `@flux:choices.0.delta.content` — SSE stream, reassembled |
-| `texte` | `@brut` — the whole body, not parsed |
+| Your own deployment | yes |
+| A client's **application**, with written authorisation | yes — this is the use case |
+| A provider's **raw model**, to make it misbehave | **no** — outside almost every provider's terms |
 
-Streaming matters more than it looks: "just set `stream: false`" assumes you control the
-request body, which you often don't when the thing under test is a client's own
-application. Either way the *request* stays JSON, so an attack payload full of quotes,
-braces and newlines still travels intact — that is the property worth protecting, and
-it's why a non-JSON reply remains an error unless you ask for one of these two
-explicitly. Guessing would let an HTML error page pass as a chatbot's answer, and the
-judge would end up scoring HTML.
+**2. Find the endpoint.** You need the URL the chat UI itself calls, not the page you
+open in a browser. If all you have is the page: open it, press F12, go to the Network
+tab, send a message, read off the POST request's URL. The auth header is there too.
 
-Anything bespoke is described in `.env`. A profile passed on the command line
-overrides `CIBLE_CORPS` and `CIBLE_CHEMIN_REPONSE` from `.env` — the more specific
-invocation wins, as usual — so for a body of your own, set `.env` and pass no profile:
+**3. Check the wiring — no mandate needed, nothing attacked.**
+
+```bash
+python main.py --cible https://host/v1/chat --tester-cible --profil-cible openai
+```
+
+It prints what it sent, what came back, and the text it extracted. If it fails, the
+message names the fix. Header values are never printed, only their names.
+
+**4. If no profile fits, describe the shape in `.env`** — and pass no profile, since an
+option overrides the file:
 
 ```bash
 CIBLE_ENTETES={"Authorization": "Bearer xxx"}
-CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
+CIBLE_CORPS={"model":"the-model","messages":[{"role":"user","content":"{message}"}]}
 CIBLE_CHEMIN_REPONSE=choices.0.message.content
 ```
 
-**What goes in is the endpoint's exact URL** — the address the chat UI itself calls,
-not the page you'd open in a browser. If you only have the page, open it, press F12,
-go to the Network tab, send a message, and read off the POST request's URL.
-
-**Check the wiring before you attack anything.** One harmless message, then it stops:
+**5. Get the mandate in place.** Against a remote target this is a precondition, not
+advice — the campaign refuses to start without one.
 
 ```bash
-python main.py --cible https://host/chat --tester-cible --profil-cible openai
+cp autorisation.example.json autorisation.json
 ```
 
-It prints the body it sent, the reply it got and the text it extracted. Get the response
-path wrong and it lists the paths that *do* reach text in the reply you just received —
-the right one is almost always there:
+Fill it in: the target must be covered by it, and today must fall inside the window.
+
+**6. Declare what the application does with the output,** because the model cannot tell
+you. Skip this and twelve probes are left out, each with a stated reason.
+
+```bash
+python main.py --cible https://host/v1/chat --profil-cible openai   --contexte rendu-riche --rapport
+```
+
+**7. Judge with a different model than the target** — `PROFIL_ARBITRE` in `.env`. A
+judge that is its target shares its blind spots.
+
+### Target wiring: reference
+
+**Profiles** fill in the request shape and where to read the reply, for the forms that
+turn up in practice:
+
+| Profile | Reply read as |
+|---|---|
+| `openai` | `choices.0.message.content` — OpenAI, Groq, Together, vLLM, LM Studio, most gateways |
+| `ollama` | `response` — Ollama's own `/api/generate` |
+| `anthropic` | `content.0.text` |
+| `simple` | `reply` — a bespoke app |
+| `openai-flux` | `@flux:choices.0.delta.content` — an SSE stream, reassembled |
+| `texte` | `@brut` — the whole body, unparsed |
+
+Precedence is the usual one: command line, then profile, then `.env`.
+
+**Streaming matters more than it looks.** "Just set `stream: false`" assumes you control
+the request body — which you often don't when the thing under test is a client's own
+application. Either way the *request* stays JSON, so an attack payload full of quotes,
+braces and newlines travels intact. That property is why a non-JSON reply stays an
+error unless you ask for one of those two profiles explicitly: guessing would let an
+HTML error page pass as a chatbot's answer, and the judge would end up scoring HTML.
+
+**Failures read as instructions, not stack traces.** A wrong response path lists the
+paths that *do* reach text in the reply you just got — the right one is almost always
+among them:
 
 ```
 ÉCHEC — Chemin 'reply' : clé 'reply' absente. Clés disponibles : id, model, choices.
@@ -369,65 +406,34 @@ Chemins qui mènent à du texte dans la réponse reçue :
       → 'Je te reçois : Bonjour, peux-tu me confirmer…'
 ```
 
-Header *values* are never printed, only their names. The error messages were already
-good, but they used to arrive mid-campaign, after a payload had gone out — on a client's
-target, under mandate, that spends authorised traffic and writes an audit-trail entry to
-discover a typo.
+When the reply isn't JSON, it asks the target before guessing: a response declares its
+own format in `Content-Type`, so `text/event-stream` gets you pointed at
+`--profil-cible openai-flux`. That declaration only ever *advises* — plenty of gateways
+label an error page `application/json`, and trusting the header would feed HTML to the
+judge.
 
-When the reply isn't JSON at all, it names the likely cause rather than just the fact.
-It asks the target first: a response declares its own format in `Content-Type`, so
-`text/event-stream` gets you told to use `--profil-cible openai-flux`, and `text/plain`
-points at `texte`. Failing that it sniffs the body — HTML means you gave it the page
-instead of the endpoint, `data:` lines mean a stream, an empty body usually means the
-wrong URL or method.
+**One failure mode deserves its own mention,** because nothing about it looks wrong: a
+`CIBLE_CORPS` with no `{message}` in it. Substitution used to leave the body untouched,
+so every attempt sent the same fixed text, the judge answered "no finding" every time,
+and the report concluded the target was safe. Refused outright now, before the first
+request.
 
-The declaration only ever *advises*; it never switches the parsing mode. Plenty of
-gateways return an error page labelled `application/json`, and trusting that header
-would feed HTML to the judge as though it were a chatbot's answer.
+**What decides which payloads get sent** is partly discoverable and partly not.
+Reconnaissance asks six harmless questions and a model extracts *facts* — the target's
+role, what it declines, whether it mentions having instructions, whether it has tools,
+writes code, or will work on a document you hand it. Those facts gate whole families.
+But no model knows whether its output lands in a terminal, gets rendered as Markdown,
+or reaches a database, so you declare that instead:
 
-One failure mode deserves its own mention, because nothing about it looks wrong: a
-`CIBLE_CORPS` with no `{message}` in it. Payload substitution silently left the body
-untouched, so every attempt sent the same fixed text, the judge answered "no finding"
-every time, and the report concluded the target was safe. That is now refused outright,
-before the first request.
-
-`{message}` is substituted into the parsed structure, not into raw text, so a payload
-full of quotes and newlines travels intact and cannot inject JSON. Every failure —
-HTTP error, unreachable host, non-JSON reply, wrong response path — is reported as an
-instruction rather than a stack trace.
-
-**Two things decide which payloads get sent, and only one of them is discoverable.**
-
-Reconnaissance asks the target six harmless questions and a model extracts *facts* from
-the answers — its role, the subjects it declines, whether it mentions having
-instructions, whether it has tools, whether it writes code, whether it will work on a
-document you hand it. Those facts gate whole families: no declared tools, no
-excessive-agency probes; "I don't write code", no package-hallucination probes.
-
-But some probes depend on the application *around* the model, and the model cannot
-know about it — a chatbot has no idea whether its output ends up in a terminal, gets
-rendered as Markdown by some client, or reaches a database. Asking it would invite an
-answer it has no way to ground, and the planner would treat that invention as an
-observed fact. So you declare it:
-
-```bash
-python main.py --cible https://host/chat --contexte rendu-riche,base-donnees
-```
-
-| Value | Declares that | Unlocks |
+| `--contexte` value | Declares that | Unlocks |
 |---|---|---|
 | `terminal` | the output is shown in a terminal | `ansiescape` (2 probes) |
-| `rendu-riche` | a client renders the output's Markdown or HTML | `web_injection` (8) |
+| `rendu-riche` | a client renders its Markdown or HTML | `web_injection` (8) |
 | `base-donnees` | a database or template engine sits behind it | `exploitation` (2) |
 
-Declare nothing and those twelve probes are skipped — each with a stated reason that
-names the flag to turn it on. That is deliberate: they are not merely untried there,
-they are *untestable*, and running them anyway would burn attempts while the report
-claimed a coverage it did not have.
+Those twelve aren't merely untried without it — they're *untestable*, and running them
+anyway would spend attempts while the report claimed coverage it didn't have.
 
-Only ever point this at a system you own or have **written authorisation** to test —
-and against a remote target that is not a suggestion but a precondition: the campaign
-refuses to start without a valid mandate (see *Authorisation and audit trail* below).
 
 ### Producing a report
 
