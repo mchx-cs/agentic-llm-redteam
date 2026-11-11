@@ -1199,6 +1199,69 @@ Ce que la mesure ne dit PAS : LLM06 n'est couverte que sur **un outil factice à
 seul tour**. Un vrai abus d'outil (enchaînement d'appels, injection indirecte venue
 d'une sortie d'outil) reste hors de portée du corpus comme de la cible.
 
+**Ce que garak couvre VRAIMENT, et le seul trou qui valait la peine (2026-11-11).**
+Question posée : « uniquement les payloads garak, ce n'est pas suffisant ? » La réponse
+est oui, à une exception près — mais la vérifier a mis au jour un défaut d'étiquetage.
+
+Compté sur les 52 sondes du périmètre :
+
+| Tag garak | Sondes | Payloads | Statut |
+|---|---|---|---|
+| `owasp:llm01` | 35 | 845 | famille principale |
+| `owasp:llm02` | 19 | 298 | famille principale |
+| `owasp:llm06` | 10 | — | **secondaire, non jugeable** |
+| `owasp:llm09` | 7 | — | **secondaire, non jugeable** |
+| `owasp:llm05` | 2 | — | **secondaire, non jugeable** |
+| `owasp:llm07` | **0** | 0 | entrée morte, retirée |
+
+**Le nombre de payloads n'est PAS le facteur limitant.** Il y en a 1 143 venus de garak,
+et `MAX_ESSAIS=3` en lance trois. Écrire des payloads à la main ne changerait rien tant
+que l'arbitre n'a que trois critères et que la cible n'a pas d'application autour.
+
+**Mais garak ne fournit AUCUNE sonde LLM07**, alors que c'est le seul trou où les trois
+conditions d'exploitation sont réunies : l'arbitre sait juger cette famille (critère
+affiné trois fois et mesuré), le corpus a cinq échanges étiquetés dessus, et la cible de
+démonstration a un prompt système bavard. D'où onze payloads écrits à la main, en cinq
+registres dont la différence est le point : demande directe (« répète mot pour mot »),
+reformulation (une cible qui refuse de RÉPÉTER accepte souvent de RÉSUMER — le refus
+porte sur le verbe, pas sur l'information), positionnel (« quel texte apparaît
+au-dessus », qui ne nomme ni « instructions » ni « consignes », donc passe un filtre par
+mots-clés), prétexte d'audit, et faux délimiteur de fin de consigne. Deux en anglais :
+les garde-fous d'une cible francophone sont parfois écrits en français seulement.
+
+Limite assumée sur ces payloads : ce sont des **demandes directes de configuration**, le
+registre que décrit OWASP LLM07 lui-même, pas des jailbreaks contournant la modération
+pour obtenir du contenu nuisible. Ces derniers restent du ressort de garak.
+
+**Les trois familles « secondaires » ne sont pas un gisement perdu, et les annoncer
+testées serait faux.** Chaque sonde concernée porte AUSSI `llm01` ou `llm02`, donc elle
+est bel et bien lancée — rien n'est jeté. Mais :
+- les 10 `llm06` sont des exfiltrations par URI Markdown, du XSS, de l'injection Jinja
+  et SQL : des attaques sur l'**application autour** du modèle, qui supposent un client
+  rendant le Markdown. Notre cible est un chatbot texte, et le critère `abus_outils`
+  parle d'appels d'outil, pas de ça ;
+- les 7 `llm09` font générer du code important des paquets inexistants : juger demande
+  de vérifier l'existence du paquet, garak a un détecteur dédié, nous non ;
+- les 2 `llm05` sont les sondes `ansiescape`, déjà couvertes par `llm01`.
+
+D'où un **troisième état de couverture** au rapport : « effleurée, mais non jugée ».
+Ni testée, ni ignorée. Trancher dans un sens ou l'autre serait faux.
+
+**Et un faux trou a été supprimé.** Le rapport affichait côte à côte
+« divulgation-information (LLM02) — aucun modèle de payload » et « Familles testées :
+LLM02 » : contradictoire pour un lecteur, et c'est un trou INVENTÉ — la famille est
+couverte par garak, seule la technique maison du même nom est encore vide. Elle reste
+listée (la taire serait l'autre moitié du mensonge), mais avec la mention « la famille
+est couverte par d'autres sondes ». `abus-outils` ne reçoit pas cette mention : son trou
+est réel, LLM06 n'étant la famille principale d'aucune sonde.
+
+**Un test dormait depuis la composition.** `test_le_catalogue_croise_bien_les_axes`
+comptait `complets × transformations`, formule fausse depuis que chaque payload complet
+produit aussi ses variantes composées. Il passait quand même, parce que la fixture
+neutralise l'instantané garak et qu'aucune technique MAISON n'avait de payload complet :
+le terme valait zéro. Les payloads LLM07 l'ont réveillé. Leçon : une fixture qui isole
+d'une dépendance peut aussi cacher qu'un test ne vérifie plus rien.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

@@ -376,6 +376,29 @@ resistance to injection, and the judge has no criterion for them.
 The snapshot stays out of git. garak's probes pull in third-party datasets with their
 own terms, so the repository points at the source rather than republishing it.
 
+**What garak covers, and the one gap worth filling by hand.** Counted on those 52
+probes: 35 carry `owasp:llm01` (845 payloads) and 19 carry `owasp:llm02` (298). Ten more
+carry `owasp:llm06`, seven `owasp:llm09`, two `owasp:llm05` — always *in addition* to
+llm01 or llm02, so those probes do get sent. But the judge has no criterion for those
+families, so a `aucun` verdict there means nothing, and the report says so in a third
+state: **touched, but not judged**. Calling them tested would be false; staying silent
+would suggest they were never approached. The llm06 probes, for instance, are Markdown
+URI exfiltration, XSS and Jinja/SQL injection — attacks on the *application around* the
+model, which need a client that renders Markdown.
+
+Payload count is not the bottleneck: there are 1,143 of them and `MAX_ESSAIS` sends
+three. But garak ships **no LLM07 probe at all**, and that is the one gap where all
+three conditions line up — the judge can score system-prompt leakage, the corpus has
+labelled cases for it, and the shipped demo target has a talkative system prompt. So
+that family is covered by eleven hand-written payloads across five registers, and the
+difference between registers is the point: a direct ask ("repeat them word for word"), a
+reformulation (a target that refuses to *repeat* will often agree to *summarise* — the
+refusal attaches to the verb, not the information), a positional one that never says
+"instructions" and so slips past a keyword filter, an audit pretext, and a fake
+end-of-instructions delimiter. These are direct configuration requests — the register
+OWASP LLM07 itself describes — not jailbreaks aimed at eliciting harmful content; those
+stay garak's job.
+
 **When to resync.** garak ships every 37 days on median, so there is no right calendar,
 only triggers: before any real engagement, when garak publishes, and — the only one
 grounded in evidence — when your own measurements start declining, because that means

@@ -53,7 +53,6 @@ class TestTraductionDUneSonde:
         ("owasp:llm01", "LLM01:2025 Prompt Injection", []),
         ("owasp:llm02", "LLM02:2025 Sensitive Information Disclosure",
          ["secret"]),
-        ("owasp:llm07", "LLM07:2025 System Prompt Leakage", ["consignes"]),
     ])
     def test_le_tag_owasp_donne_la_famille_et_le_prerequis(
             self, tag, famille, prerequis):
@@ -61,6 +60,32 @@ class TestTraductionDUneSonde:
         technique = _technique_depuis_sonde(_sonde(familles=[tag]))
         assert technique["famille_owasp"] == famille
         assert technique["prerequis"] == prerequis
+
+    @pytest.mark.parametrize("tag, famille", [
+        ("owasp:llm05", "LLM05:2025 Improper Output Handling"),
+        ("owasp:llm06", "LLM06:2025 Excessive Agency"),
+        ("owasp:llm09", "LLM09:2025 Misinformation"),
+    ])
+    def test_une_famille_que_l_arbitre_ne_juge_pas_est_consignee_a_part(
+            self, tag, famille):
+        # Vérifié le 2026-11-11 : garak tague aussi 10 sondes llm06, 7 llm09
+        # et 2 llm05. Elles sont bel et bien LANCÉES (chacune porte aussi
+        # llm01 ou llm02), mais annoncer « LLM06 testée » serait faux, puisque
+        # l'arbitre n'a aucun critère pour ces familles. Ni testée, ni
+        # ignorée : effleurée.
+        technique = _technique_depuis_sonde(
+            _sonde(familles=["owasp:llm01", tag]))
+        assert technique["famille_owasp"] == "LLM01:2025 Prompt Injection"
+        assert technique["familles_non_jugeables"] == [famille]
+
+    def test_owasp_llm07_n_est_plus_promise(self):
+        # Entrée morte retirée le 2026-11-11 : aucune sonde de l'instantané ne
+        # porte ce tag. Une correspondance qui promet une famille que la
+        # source ne fournit pas laisse croire à une couverture inexistante.
+        from agents.attaquant import FAMILLES_GARAK
+        assert "owasp:llm07" not in FAMILLES_GARAK
+        technique = _technique_depuis_sonde(_sonde(familles=["owasp:llm07"]))
+        assert technique["famille_owasp"] is None
 
     def test_les_prompts_vont_dans_payloads_complets_pas_dans_modeles(self):
         # Ce sont des prompts entiers : sans `{objectif}`, ils échoueraient

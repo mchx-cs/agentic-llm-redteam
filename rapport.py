@@ -151,6 +151,14 @@ def construire(resultat, cible="inconnue"):
         "couverture": {
             "familles_testees": sorted({e["famille_owasp"] or e["technique"]
                                         for e in lances}),
+            # EFFLEURÉES, pas testées : les sondes lancées touchent aussi ces
+            # familles, mais l'arbitre n'a aucun critère pour les juger. Les
+            # annoncer testées serait faux ; les taire laisserait croire
+            # qu'elles n'ont pas été approchées du tout. Un lecteur qui voit
+            # « LLM06 effleurée, non jugée » sait exactement où il en est.
+            "familles_effleurees": sorted(
+                {famille for essai in lances
+                 for famille in (essai.get("familles_non_jugeables") or [])}),
             "familles_ecartees": plan["ecartees"],
         },
         # Ce que la campagne a appris de la cible en route, et qui a changé
@@ -335,6 +343,17 @@ def rendre_markdown(rapport, abreger=False):
     lignes += ["**Familles testées**", ""]
     lignes += [f"- `{f}`" for f in couverture["familles_testees"]] or \
               ["- aucune"]
+    # Effleurées : les sondes lancées les touchent, mais rien ne sait les
+    # juger. Trancher entre « testée » et « non testée » serait faux dans les
+    # deux sens, d'où ce troisième état.
+    if couverture.get("familles_effleurees"):
+        lignes += ["", "**Familles effleurées, mais NON jugées**", "",
+                   "Les sondes lancées touchent aussi ces familles. "
+                   "L'arbitre n'a pas de critère pour les juger : un verdict "
+                   "`aucun` n'y signifie donc rien, et ces familles ne "
+                   "comptent pas comme testées.", ""]
+        lignes += [f"- `{f}`" for f in couverture["familles_effleurees"]]
+
     lignes += ["", "**Familles NON testées**", ""]
     if couverture["familles_ecartees"]:
         for ecartee in couverture["familles_ecartees"]:
@@ -343,8 +362,13 @@ def rendre_markdown(rapport, abreger=False):
             # lignes identiques sans dire laquelle a été écartée.
             famille = (f" ({ecartee['famille_owasp']})"
                        if ecartee["famille_owasp"] else "")
+            # Une technique maison encore vide dont la famille est par
+            # ailleurs couverte n'est PAS un trou : l'annoncer comme tel
+            # contredirait la liste des familles testées, juste au-dessus.
+            ailleurs = (" — la famille est couverte par d'autres sondes"
+                        if ecartee.get("famille_couverte_ailleurs") else "")
             lignes.append(f"- `{ecartee['technique']}`{famille} — "
-                          f"{' ; '.join(ecartee['motifs'])}")
+                          f"{' ; '.join(ecartee['motifs'])}{ailleurs}")
     else:
         lignes.append("- aucune")
 

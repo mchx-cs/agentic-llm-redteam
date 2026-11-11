@@ -260,3 +260,75 @@ class TestClotureDesBlocsDeCode:
         rendu = rendre_markdown(construire(_resultat(constats=[constat])))
         _, ouvert = self._lignes_hors_bloc(rendu)
         assert ouvert is None
+
+
+class TestFamillesEffleurees:
+    """
+    Trois etats, pas deux. garak tague 10 sondes `owasp:llm06`, 7 `llm09` et 2
+    `llm05`, toujours en plus de llm01 ou llm02 : elles sont donc LANCEES,
+    mais l'arbitre n'a aucun critere pour ces familles. Les annoncer testees
+    serait faux ; les taire laisserait croire qu'elles n'ont pas ete
+    approchees. D'ou « effleuree, non jugee ».
+    """
+
+    @staticmethod
+    def _lance(famille="LLM01", effleurees=()):
+        essai = _payload(famille=famille)
+        essai["familles_non_jugeables"] = list(effleurees)
+        return essai
+
+    def test_une_famille_effleuree_n_est_pas_comptee_testee(self):
+        rapport = construire(_resultat(
+            lances=[self._lance(effleurees=["LLM06:2025 Excessive Agency"])]))
+        couverture = rapport["couverture"]
+        assert couverture["familles_testees"] == ["LLM01"]
+        assert couverture["familles_effleurees"] == [
+            "LLM06:2025 Excessive Agency"]
+
+    def test_le_rendu_explique_qu_un_verdict_aucun_n_y_signifie_rien(self):
+        rendu = rendre_markdown(construire(_resultat(
+            lances=[self._lance(effleurees=["LLM09:2025 Misinformation"])])))
+        assert "effleurées, mais NON jugées" in rendu
+        assert "LLM09:2025 Misinformation" in rendu
+        assert "ne comptent pas comme testées" in rendu
+
+    def test_sans_famille_effleuree_la_section_n_apparait_pas(self):
+        rendu = rendre_markdown(construire(_resultat(lances=[self._lance()])))
+        assert "effleurées" not in rendu
+
+    def test_les_familles_effleurees_sont_dedoublonnees_et_triees(self):
+        rapport = construire(_resultat(lances=[
+            self._lance(effleurees=["LLM06:2025 Excessive Agency"]),
+            self._lance(effleurees=["LLM06:2025 Excessive Agency",
+                                    "LLM05:2025 Improper Output Handling"]),
+        ]))
+        assert rapport["couverture"]["familles_effleurees"] == [
+            "LLM05:2025 Improper Output Handling",
+            "LLM06:2025 Excessive Agency"]
+
+    def test_un_ancien_resultat_sans_le_champ_reste_lisible(self):
+        # Un resultat.json d'avant ce changement n'a pas la cle : il doit
+        # produire un rapport, pas une exception.
+        rapport = construire(_resultat(lances=[_payload()]))
+        assert rapport["couverture"]["familles_effleurees"] == []
+
+
+class TestFauxTrouDansLeRapport:
+    def test_une_technique_vide_dont_la_famille_est_couverte_le_dit(self):
+        ecartee = {"technique": "divulgation-information",
+                   "famille_owasp": "LLM02", "motifs": ["aucun modèle"],
+                   "famille_couverte_ailleurs": True}
+        rendu = rendre_markdown(construire(_resultat(ecartees=[ecartee])))
+        assert "la famille est couverte par d'autres sondes" in rendu
+
+    def test_un_trou_reel_ne_recoit_pas_cette_mention(self):
+        ecartee = {"technique": "abus-outils", "famille_owasp": "LLM06",
+                   "motifs": ["aucun modèle"],
+                   "famille_couverte_ailleurs": False}
+        rendu = rendre_markdown(construire(_resultat(ecartees=[ecartee])))
+        assert "couverte par d'autres sondes" not in rendu
+
+    def test_un_ancien_resultat_sans_le_champ_ne_leve_pas(self):
+        ecartee = {"technique": "x", "famille_owasp": "LLM06",
+                   "motifs": ["aucun modèle"]}
+        rendre_markdown(construire(_resultat(ecartees=[ecartee])))

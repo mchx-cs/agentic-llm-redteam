@@ -99,6 +99,18 @@ def planifier(fiche, budget):
         else:
             retenues.append(technique)
 
+    # Une technique maison encore vide dont la FAMILLE est par ailleurs
+    # couverte par garak n'est pas un trou de couverture. Sans cette
+    # distinction, le rapport affichait côte à côte « divulgation-information
+    # (LLM02) — aucun modèle de payload » et « Familles testées : LLM02 », ce
+    # qui est contradictoire pour un lecteur et invente un trou qui n'existe
+    # pas. On ne la masque pas pour autant : on dit où la famille est traitée.
+    familles_retenues = {t["famille_owasp"] for t in retenues
+                         if t["famille_owasp"]}
+    for ecartee in ecartees:
+        ecartee["famille_couverte_ailleurs"] = (
+            ecartee["famille_owasp"] in familles_retenues)
+
     essais = []
     for technique in retenues:
         for modele in technique["modeles"]:
@@ -111,6 +123,8 @@ def planifier(fiche, budget):
                         "objectif": objectif["id"],
                         "transformation": nom_transfo,
                         "texte": transformer(texte),
+                        "familles_non_jugeables":
+                            technique.get("familles_non_jugeables") or [],
                         "priorite": _priorite(technique, objectif, nom_transfo),
                     })
 
@@ -131,6 +145,8 @@ def planifier(fiche, budget):
                         "transformation": nom_transfo,
                         "texte": transformer(texte),
                         "source": technique.get("source"),
+                        "familles_non_jugeables":
+                            technique.get("familles_non_jugeables") or [],
                         "priorite": _priorite(technique, objectif, nom_transfo),
                     })
 

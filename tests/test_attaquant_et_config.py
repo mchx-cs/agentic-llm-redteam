@@ -73,10 +73,19 @@ class TestGenerationDesPayloads:
         gabarits = sum(len(t["modeles"]) for t in bibliotheque["techniques"])
         complets = sum(len(t.get("payloads_complets", []))
                        for t in bibliotheque["techniques"])
-        # Un gabarit se croise avec chaque objectif ; un payload complet
-        # porte déjà son intention et n'a que l'axe transformation.
+        objectifs = len(bibliotheque["objectifs"])
+        # Un gabarit se croise avec chaque objectif. Un payload complet en
+        # produit UN DE PLUS que d'objectifs : composé avec chacun d'eux
+        # (il sert alors de préambule, et l'objectif fournit la demande),
+        # plus sa variante nue, qui mesure la résistance au détournement.
+        #
+        # Cette formule disait « complets × transformations » jusqu'au
+        # 2026-11-11, et le test passait quand même : la composition datait
+        # du même jour, mais la fixture neutralise l'instantané garak et
+        # aucune technique MAISON n'avait encore de payload complet, donc le
+        # terme valait zéro. Les payloads LLM07 l'ont réveillé.
         attendu = len(TRANSFORMATIONS) * (
-            gabarits * len(bibliotheque["objectifs"]) + complets)
+            gabarits * objectifs + complets * (objectifs + 1))
         assert len(generer_payloads()) == attendu
 
 

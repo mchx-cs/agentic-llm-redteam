@@ -153,3 +153,89 @@ class TestVivierDeCandidats:
         plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
         priorites = [c["priorite"] for c in plan["candidats"]]
         assert priorites == sorted(priorites)
+
+
+class TestFauxTrousDeCouverture:
+    """
+    Le rapport affichait cote a cote « divulgation-information (LLM02) —
+    aucun modele de payload » et « Familles testees : LLM02 ». Contradictoire
+    pour un lecteur, et c'est un trou INVENTE : la famille est couverte par
+    les sondes garak, seule la technique maison du meme nom est encore vide.
+
+    On ne masque pas l'ecartement pour autant — on dit ou la famille est
+    traitee. Taire une technique vide serait l'autre moitie du mensonge.
+    """
+
+    def test_une_technique_vide_dont_la_famille_est_couverte_est_signalee(self):
+        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        par_nom = {e["technique"]: e for e in plan["ecartees"]}
+        # `divulgation-information` est vide, mais LLM02 est couverte par
+        # garak — sauf si l'instantane est absent, d'ou la garde.
+        familles_testees = {c["famille_owasp"] for c in plan["candidats"]}
+        if "LLM02:2025 Sensitive Information Disclosure" in familles_testees:
+            assert par_nom["divulgation-information"][
+                "famille_couverte_ailleurs"] is True
+
+    def test_une_famille_reellement_absente_n_est_pas_dite_couverte(self):
+        plan = planifier(fiche(outils=["un_outil"],
+                               refuses=["le code du coffre"]), budget=3)
+        par_nom = {e["technique"]: e for e in plan["ecartees"]}
+        # LLM06 n'est la famille principale d'aucune sonde : le trou est reel.
+        assert par_nom["abus-outils"]["famille_couverte_ailleurs"] is False
+
+    def test_chaque_ecartee_porte_le_champ(self):
+        # Le rapport le lit sans garde : un champ manquant le ferait mentir
+        # par omission.
+        plan = planifier(fiche(), budget=3)
+        assert all("famille_couverte_ailleurs" in e for e in plan["ecartees"])
+
+
+class TestFuiteDePromptSysteme:
+    """
+    garak ne fournit AUCUNE sonde pour LLM07 (verifie le 2026-11-11 sur les 52
+    sondes du perimetre), alors que l'arbitre sait juger cette famille, que le
+    corpus a cinq echanges etiquetes dessus et que la cible de demonstration a
+    un prompt systeme bavard. C'etait le seul trou reellement exploitable.
+    """
+
+    def test_la_technique_est_retenue_quand_la_cible_evoque_ses_consignes(self):
+        plan = planifier(fiche(consignes=True), budget=3)
+        ecartees = {e["technique"] for e in plan["ecartees"]}
+        assert "fuite-prompt-systeme" not in ecartees
+
+    def test_elle_reste_ecartee_si_la_cible_n_evoque_aucune_consigne(self):
+        # Le prerequis `consignes` tient : extraire des instructions suppose
+        # qu'il y en ait.
+        plan = planifier(fiche(consignes=False), budget=3)
+        par_nom = {e["technique"]: e for e in plan["ecartees"]}
+        assert "fuite-prompt-systeme" in par_nom
+        assert any("consigne" in m
+                   for m in par_nom["fuite-prompt-systeme"]["motifs"])
+
+    def test_elle_couvre_la_famille_LLM07(self):
+        plan = planifier(fiche(consignes=True), budget=3)
+        familles = {c["famille_owasp"] for c in plan["candidats"]}
+        assert "LLM07:2025 System Prompt Leakage" in familles
+
+    def test_ses_payloads_sont_complets_pas_des_modeles(self):
+        # Une demande d'instructions porte sa propre intention : elle n'a pas
+        # d'emplacement `{objectif}` a remplir.
+        from agents.attaquant import charger_bibliotheque
+        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+                         ["techniques"] if t["id"] == "fuite-prompt-systeme")
+        assert technique["modeles"] == []
+        assert len(technique["payloads_complets"]) >= 5
+
+    def test_les_payloads_couvrent_plusieurs_registres(self):
+        # Une cible qui refuse de REPETER accepte souvent de RESUMER, et un
+        # filtre par mots-cles ne voit pas une formulation positionnelle.
+        from agents.attaquant import charger_bibliotheque
+        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+                         ["techniques"] if t["id"] == "fuite-prompt-systeme")
+        textes = " ".join(technique["payloads_complets"]).lower()
+        for registre in ("répète", "résume", "au-dessus", "audit"):
+            assert registre in textes, registre
+        # Et au moins un en anglais : les garde-fous d'une cible francophone
+        # sont parfois ecrits en francais seulement.
+        assert any("you were given" in p or "system prompt" in p
+                   for p in technique["payloads_complets"])

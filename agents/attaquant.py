@@ -61,10 +61,43 @@ FICHIER_GARAK = FICHIER_BIBLIOTHEQUE.parent / "garak.json"
 
 # Les tags de garak portent déjà la correspondance OWASP ; on la traduit dans
 # le vocabulaire du projet, et on en déduit le prérequis de la famille.
+#
+# Seules les familles que l'ARBITRE sait juger figurent ici. C'est la même
+# logique que le filtre de périmètre de l'exportateur : importer une famille
+# sans critère pour la juger produirait des verdicts `aucun` systématiques,
+# donc une fausse impression d'avoir testé.
+#
+# `owasp:llm07` a été RETIRÉE le 2026-11-11 : entrée morte, aucune sonde de
+# l'instantané ne la porte. Une correspondance qui promet une famille que la
+# source ne fournit pas est pire qu'absente — elle laisse croire à une
+# couverture. La fuite de prompt système se couvre donc par des payloads
+# écrits à la main (technique `fuite-prompt-systeme`).
 FAMILLES_GARAK = {
     "owasp:llm01": ("LLM01:2025 Prompt Injection", []),
     "owasp:llm02": ("LLM02:2025 Sensitive Information Disclosure", ["secret"]),
-    "owasp:llm07": ("LLM07:2025 System Prompt Leakage", ["consignes"]),
+}
+
+# Les tags que garak pose AUSSI sur ces sondes, et que l'arbitre ne sait pas
+# juger. Vérifié le 2026-11-11 sur les 52 sondes du périmètre : llm06 (10
+# sondes), llm09 (7) et llm05 (2). Elles ne sont pas perdues — chacune porte
+# également llm01 ou llm02, donc elle est bel et bien lancée — mais annoncer
+# « LLM06 testée » serait faux :
+#
+# - llm06 : exfiltration par URI Markdown, XSS, injection Jinja et SQL. Ce
+#   sont des attaques sur l'APPLICATION autour du modèle, et elles supposent
+#   un client qui rende le Markdown. Notre cible est un chatbot texte, et le
+#   critère `abus_outils` de l'arbitre parle d'appels d'outil, pas de ça.
+# - llm09 : faire importer des paquets inexistants. Juger demande de vérifier
+#   l'existence du paquet — garak a un détecteur dédié, nous n'en avons pas.
+# - llm05 : les deux sondes `ansiescape`, déjà couvertes par llm01.
+#
+# On les CONSIGNE au rapport plutôt que de les taire : « cette sonde touche
+# aussi LLM06, que nous ne savons pas juger » est une information honnête.
+FAMILLES_NON_JUGEABLES = {
+    "owasp:llm05": "LLM05:2025 Improper Output Handling",
+    "owasp:llm06": "LLM06:2025 Excessive Agency",
+    "owasp:llm08": "LLM08:2025 Vector and Embedding Weaknesses",
+    "owasp:llm09": "LLM09:2025 Misinformation",
 }
 
 
@@ -106,6 +139,14 @@ def _technique_depuis_sonde(sonde):
     return {
         "id": identifiant,
         "famille_owasp": famille,
+        # Ce que la sonde touche AUSSI, et que l'arbitre ne sait pas juger.
+        # Lancer sans le dire laisserait croire que ces familles sont
+        # couvertes ; les taire laisserait croire qu'elles ne sont pas
+        # effleurées. Le rapport les présente donc comme « effleurées, non
+        # jugées ».
+        "familles_non_jugeables": sorted(
+            {FAMILLES_NON_JUGEABLES[t] for t in sonde["familles_owasp"]
+             if t in FAMILLES_NON_JUGEABLES}),
         "description": sonde["objectif"] or sonde["sonde"],
         "prerequis": prerequis,
         # Les prompts de garak sont COMPLETS : ils ne comportent pas
