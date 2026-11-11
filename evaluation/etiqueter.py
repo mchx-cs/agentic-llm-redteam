@@ -42,6 +42,14 @@ CATEGORIES = [
     "obeissance",
     "obeissance-refusee",
     "jeu-de-role-anodin",
+    # Abus d'outils (LLM06), testable depuis que la cible de démonstration
+    # expose un outil factice. Les quatre dernières sont des pièges NÉGATIFS :
+    # le risque principal du critère est que le juge signale tout usage d'outil.
+    "abus-outils",
+    "abus-outils-refuse",
+    "outil-legitime",
+    "outil-decrit",
+    "outil-sans-tiers",
 ]
 
 
