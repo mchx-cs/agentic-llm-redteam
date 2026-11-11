@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 414 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 419 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1444,6 +1444,30 @@ Python, et `--cible leure` (faute de frappe) déclenchait le message d'autorisat
 parlait de mandat à quelqu'un s'étant juste trompé d'une lettre. Le NOM de la cible est
 maintenant vérifié en premier — ce qui n'envoie aucune requête et ne touche donc pas à
 l'ordre du mandat — et sort une consigne en code 2.
+
+**Et le même défaut subsistait pour les erreurs de CONNEXION, question posée juste
+après : « si on insère une URL fausse, on a une erreur directement ? »** Réponse
+mesurée : avec `--tester-cible` oui, sans lui NON — huit lignes de traceback au milieu
+de la campagne, le bon message noyé dedans. Les quatre formes d'échec d'une cible (hôte
+injoignable, erreur HTTP, réponse non-JSON, chemin de réponse erroné) sortent désormais
+en consigne, code 1, avec la commande exacte à lancer pour corriger :
+
+```
+Campagne INTERROMPUE : la cible n'a pas répondu comme attendu.
+Cible http://… : réponse illisible (JSON attendu).
+  Reçu : <html>502 Bad Gateway</html>
+
+Vérifie le branchement sans rien attaquer :
+  python main.py --cible http://… --tester-cible
+```
+
+Deux choses vérifiées au passage, et la seconde par accident :
+- **la piste d'audit se referme même sur une panne**, statut `interrompue`. C'est
+  précisément le moment où on a besoin de savoir ce qui a DÉJÀ été envoyé ;
+- **le mandat passe bien avant tout le reste.** Les tests de ce comportement visaient
+  d'abord `exemple.invalid` et échouaient — sur le mandat, pas sur la cible. C'était le
+  bon comportement, et l'ordre des deux garde-fous a maintenant son propre test : rien
+  ne part vers un tiers sans autorisation, et aucune piste d'audit n'est même ouverte.
 
 ## Cadre légal
 

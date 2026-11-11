@@ -281,3 +281,86 @@ class TestVerificationDuBranchement:
         ok, sortie = self._sortie(url="http://127.0.0.1:9/x", profil="openai")
         assert ok is False
         assert "injoignable" in sortie
+
+
+class TestEchecDeCibleEnCampagne:
+    """
+    Une cible qui ne repond pas comme prevu doit donner une CONSIGNE, pas une
+    trace Python. Verifie le 2026-11-11 : sans `--tester-cible`, une URL
+    injoignable sortait huit lignes de traceback, le bon message noye dedans.
+
+    Ce test porte sur `cli()`, donc sur le contrat de sortie : code 1, rien
+    sur stdout qui ressemble a un traceback, et le raccourci de verification
+    propose.
+    """
+
+    @pytest.fixture
+    def campagne_qui_echoue(self, monkeypatch):
+        """`cli()` avec une cible qui leve, sans toucher au reseau."""
+        import main
+
+        def cible_cassee(*a, **k):
+            def interroger(message):
+                raise RuntimeError(
+                    "Cible http://exemple.invalid/x : injoignable (test).\n"
+                    "  Verifie l'URL, le reseau, et que la cible est demarree.")
+            return interroger
+
+        monkeypatch.setattr(main, "choisir_cible", cible_cassee)
+        return main
+
+    def test_l_echec_sort_en_code_1(self, campagne_qui_echoue, tmp_path,
+                                    capsys):
+        with pytest.raises(SystemExit) as sortie:
+            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+                                     "--rapport", str(tmp_path)])
+        assert sortie.value.code == 1
+
+    def test_le_message_propose_la_verification(self, campagne_qui_echoue,
+                                                tmp_path, capsys):
+        with pytest.raises(SystemExit):
+            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+                                     "--rapport", str(tmp_path)])
+        erreur = capsys.readouterr().err
+        assert "INTERROMPUE" in erreur
+        assert "--tester-cible" in erreur       # le raccourci exact
+        assert "injoignable" in erreur          # le message d'origine
+
+    def test_aucun_traceback_n_est_affiche(self, campagne_qui_echoue,
+                                           tmp_path, capsys):
+        with pytest.raises(SystemExit):
+            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+                                     "--rapport", str(tmp_path)])
+        capture = capsys.readouterr()
+        for marque in ("Traceback", "File \"", "raise RuntimeError"):
+            assert marque not in capture.err + capture.out, marque
+
+    def test_la_piste_d_audit_est_refermee_et_nommee(self, campagne_qui_echoue,
+                                                     tmp_path, capsys):
+        # Si la campagne tombe, on doit garder la trace de ce qui a DEJA ete
+        # envoye — c'est precisement le moment ou on en a besoin.
+        with pytest.raises(SystemExit):
+            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+                                     "--rapport", str(tmp_path)])
+        assert "Piste d'audit" in capsys.readouterr().err
+        pistes = list(tmp_path.glob("*-journal.jsonl"))
+        assert len(pistes) == 1
+        lignes = [json.loads(l) for l in
+                  pistes[0].read_text(encoding="utf-8").splitlines() if l]
+        assert lignes[-1]["type"] == "fin_campagne"
+        assert lignes[-1]["statut"] == "interrompue"
+
+    def test_une_cible_distante_exige_le_mandat_AVANT_la_campagne(
+            self, campagne_qui_echoue, tmp_path, capsys):
+        # Decouvert en ecrivant les tests ci-dessus : visant d'abord
+        # `exemple.invalid`, ils echouaient sur le mandat et non sur la cible.
+        # C'etait le bon comportement, et il merite son propre test — l'ordre
+        # des deux garde-fous est ce qui garantit qu'aucune requete ne part
+        # vers un tiers sans autorisation.
+        with pytest.raises(SystemExit) as sortie:
+            campagne_qui_echoue.cli(["--cible", "https://exemple.invalid/x",
+                                     "--rapport", str(tmp_path)])
+        assert sortie.value.code == 2
+        assert "REFUSÉE" in capsys.readouterr().err
+        # Et rien n'a ete ecrit : pas meme une piste d'audit.
+        assert list(tmp_path.glob("*.jsonl")) == []

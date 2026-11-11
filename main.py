@@ -361,6 +361,20 @@ def cli(arguments=None):
         resultat = lancer_campagne(
             choisir_cible(arguments.cible, arguments.profil_cible),
             nom_cible, piste, contexte)
+    except RuntimeError as panne:
+        # La cible ne répond pas comme prévu : hôte injoignable, erreur HTTP,
+        # réponse non-JSON, chemin de réponse erroné. Le message de
+        # `cibles/http.py` dit déjà quoi corriger — il sortait seulement noyé
+        # dans huit lignes de trace Python, alors que le projet tient à
+        # donner une consigne. On y ajoute le raccourci qui évite de
+        # recommencer à l'aveugle.
+        print(f"\nCampagne INTERROMPUE : la cible n'a pas répondu comme "
+              f"attendu.\n{panne}\n\n"
+              f"Vérifie le branchement sans rien attaquer :\n"
+              f"  python main.py --cible {nom_cible} --tester-cible",
+              file=sys.stderr)
+        print(f"Piste d'audit : {piste.chemin}", file=sys.stderr)
+        raise SystemExit(1)
     finally:
         # Même si la campagne lève, le journal doit se refermer proprement.
         piste.clore(locals().get("resultat", {}).get("statut", "interrompue"),
