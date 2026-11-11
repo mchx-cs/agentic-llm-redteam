@@ -337,8 +337,9 @@ it's why a non-JSON reply remains an error unless you ask for one of these two
 explicitly. Guessing would let an HTML error page pass as a chatbot's answer, and the
 judge would end up scoring HTML.
 
-Anything bespoke is described in `.env`, and what you set there always wins over a
-profile:
+Anything bespoke is described in `.env`. A profile passed on the command line
+overrides `CIBLE_CORPS` and `CIBLE_CHEMIN_REPONSE` from `.env` — the more specific
+invocation wins, as usual — so for a body of your own, set `.env` and pass no profile:
 
 ```bash
 CIBLE_ENTETES={"Authorization": "Bearer xxx"}

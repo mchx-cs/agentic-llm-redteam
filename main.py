@@ -275,7 +275,9 @@ def cli(arguments=None):
         help="forme d'API de la cible, au lieu de décrire CIBLE_CORPS et "
              "CIBLE_CHEMIN_REPONSE à la main : "
              + ", ".join(PROFILS_CIBLE)
-             + ". Ce qui est posé dans .env a toujours la priorité.")
+             + ". L'emporte sur CIBLE_CORPS et CIBLE_CHEMIN_REPONSE de .env : "
+               "la ligne de commande est plus spécifique. Pour un corps sur mesure, "
+               "règle .env et ne passe pas de profil.")
     parseur.add_argument(
         "--tester-cible", action="store_true", dest="tester_cible",
         help="envoyer UN message anodin pour vérifier le branchement, puis "

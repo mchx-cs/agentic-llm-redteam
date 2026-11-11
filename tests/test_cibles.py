@@ -569,3 +569,57 @@ class TestFormatAnnonceParLaCible:
     def test_un_type_inconnu_ne_conseille_rien(self):
         for inconnu in ("application/xml", "image/png", "", None):
             assert _profil_conseille(inconnu) is None
+
+
+class TestOrdreDePriorite:
+    """
+    Ligne de commande > profil > .env. C'est la convention habituelle — une
+    option est plus specifique qu'un fichier de configuration — et le code la
+    suivait deja. C'etait la DOCUMENTATION qui affirmait l'inverse (« ce qui
+    est pose dans .env a toujours la priorite »), decouvert le 2026-11-11 en
+    deroulant un guide pas a pas : un CIBLE_CORPS pose pour Ollama etait
+    ecrase par --profil-cible openai, et l'API repondait « model is required ».
+
+    D'ou ces tests : l'ordre est maintenant verifie, pas seulement decrit.
+    """
+
+    def test_un_parametre_explicite_bat_le_profil(self, base):
+        interroger = construire_cible_http(
+            f"{base}/imbrique", corps=CORPS_IMBRIQUE,
+            chemin_reponse=CHEMIN_IMBRIQUE, profil="ollama")
+        assert interroger("bonjour") == "bonjour"
+
+    def test_le_profil_bat_le_env(self, base, monkeypatch):
+        # Le piege reel : un corps pose dans .env, et un profil passe en
+        # option. C'est le profil qui part sur le reseau.
+        import config
+        monkeypatch.setitem(config.CIBLE_HTTP, "corps",
+                            {"message": "{message}"})
+        monkeypatch.setitem(config.CIBLE_HTTP, "chemin_reponse", "reply")
+        interroger = construire_cible_http(f"{base}/imbrique",
+                                           profil="openai")
+        # Si .env l'emportait, la cible /imbrique ne saurait pas lire ce corps.
+        assert interroger("bonjour") == "bonjour"
+
+    def test_le_env_sert_quand_aucun_profil_n_est_passe(self, base,
+                                                        monkeypatch):
+        import config
+        monkeypatch.setitem(config.CIBLE_HTTP, "corps", CORPS_IMBRIQUE)
+        monkeypatch.setitem(config.CIBLE_HTTP, "chemin_reponse",
+                            CHEMIN_IMBRIQUE)
+        interroger = construire_cible_http(f"{base}/imbrique")
+        assert interroger("bonjour") == "bonjour"
+
+    def test_l_aide_decrit_le_bon_ordre(self):
+        # Le defaut etait dans l'aide, donc l'aide est testee.
+        import main
+        parseur = [a for a in main.cli.__doc__ or ""]  # garde-fou de presence
+        import argparse, io, contextlib
+        tampon = io.StringIO()
+        with contextlib.redirect_stdout(tampon):
+            with pytest.raises(SystemExit):
+                main.cli(["--help"])
+        aide = tampon.getvalue()
+        assert "profil-cible" in aide
+        # Ne doit PLUS affirmer que .env gagne.
+        assert ".env a toujours la priorité" not in aide

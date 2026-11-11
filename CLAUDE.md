@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 451 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 455 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1516,6 +1516,20 @@ le point délicat. Bien des passerelles renvoient une page d'erreur annoncée
 réponse d'un chatbot, et l'arbitre jugerait du HTML. L'ordre est donc : la déclaration
 si elle est exploitable, sinon le reniflage du corps — qui, lui, ne ment pas. Un test
 couvre explicitement le cas du `Content-Type` menteur.
+
+**L'ordre de priorité était documenté à l'ENVERS (2026-11-11).** Trouvé en déroulant un
+guide pas à pas contre Ollama : un `CIBLE_CORPS` posé pour la couche compatible OpenAI
+était écrasé par `--profil-cible openai`, et l'API répondait « model is required ».
+
+Le vrai ordre est **ligne de commande > profil > `.env`**, ce que le code faisait déjà et
+qui est la convention habituelle : une option est plus spécifique qu'un fichier de
+configuration. C'est l'aide de `--profil-cible`, le README et `.env.example` qui
+affirmaient tous trois l'inverse — « ce qui est posé dans .env a toujours la priorité ».
+
+Leçon : une contradiction entre code et documentation ne lève rien et ne casse aucun
+test. Celle-ci est sortie en SUIVANT la documentation comme un lecteur l'aurait fait.
+L'ordre a maintenant ses propres tests, et l'un d'eux lit l'aide de la ligne de commande
+pour vérifier qu'elle ne réaffirme plus le contraire.
 
 Ce qui reste hors de portée, et qui demanderait un adaptateur à part : `multipart`, GET,
 et WebSocket (celui-là ajouterait une dépendance). Le contrat
