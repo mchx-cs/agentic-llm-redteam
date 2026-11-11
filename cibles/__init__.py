@@ -51,18 +51,31 @@ def est_cible_livree(nom):
     return nom in CIBLES_NOMMEES or nom == "demo" or nom.startswith("demo:")
 
 
-def choisir_cible(nom=None):
+def choisir_cible(nom=None, profil=None):
     """
     Renvoie la fonction d'interrogation correspondant à `nom`.
 
     - un nom connu ("leurre", "mock") ;
     - "demo", ou "demo:N" pour choisir le niveau de défense (1, 2 ou 3) ;
-    - une URL (http:// ou https://) → adaptateur HTTP configuré par .env ;
+    - une URL (http:// ou https://) → adaptateur HTTP configuré par .env,
+      ou par `profil` (voir cibles.http.PROFILS_CIBLE) pour une forme d'API
+      connue : décrire le corps JSON à la main est la partie la plus pénible
+      du branchement, et pour le cas courant elle est prévisible ;
     - None → la valeur de CIBLE dans .env, sinon le leurre local.
     """
     from config import CIBLE  # importé ici pour éviter un import circulaire
 
     nom = nom or CIBLE
+
+    # EN PREMIER, avant toute branche : un profil ne vaut que pour une cible
+    # HTTP. Placé plus bas, ce contrôle était inatteignable — les cibles
+    # nommées retournent avant lui — et le profil était ignoré en silence,
+    # exactement ce qu'il devait empêcher. Un test l'a montré.
+    if profil and not nom.startswith(("http://", "https://")):
+        raise ValueError(
+            f"Le profil de cible « {profil} » décrit la forme d'une API "
+            f"http(s) ; la cible '{nom}' est livrée avec le projet et n'a "
+            f"rien à configurer.")
 
     if nom in CIBLES_NOMMEES:
         return CIBLES_NOMMEES[nom]
@@ -82,7 +95,7 @@ def choisir_cible(nom=None):
             ) from erreur
 
     if nom.startswith(("http://", "https://")):
-        return construire_cible_http(nom)
+        return construire_cible_http(nom, profil=profil)
 
     raise ValueError(
         f"Cible inconnue : '{nom}'. Attendu : "

@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 394 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 414 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -63,7 +63,7 @@ cibles/            # les systèmes testés — contrat commun : interroger(messa
   demo.py          # volontairement mal protégée, 3 niveaux : `--cible demo[:N]`
   leurre.py        # chatbot-jouet local avec un secret factice (défaut)
   mock.py          # déterministe, sans LLM : tests de bout en bout gratuits
-  http.py          # un vrai endpoint, décrit dans .env (urllib, zéro dépendance)
+  http.py          # un vrai endpoint : profils d'API, --tester-cible, zéro dépendance
 agents/
   reconnaissance.py # sonde la cible (questions anodines) et en dresse une fiche
   planificateur.py  # choisit familles, objectifs et ordre à partir de la fiche (règles)
@@ -1389,6 +1389,61 @@ outil. C'était dans la moitié du code précisément chargée de protéger des 
 du modèle. Corrigé par `_liste_de_textes()`, et `tests/test_reconnaissance.py` couvre
 désormais la normalisation — le fichier n'existait pas, la reconnaissance n'étant mesurée
 que par `evaluation/`, qui exige un modèle.
+
+**Brancher une cible était trop pénible, et ça cachait un faux négatif
+(2026-11-11).** Remarque de départ : « le setup de la cible semble compliqué, est-ce
+qu'une interface terminal n'aiderait pas ? » En mesurant, le problème s'est révélé
+ailleurs — et plus grave.
+
+**Le défaut : `_injecter` renvoyait le gabarit INCHANGÉ quand `{message}` manquait.**
+Une faute de frappe (`{mesage}`), un corps recopié d'une documentation, et la campagne
+envoyait le même texte fixe à chaque essai. L'arbitre répondait « aucune faille » à
+chaque fois, et le rapport concluait que la cible était sûre. Rien ne levait, rien ne
+manquait, et la conclusion était **inversée** : exactement l'échec muet que ce projet
+s'attache à rendre bruyant. `verifier_gabarit()` refuse désormais au DÉMARRAGE, pas à
+l'envoi — on ne découvre pas ça après avoir consommé du débit chez un client.
+
+**Et le vrai problème d'ergonomie n'était pas la saisie, c'était le MOMENT.** Les
+messages d'erreur étaient déjà bons (« clé 'reply' absente. Clés disponibles :
+choices. »), mais ils tombaient PENDANT la campagne, après qu'un payload soit parti. Sur
+une cible sous mandat, c'est dépenser du débit autorisé et écrire une entrée de piste
+d'audit pour découvrir une coquille.
+
+D'où trois ajouts, et aucune interface :
+- **`verifier_gabarit()`** — le refus décrit ci-dessus.
+- **`--tester-cible`** — UN message anodin, puis arrêt. Affiche le corps envoyé, la
+  réponse brute et le texte extrait. Sur un chemin erroné, il liste les chemins qui
+  mènent à du texte dans la réponse REÇUE : le bon y est presque toujours, puisqu'il
+  mène au texte que la cible vient d'écrire. Et si aucun de ces textes ne reprend le
+  message envoyé, il le signale — le corps est faux lui aussi, et corriger le seul
+  chemin aurait fait relancer pour rien. Les valeurs d'en-tête ne sont jamais
+  affichées : un jeton n'a rien à faire dans une sortie qu'on colle dans un rapport.
+- **`--profil-cible`** — `openai`, `ollama`, `anthropic`, `simple`. Décrire `CIBLE_CORPS`
+  et `CIBLE_CHEMIN_REPONSE` suppose de lire la documentation d'une API puis d'écrire du
+  JSON imbriqué dans une variable d'environnement : c'est la partie la plus pénible, et
+  pour le cas le plus courant elle est entièrement prévisible. Un profil est une
+  COMMODITÉ : ce qui est posé à la main l'emporte toujours, sinon il deviendrait un piège.
+
+**Pourquoi pas une interface terminal**, alors que la question portait sur elle : elle
+aurait rendu la saisie plus agréable sans rien corriger. Le payload silencieusement jeté
+serait passé tout autant, et les erreurs seraient restées tardives. Elle ajouterait une
+dépendance — contre la promesse de dépendance unique — et ne s'automatiserait pas, ce
+qui est l'argument déjà retenu contre l'interface web. Une commande de vérification, en
+revanche, s'enchaîne en script et sort en code 0/1.
+
+**Deux défauts de MES ajouts, trouvés par les tests :**
+- le garde-fou « un profil ne vaut que pour une URL » était placé APRÈS la branche des
+  cibles nommées, donc **inatteignable** : le profil était ignoré en silence sur
+  `--cible demo`, précisément ce qu'il devait empêcher. Remonté en tête de
+  `choisir_cible()` ;
+- `from cibles.http import tester` faisait collecter `tester` par pytest comme un test,
+  puisque son nom commence par « test ». Importé sous alias.
+
+**Correction d'un défaut préexistant au passage** : `--cible demo:9` sortait en trace
+Python, et `--cible leure` (faute de frappe) déclenchait le message d'autorisation, qui
+parlait de mandat à quelqu'un s'étant juste trompé d'une lettre. Le NOM de la cible est
+maintenant vérifié en premier — ce qui n'envoie aucune requête et ne touche donc pas à
+l'ordre du mandat — et sort une consigne en code 2.
 
 ## Cadre légal
 

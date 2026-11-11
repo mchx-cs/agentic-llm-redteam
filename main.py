@@ -31,6 +31,7 @@ from agents.reconnaissance import (CONTEXTES_CONNUS, reconnaitre,
                                     resumer as resumer_fiche)
 from agents.verificateur import verifier_par_rejeu
 from cibles import choisir_cible
+from cibles.http import PROFILS_CIBLE, tester as tester_cible_http
 from config import BUDGET_APPELS, BUDGET_TOKENS, CIBLE
 from llm_client import BudgetDepasse, journal, reinitialiser_journal
 from rapport import enregistrer
@@ -270,6 +271,17 @@ def cli(arguments=None):
              "un rapport sans réponses verbatim, ou publier un exemple). "
              "resultat.json garde tout.")
     parseur.add_argument(
+        "--profil-cible", default=None, metavar="NOM", dest="profil_cible",
+        help="forme d'API de la cible, au lieu de décrire CIBLE_CORPS et "
+             "CIBLE_CHEMIN_REPONSE à la main : "
+             + ", ".join(PROFILS_CIBLE)
+             + ". Ce qui est posé dans .env a toujours la priorité.")
+    parseur.add_argument(
+        "--tester-cible", action="store_true", dest="tester_cible",
+        help="envoyer UN message anodin pour vérifier le branchement, puis "
+             "s'arrêter. Aucune attaque, aucun mandat requis : à lancer "
+             "avant toute campagne contre une cible réelle.")
+    parseur.add_argument(
         "--contexte", default="", metavar="LISTE",
         help="ce que l'application AUTOUR de la cible fait de sa sortie, "
              "séparé par des virgules : "
@@ -284,6 +296,17 @@ def cli(arguments=None):
 
     nom_cible = arguments.cible or CIBLE
 
+    # Le NOM de la cible d'abord, et c'est une correction : une faute de
+    # frappe (« demo:9 », « leure ») sortait soit en trace Python, soit —
+    # pire — en message d'autorisation, qui parlait de mandat à quelqu'un
+    # qui s'était juste trompé de lettre. On vérifie donc le nom avant tout,
+    # ce qui n'envoie aucune requête et ne touche pas à l'ordre du mandat.
+    try:
+        choisir_cible(nom_cible, arguments.profil_cible)
+    except (ValueError, RuntimeError) as refus:
+        print(f"Cible inutilisable.\n{refus}", file=sys.stderr)
+        raise SystemExit(2)
+
     # Un nom de contexte inconnu est une FAUTE DE FRAPPE, pas un contexte
     # absent : l'accepter en silence écarterait des familles entières sans que
     # personne comprenne pourquoi. Même logique que le profil inconnu, qui
@@ -295,6 +318,23 @@ def cli(arguments=None):
               f"Valeurs acceptées : {', '.join(CONTEXTES_CONNUS)}.",
               file=sys.stderr)
         raise SystemExit(2)
+
+    # Vérifier le branchement AVANT d'exiger le mandat, et avant de lancer
+    # quoi que ce soit : c'est une requête anodine, pas un test d'intrusion.
+    # L'ordre compte — découvrir une coquille de configuration ne doit pas
+    # coûter une entrée dans la piste d'audit d'un client.
+    if arguments.tester_cible:
+        if not nom_cible.startswith(("http://", "https://")):
+            print(f"--tester-cible vise une URL http(s) ; '{nom_cible}' est "
+                  f"une cible livrée, qui n'a rien à configurer.",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        try:
+            ok = tester_cible_http(nom_cible, profil=arguments.profil_cible)
+        except RuntimeError as refus:
+            print(refus, file=sys.stderr)
+            raise SystemExit(2)
+        raise SystemExit(0 if ok else 1)
 
     # Le mandat AVANT tout : on ne lance pas une seule requête vers un
     # système tiers sans pouvoir prouver qu'on en avait le droit.
@@ -319,7 +359,8 @@ def cli(arguments=None):
 
     try:
         resultat = lancer_campagne(
-            choisir_cible(arguments.cible), nom_cible, piste, contexte)
+            choisir_cible(arguments.cible, arguments.profil_cible),
+            nom_cible, piste, contexte)
     finally:
         # Même si la campagne lève, le journal doit se refermer proprement.
         piste.clore(locals().get("resultat", {}).get("statut", "interrompue"),

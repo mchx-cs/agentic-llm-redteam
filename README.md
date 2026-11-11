@@ -308,14 +308,51 @@ python main.py --cible mock             # deterministic, no LLM, no quota
 python main.py --cible https://host/chat  # a real endpoint
 ```
 
-Applications all shape their JSON differently, so rather than guess, the shape is
-described in `.env`:
+Applications all shape their JSON differently. For the common cases the shape is
+predictable, so a profile supplies it:
+
+```bash
+python main.py --cible https://host/chat --profil-cible openai
+```
+
+`openai` covers OpenAI, Groq, Together, vLLM, LM Studio and most gateways; `ollama`,
+`anthropic` and `simple` cover the rest of what turns up. Anything bespoke is described
+in `.env`, and what you set there always wins over a profile:
 
 ```bash
 CIBLE_ENTETES={"Authorization": "Bearer xxx"}
 CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
 CIBLE_CHEMIN_REPONSE=choices.0.message.content
 ```
+
+**Check the wiring before you attack anything.** One harmless message, then it stops:
+
+```bash
+python main.py --cible https://host/chat --tester-cible --profil-cible openai
+```
+
+It prints the body it sent, the reply it got and the text it extracted. Get the response
+path wrong and it lists the paths that *do* reach text in the reply you just received —
+the right one is almost always there:
+
+```
+ÉCHEC — Chemin 'reply' : clé 'reply' absente. Clés disponibles : id, model, choices.
+
+Chemins qui mènent à du texte dans la réponse reçue :
+  CIBLE_CHEMIN_REPONSE=choices.0.message.content
+      → 'Je te reçois : Bonjour, peux-tu me confirmer…'
+```
+
+Header *values* are never printed, only their names. The error messages were already
+good, but they used to arrive mid-campaign, after a payload had gone out — on a client's
+target, under mandate, that spends authorised traffic and writes an audit-trail entry to
+discover a typo.
+
+One failure mode deserves its own mention, because nothing about it looks wrong: a
+`CIBLE_CORPS` with no `{message}` in it. Payload substitution silently left the body
+untouched, so every attempt sent the same fixed text, the judge answered "no finding"
+every time, and the report concluded the target was safe. That is now refused outright,
+before the first request.
 
 `{message}` is substituted into the parsed structure, not into raw text, so a payload
 full of quotes and newlines travels intact and cannot inject JSON. Every failure —

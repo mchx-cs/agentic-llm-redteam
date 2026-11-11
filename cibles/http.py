@@ -23,6 +23,43 @@ import urllib.request
 MARQUEUR_MESSAGE = "{message}"
 
 
+# --- Profils de cible : les formes qu'on rencontre en pratique ---------------
+# Décrire `CIBLE_CORPS` et `CIBLE_CHEMIN_REPONSE` à la main suppose de lire la
+# documentation de l'API, puis d'écrire du JSON imbriqué dans une variable
+# d'environnement. C'est la partie la plus pénible du branchement, et pour le
+# cas le PLUS COURANT elle est entièrement prévisible : la majorité des
+# endpoints LLM parlent le dialecte OpenAI.
+#
+# Ces profils ne remplacent pas la configuration manuelle, ils couvrent les
+# cas connus. Une application maison garde sa forme propre dans `.env`, et
+# c'est bien pour ça que le projet ne devine jamais : il propose.
+PROFILS_CIBLE = {
+    "openai": {
+        "corps": {"messages": [{"role": "user", "content": MARQUEUR_MESSAGE}]},
+        "chemin_reponse": "choices.0.message.content",
+        "description": "API de type OpenAI (OpenAI, Groq, Together, vLLM, "
+                       "LM Studio, la plupart des passerelles)",
+    },
+    "ollama": {
+        "corps": {"model": "llama3.2", "prompt": MARQUEUR_MESSAGE,
+                  "stream": False},
+        "chemin_reponse": "response",
+        "description": "Ollama en direct (/api/generate), sans couche OpenAI",
+    },
+    "anthropic": {
+        "corps": {"messages": [{"role": "user", "content": MARQUEUR_MESSAGE}],
+                  "max_tokens": 1024},
+        "chemin_reponse": "content.0.text",
+        "description": "API Messages d'Anthropic",
+    },
+    "simple": {
+        "corps": {"message": MARQUEUR_MESSAGE},
+        "chemin_reponse": "reply",
+        "description": "application maison : {\"message\": …} → {\"reply\": …}",
+    },
+}
+
+
 def _extraire(donnees, chemin):
     """
     Suit un chemin pointé dans une réponse JSON.
@@ -74,8 +111,51 @@ def _injecter(gabarit, message):
     return gabarit
 
 
+def _premier_defini(*valeurs):
+    """La première valeur non-None. `{}` et `""` restent des choix valides."""
+    return next((v for v in valeurs if v is not None), None)
+
+
+def _contient_marqueur(gabarit):
+    """Le gabarit a-t-il un emplacement où mettre le payload ?"""
+    if isinstance(gabarit, dict):
+        return any(_contient_marqueur(v) for v in gabarit.values())
+    if isinstance(gabarit, list):
+        return any(_contient_marqueur(v) for v in gabarit)
+    return gabarit == MARQUEUR_MESSAGE
+
+
+def verifier_gabarit(corps):
+    """
+    Refuse un gabarit de corps qui n'a nulle part où mettre le payload.
+
+    LE défaut qui justifie cette fonction, et il est grave : `_injecter`
+    renvoie le gabarit inchangé quand le marqueur manque. Une faute de frappe
+    (`{mesage}`), un oubli, un corps recopié depuis une documentation — et la
+    campagne envoie le MÊME texte fixe à chaque essai. L'arbitre répond
+    « aucune faille » à chaque fois, et le rapport conclut que la cible est
+    sûre.
+
+    C'est un faux négatif silencieux, la pire erreur pour un outil de
+    sécurité : rien ne lève, rien ne manque, et la conclusion est inversée.
+    D'où un refus AU DÉMARRAGE plutôt qu'un contrôle à l'envoi — on ne veut
+    pas découvrir ça après avoir consommé du débit sur la cible d'un client.
+    """
+    if _contient_marqueur(corps):
+        return
+    raise RuntimeError(
+        f"Le gabarit du corps ne contient pas le marqueur "
+        f"« {MARQUEUR_MESSAGE} » : le payload n'aurait nulle part où aller, "
+        f"et la cible recevrait le même texte fixe à chaque essai.\n"
+        f"  Gabarit lu : {json.dumps(corps, ensure_ascii=False)}\n"
+        f"  Attendu, par exemple : "
+        f'{{"message": "{MARQUEUR_MESSAGE}"}}\n'
+        f"  Vérifie CIBLE_CORPS dans .env (voir .env.example)."
+    )
+
+
 def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
-                          delai=None):
+                          delai=None, profil=None):
     """
     Renvoie une fonction `interroger(message) -> str` qui vise `url`.
 
@@ -83,14 +163,33 @@ def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
     - entetes        : en-têtes HTTP, dont l'authentification ;
     - corps          : gabarit JSON du corps, où "{message}" sera remplacé ;
     - chemin_reponse : où lire le texte dans la réponse JSON ;
-    - delai          : secondes avant abandon.
+    - delai          : secondes avant abandon ;
+    - profil         : un nom de PROFILS_CIBLE, qui fournit `corps` et
+                       `chemin_reponse` pour une forme d'API connue.
+
+    Ordre de priorité : ce qui est passé explicitement, puis le profil, puis
+    `.env`. Un profil est une COMMODITÉ, pas une contrainte : il ne doit
+    jamais écraser un réglage posé à la main.
     """
     from config import CIBLE_HTTP
 
+    if profil is not None and profil not in PROFILS_CIBLE:
+        raise RuntimeError(
+            f"Profil de cible inconnu : « {profil} ».\n"
+            f"  Profils disponibles : {', '.join(PROFILS_CIBLE)}."
+        )
+    reglages = PROFILS_CIBLE.get(profil, {})
+
     entetes = {**CIBLE_HTTP["entetes"], **(entetes or {})}
-    corps = corps if corps is not None else CIBLE_HTTP["corps"]
-    chemin_reponse = chemin_reponse or CIBLE_HTTP["chemin_reponse"]
+    corps = _premier_defini(corps, reglages.get("corps"), CIBLE_HTTP["corps"])
+    chemin_reponse = _premier_defini(
+        chemin_reponse, reglages.get("chemin_reponse"),
+        CIBLE_HTTP["chemin_reponse"])
     delai = delai or CIBLE_HTTP["delai"]
+
+    # AVANT le premier appel : une campagne entière sur un gabarit muet
+    # conclurait « aucune faille » sans avoir rien envoyé de ce qu'on croyait.
+    verifier_gabarit(corps)
 
     def interroger(message):
         donnees = json.dumps(_injecter(corps, message)).encode("utf-8")
@@ -134,3 +233,135 @@ def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
         return texte
 
     return interroger
+
+
+# --- Vérification avant campagne ---------------------------------------------
+
+# Ce qu'on envoie pour vérifier le branchement : anodin, et c'est voulu. Une
+# vérification n'est pas une attaque — elle précède souvent le mandat, et elle
+# ne doit rien laisser dans les journaux de la cible qui ressemble à un test
+# d'intrusion.
+MESSAGE_DE_TEST = "Bonjour, peux-tu me confirmer que tu me reçois ?"
+
+
+def _chemins_plausibles(donnees, prefixe="", profondeur=4):
+    """
+    Les chemins pointés qui mènent à du texte, dans une réponse JSON reçue.
+
+    C'est ce qui transforme « clé absente » en « essaie plutôt ceci » : le
+    chemin correct est presque toujours dans la liste, puisqu'il mène au texte
+    que la cible vient de renvoyer.
+    """
+    if profondeur <= 0:
+        return []
+    trouves = []
+    if isinstance(donnees, dict):
+        for cle, valeur in donnees.items():
+            chemin = f"{prefixe}.{cle}" if prefixe else str(cle)
+            if isinstance(valeur, str) and valeur.strip():
+                trouves.append((chemin, valeur))
+            else:
+                trouves += _chemins_plausibles(valeur, chemin, profondeur - 1)
+    elif isinstance(donnees, list):
+        for indice, valeur in enumerate(donnees[:3]):
+            chemin = f"{prefixe}.{indice}" if prefixe else str(indice)
+            if isinstance(valeur, str) and valeur.strip():
+                trouves.append((chemin, valeur))
+            else:
+                trouves += _chemins_plausibles(valeur, chemin, profondeur - 1)
+    return trouves
+
+
+def tester(url, entetes=None, corps=None, chemin_reponse=None, delai=None,
+           profil=None, afficher=print):
+    """
+    Envoie UN message anodin et rend compte, sans rien juger.
+
+    Pourquoi cette commande existe : les messages d'erreur du projet sont
+    bons, mais ils tombaient PENDANT la campagne, après qu'un payload soit
+    déjà parti. Sur la cible d'un client, sous mandat, c'est consommer du
+    débit autorisé et polluer la piste d'audit pour découvrir une coquille.
+    Un appel anodin en amont déplace toutes ces erreurs avant le mandat.
+
+    Renvoie True si le branchement fonctionne. Sur un chemin de réponse
+    erroné, propose les chemins qui mènent à du texte dans la réponse reçue —
+    le bon y est presque toujours.
+    """
+    from config import CIBLE_HTTP
+
+    reglages = PROFILS_CIBLE.get(profil, {})
+    corps_final = _premier_defini(corps, reglages.get("corps"),
+                                  CIBLE_HTTP["corps"])
+    chemin_final = _premier_defini(chemin_reponse,
+                                   reglages.get("chemin_reponse"),
+                                   CIBLE_HTTP["chemin_reponse"])
+
+    afficher(f"Cible    : {url}")
+    if profil:
+        afficher(f"Profil   : {profil} — {reglages['description']}")
+    afficher(f"Corps    : {json.dumps(corps_final, ensure_ascii=False)}")
+    afficher(f"Chemin   : {chemin_final}")
+    entetes_finaux = {**CIBLE_HTTP["entetes"], **(entetes or {})}
+    # On nomme les en-têtes sans montrer leur valeur : un jeton n'a rien à
+    # faire dans une sortie de terminal qu'on colle dans un rapport ou un chat.
+    afficher(f"En-têtes : {', '.join(entetes_finaux) or 'aucun'}"
+             + (" (valeurs masquées)" if entetes_finaux else ""))
+    afficher("")
+
+    try:
+        verifier_gabarit(corps_final)
+    except RuntimeError as erreur:
+        afficher(f"ÉCHEC — {erreur}")
+        return False
+
+    interroger = construire_cible_http(url, entetes, corps_final,
+                                       chemin_final, delai, profil=None)
+    afficher(f"Envoi    : {MESSAGE_DE_TEST}")
+    try:
+        reponse = interroger(MESSAGE_DE_TEST)
+    except RuntimeError as erreur:
+        afficher(f"\nÉCHEC — {erreur}")
+        _suggerer(url, entetes_finaux, corps_final, delai, afficher)
+        return False
+
+    afficher(f"Réponse  : {reponse[:300]}"
+             + (" […]" if len(reponse) > 300 else ""))
+    afficher("\nBranchement VALIDE : la cible répond et le texte se lit bien.")
+    return True
+
+
+def _suggerer(url, entetes, corps, delai, afficher):
+    """Relit la réponse brute pour proposer un chemin qui mène à du texte."""
+    requete = urllib.request.Request(
+        url, data=json.dumps(_injecter(corps, MESSAGE_DE_TEST)).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json", **entetes})
+    try:
+        with urllib.request.urlopen(requete, timeout=delai or 60) as reponse:
+            donnees = json.loads(reponse.read().decode("utf-8"))
+    except Exception:
+        # La suggestion est un bonus : si elle échoue, l'erreur d'origine
+        # reste affichée et c'est elle qui compte.
+        return
+
+    chemins = _chemins_plausibles(donnees)
+    if not chemins:
+        return
+    afficher("\nChemins qui mènent à du texte dans la réponse reçue :")
+    for chemin, valeur in chemins[:6]:
+        extrait = valeur.replace("\n", " ")[:60]
+        afficher(f"  CIBLE_CHEMIN_REPONSE={chemin}")
+        afficher(f"      → {extrait!r}")
+
+    # Si AUCUN texte reçu ne reprend ce qu'on a envoyé, c'est que la cible ne
+    # l'a pas vu : le corps est faux lui aussi, et corriger le seul chemin ne
+    # suffira pas. Sans cet indice, on lirait « choices.0.message.content »
+    # comme la solution, on relancerait, et la cible répondrait toujours à
+    # côté — en consommant du débit à chaque essai.
+    extrait_envoye = MESSAGE_DE_TEST[:20]
+    if not any(extrait_envoye in valeur for _, valeur in chemins):
+        afficher("\nAttention : aucun de ces textes ne reprend le message "
+                 "envoyé.\n  La cible ne l'a donc pas reçu là où elle "
+                 "l'attendait : CIBLE_CORPS est à corriger aussi, pas "
+                 "seulement le chemin.\n  Essaie --profil-cible "
+                 f"{', '.join(PROFILS_CIBLE)} pour partir d'une forme connue.")
