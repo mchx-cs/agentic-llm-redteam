@@ -322,7 +322,38 @@ full of quotes and newlines travels intact and cannot inject JSON. Every failure
 HTTP error, unreachable host, non-JSON reply, wrong response path — is reported as an
 instruction rather than a stack trace.
 
-Only ever point this at a system you own or have **written authorisation** to test.
+**Two things decide which payloads get sent, and only one of them is discoverable.**
+
+Reconnaissance asks the target six harmless questions and a model extracts *facts* from
+the answers — its role, the subjects it declines, whether it mentions having
+instructions, whether it has tools, whether it writes code, whether it will work on a
+document you hand it. Those facts gate whole families: no declared tools, no
+excessive-agency probes; "I don't write code", no package-hallucination probes.
+
+But some probes depend on the application *around* the model, and the model cannot
+know about it — a chatbot has no idea whether its output ends up in a terminal, gets
+rendered as Markdown by some client, or reaches a database. Asking it would invite an
+answer it has no way to ground, and the planner would treat that invention as an
+observed fact. So you declare it:
+
+```bash
+python main.py --cible https://host/chat --contexte rendu-riche,base-donnees
+```
+
+| Value | Declares that | Unlocks |
+|---|---|---|
+| `terminal` | the output is shown in a terminal | `ansiescape` (2 probes) |
+| `rendu-riche` | a client renders the output's Markdown or HTML | `web_injection` (8) |
+| `base-donnees` | a database or template engine sits behind it | `exploitation` (2) |
+
+Declare nothing and those twelve probes are skipped — each with a stated reason that
+names the flag to turn it on. That is deliberate: they are not merely untried there,
+they are *untestable*, and running them anyway would burn attempts while the report
+claimed a coverage it did not have.
+
+Only ever point this at a system you own or have **written authorisation** to test —
+and against a remote target that is not a suggestion but a precondition: the campaign
+refuses to start without a valid mandate (see *Authorisation and audit trail* below).
 
 ### Producing a report
 
