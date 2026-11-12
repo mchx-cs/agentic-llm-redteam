@@ -391,6 +391,15 @@ instruction is *medium*. A penetration test whose severities change between runs
 indefensible, and the judge is already non-deterministic — stacking a second source of
 variance on top of it would be worse.
 
+A run that finds nothing says so plainly: *"0 findings in 3 attempts does not
+demonstrate the target is safe"*, with what it would take to claim otherwise (about 30
+independent attempts of one technique to rule out a 10% residual rate). It deliberately
+prints **no** confidence bound for the campaign itself — attempts are adaptive and
+heterogeneous, so the binomial model doesn't apply, and a number that looked rigorous
+without being so would be worse than none. The one place a bound *is* justified is the
+replay check, where the same payload is re-sent to the same target: "the value came back
+2 times out of 3" reads as 67%, when three trials only support a range of 21–94%.
+
 Every report ends with what was **not** tested and why — a tool that hides its coverage
 gives a false sense of security, which is worse than no report at all. With the payload
 library still empty, that section is currently the longest part of the document.
@@ -565,7 +574,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | **Done** |
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | **Done** |
 | **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, campaign output excerpt in this README | **Done** |
-| **13** | Statistically defensible results — Wilson bound on "no findings", ASR, explicit denominator states | Planned |
+| **13** | Statistically defensible results — Wilson bound on "no findings", ASR, explicit denominator states | In progress |
 | **14** | Engagement-grade evidence — SHA-256 hashing, case IDs, target telemetry, MITRE ATLAS mapping | Planned |
 
 Phases 1, 6 and 8 are what it takes to run the tool against systems you own. Phases 2,

@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 455 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 498 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -93,6 +93,7 @@ evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
 audit.py           # mandat exigé avant de démarrer + piste d'audit JSONL au fil de l'eau
+statistiques.py    # ce qu'un résultat borne — et le refus de borner l'indépendance absente
 rapport.py         # resultat.json (vérité) → rapport.md (rendu), gravité par règles
 exemples/
   rapport-demo.md  # rapport d'exemple commité, abrégé (--abreger)
@@ -160,7 +161,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | **Fait** |
 | 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, extrait de sortie au README | **Fait** |
-| 13 | **Résultats statistiquement défendables** : borne de Wilson sur « aucun constat », ASR, états du dénominateur (écarts 1 à 3 de l'audit OWASP) | Prévu |
+| 13 | **Résultats statistiquement défendables** : borne de Wilson sur « aucun constat », ASR, états du dénominateur (écarts 1 à 3 de l'audit OWASP) | En cours |
 | 14 | **Traçabilité de niveau mission** : hash SHA-256 des preuves, Case ID, télémétrie de la cible, MITRE ATLAS (écarts 5 à 7) | Prévu |
 
 Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
@@ -1600,6 +1601,55 @@ Advisory et le cadrage (1.5, 1.6). Les 144 pages n'ont pas été auditées.
 supposent une cible agentique et un mandat d'exploitation. Cet outil est un scanner à un
 tour contre un chatbot. Ce n'est pas un défaut, mais le rapport devrait le nommer,
 puisque le manuel exige que la couverture dise ce qui n'a pas été tenté.
+
+**Phase 13 commencée : le bounded null (2026-11-12).** Premier écart de l'audit OWASP
+traité, et le plus sévère : c'était le dernier endroit où cet outil laissait croire à
+une sécurité qu'il n'avait pas vérifiée.
+
+`statistiques.py` fournit les trois outils que le manuel nomme : règle de trois
+(`borne_superieure_zero`), intervalle de Wilson (`intervalle_wilson`), et le choix de N
+à partir du taux à écarter (`essais_pour_ecarter`). Les valeurs sont vérifiées contre
+celles que le manuel cite lui-même — 0/100 → 3 %, 0/300 → 1 %, 2/50 → 1,1 à 13,5 % —
+donc contre une source externe, pas contre notre propre implémentation.
+
+**Mais le cœur du module est un REFUS de calculer.** Le manuel le pose juste après :
+*« Do not apply binomial confidence bounds to adaptive or dependent attempts without a
+justified statistical model. »* Or une campagne de ce projet est adaptative (le prochain
+essai dépend des réponses précédentes) et hétérogène (des sondes de familles
+différentes). Appliquer 3/N à ses essais produirait un chiffre qui a l'air rigoureux
+sans l'être — précisément le faux confort que cet outil combat.
+
+D'où `resumer(..., independants=)`, **sans valeur par défaut** : l'appelant est le seul
+à savoir si ses essais étaient indépendants, et un défaut quelconque ferait apparaître
+ou disparaître des bornes au premier oubli.
+
+**Le seul endroit i.i.d. du projet est le REJEU** — même payload, même cible, essais
+indépendants. C'est donc le seul qui reçoit une borne, et elle sert : « la valeur revient
+2 fois sur 3 » se lit spontanément comme 67 %, alors que trois essais ne permettent
+d'affirmer qu'une **fourchette de 21 % à 94 %**. La fréquence d'une fuite est exactement
+ce qu'un client voudra savoir, et exactement ce que trois rejeux ne disent pas.
+
+Ce que le rapport dit maintenant quand il ne trouve rien :
+
+```
+**0 constat sur 3 essai(s) ne démontre pas que la cible est sûre.**
+Un zéro borne le taux de succès réel, il ne l'annule pas.
+
+Aucune borne chiffrée n'est donnée, et c'est délibéré — essais adaptatifs et
+hétérogènes […] Le modèle binomial ne s'applique pas.
+
+- Pour écarter un taux résiduel de 10 % sur UNE technique, il faudrait environ
+  30 essais indépendants de cette même technique.
+- […] 5 % […] 60 essais […]
+
+Ce rapport mesure donc une COUVERTURE, pas une absence de vulnérabilité.
+```
+
+Le bloc est placé AVANT la liste des familles : un lecteur qui parcourt la section doit
+rencontrer la limite avant les résultats.
+
+**Ce qui reste de la phase 13** : l'ASR et pass@k (écart 2), puis les états du
+dénominateur — timeout, bloqué en amont, non scorable, session compromise (écart 3).
 
 ## Cadre légal
 

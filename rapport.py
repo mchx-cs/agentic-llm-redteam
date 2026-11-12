@@ -24,6 +24,7 @@ sécurité, ce qui est pire que pas de rapport du tout.
 
 import json
 import re
+import statistiques
 from agents.planificateur import grouper_par_motif
 from datetime import datetime
 from pathlib import Path
@@ -166,6 +167,14 @@ def construire(resultat, cible="inconnue"):
         # l'ordre des essais. Sans cette trace, un lecteur ne pourrait pas
         # contester le choix des essais : il verrait un ordre, pas un motif.
         "adaptation": resultat.get("observations") or [],
+        # Ce que ce décompte permet d'affirmer. `independants=False` est le
+        # point de la chose : une campagne choisit chaque essai d'après les
+        # réponses précédentes et mélange des familles de sondes, donc aucune
+        # borne binomiale ne s'y applique. Le dire vaut mieux qu'un chiffre
+        # qui aurait l'air rigoureux sans l'être.
+        "portee": statistiques.resumer(
+            len(constats), len(lances), independants=False,
+            quoi="essais de campagne"),
         "constats": constats,
         "journal": resultat.get("journal", {}),
     }
@@ -177,6 +186,62 @@ def construire(resultat, cible="inconnue"):
 # du contexte, trop court pour republier une attaque ou les réponses
 # verbatim d'un client.
 LONGUEUR_EXTRAIT = 300
+
+
+def _bloc_portee(portee, nb_constats):
+    """
+    Ce que le décompte d'essais permet d'affirmer — et surtout pas.
+
+    Le GenAI Red Teaming Manual (§7.5) : « A test round with zero observed
+    successes does not demonstrate that the system is secure; it only bounds
+    how large the true attack success rate could still be. »
+
+    Deux cas, et le second est celui qui manquait :
+    - des constats ont été trouvés → le fait est établi, cette cible a cédé ;
+    - aucun constat → c'est là que le rapport mentait par omission. Il faut
+      dire que rien n'est démontré, ET pourquoi aucune borne chiffrée n'est
+      donnée (les essais d'une campagne sont adaptatifs et hétérogènes, donc
+      le modèle binomial ne s'y applique pas), ET ce qu'il faudrait pour
+      affirmer quelque chose.
+    """
+    if not portee:
+        return []
+
+    essais = portee["essais"]
+    lignes = ["**Ce que ce résultat permet d'affirmer**", ""]
+
+    if nb_constats:
+        lignes += [
+            f"{nb_constats} constat(s) sur {essais} essai(s). Un constat "
+            f"établit un fait : cette cible a cédé au moins une fois. Il ne "
+            f"dit pas à quelle fréquence — les attaques sont probabilistes, "
+            f"et le rejeu indiqué sur chaque constat est la seule mesure de "
+            f"reproductibilité donnée ici.",
+            "",
+        ]
+        return lignes
+
+    lignes += [
+        f"**0 constat sur {essais} essai(s) ne démontre pas que la cible est "
+        f"sûre.** Un zéro borne le taux de succès réel, il ne l'annule pas.",
+        "",
+        f"Aucune borne chiffrée n'est donnée, et c'est délibéré — "
+        f"{portee['explication']}",
+        "",
+    ]
+    for taux in (0.10, 0.05):
+        lignes.append(
+            f"- Pour écarter un taux de succès résiduel de {taux:.0%} sur UNE "
+            f"technique, il faudrait environ "
+            f"{statistiques.essais_pour_ecarter(taux)} essais indépendants de "
+            f"cette même technique.")
+    lignes += [
+        "",
+        "Ce rapport mesure donc une COUVERTURE, pas une absence de "
+        "vulnérabilité.",
+        "",
+    ]
+    return lignes
 
 
 def _extrait(texte, abreger):
@@ -208,6 +273,19 @@ def _bloc_constat(constat, abreger=False):
     if constat["verification"]:
         lignes.append(f"- **Rejeu** : {constat['verification']['statut']} — "
                       f"{constat['verification']['explication']}")
+        # La FRÉQUENCE d'une fuite est ce qu'un client voudra savoir, et
+        # « 2 fois sur 3 » se lit spontanément comme 67 % — alors que trois
+        # essais ne permettent d'affirmer qu'une fourchette très large. Le
+        # rejeu étant le seul endroit i.i.d. du projet, c'est aussi le seul
+        # où cette fourchette est justifiée.
+        portee = constat["verification"].get("portee")
+        if portee and portee.get("borne"):
+            lignes.append(
+                f"  - Taux de reproduction : entre "
+                f"{portee['borne']['basse']:.0%} et "
+                f"{portee['borne']['haute']:.0%} "
+                f"({portee['borne']['methode']}, {statistiques.CONFIANCE:.0%}) "
+                f"— sur {portee['essais']} rejeux seulement.")
     if constat["votes"]:
         lignes.append(f"- **Votes du juge** : {constat['votes']}")
     if constat["tronquee"]:
@@ -351,6 +429,13 @@ def rendre_markdown(rapport, abreger=False):
             f"**incomplète**, y compris pour les familles dites testées.",
             "",
         ]
+
+    # --- Ce que ce décompte permet d'affirmer -------------------------------
+    # Exigé par le GenAI Red Teaming Manual (§7.5) : un zéro succès ne prouve
+    # rien, il borne. Placé AVANT la liste des familles, parce qu'un lecteur
+    # qui parcourt la section doit rencontrer la limite avant les résultats.
+    lignes += _bloc_portee(rapport.get("portee"), len(rapport["constats"]))
+
     lignes += ["**Familles testées**", ""]
     lignes += [f"- `{f}`" for f in couverture["familles_testees"]] or \
               ["- aucune"]

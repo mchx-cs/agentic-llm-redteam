@@ -332,3 +332,99 @@ class TestFauxTrouDansLeRapport:
         ecartee = {"technique": "x", "famille_owasp": "LLM06",
                    "motifs": ["aucun modèle"]}
         rendre_markdown(construire(_resultat(ecartees=[ecartee])))
+
+
+class TestBoundedNull:
+    """
+    Le GenAI Red Teaming Manual (§7.5) : « A test round with zero observed
+    successes does not demonstrate that the system is secure. » C'etait le
+    dernier endroit ou cet outil laissait croire a une securite non verifiee.
+    """
+
+    def test_zero_constat_dit_qu_il_ne_demontre_rien(self):
+        rendu = rendre_markdown(construire(_resultat(
+            lances=[_payload()] * 3)))
+        assert "ne démontre pas que la cible est sûre" in rendu
+
+    def test_zero_constat_dit_ce_qu_il_faudrait(self):
+        # Le seul contenu actionnable quand on n'a rien trouve.
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()] * 3)))
+        assert "30 essais indépendants" in rendu     # pour ecarter 10 %
+        assert "60 essais indépendants" in rendu     # pour ecarter 5 %
+
+    def test_zero_constat_refuse_de_donner_une_borne_chiffree(self):
+        # LE point : une campagne est adaptative et heterogene, donc aucune
+        # borne binomiale ne s'y applique. Un chiffre aurait l'air rigoureux
+        # sans l'etre.
+        rapport = construire(_resultat(lances=[_payload()] * 3))
+        assert rapport["portee"]["borne"] is None
+        rendu = rendre_markdown(rapport)
+        assert "c'est délibéré" in rendu
+        assert "binomial" in rendu
+
+    def test_la_conclusion_est_une_couverture_pas_une_absence(self):
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()] * 3)))
+        assert "COUVERTURE, pas une absence de vulnérabilité" in rendu
+
+    def test_avec_constat_le_ton_change(self):
+        # Un constat etablit un FAIT ; la question de la borne ne se pose pas
+        # de la meme facon.
+        rendu = rendre_markdown(construire(_resultat(
+            constats=[_constat()], lances=[_payload()] * 3)))
+        assert "a cédé au moins une fois" in rendu
+        assert "ne démontre pas que la cible est sûre" not in rendu
+
+    def test_le_bloc_precede_les_familles(self):
+        # Un lecteur qui parcourt la section doit rencontrer la limite AVANT
+        # les resultats, pas apres.
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()] * 3)))
+        assert (rendu.index("Ce que ce résultat permet d'affirmer")
+                < rendu.index("**Familles testées**"))
+
+    def test_un_ancien_resultat_sans_portee_ne_leve_pas(self):
+        rapport = construire(_resultat(lances=[_payload()]))
+        del rapport["portee"]
+        rendre_markdown(rapport)
+
+    def test_la_portee_est_dans_le_json(self):
+        # Le JSON reste la source de verite : les comptes bruts y sont, pour
+        # qu'un lecteur puisse refaire le calcul.
+        rapport = construire(_resultat(lances=[_payload()] * 3))
+        assert rapport["portee"]["essais"] == 3
+        assert rapport["portee"]["succes"] == 0
+        assert rapport["portee"]["independants"] is False
+
+
+class TestPorteeDuRejeu:
+    """
+    Le rejeu est le SEUL endroit i.i.d. du projet, donc le seul ou une borne
+    est justifiee. Et elle sert : « 2 fois sur 3 » se lit spontanement comme
+    67 %, alors que trois essais ne donnent qu'une fourchette tres large.
+    """
+
+    @staticmethod
+    def _constat_avec_rejeu(concordantes, essais=3):
+        import statistiques
+        constat = _constat(rejeu="confirmee")
+        constat["verification"]["portee"] = statistiques.resumer(
+            concordantes, essais, independants=True, quoi="rejeux")
+        return constat
+
+    def test_la_fourchette_est_affichee(self):
+        rendu = rendre_markdown(construire(_resultat(
+            constats=[self._constat_avec_rejeu(2)], lances=[_payload()])))
+        assert "Taux de reproduction" in rendu
+        assert "Wilson" in rendu
+
+    def test_elle_est_large_sur_trois_rejeux(self):
+        # C'est tout l'interet : interdire de lire « 67 % » comme une mesure.
+        rendu = rendre_markdown(construire(_resultat(
+            constats=[self._constat_avec_rejeu(2)], lances=[_payload()])))
+        assert "entre 21% et 94%" in rendu
+        assert "sur 3 rejeux seulement" in rendu
+
+    def test_un_ancien_constat_sans_portee_ne_leve_pas(self):
+        rendu = rendre_markdown(construire(_resultat(
+            constats=[_constat(rejeu="confirmee")], lances=[_payload()])))
+        assert "Rejeu" in rendu
+        assert "Taux de reproduction" not in rendu

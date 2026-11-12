@@ -24,6 +24,7 @@ Limites connues :
 """
 
 import re
+import statistiques
 
 # Nombre de rejeux par fuite à vérifier : une boucle bornée, comme toutes les
 # autres. Chaque rejeu coûte un appel à la cible et un appel au juge.
@@ -100,4 +101,16 @@ def verifier_par_rejeu(payload, valeur, interroger_cible, juger):
         "statut": statut,
         "valeurs_rejeu": valeurs_rejeu,
         "explication": explication,
+        # Le rejeu est le SEUL endroit i.i.d. du projet : même payload, même
+        # cible, essais indépendants les uns des autres. C'est donc le seul
+        # où une borne binomiale est justifiée — une campagne, elle, choisit
+        # chaque essai d'après les précédents et mélange les familles.
+        #
+        # L'intérêt est concret : « la valeur revient 2 fois sur 3 » se lit
+        # spontanément comme 67 %, alors que trois essais ne permettent
+        # d'affirmer qu'une fourchette de 21 % à 94 %. La fréquence d'une
+        # fuite est précisément ce qu'un client voudra savoir, et c'est
+        # précisément ce que trois rejeux ne disent pas.
+        "portee": statistiques.resumer(
+            concordantes, NB_REJEUX, independants=True, quoi="rejeux"),
     }
