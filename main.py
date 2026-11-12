@@ -41,7 +41,7 @@ MAX_ESSAIS = 3
 
 
 def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
-                    contexte=(), adaptatif=True):
+                    contexte=(), adaptatif=True, seulement=(), sauf=()):
     """
     Lance une campagne contre `interroger_cible`.
 
@@ -82,7 +82,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
 
     # --- 2. Planification : que lancer, et dans quel ordre ? ---------------
     print("\n--- Plan ---")
-    plan = planifier(fiche, MAX_ESSAIS)
+    plan = planifier(fiche, MAX_ESSAIS, seulement, sauf)
     print(resumer_plan(plan))
 
     if not plan["essais"]:
@@ -241,6 +241,20 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
         # L'issue de chaque essai, pour que le rapport calcule un ASR sur un
         # dénominateur DÉFINI plutôt que sur le nombre d'envois.
         "etats": etats,
+        # Le périmètre demandé : le rapport DOIT le dire, sinon une campagne
+        # restreinte à une famille présenterait sa couverture comme complète.
+        "perimetre": {"seulement": list(seulement), "sauf": list(sauf)},
+        # Les essais sont-ils i.i.d. ? Deux conditions, toutes deux
+        # nécessaires : pas d'adaptation (sinon le prochain dépend des
+        # réponses précédentes) et une seule technique lancée (sinon des
+        # payloads de familles différentes ne partagent pas la même
+        # probabilité de succès). Quand les deux sont vraies — typiquement
+        # `--seulement X --sans-adaptation` — le rapport peut enfin borner son
+        # « aucun constat », ce qui est précisément ce que pass@k demande.
+        "essais_independants": (
+            not adaptatif
+            and len({e["technique"] for e in lances}) <= 1
+            and len(lances) > 0),
         "ecourtee": ecourtee,
     })
 
@@ -250,6 +264,8 @@ def _terminer(resultat):
     resultat.setdefault("ecourtee", None)
     resultat.setdefault("lances", [])
     resultat.setdefault("etats", [])
+    resultat.setdefault("perimetre", {"seulement": [], "sauf": []})
+    resultat.setdefault("essais_independants", False)
     resultat.setdefault("observations", [])
     resultat.setdefault("payloads", _provenance_des_payloads())
     resultat["journal"] = journal()
@@ -278,6 +294,17 @@ def _provenance_des_payloads():
             "perime": age is not None and age > AGE_INSTANTANE_SUSPECT}
 
 
+def perimetre(valeur):
+    """Découpe « dan, encoding » en motifs propres, sans vide ni doublon."""
+    vus, motifs = set(), []
+    for motif in (valeur or "").split(","):
+        motif = motif.strip()
+        if motif and motif.lower() not in vus:
+            vus.add(motif.lower())
+            motifs.append(motif)
+    return motifs
+
+
 def cli(arguments=None):
     """Point d'entrée en ligne de commande (voir [project.scripts])."""
     parseur = argparse.ArgumentParser(description="Lance une campagne de test.")
@@ -295,6 +322,17 @@ def cli(arguments=None):
         help="tronquer payloads et réponses dans rapport.md (pour partager "
              "un rapport sans réponses verbatim, ou publier un exemple). "
              "resultat.json garde tout.")
+    parseur.add_argument(
+        "--seulement", default="", metavar="MOTIFS",
+        help="restreindre la campagne, par famille OWASP (LLM07), module "
+             "garak (dan) ou technique (fuite-prompt-systeme) ; plusieurs "
+             "motifs séparés par des virgules. Le rapport dit toujours que "
+             "la campagne était restreinte.")
+    parseur.add_argument(
+        "--sauf", default="", metavar="MOTIFS",
+        help="écarter des techniques, mêmes motifs que --seulement. Sert à "
+             "respecter une portée de mandat qui exclut des techniques ; "
+             "l'emporte sur --seulement.")
     parseur.add_argument(
         "--sans-adaptation", action="store_true", dest="sans_adaptation",
         help="suivre le plan statique sans rien apprendre des réponses. "
@@ -394,7 +432,9 @@ def cli(arguments=None):
         resultat = lancer_campagne(
             choisir_cible(arguments.cible, arguments.profil_cible),
             nom_cible, piste, contexte,
-            adaptatif=not arguments.sans_adaptation)
+            adaptatif=not arguments.sans_adaptation,
+            seulement=perimetre(arguments.seulement),
+            sauf=perimetre(arguments.sauf))
     except RuntimeError as panne:
         # La cible ne répond pas comme prévu : hôte injoignable, erreur HTTP,
         # réponse non-JSON, chemin de réponse erroné. Le message de

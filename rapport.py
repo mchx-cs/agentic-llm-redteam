@@ -176,13 +176,23 @@ def construire(resultat, cible="inconnue"):
         # réponses précédentes et mélange des familles de sondes, donc aucune
         # borne binomiale ne s'y applique. Le dire vaut mieux qu'un chiffre
         # qui aurait l'air rigoureux sans l'être.
+        # `independants` n'est plus toujours faux : une campagne restreinte à
+        # UNE technique et lancée sans adaptation produit des essais i.i.d., et
+        # son « aucun constat » peut alors être borné pour de bon.
         "portee": statistiques.resumer(
-            len(constats), len(lances), independants=False,
-            quoi="essais de campagne"),
+            len(constats), len(lances),
+            independants=bool(resultat.get("essais_independants")),
+            quoi="essais de la même technique"
+                 if resultat.get("essais_independants")
+                 else "essais de campagne"),
         # ASR de bout en bout, sur un dénominateur DÉFINI : les essais que
         # l'oracle a su trancher. Un verdict illisible ou une réponse coupée
         # en sont exclus — ce sont des mesures manquantes, pas des victoires
         # de la cible (manuel OWASP §7.5).
+        # Une campagne restreinte ne doit JAMAIS présenter sa couverture
+        # comme complète : c'est le mensonge par omission que cette section
+        # existe pour empêcher.
+        "perimetre": resultat.get("perimetre") or {"seulement": [], "sauf": []},
         "taux_de_succes": statistiques.taux_de_succes(
             resultat.get("etats") or []),
         "constats": constats,
@@ -253,6 +263,35 @@ def _bloc_atlas(familles):
               "primaire consultable — un ID ATLAS plausible mais non vérifié "
               "serait pire qu'une case vide.")
     lignes += ["", f"Source : {SOURCE_ATLAS}.", ""]
+    return lignes
+
+
+def _bloc_perimetre(perimetre):
+    """
+    Dire qu'une campagne a été restreinte, et par quoi.
+
+    Non négociable : une campagne lancée avec `--seulement LLM07` ne teste
+    qu'une famille, et une section Couverture qui ne le signalerait pas
+    laisserait croire que tout le reste a été tenté sans rien trouver. C'est
+    exactement le mensonge par omission que cette section existe pour
+    empêcher — même faute que le « aucun constat » sans borne.
+    """
+    if not perimetre:
+        return []
+    seulement, sauf = perimetre.get("seulement"), perimetre.get("sauf")
+    if not seulement and not sauf:
+        return []
+
+    lignes = ["> ⚠️ **Campagne RESTREINTE.** La couverture ci-dessous ne "
+              "porte que sur le périmètre demandé :"]
+    if seulement:
+        lignes.append(f">   - limitée à : {', '.join(seulement)}")
+    if sauf:
+        # Formulé comme une exclusion volontaire : en mission, c'est
+        # généralement la portée du mandat qui l'impose.
+        lignes.append(f">   - exclusions demandées : {', '.join(sauf)}")
+    lignes += ["> Tout le reste n'a pas été tenté, et n'est donc ni testé ni "
+               "écarté pour un motif technique.", ""]
     return lignes
 
 
@@ -346,18 +385,36 @@ def _bloc_portee(portee, nb_constats, taux=None):
         f"**0 constat sur {essais} essai(s) ne démontre pas que la cible est "
         f"sûre.** Un zéro borne le taux de succès réel, il ne l'annule pas.",
         "",
-        f"Aucune borne chiffrée n'est donnée, et c'est délibéré — "
-        f"{portee['explication']}",
-        "",
     ]
-    for taux in (0.10, 0.05):
-        lignes.append(
-            f"- Pour écarter un taux de succès résiduel de {taux:.0%} sur UNE "
-            f"technique, il faudrait environ "
-            f"{statistiques.essais_pour_ecarter(taux)} essais indépendants de "
-            f"cette même technique.")
+
+    if portee.get("borne"):
+        # Cas i.i.d. : une seule technique, aucune adaptation. La borne vaut,
+        # et c'est la seule configuration où on a le droit de la donner.
+        lignes += [
+            f"Ici les essais SONT indépendants — même technique, sans "
+            f"adaptation — donc la borne vaut : {portee['explication']}",
+            "",
+            f"Pour descendre cette borne à 5 %, il faudrait "
+            f"{statistiques.essais_pour_ecarter(0.05)} essais ; à 1 %, "
+            f"{statistiques.essais_pour_ecarter(0.01)}.",
+            "",
+        ]
+    else:
+        lignes += [
+            f"Aucune borne chiffrée n'est donnée, et c'est délibéré — "
+            f"{portee['explication']}",
+            "",
+        ]
+        for taux in (0.10, 0.05):
+            lignes.append(
+                f"- Pour écarter un taux de succès résiduel de {taux:.0%} sur "
+                f"UNE technique, il faudrait environ "
+                f"{statistiques.essais_pour_ecarter(taux)} essais "
+                f"indépendants de cette même technique — ce qu'obtient "
+                f"`--seulement <technique> --sans-adaptation`.")
+        lignes.append("")
+
     lignes += [
-        "",
         "Ce rapport mesure donc une COUVERTURE, pas une absence de "
         "vulnérabilité.",
         "",
@@ -550,6 +607,8 @@ def rendre_markdown(rapport, abreger=False):
             f"**incomplète**, y compris pour les familles dites testées.",
             "",
         ]
+
+    lignes += _bloc_perimetre(rapport.get("perimetre"))
 
     # --- Ce que ce décompte permet d'affirmer -------------------------------
     # Exigé par le GenAI Red Teaming Manual (§7.5) : un zéro succès ne prouve

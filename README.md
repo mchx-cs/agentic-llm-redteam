@@ -591,7 +591,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **10** | Engineering baseline — LLM-free unit tests, CI, packaging, CLI entry point | **Done** |
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | **Done** |
 | **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, campaign output excerpt in this README | **Done** |
-| **13** | Statistically defensible results — Wilson bound on "no findings", ASR, explicit denominator states | In progress |
+| **13** | Statistically defensible results — Wilson bound on "no findings", ASR, explicit denominator states | **Done** |
 | **14** | Engagement-grade evidence — SHA-256 hashing, case IDs, target telemetry, MITRE ATLAS mapping | **Done** |
 
 Phases 1, 6 and 8 are what it takes to run the tool against systems you own. Phases 2,

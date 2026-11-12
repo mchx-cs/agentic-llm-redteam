@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 547 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 566 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -162,7 +162,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | **Fait** |
 | 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, extrait de sortie au README | **Fait** |
-| 13 | **Résultats statistiquement défendables** : borne de Wilson sur « aucun constat », ASR, états du dénominateur (écarts 1 à 3 de l'audit OWASP) | En cours |
+| 13 | **Résultats statistiquement défendables** : borne de Wilson sur « aucun constat », ASR, états du dénominateur (écarts 1 à 3 de l'audit OWASP) | **Fait** |
 | 14 | **Traçabilité de niveau mission** : hash SHA-256 des preuves, Case ID, télémétrie de la cible, MITRE ATLAS (écarts 5 à 7) | **Fait** |
 
 Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
@@ -1789,6 +1789,74 @@ llama3.2 comme juge plafonne à 50 % de rappel. Or l'adaptation se nourrit des V
 changer au bras statique. La mesure **sous-estime** donc le gain. Conséquence pratique :
 si l'adaptatif gagne malgré ça, c'est une borne basse du gain réel et le résultat est
 solide ; s'il ne gagne pas, on ne peut rien conclure.
+
+**Restreindre le périmètre d'une campagne : `--seulement` et `--sauf`
+(2026-11-12).** Trois besoins, un seul mécanisme — et le premier est un écart
+contractuel que personne n'avait vu.
+
+1. **LE MANDAT.** `autorisation.example.json` déclare une portée qui mentionne
+   « techniques exclues », et `rapport.py` l'AFFICHE fidèlement… mais rien ne
+   l'appliquait. Un rapport qui cite un mandat excluant une technique, puis documente
+   le lancement de cette technique, n'est pas opposable. Même famille de défaut que tous
+   les autres trouvés cette semaine : un document qui affirme ce que le code ne garantit
+   pas, sauf qu'ici c'est le contrat.
+2. **Reproduire un constat** après correction, sans relancer toute la campagne — et sans
+   que l'adaptation change d'avis en route.
+3. **pass@k**, qui exige de rejouer la MÊME technique k fois, impossible tant que le
+   tour de rôle balaye les modules.
+
+Un seul motif couvre les trois granularités utiles — famille OWASP (`LLM07`), module
+garak (`dan`), technique (`fuite-prompt-systeme`) — parce qu'en demander trois serait
+trois options à retenir pour le même geste. `--sauf` l'emporte sur `--seulement` : une
+exclusion vient du mandat, et un mandat ne se contourne pas par une autre option de la
+même commande.
+
+Le filtre s'applique **avant** les prérequis, pour qu'une technique hors périmètre ne
+soit pas écartée pour « aucun outil détecté », ce qui masquerait la vraie raison.
+
+**Et le rapport DIT qu'il a été restreint**, en tête de la section Couverture. Une
+campagne lancée avec `--seulement LLM07` ne teste qu'une famille, et une couverture
+silencieuse là-dessus laisserait croire que tout le reste a été tenté sans rien trouver.
+C'est le même mensonge par omission que le « aucun constat » sans borne.
+
+**Conséquence inattendue : pass@k tombe tout seul, et la phase 13 se termine.** Le
+bounded null refusait TOUJOURS de borner, parce qu'une campagne est adaptative et
+hétérogène. Mais `--seulement <technique> --sans-adaptation` produit des essais
+**i.i.d.** — même technique, aucun apprentissage. `essais_independants` est donc
+calculé et non plus supposé faux, et le rapport bascule :
+
+```
+Ici les essais SONT indépendants — même technique, sans adaptation — donc la
+borne vaut : 0 succès sur 30 essais de la même technique ne démontre rien : le
+taux réel peut encore atteindre 10% (borne supérieure à 95%).
+
+Pour descendre cette borne à 5 %, il faudrait 60 essais ; à 1 %, 300.
+```
+
+Un défaut d'affichage a été attrapé au passage : le bloc disait « aucune borne n'est
+donnée » **puis** donnait la borne. Les deux cas sont maintenant distincts, et celui qui
+refuse de borner dit comment obtenir l'indépendance au lieu de laisser croire qu'aucune
+borne n'est possible.
+
+**Première mesure du gain de l'adaptation sur la VRAIE cible (2026-11-12).** 5 paires ×
+8 essais contre `demo`, juge local, `--sans-adaptation` comme témoin :
+
+| | constats (moy.) | modules couverts |
+|---|---|---|
+| adaptatif | **0,40** | 7,20 |
+| statique | 0,00 | 8,00 |
+
+Écarts par paire : `[0, 1, 1, 0, 0]` — l'adaptatif fait mieux 2 fois, **jamais moins
+bien**, et le bras statique n'a rien trouvé sur 40 essais.
+
+**Ce n'est PAS significatif**, et il faut le dire : test des signes sur 2 paires non
+nulles toutes favorables → **p = 0,25**, loin de 0,05. Il faudrait au moins 5 paires non
+nulles dans le même sens. Conclure ici serait commettre une troisième fois le piège déjà
+consigné deux fois (« conclusion hâtive sur un tirage »).
+
+Ce que la mesure établit quand même : **l'arbitrage couverture/constats est réel et
+chiffré** — l'adaptation échange 0,8 module de couverture contre 0,4 constat. C'est la
+première fois qu'on l'observe sur une vraie cible et non en simulation.
 
 ## Cadre légal
 

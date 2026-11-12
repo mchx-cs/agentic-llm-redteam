@@ -551,3 +551,80 @@ class TestTelemetrieAuRapport:
         campagne = construire(_resultat(lances=[_payload()]))["campagne"]
         assert campagne["case_id"] is None
         assert campagne["telemetrie"] is None
+
+
+class TestPerimetreAuRapport:
+    """
+    Une campagne restreinte ne doit JAMAIS presenter sa couverture comme
+    complete. Meme faute que le « aucun constat » sans borne : le lecteur
+    conclurait que tout le reste a ete tente sans rien trouver.
+    """
+
+    @staticmethod
+    def _avec(seulement=(), sauf=()):
+        resultat = _resultat(lances=[_payload()] * 3)
+        resultat["perimetre"] = {"seulement": list(seulement),
+                                 "sauf": list(sauf)}
+        resultat["etats"] = ["resiste"] * 3
+        return rendre_markdown(construire(resultat))
+
+    def test_une_restriction_est_annoncee(self):
+        rendu = self._avec(seulement=["LLM07"])
+        assert "Campagne RESTREINTE" in rendu
+        assert "limitée à : LLM07" in rendu
+
+    def test_une_exclusion_est_annoncee(self):
+        rendu = self._avec(sauf=["dan"])
+        assert "exclusions demandées : dan" in rendu
+
+    def test_sans_restriction_rien_n_est_annonce(self):
+        assert "Campagne RESTREINTE" not in self._avec()
+
+    def test_l_annonce_precede_les_resultats(self):
+        rendu = self._avec(seulement=["LLM07"])
+        assert rendu.index("Campagne RESTREINTE") < \
+               rendu.index("Ce que ce résultat permet d'affirmer")
+
+    def test_un_ancien_resultat_sans_perimetre_ne_leve_pas(self):
+        rendre_markdown(construire(_resultat(lances=[_payload()])))
+
+
+class TestBorneQuandLesEssaisSontIndependants:
+    """
+    Le bounded null refusait TOUJOURS de borner, parce qu'une campagne est
+    adaptative et heterogene. Mais `--seulement X --sans-adaptation` produit
+    des essais i.i.d. — meme technique, aucun apprentissage — et c'est
+    exactement la configuration que pass@k demande.
+    """
+
+    @staticmethod
+    def _rendu(independants, essais=30):
+        resultat = _resultat(lances=[_payload()] * essais)
+        resultat["essais_independants"] = independants
+        resultat["etats"] = ["resiste"] * essais
+        return rendre_markdown(construire(resultat))
+
+    def test_sans_independance_aucune_borne(self):
+        rendu = self._rendu(False)
+        assert "c'est délibéré" in rendu
+        assert "binomial" in rendu
+
+    def test_avec_independance_la_borne_est_donnee(self):
+        rendu = self._rendu(True)
+        assert "les essais SONT indépendants" in rendu
+        assert "10%" in rendu            # regle de trois sur 30 essais
+
+    def test_la_borne_dit_comment_la_descendre(self):
+        rendu = self._rendu(True)
+        assert "60 essais" in rendu      # pour 5 %
+        assert "300" in rendu            # pour 1 %
+
+    def test_sans_independance_on_dit_comment_l_obtenir(self):
+        # Sinon le lecteur apprend qu'aucune borne n'est possible, ce qui est
+        # faux : elle l'est, dans une autre configuration.
+        assert "--sans-adaptation" in self._rendu(False)
+
+    def test_les_deux_cas_ne_se_contredisent_jamais(self):
+        # Le bloc a d'abord dit « aucune borne » PUIS donne la borne.
+        rendu = self._rendu(True)
+        assert "Aucune borne chiffrée n'est donnée" not in rendu

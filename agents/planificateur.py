@@ -100,7 +100,56 @@ def objectifs_pour(fiche, bibliotheque):
     return objectifs
 
 
-def planifier(fiche, budget):
+# --- Restreindre le périmètre d'une campagne ---------------------------------
+# Trois besoins distincts, un seul mécanisme :
+#
+# 1. LE MANDAT. `autorisation.example.json` déclare une portée qui mentionne
+#    « techniques exclues », et le rapport l'affiche fidèlement — mais rien ne
+#    l'appliquait. Un rapport qui cite un mandat excluant une technique, puis
+#    documente le lancement de cette technique, est un écart contractuel.
+# 2. REPRODUIRE un constat après correction, sans relancer toute la campagne
+#    et sans que l'adaptation change d'avis en route.
+# 3. pass@k, qui exige de rejouer la MÊME technique k fois — impossible tant
+#    que le tour de rôle balaye les modules.
+#
+# Un seul motif couvre les trois granularités utiles, parce qu'en demander
+# trois serait trois options à retenir pour le même geste : famille OWASP
+# (« LLM07 »), module garak (« dan ») ou technique (« fuite-prompt-systeme »).
+
+def _correspond(technique, motif):
+    """Le motif désigne-t-il cette technique, son module ou sa famille ?"""
+    motif = motif.strip().lower()
+    if not motif:
+        return False
+    champs = (technique["id"], technique.get("groupe") or "",
+              technique.get("famille_owasp") or "")
+    return any(motif in champ.lower() for champ in champs)
+
+
+def filtrer(techniques, seulement=(), sauf=()):
+    """
+    Les techniques retenues, et celles qu'un motif a écartées avec son motif.
+
+    `sauf` l'emporte sur `seulement` : une exclusion vient du mandat, et un
+    mandat ne se contourne pas par une autre option de la même commande.
+    """
+    retenues, ecartees = [], []
+    for technique in techniques:
+        exclusion = next((m for m in sauf if _correspond(technique, m)), None)
+        if exclusion:
+            ecartees.append((technique, f"exclue par --sauf {exclusion}"))
+            continue
+        if seulement and not any(_correspond(technique, m) for m in seulement):
+            ecartees.append(
+                (technique,
+                 f"hors du périmètre demandé (--seulement "
+                 f"{', '.join(seulement)})"))
+            continue
+        retenues.append(technique)
+    return retenues, ecartees
+
+
+def planifier(fiche, budget, seulement=(), sauf=()):
     """
     Renvoie {"essais": [...], "candidats": [...], "ecartees": [...]}.
 
@@ -122,7 +171,16 @@ def planifier(fiche, budget):
 
     retenues, ecartees = [], []
 
-    for technique in bibliotheque["techniques"]:
+    # Le périmètre d'abord : une technique exclue par le mandat n'a pas à être
+    # écartée pour « aucun outil détecté », ce qui masquerait la vraie raison.
+    techniques, hors_perimetre = filtrer(bibliotheque["techniques"],
+                                         seulement, sauf)
+    for technique, motif in hors_perimetre:
+        ecartees.append({"technique": technique["id"],
+                         "famille_owasp": technique["famille_owasp"],
+                         "motifs": [motif]})
+
+    for technique in techniques:
         motifs = [texte for nom, (verifier, texte) in PREREQUIS.items()
                   if nom in technique["prerequis"] and not verifier(fiche)]
         if not technique["modeles"] and not technique.get("payloads_complets"):
