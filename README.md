@@ -151,7 +151,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 588 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 593 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Ten seconds, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -651,10 +651,16 @@ if the campaign dies, the record of what was already sent survives, which is exa
 when it matters. It holds the mandate, every exchange with the target across
 reconnaissance, attack and replay, every verdict with its votes, and the final usage.
 
-Each run carries a readable case ID (`20261112-180042-demo`, not an opaque UUID), each
+Each run carries a readable case ID (`20261112-233201-demo`, not an opaque UUID), each
 exchange a SHA-256 of what was sent and received, and the trail is **sealed** on close
 with a hash over everything before it. `verifier_sceau()` then answers the only question
 that matters if a report is disputed: has this record been touched since it was written?
+
+**The report carries that link, not just the trail.** It opens with the case ID and ends
+with the trail's path and its full seal — all sixty-four characters, because a truncated
+digest cannot be checked and checking is the only thing it is for. An identifier that
+only one of the two documents knows links nothing, which is exactly what this used to be:
+the fields existed in `resultat.json` and nothing ever filled them.
 
 The environment is logged with it — and so is what cannot be known. A black-box tester
 has no idea of the target's model, temperature or system prompt; that is what they are

@@ -2142,6 +2142,51 @@ identifiant de dossier. À trancher.
 
 588 tests `pytest`, toujours sans aucun appel LLM.
 
+**La chaîne de preuve n'était branchée qu'à moitié, et personne ne pouvait le voir
+(2026-11-12).** Relevé en voulant simplement afficher le `case_id` au rapport : la phase
+14 était incomplète depuis sa livraison.
+
+`rapport.construire()` lisait bien `case_id`, `sceau_piste` et `telemetrie` depuis le
+résultat de campagne. Mais **rien ne les remplissait** : `main.py` appelait
+`piste.clore()` sans garder sa valeur de retour — qui est le sceau — et ne reportait
+jamais l'identifiant de dossier. Les trois champs valaient donc `None` dans chaque
+`resultat.json` produit, et le rapport ne les affichait pas, faute de les avoir.
+
+Deux conséquences, la seconde étant celle qui compte :
+- la télémétrie demandée par le manuel §7.3 n'existait que dans la piste d'audit ;
+- **un rapport et sa piste n'étaient reliés que par leur horodatage.** Un identifiant de
+  dossier que seul l'un des deux documents connaît ne relie rien — or relier est sa seule
+  fonction. En mission, un rapport contesté doit pouvoir désigner la trace qui le
+  justifie.
+
+Corrigé des deux côtés : `main.py` verse `case_id`, le chemin de la piste, le sceau et la
+télémétrie dans le résultat ; le rapport ouvre sur l'identifiant de dossier et se termine
+par une section « Chaîne de preuve » qui donne la piste et son sceau. **Le sceau est
+affiché en entier**, soixante-quatre caractères : un condensat tronqué ne se vérifie pas,
+et il n'est là que pour être vérifié.
+
+**Pourquoi aucun test ne l'avait vu, et c'est la leçon.** `tests/test_audit.py` vérifiait
+que `clore()` scelle ; `tests/test_rapport.py` vérifiait que `construire()` propage les
+champs quand ils sont là. Les deux modules étaient corrects. Le défaut était dans la
+COLLE entre eux, que rien ne couvrait — `main.cli()` n'avait aucun test, parce qu'une
+campagne appelle un modèle.
+
+Or elle n'en a pas besoin pour ce qu'on vérifie ici : en remplaçant `lancer_campagne` par
+une fonction qui renvoie un résultat tout fait, `main.cli(["--cible", "mock",
+"--rapport", <tmp>])` exécute tout ce que l'orchestrateur fait AUTOUR de la campagne —
+mandat, piste, scellement, report des champs, rendu — sans un seul appel LLM. Le test
+mord : neutraliser l'affectation du `case_id` le fait échouer. **Deux modules testés
+séparément ne testent pas leur jonction**, et c'est le troisième défaut de cette semaine
+qui vivait précisément là (après `_injecter` et le garde-fou de profil inatteignable).
+
+**Le rapport d'exemple a été regénéré sans relancer de campagne**, en reportant les trois
+valeurs depuis la piste RÉELLE de cette même campagne — `verifier_sceau()` la déclare
+intacte avant report. On recopie ce qui existe, on n'invente aucune valeur : un sceau
+fabriqué dans un rapport de vitrine serait exactement le genre de faux qu'un sceau
+existe pour empêcher.
+
+593 tests `pytest`, toujours sans aucun appel LLM.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

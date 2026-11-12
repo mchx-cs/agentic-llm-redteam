@@ -8,6 +8,8 @@ Ce qui est surveillé de près : que le rapport ne puisse jamais laisser croire
 à une couverture qu'il n'a pas.
 """
 
+from pathlib import Path
+
 import pytest
 
 import re
@@ -696,3 +698,69 @@ class TestAccrocheDeLaCouverture:
             constats=[_constat()], lances=[_payload()])))
         assert "Un « aucun constat » ne vaut que" not in rendu
         assert "ce qui ne l'a pas été" in rendu
+
+
+class TestChaineDePreuve:
+    """
+    Le manuel (§7.3) veut qu'une preuve soit identifiable. `construire` lisait
+    `case_id`, `sceau_piste` et `telemetrie` depuis le 2026-11-12... mais rien
+    ne les REMPLISSAIT : `main.py` jetait la valeur de retour de
+    `piste.clore()`. Un rapport sortait donc sans identifiant de dossier
+    alors que sa piste en avait un, et un identifiant qu'un seul des deux
+    documents connaît ne relie rien.
+
+    Le defaut etait dans la COLLE entre deux modules testes chacun de leur
+    cote — d'ou le test de bout en bout plus bas, sans aucun appel LLM.
+    """
+
+    def _rendu(self, **champs):
+        resultat = _resultat(constats=[_constat()], lances=[_payload()])
+        resultat.update(champs)
+        return rendre_markdown(construire(resultat))
+
+    def test_l_identifiant_est_en_tete(self):
+        # La reference d'un rapport se lit avant son contenu.
+        rendu = self._rendu(case_id="20261112-233201-demo")
+        entete = rendu[:rendu.index("## Constats")]
+        assert "20261112-233201-demo" in entete
+
+    def test_la_piste_et_le_sceau_sont_donnes(self):
+        rendu = self._rendu(case_id="20261112-233201-demo",
+                            piste="rapports/20261112-233201-journal.jsonl",
+                            sceau_piste="3f" * 32)
+        assert "## Chaîne de preuve" in rendu
+        assert "rapports/20261112-233201-journal.jsonl" in rendu
+        assert "verifier_sceau" in rendu
+
+    def test_le_sceau_n_est_jamais_tronque(self):
+        # Un condensat tronque ne se verifie pas, et il n'est la que pour
+        # etre verifie. Les 64 caracteres, ou rien.
+        sceau = "a1b2c3d4" * 8
+        assert len(sceau) == 64
+        assert sceau in self._rendu(case_id="c", sceau_piste=sceau)
+
+    def test_un_ancien_rapport_n_a_pas_de_section_vide(self):
+        # Les `resultat.json` d'avant la chaine de preuve n'ont aucun de ces
+        # champs : mieux vaut pas de section qu'une section vide.
+        rendu = self._rendu()
+        assert "Chaîne de preuve" not in rendu
+        assert "Dossier" not in rendu
+
+    def test_la_campagne_remplit_bien_ces_champs(self, tmp_path, monkeypatch):
+        # LE test qui manquait : la colle de `main.py`. Aucun appel LLM — la
+        # campagne elle-meme est remplacee, puisque ce qu'on verifie ici est
+        # ce que l'orchestrateur fait AUTOUR d'elle.
+        import main
+
+        monkeypatch.setattr(main, "lancer_campagne",
+                            lambda *a, **k: _resultat(lances=[_payload()]))
+        resultat = main.cli(["--cible", "mock",
+                            "--rapport", str(tmp_path)])
+
+        assert resultat["case_id"].endswith("-mock")
+        assert len(resultat["sceau_piste"]) == 64
+        assert Path(resultat["piste"]).exists()
+        assert resultat["telemetrie"]["cible"]["nom"] == "mock"
+        # Et le rendu Markdown le porte vraiment, pas seulement le JSON.
+        rapport = next(tmp_path.glob("*-rapport.md"))
+        assert resultat["case_id"] in rapport.read_text(encoding="utf-8")

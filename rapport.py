@@ -148,6 +148,7 @@ def construire(resultat, cible="inconnue"):
             "payloads": resultat.get("payloads"),
             # Chaîne de preuve et environnement de test (manuel §7.3).
             "case_id": resultat.get("case_id"),
+            "piste": resultat.get("piste"),
             "sceau_piste": resultat.get("sceau_piste"),
             "telemetrie": resultat.get("telemetrie"),
         },
@@ -344,6 +345,38 @@ def _bloc_asr(taux):
                 lignes.append(f"- {nombre} × {statistiques.ETATS[etat][2]}")
         lignes.append("")
 
+    return lignes
+
+
+def _bloc_preuve(campagne):
+    """
+    De quoi remonter du rapport à la trace qui le justifie (manuel §7.3).
+
+    Sans ces trois lignes, un rapport et sa piste d'audit n'étaient reliés que
+    par leur horodatage. L'identifiant de dossier existait dans la piste, mais
+    le rapport ne le portait pas — un identifiant qu'un seul des deux
+    documents connaît ne relie rien.
+
+    Le sceau est donné en ENTIER, soixante-quatre caractères. Un condensat
+    tronqué ne se vérifie pas, et il n'est là que pour être vérifié : c'est la
+    seule réponse à « cette trace a-t-elle été retouchée depuis ? ».
+    """
+    if not campagne.get("case_id"):
+        return []          # campagne d'avant la chaîne de preuve
+    lignes = ["", "## Chaîne de preuve", "",
+              f"- **Dossier** : `{campagne['case_id']}`"]
+    if campagne.get("piste"):
+        lignes.append(f"- **Piste d'audit** : `{campagne['piste']}` — chaque "
+                      f"échange avec la cible, horodaté, avec son empreinte")
+    if campagne.get("sceau_piste"):
+        lignes += [
+            f"- **Sceau de la piste** (SHA-256) : `{campagne['sceau_piste']}`",
+            "",
+            "Le sceau porte sur tout ce que la piste contient. "
+            "`audit.verifier_sceau(piste)` répond à la seule question qui "
+            "compte si ce rapport est contesté : la trace a-t-elle bougé "
+            "depuis son écriture ?",
+        ]
     return lignes
 
 
@@ -585,6 +618,8 @@ def rendre_markdown(rapport, abreger=False):
         "",
         f"- **Cible** : `{campagne['cible']}`",
         f"- **Date** : {campagne['date']}",
+    ] + ([f"- **Dossier** : `{campagne['case_id']}`"]
+         if campagne.get("case_id") else []) + [
         f"- **Essais prévus au plan** : {campagne['essais_prevus']}",
         f"- **Constats** : {len(constats)}" + (f" ({resume})" if resume else ""),
         "",
@@ -736,6 +771,8 @@ def rendre_markdown(rapport, abreger=False):
         ]
         if autorisation.get("portee"):
             lignes.append(f"- **Portée** : {autorisation['portee']}")
+
+    lignes += _bloc_preuve(campagne)
 
     if rapport["fiche_cible"]:
         fiche = rapport["fiche_cible"]

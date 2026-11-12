@@ -451,10 +451,20 @@ def cli(arguments=None):
         raise SystemExit(1)
     finally:
         # Même si la campagne lève, le journal doit se refermer proprement.
-        piste.clore(locals().get("resultat", {}).get("statut", "interrompue"),
-                    journal())
+        sceau = piste.clore(
+            locals().get("resultat", {}).get("statut", "interrompue"),
+            journal())
 
     resultat["autorisation"] = autorisation
+    # La chaîne de preuve passe de la piste au RAPPORT. `construire` lisait
+    # déjà ces trois champs, mais personne ne les remplissait : un rapport
+    # sortait donc sans identifiant de dossier, alors que la piste en avait
+    # un. Le lecteur du rapport ne pouvait pas remonter à la trace qui le
+    # justifie — exactement ce à quoi sert un identifiant de dossier.
+    resultat["case_id"] = piste.case_id
+    resultat["piste"] = str(piste.chemin)
+    resultat["sceau_piste"] = sceau
+    resultat["telemetrie"] = telemetrie(nom_cible, arguments.profil_cible)
     print(f"\nRésultat final : {resultat['statut']}")
     print(f"Piste d'audit : {piste.chemin}")
 

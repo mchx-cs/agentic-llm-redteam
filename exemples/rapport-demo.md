@@ -2,6 +2,7 @@
 
 - **Cible** : `demo`
 - **Date** : 2026-11-12T23:33:41
+- **Dossier** : `20261112-233201-demo`
 - **Essais prévus au plan** : 3
 - **Constats** : 1 (1 élevée)
 
@@ -90,6 +91,14 @@ Le prochain essai est choisi d'après ce que la cible a déjà répondu, par des
 - La cible a montré un appel d'outil : les essais d'abus d'outil deviennent pertinents ici.
 
 Un essai relégué n'est jamais écarté : il reste dans le vivier, car une attaque probabiliste peut réussir plus tard.
+
+## Chaîne de preuve
+
+- **Dossier** : `20261112-233201-demo`
+- **Piste d'audit** : `rapports/20261112-233201-journal.jsonl` — chaque échange avec la cible, horodaté, avec son empreinte
+- **Sceau de la piste** (SHA-256) : `949e76afa94a12b97986bca172731423896e25f8de13d52bb4ac78ac7ad02dbe`
+
+Le sceau porte sur tout ce que la piste contient. `audit.verifier_sceau(piste)` répond à la seule question qui compte si ce rapport est contesté : la trace a-t-elle bougé depuis son écriture ?
 
 ## Fiche de la cible
 
