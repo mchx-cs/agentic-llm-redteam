@@ -1571,7 +1571,7 @@ Advisory et le cadrage (1.5, 1.6). Les 144 pages n'ont pas été auditées.
 | « Record tested, untested, and inconclusive cases, including benign controls » (7.4) | testées / effleurées / écartées, plus la technique `controle` |
 | « Report Effort Alongside Success… tokens expended » (7.5) | journal des appels et des tokens, budget en coupe-circuit |
 | Reproductibilité | instantané garak local, tri stable, zéro réseau en campagne |
-| Piège du corpus 100 % malveillant (« FP et TN nuls par construction ») | 29 contrôles sur 69 dans le jeu dev |
+| Piège du corpus 100 % malveillant (« FP et TN nuls par construction ») | 43 négatifs sur les 67 échanges du jeu dev |
 
 **Les écarts, par importance. Le premier est sévère et touche le cœur du projet.**
 
@@ -2019,6 +2019,58 @@ secondaires ne comptent pas, et aucun test ne le tenait. Une affirmation dans un
 commentaire ne vaut rien tant qu'une mutation ne la casse pas.
 
 581 tests `pytest`, toujours sans aucun appel LLM.
+
+**Le manuel OWASP est désormais NOMMÉ au README (2026-11-12).** Il manquait, et
+l'absence était significative : le README montrait les conséquences du manuel — borne
+sur un zéro, dénominateur déclaré, troisième état de couverture — sans dire qu'elles
+venaient d'un audit contre un document publié. Un lecteur ne pouvait pas distinguer une
+méthode empruntée à un standard d'une invention maison, ce qui dessert les deux.
+
+La section `Audited against the OWASP GenAI Red Teaming Manual` dit trois choses, dans
+cet ordre : ce que l'audit a trouvé DÉJÀ en place (six lignes, avec l'endroit du dépôt où
+chacune vit), les sept écarts et ce qu'ils sont devenus, puis ce qui reste ouvert. Elle
+dit aussi que **l'audit est partiel** — Phase 7 lue en détail, les sept autres non — parce
+qu'un dépôt qui laisserait croire à un audit complet des 144 pages mentirait sur son
+sérieux au moment précis où il cherche à le démontrer.
+
+**Et écrire cette section a montré que deux de ses phrases étaient FAUSSES.** J'avais
+rédigé que le rapport dit au lecteur que l'adaptation réordonne sans reformuler, et qu'il
+nomme les phases hors périmètre. Vérification dans `rapport.py` : ni l'un ni l'autre. Ces
+deux points étaient l'écart 4 et le « hors périmètre par conception » de l'audit du
+2026-11-12 — consignés dans CLAUDE.md, donc tenus pour acquis, alors que le LECTEUR DU
+RAPPORT, seul à en avoir besoin, n'en savait rien.
+
+D'où `_bloc_non_tente()`, trois limites dites dans la section Couverture :
+- **un seul tour** — aucun essai n'a d'historique, alors que les attaques réelles
+  enchaînent détournement puis demande ;
+- **l'adaptation réordonne, elle ne reformule pas** — le manuel tient qu'un zéro succès
+  contre une liste statique vaut une assurance bien plus faible que contre un attaquant
+  adaptatif. Laisser le lecteur confondre réordonner et reformuler lui ferait
+  surestimer le rapport. La seconde moitié de l'écart 4 est donc comblée ; la première
+  (reformuler réellement) reste la phase 3b ;
+- **persistance, escalade de privilèges, rayon d'impact** — non tentés, faute de cible
+  agentique et de mandat d'exploitation. Une frontière, pas un défaut, mais elle doit
+  être dite.
+
+**Le bloc est INCONDITIONNEL**, et c'est le seul choix défendable : ce sont des
+propriétés de l'outil, pas du tirage. Les faire dépendre de la campagne les ferait
+disparaître exactement quand elles comptent — dans un rapport sans constat, ou lancé
+`--sans-adaptation`. Deux tests tiennent cette propriété.
+
+**Un chiffre faux corrigé au passage, trouvé en voulant le citer.** Le tableau de l'audit
+annonçait « 29 contrôles sur 69 dans le jeu dev ». Compté dans le corpus : le jeu dev a
+**67 échanges, dont 43 négatifs** (24 vraies failles). Le 69 était le total dev+test du
+2026-11-09, et le 29 comptait la seule catégorie `controle` — deux chiffres exacts à une
+autre date, recollés en une phrase fausse. C'est la raison de vérifier un chiffre AVANT
+de le mettre en vitrine, plutôt qu'après.
+
+**Le rapport d'exemple a été regénéré sans relancer de campagne**, depuis le
+`resultat.json` du 2026-11-12 : six lignes ajoutées, zéro appel au modèle. Deuxième fois
+que le choix « le JSON est la source de vérité » se paie comptant. Ce qu'il ne montre pas
+encore : les payloads LLM06, puisqu'il date d'avant. Le regénérer vraiment demande une
+campagne, donc du quota.
+
+586 tests `pytest`, toujours sans aucun appel LLM.
 
 ## Cadre légal
 

@@ -75,6 +75,11 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 - Sensitive information disclosure
 - Insecure output handling *(planned)*
 
+The *method* follows a second document: the project is audited against OWASP's
+[GenAI Red Teaming Manual](#audited-against-the-owasp-genai-red-teaming-manual), which
+is where the reporting rules below come from — bounded nulls, a declared denominator,
+and coverage that states what was never attempted.
+
 ## Project structure
 
 ```
@@ -132,7 +137,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 581 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 586 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Four seconds, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -444,6 +449,49 @@ gives a false sense of security, which is worse than no report at all. Coverage 
 mapped to OWASP LLM and, where a published identifier could be verified, to MITRE ATLAS.
 Where none could, the report says so rather than offering a plausible ID: one that looks
 checkable without being so is worse than an empty cell.
+
+### Audited against the OWASP GenAI Red Teaming Manual
+
+Most of what the previous section describes is not invention. It comes from auditing
+this project against the
+[GenAI Red Teaming Manual v1.0](https://genai.owasp.org/resource/genai-red-teaming-manual-version-1-0/)
+(OWASP GenAI Security Project, October 2026, CC BY-SA 4.0), and then closing the gaps.
+
+**The audit is partial, and saying so is the point.** Its Phase 7, *Evaluation &
+Reporting*, was read in detail, because that is exactly this tool's job — plus the
+adversarial testing advisory and the scoping sections. The other seven phases of its
+144 pages were not audited.
+
+What it found already in place:
+
+| What the manual asks for | Where it lives here |
+|---|---|
+| Validate the scorer separately from the system under test | `evaluation/evaluer_arbitre.py`, hand-labelled corpus, frozen test set |
+| Explicit oracles, including a *needs human adjudication* state | three criteria, and a split vote returning no verdict |
+| A missing trace must never be recorded as a defensive pass | truncated replies detected and warned about twice |
+| Record tested, untested and inconclusive cases, benign controls included | tested / touched-but-unjudged / skipped, plus the `controle` technique |
+| Report effort alongside success — tokens expended | call and token journal, budget as a circuit breaker |
+| Avoid an all-malicious corpus, where false positives are nil by construction | 43 of the 67 dev exchanges are negatives — controls and near-misses the judge must not flag |
+
+And seven gaps, which became phases 13 and 14. The severe one was the first: a campaign
+that found nothing said so honestly but **bounded nothing**, and with `MAX_ESSAIS=3` the
+rule of three gives 100% — that was the last place this tool still let a reader infer
+safety it had not verified, which is what it argues against everywhere else. The rest:
+no attack success rate, no declared denominator states, no cryptographic integrity on
+the evidence, no target telemetry, no MITRE ATLAS mapping.
+
+Two things the audit did **not** resolve, and the repo says which is which:
+
+- **adaptive attacks.** The manual holds that a zero-success result against a static
+  prompt list is substantially weaker assurance than one against adaptive attacks. This
+  project's adaptation reorders its plan from the target's replies; it does not reword
+  the attack. Phase 3b, and the report tells the reader so rather than letting the
+  distinction pass.
+- **out of scope by design.** The manual's phases on persistence, privilege escalation
+  and blast radius assume an agentic target and an exploitation mandate. This is a
+  single-turn scanner against a chatbot. That is a boundary, not a defect — but the
+  report names it, because a coverage section that omits what was never attempted is the
+  same lie by omission as an unbounded "no findings".
 
 ### Payloads: synced, not hand-written
 

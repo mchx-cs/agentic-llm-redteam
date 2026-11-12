@@ -347,6 +347,46 @@ def _bloc_asr(taux):
     return lignes
 
 
+def _bloc_non_tente():
+    """
+    Ce que cet outil ne tente PAS, par construction.
+
+    Exigé par le GenAI Red Teaming Manual (§7.4) : une section de couverture
+    qui tait ce qui n'a jamais été tenté donne la même fausse assurance qu'un
+    « aucun constat » sans borne. Deux de ces trois limites étaient les
+    écarts 4 et « hors périmètre » de l'audit du 2026-11-12 : elles étaient
+    consignées dans le dépôt, mais pas dites AU LECTEUR du rapport, qui est
+    précisément celui qui en a besoin.
+
+    Le bloc est inconditionnel : ce sont des propriétés de l'outil, pas du
+    tirage. Les faire dépendre de la campagne les ferait disparaître
+    exactement quand elles comptent — dans un rapport sans constat.
+
+    Sur l'adaptation, la nuance est celle que le manuel souligne : il tient
+    qu'un zéro succès contre une LISTE STATIQUE vaut une assurance bien plus
+    faible que contre des attaques adaptatives. Notre adaptation réordonne le
+    plan d'après les réponses ; elle ne reformule pas l'attaque. Laisser le
+    lecteur confondre les deux lui ferait surestimer ce rapport.
+    """
+    return [
+        "", "**Ce qui n'a PAS été tenté, par conception**", "",
+        "- **un seul tour** : chaque essai est un message isolé, sans "
+        "historique. Une attaque en plusieurs tours — détourner la cible "
+        "d'abord, demander ensuite — n'est pas testée ici, et c'est ainsi "
+        "que ces attaques fonctionnent en pratique.",
+        "- **l'adaptation réordonne, elle ne reformule pas** : quand elle est "
+        "active, le prochain essai est choisi d'après les réponses de la "
+        "cible, mais son texte vient du vivier. Un zéro succès contre une "
+        "liste de prompts, même réordonnée, vaut une assurance plus faible "
+        "qu'un zéro succès contre un attaquant qui reformule.",
+        "- **persistance, escalade de privilèges, rayon d'impact** : non "
+        "tentés. Ils supposent une cible agentique et un mandat "
+        "d'exploitation ; cet outil est un scanner à un tour contre un "
+        "agent conversationnel. C'est une frontière, pas un défaut — mais "
+        "elle doit être dite.",
+    ]
+
+
 def _bloc_portee(portee, nb_constats, taux=None):
     """
     Ce que le décompte d'essais permet d'affirmer — et surtout pas.
@@ -653,6 +693,8 @@ def rendre_markdown(rapport, abreger=False):
                           + ", ".join(f"`{t}`" for t in techniques))
     else:
         lignes.append("- aucune")
+
+    lignes += _bloc_non_tente()
 
     # --- Adaptation : pourquoi ces essais, dans cet ordre -------------------
     # Une campagne qui réordonne ses essais sans dire pourquoi est une boîte

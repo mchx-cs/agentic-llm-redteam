@@ -628,3 +628,45 @@ class TestBorneQuandLesEssaisSontIndependants:
         # Le bloc a d'abord dit « aucune borne » PUIS donne la borne.
         rendu = self._rendu(True)
         assert "Aucune borne chiffrée n'est donnée" not in rendu
+
+
+class TestCeQuiNEstPasTente:
+    """
+    Le GenAI Red Teaming Manual (§7.4) demande que la couverture dise ce qui
+    n'a jamais ete tente. Deux de ces trois limites etaient les ecarts 4 et
+    « hors perimetre » de l'audit du 2026-11-12 : consignees dans le depot,
+    mais pas dites AU LECTEUR du rapport, qui est celui qui en a besoin.
+    """
+
+    def test_le_mono_tour_est_dit(self):
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()])))
+        assert "un seul tour" in rendu
+
+    def test_la_difference_entre_reordonner_et_reformuler_est_dite(self):
+        # Le manuel tient qu'un zero succes contre une liste statique vaut une
+        # assurance plus faible. Laisser le lecteur croire que l'attaquant
+        # reformule lui ferait surestimer ce rapport.
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()])))
+        assert "réordonne, elle ne reformule pas" in rendu
+
+    def test_les_phases_hors_perimetre_sont_nommees(self):
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()])))
+        for limite in ("persistance", "escalade de privilèges",
+                       "rayon d'impact"):
+            assert limite in rendu, limite
+
+    def test_le_bloc_est_la_meme_sans_adaptation(self):
+        # Inconditionnel par construction : ce sont des proprietes de l'outil,
+        # pas du tirage. Les faire dependre de la campagne les ferait
+        # disparaitre exactement quand elles comptent — dans un rapport sans
+        # constat, ou sans adaptation.
+        resultat = _resultat(lances=[_payload()])
+        resultat["adaptation"] = []
+        rendu = rendre_markdown(construire(resultat))
+        assert "réordonne, elle ne reformule pas" in rendu
+
+    def test_le_bloc_est_la_meme_avec_des_constats(self):
+        # Une campagne qui TROUVE quelque chose reste un scanner a un tour :
+        # le lecteur d'un rapport non vide a autant besoin de la frontiere.
+        rendu = rendre_markdown(construire(_resultat()))
+        assert "un seul tour" in rendu

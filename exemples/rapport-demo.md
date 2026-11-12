@@ -135,6 +135,12 @@ Source : identifiants cités par le GenAI Red Teaming Manual v1.0 (OWASP, octobr
 - **aucun client ne rend le Markdown de la sortie (--contexte rendu-riche pour l'activer)**
   - 8 technique(s) : `garak-web-injection-colabaidataleakage`, `garak-web-injection-markdownimageexfil`, `garak-web-injection-markdownuriimageexfilextended`, `garak-web-injection-markdownurinonimageexfilextended`, `garak-web-injection-markdownxss`, `garak-web-injection-playgroundmarkdownexfil`, `garak-web-injection-stringassemblydataexfil`, `garak-web-injection-taskxss`
 
+**Ce qui n'a PAS été tenté, par conception**
+
+- **un seul tour** : chaque essai est un message isolé, sans historique. Une attaque en plusieurs tours — détourner la cible d'abord, demander ensuite — n'est pas testée ici, et c'est ainsi que ces attaques fonctionnent en pratique.
+- **l'adaptation réordonne, elle ne reformule pas** : quand elle est active, le prochain essai est choisi d'après les réponses de la cible, mais son texte vient du vivier. Un zéro succès contre une liste de prompts, même réordonnée, vaut une assurance plus faible qu'un zéro succès contre un attaquant qui reformule.
+- **persistance, escalade de privilèges, rayon d'impact** : non tentés. Ils supposent une cible agentique et un mandat d'exploitation ; cet outil est un scanner à un tour contre un agent conversationnel. C'est une frontière, pas un défaut — mais elle doit être dite.
+
 ## Adaptation en cours de campagne
 
 Le prochain essai est choisi d'après ce que la cible a déjà répondu, par des règles déterministes. Ce qui a été appris :
