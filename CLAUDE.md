@@ -10,7 +10,7 @@ Projet personnel d'apprentissage **et** vitrine publique (dépôt public, lu par
 recruteurs). Les deux objectifs comptent : le code doit être propre et lisible, et
 le README doit rester honnête sur l'état d'avancement.
 
-## État actuel : Phase 0 terminée, Phases 1 et 2 démarrées
+## État actuel : 13 phases closes, 2 et 5 en cours, 3b à venir
 
 La campagne complète **reconnaissance → planification → attaque → jugement → rejeu**
 tourne de bout en bout en local, et le prochain essai est désormais choisi d'après ce
@@ -157,7 +157,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | En cours |
 | 3a | **Réordonner le plan selon la réponse de la cible** (déterministe, extension de la phase 5) | **Fait** |
 | 3b | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
-| 4 | Dissocier l'arbitre du modèle cible | En cours |
+| 4 | Dissocier l'arbitre du modèle cible | **Fait** |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
 | 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | **Fait** |
 | 7 | Intégrer garak (couverture large) | **Fait** |
@@ -2228,6 +2228,23 @@ Leçon de cette passe : **les erreurs factuelles se trouvent avec le code sous l
 les défauts de structure en regardant le document de loin.** Les deux lectures ne
 remontent pas les mêmes choses, et aucune ne remplace l'autre — le même constat que pour
 les trois façons d'avoir trouvé les trois défauts de la phase 3a.
+
+**Phase 4 close (2026-11-12).** Dissocier l'arbitre du modèle cible était marqué
+« en cours » alors que tout ce que la phase demandait existe et a été mesuré :
+`PROFIL_ARBITRE` est séparé de `PROFIL_ACTIF` dans `config.py`, `demander_au_llm()`
+accepte un paramètre `profil`, un nom de profil inconnu échoue dès l'import, et le gain
+du changement de famille de modèle est chiffré deux fois sur le jeu gelé (rappel 50 %
+→ 100 %).
+
+Ce qui restait n'était pas un manque mais un DÉFAUT au sens d'option par défaut : juge et
+leurre tournent tous deux sur `llama3.2` quand personne ne configure rien. C'est un choix
+délibéré — le dépôt doit tourner sans clé — et il est documenté comme tel. Laisser la
+phase ouverte pour ça revenait à confondre « la capacité n'existe pas » avec « elle n'est
+pas activée par défaut », et ça faisait dire à la feuille de route le contraire de la
+section « Running the judge on a different model » du README.
+
+Reste en cours : 2 (critères de l'arbitre, trois sur dix familles jugeables) et 5
+(reconnaissance purement déclarative). Prévue : 3b.
 
 ## Cadre légal
 

@@ -756,7 +756,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
 | **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
-| **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
+| **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | **Done** |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
 | **7** | Integrate [garak](https://github.com/NVIDIA/garak) for vulnerability scanning breadth | **Done** |
