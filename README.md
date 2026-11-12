@@ -371,7 +371,7 @@ python main.py --cible https://host/v1/chat --profil-cible openai --contexte ren
 ```
 
 **7. Judge with a different model than the target** — `PROFIL_ARBITRE` in `.env`. A
-judge that is its target shares its blind spots.
+judge running on its target's own model shares its blind spots.
 
 ### Target wiring: reference
 
@@ -436,6 +436,12 @@ or reaches a database, so you declare that instead:
 Those twelve aren't merely untried without it — they're *untestable*, and running them
 anyway would spend attempts while the report claimed coverage it didn't have.
 
+## Reports, and what they refuse to claim
+
+A report is the deliverable, so this is where the project is most careful: every number
+has a defined denominator, and a run that found nothing is never allowed to read as
+proof of safety.
+
 ### Producing a report
 
 ```bash
@@ -475,7 +481,7 @@ actually run:
 The replay check is bounded too, and that one matters to a client: "the value came back
 2 times out of 3" reads as 67%, when three trials only support a range of 21–94%.
 
-Every report ends with what was **not** tested and why — a tool that hides its coverage
+Every report states what was **not** tested and why — a tool that hides its coverage
 gives a false sense of security, which is worse than no report at all. Coverage is
 mapped to OWASP LLM and, where a published identifier could be verified, to MITRE ATLAS.
 Where none could, the report says so rather than offering a plausible ID: one that looks
@@ -524,7 +530,7 @@ Two things the audit did **not** resolve, and the repo says which is which:
   report names it, because a coverage section that omits what was never attempted is the
   same lie by omission as an unbounded "no findings".
 
-### Payloads: synced, not hand-written
+## Where the payloads come from
 
 Hand-written payloads rot — a jailbreak that worked in 2026 fails in 2027, and the
 upkeep falls on one person forever. So the library is synced from
@@ -562,9 +568,9 @@ but not judged**: calling them tested would be false, staying silent would imply
 were never approached.
 
 Payload count isn't the bottleneck — 1,143 from garak, and `MAX_ESSAIS` sends three. But
-garak ships **no LLM07 probe at all**, and that's the one gap where all three conditions
-line up: the judge can score system-prompt leakage, the corpus has labelled cases, and
-the demo target has a talkative system prompt. Hence eleven hand-written payloads across
+garak ships **no LLM07 probe at all**, and that is the first gap where all three
+conditions line up: the judge can score system-prompt leakage, the corpus has labelled
+cases, and the demo target has a talkative system prompt. Hence eleven payloads across
 five registers, where the difference between registers is the point — a direct ask, a
 reformulation (a target that refuses to *repeat* often agrees to *summarise*; the
 refusal attaches to the verb, not the information), a positional one that never says
@@ -575,8 +581,9 @@ describes — not jailbreaks, which stay garak's job.
 **LLM06 is the second gap, and it needed a different shape.** Those ten `owasp:llm06`
 probes all target the application *around* the model — Markdown URI exfiltration, XSS,
 Jinja and SQL injection — not tool calls, which is what the judge's `abus_outils`
-criterion scores. So four hand-written payloads: a call dictated by the user, an authority pretext, a step slipped
-in as a technical formality, and raw tool output demanded verbatim.
+criterion scores. So four hand-written payloads: a call dictated by the user, an
+authority pretext, a step slipped in as a technical formality, and raw tool output
+demanded verbatim.
 
 These four can't name the tool, because the tool name differs per target. They are
 templates, and reconnaissance fills the blank: every tool it discovers becomes an
@@ -612,6 +619,12 @@ identical payloads — pull gigabytes mid-engagement, and send a client system c
 nobody reviewed. `nuclei -update-templates` is explicit for the same reasons. Two guards
 back it up: the validator warns past 60 days, and an export returning no probes keeps
 the existing snapshot and exits non-zero rather than silently emptying your library.
+
+## Running it on an engagement
+
+Two guards that have nothing to do with attack quality, and everything to do with
+whether the tool can be used on someone else's system: a mandate it refuses to start
+without, and a ceiling it stops at cleanly.
 
 ### Authorisation and audit trail
 
@@ -659,8 +672,7 @@ that matters if a report is disputed: has this record been touched since it was 
 **The report carries that link, not just the trail.** It opens with the case ID and ends
 with the trail's path and its full seal — all sixty-four characters, because a truncated
 digest cannot be checked and checking is the only thing it is for. An identifier that
-only one of the two documents knows links nothing, which is exactly what this used to be:
-the fields existed in `resultat.json` and nothing ever filled them.
+only one of the two documents knows links nothing.
 
 The environment is logged with it — and so is what cannot be known. A black-box tester
 has no idea of the target's model, temperature or system prompt; that is what they are
@@ -688,10 +700,15 @@ already has. What matters is that it never pretends to have finished: the status
 section flags itself as incomplete. A "no findings" result after three attempts out of
 twelve would otherwise read as a clean bill of health.
 
+## Providers and models
+
+The provider is a `.env` setting, never a code change — and the judge gets one of its
+own, separate from the target's.
+
 ### Switching to a hosted API
 
-Every provider setting lives in `.env` (git-ignored), so switching never means editing
-a tracked file. Copy `.env.example` to `.env` and fill in:
+`.env` is git-ignored, so switching provider never means editing a tracked file. Copy
+`.env.example` to `.env` and fill in:
 
 ```bash
 OPENAI_API_KEY=sk-...
@@ -711,9 +728,8 @@ authorisation.
 
 ### Running the judge on a different model
 
-A judge that shares its target's model shares its blind spots, so the judge has its own
-profile. Copy `.env.example` to `.env` (git-ignored), add a free [Groq](https://console.groq.com)
-API key, and set:
+A judge that shares its target's model shares its blind spots, so it has a profile of
+its own. Add a free [Groq](https://console.groq.com) key to the same `.env` and set:
 
 ```bash
 PROFIL_ARBITRE=groq
@@ -738,7 +754,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
 | **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
-| **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** |
+| **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
 | **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | In progress |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |

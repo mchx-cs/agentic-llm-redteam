@@ -2187,6 +2187,48 @@ existe pour empêcher.
 
 593 tests `pytest`, toujours sans aucun appel LLM.
 
+**Deuxième passe sur le README : la structure, pas les faits (2026-11-12).** La
+première passe avait corrigé neuf erreurs factuelles. Celle-ci portait sur ce qui ne se
+vérifie pas avec une commande.
+
+**Le défaut principal était la HIÉRARCHIE des titres.** Dix sous-sections `###` étaient
+imbriquées sous « Getting started », dont « Audited against the OWASP manual »,
+« Payloads », « Authorisation and audit trail » et « Bounding a campaign » — 580 lignes
+qui n'ont rien à voir avec le démarrage. GitHub construit sa table des matières depuis
+les titres : les pièces les plus défendables du projet étaient donc rangées sous
+« comment installer ». Cinq H2 maintenant, chacun un thème réel : démarrage, rapports,
+payloads, mission, fournisseurs.
+
+**Trois redites sautaient aux yeux une fois les sections regroupées** — et ne se voyaient
+pas avant, ce qui est l'argument même du regroupement : « everything provider-related
+lives in `.env` » suivi deux lignes plus bas de « every provider setting lives in
+`.env` », et la consigne « copy `.env.example` to `.env` » répétée dans deux
+sous-sections voisines.
+
+**Deux contradictions internes, du même genre que celles de la première passe :**
+- le tableau de la feuille de route marquait la phase 3a **Done** sans réserve, alors que
+  le texte, 560 lignes plus haut, dit qu'elle n'est **pas démontrée sur cible réelle**. Un
+  lecteur qui ne parcourt que le tableau n'avait pas la même histoire que celui qui lit.
+  La réserve est maintenant dans la case ;
+- « the one gap where all three conditions line up » à propos de LLM07, deux paragraphes
+  après le titre « the two gaps filled by hand ». C'est le reste de l'état d'avant LLM06.
+
+**Et un titre qui contredisait sa propre section** : « Payloads: synced, not hand-written »
+introduisait deux paragraphes sur les quinze payloads écrits à la main. Devenu « Where the
+payloads come from », qui est le vrai sujet.
+
+Corrigé aussi : une affirmation devenue fausse par ajout — « every report **ends with**
+what was not tested » n'est plus vrai depuis que le mandat et la chaîne de preuve
+viennent après la couverture. Et le paragraphe que j'avais écrit sur la chaîne de preuve
+racontait l'historique du bogue (« les champs existaient et rien ne les remplissait ») :
+un README présente, il ne tient pas le journal de ses propres défauts. Cette histoire est
+dans ce fichier, à sa place.
+
+Leçon de cette passe : **les erreurs factuelles se trouvent avec le code sous les yeux,
+les défauts de structure en regardant le document de loin.** Les deux lectures ne
+remontent pas les mêmes choses, et aucune ne remplace l'autre — le même constat que pour
+les trois façons d'avoir trouvé les trois défauts de la phase 3a.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
