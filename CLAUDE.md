@@ -2560,7 +2560,24 @@ qui neutralise l'instantané garak (phase 7) — là, l'environnement local éta
 et cachait un test devenu tautologique ; ici, il cachait un test devenu dépendant d'un
 service. Dans les deux cas, ce qui tourne en local mentait sur ce qui tournerait ailleurs.
 
-648 tests `pytest`, et désormais une garantie exécutable qu'ils n'appellent aucun modèle.
+**Et un second défaut muet, trouvé en comparant ce que la récolte ANNONÇAIT à ce qu'elle
+CONTENAIT.** Les identifiants ne portaient que la cible (`C-demo-01`), pas l'objectif.
+Relancée contre `demo` avec les nouveaux objectifs ciblés, la récolte a donc retrouvé les
+mêmes identifiants, les a déclarés « déjà récoltés » et les a SAUTÉS : quatre séquences
+sur huit n'ont jamais reçu le nouvel objectif, alors que la commande affichait son travail
+et se terminait normalement.
+
+C'est exactement la famille de défaut que ce projet traque depuis une semaine — le gabarit
+sans `{message}`, la capacité de conversation devinée, les trois champs de chaîne de
+preuve jamais remplis : rien ne lève, rien ne casse, et le résultat n'est pas celui qu'on
+croit. L'identifiant porte désormais l'objectif (`C-demo-refus1-01`), et un test vérifie
+que deux objectifs donnent bien deux récoltes.
+
+Ce qui l'a révélé mérite d'être noté : ni une exception, ni un test, mais le fait de
+RECOMPTER le fichier produit après l'avoir annoncé. Trois défauts de cette semaine se
+sont vus de cette façon, en lisant le livrable au lieu du code.
+
+649 tests `pytest`, et désormais une garantie exécutable qu'ils n'appellent aucun modèle.
 
 ## Cadre légal
 

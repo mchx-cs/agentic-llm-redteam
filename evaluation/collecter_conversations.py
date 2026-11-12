@@ -156,6 +156,11 @@ def _sequences(limite=MAX_SEQUENCES, objectifs=None):
     return sequences
 
 
+def _fragment(texte):
+    """Les caractères alphanumériques d'un identifiant, et rien d'autre."""
+    return "".join(c for c in str(texte) if c.isalnum()) or "x"
+
+
 def _etiquette(nom_cible):
     """
     Un fragment d'identifiant qui dit CONTRE QUOI la conversation a été
@@ -166,7 +171,7 @@ def _etiquette(nom_cible):
     corpus que le niveau 1 remplirait de positifs. Il faut pouvoir récolter
     les trois, et donc que leurs identifiants diffèrent.
     """
-    return "".join(c for c in (nom_cible or "env") if c.isalnum()) or "env"
+    return _fragment(nom_cible or "env")
 
 
 def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES,
@@ -194,7 +199,14 @@ def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES,
 
     # Boucles bornées : séquences (liste finie) × NB_ECHANTILLONS.
     for numero, sequence in enumerate(sequences, start=1):
-        groupe = f"C-{etiquette}-{numero:02d}"
+        # L'identifiant porte la cible ET l'objectif. Sans l'objectif, une
+        # récolte relancée avec un objectif différent retombait sur les mêmes
+        # identifiants, les trouvait « déjà récoltés » et les SAUTAIT : la
+        # commande semblait avoir travaillé alors que le nouvel objectif
+        # n'avait jamais été envoyé. Trouvé en comparant ce que la récolte
+        # annonçait à ce qu'elle contenait.
+        groupe = (f"C-{etiquette}-{_fragment(sequence['objectif'])}"
+                  f"-{numero:02d}")
         for echantillon in range(1, NB_ECHANTILLONS + 1):
             if f"{groupe}-{echantillon}" in deja:
                 print(f"{groupe}-{echantillon} : déjà récolté, ignoré.")

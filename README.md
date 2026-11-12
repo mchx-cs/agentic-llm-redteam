@@ -152,7 +152,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 648 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 649 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Ten seconds, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:

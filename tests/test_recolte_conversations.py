@@ -422,3 +422,44 @@ class TestObjectifsIssusDeLaReconnaissance:
         sequences = collecteur._sequences(limite=4, objectifs=objectifs)
         if len(sequences) >= 2:
             assert {s["objectif"] for s in sequences} == {"a", "b"}
+
+
+class TestLIdentifiantPorteLObjectif:
+    """
+    Relancer une récolte avec un objectif DIFFÉRENT doit récolter, pas sauter.
+
+    Défaut trouvé en comparant ce que la récolte annonçait à ce qu'elle
+    contenait : les identifiants ne portaient que la cible, donc une seconde
+    commande avec un nouvel objectif retombait sur les mêmes noms, les
+    trouvait « déjà récoltés » et ne demandait rien à la cible. La commande
+    semblait avoir travaillé. Même famille que tous les autres défauts muets
+    de ce projet.
+    """
+
+    def _cible(self):
+        def interroger(message, historique=None):
+            return "réponse"
+        interroger.conversation = True
+        return interroger
+
+    def test_deux_objectifs_donnent_deux_recoltes(self, monkeypatch,
+                                                  tmp_path):
+        import evaluation.collecter_conversations as collecteur
+
+        monkeypatch.setattr(collecteur, "choisir_cible",
+                            lambda *a: self._cible())
+        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+                            tmp_path / "sortie.json")
+
+        def avec(identifiant):
+            objectif = {"id": identifiant, "formulation": f"demander {identifiant}"}
+            monkeypatch.setattr(collecteur, "_objectifs",
+                                lambda *a, **k: ([objectif], "test"))
+            return collecteur.collecter("demo", limite=1)
+
+        avec("anodin")
+        entrees = avec("refus-1")
+
+        objectifs = {e["source"].split("/")[1].strip() for e in entrees}
+        assert objectifs == {"anodin", "refus-1"}, (
+            "le second objectif a été sauté : la récolte n'a rien demandé")
