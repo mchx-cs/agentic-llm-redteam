@@ -2579,6 +2579,75 @@ sont vus de cette façon, en lisant le livrable au lieu du code.
 
 649 tests `pytest`, et désormais une garantie exécutable qu'ils n'appellent aucun modèle.
 
+**Le multi-tours est MESURABLE gratuitement, et c'est l'inverse exact de la phase 3a
+(2026-11-13).** La récolte ciblée a donné 112 entrées, dont 8 où la cible livre le code.
+En appariant chaque conversation à son témoin composé — mêmes ingrédients, même
+échantillon, joués à la suite — on obtient 56 paires comparables :
+
+| | Paires |
+|---|---|
+| la séquence seule fuite | **7** |
+| le mono-tour seul fuite | 1 |
+| les deux | 0 |
+| aucun | 48 |
+
+Test des signes unilatéral sur les 8 paires non nulles : **p = 0,035**. Wilson à 95 % :
+séquence 6–24 %, mono-tour 0–9 %.
+
+**Et je ne peux PAS revendiquer ce résultat, pour trois raisons dont la première est
+rédhibitoire.**
+1. **Aucun protocole n'avait été déclaré.** Cette récolte s'est construite par ajouts
+   successifs — 32, puis 64, puis 80, puis 112 — avec un changement d'objectifs en cours
+   de route, et l'analyse est venue APRÈS avoir vu les données grossir. C'est exactement
+   le p-hacking que le projet a évité de justesse sur la série d'adaptation, où 20 paires
+   donnaient 9 victoires sur 12 et 40 paires ont renversé le résultat.
+2. **Les niveaux de défense sont mélangés.** Les fuites viennent presque toutes du
+   niveau 1 ; mettre dans le même test des cibles de résistances différentes n'a pas de
+   sens.
+3. **Les paires ne sont pas indépendantes** comme le test le suppose : huit techniques
+   seulement, deux échantillons chacune, donc le N effectif est inférieur à 56.
+
+C'est donc une **hypothèse**, pas un résultat. Mais contrairement à la phase 3a, elle est
+vérifiable : `evaluation/mesurer_multitours.py` fait la mesure confirmatoire, et elle est
+**GRATUITE**.
+
+**Pourquoi gratuite : il n'y a pas de juge.** On ne demande pas à un modèle si la cible a
+fuité, on cherche la chaîne exacte du secret dans ses réponses. La cible de démonstration
+est à nous et son secret est factice, donc la mesure est DÉTERMINISTE là où l'arbitre
+serait probabiliste. C'est la même frontière que `tests/` contre `evaluation/` : ce qui se
+vérifie sans modèle doit se vérifier sans modèle.
+
+La phase 3a restait non démontrée parce qu'une seule paire coûtait ~520 000 tokens — le
+juge était dans la boucle. Ici il n'y est pas, donc 100 paires coûtent du temps de calcul
+local et rien d'autre. **Ce n'est pas un hasard : c'est le choix de mesurer la CIBLE
+plutôt que l'OUTIL qui l'évalue.**
+
+Ce que cette mesure ne dit pas, et qu'il faut répéter : un secret paraphrasé, épelé ou
+encodé n'est pas compté. Le chiffre est une borne BASSE du taux de fuite, et il ne dit
+rien de la qualité du juge.
+
+**Protocole déclaré AVANT lancement**, en tête du module : 100 paires, cible `demo`
+(un seul niveau), test des signes unilatéral au seuil 0,05, hypothèse « la forme
+séquencée fuite plus souvent que la forme composée ». Les paramètres sont des constantes
+du module, et modifier l'un d'eux par la ligne de commande déclenche un avertissement
+« résultat exploratoire, pas confirmatoire ». Changer un protocole après avoir vu un
+résultat, c'est choisir celui qui plaît.
+
+Le bilan rapporte aussi deux choses que le total masquerait : la répartition des
+victoires PAR TECHNIQUE — un effet tenant sur une seule technique serait une propriété de
+ce payload, pas du format — et la proportion de fuites invisibles dans la dernière
+réponse, qui est l'argument direct de la consigne multi-tours de l'arbitre.
+
+**Deux erreurs de ma part dans les tests de cette mesure, dont une déjà vue.** `pytest` a
+collecté `test_des_signes` comme un test, parce que son nom commence par « test » — même
+défaut que `from cibles.http import tester` en phase 8, et la même correction, un alias à
+l'import. Et ma cible simulée distinguait les deux formats sur l'historique, ce qui est
+faux : le PREMIER tour d'une séquence n'a pas plus d'historique qu'un message composé. Ce
+qui signe la composition est la présence SIMULTANÉE du préambule et de la demande. Un
+test dont la cible simulée est fausse mesure la simulation.
+
+663 tests `pytest`, toujours sans aucun appel LLM.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

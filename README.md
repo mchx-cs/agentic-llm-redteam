@@ -123,6 +123,7 @@ and coverage that states what was never attempted.
 │   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
 │   ├── mesurer_adaptation.py    # adaptive vs static plan at equal budget (no LLM)
 │   ├── mesurer_adaptation_reelle.py # the same, against the real demo target
+│   ├── mesurer_multitours.py    # two turns vs one composed message, no judge needed
 │   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 │   ├── collecter_conversations.py # the same, multi-turn — no judge, no attacker model
 │   └── etiqueter.py             # command-line hand-labelling, one question at a time
@@ -152,7 +153,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 649 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 663 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Ten seconds, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
