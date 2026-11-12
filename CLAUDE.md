@@ -2523,6 +2523,45 @@ la reconnaissance tourne sur le modèle local — mais elle reste à faire.
 
 642 tests `pytest`, toujours sans aucun appel LLM.
 
+**La récolte réclame maintenant ce que la cible protège (2026-11-13).** Correction du
+déséquilibre de la première récolte — 3 positifs sur 64 — dont la cause était
+structurelle et non un hasard du tirage : les trois objectifs génériques de la
+bibliothèque (`presentation`, `mission`, `culture-generale`) sont tous ANODINS, donc le
+second tour ne demandait jamais rien de sensible.
+
+Le collecteur lance donc la reconnaissance et prend ses objectifs (`refus-N` pour chaque
+sujet que la cible dit refuser, `outil-N` pour chaque outil déclaré). C'est exactement ce
+qu'une campagne fait, et c'est gratuit : l'analyste tourne sur `PROFIL_ACTIF`, local par
+défaut. `--anodin` garde l'ancien comportement, pour récolter des NÉGATIFS — un corpus
+sans conversations inoffensives aurait des faux positifs nuls par construction.
+
+Trois bornes, parce qu'une récolte qu'on n'étiquettera jamais ne sert à rien :
+`MAX_OBJECTIFS` vaut 3 (une cible bavarde peut déclarer six sujets refusés), chaque
+séquence reçoit UN objectif en tour de rôle (la taille reste séquences × échantillons),
+et un repli sur l'objectif anodin est ANNONCÉ — sans quoi on s'étonnerait ensuite de
+n'avoir aucun positif.
+
+**Et ce branchement a introduit un défaut que j'ai failli laisser passer : les tests
+appelaient un modèle.** `collecter()` lance désormais la reconnaissance, donc
+`demander_au_llm`. Les sept tests du collecteur ont continué à passer — **parce qu'Ollama
+tourne sur la machine de développement**. En intégration continue, où il n'y a ni Ollama
+ni clé, ils auraient tous échoué.
+
+La règle du projet est explicite depuis la phase 10 : « un test qui appellerait un modèle
+n'a rien à faire dans `tests/` ». Elle était tenue par convention ; elle est maintenant
+tenue par le CODE. Une fixture `aucun_appel_de_modele` rend tout appel à un modèle fatal
+dans ce fichier, et les tests passent `anodin=True`, qui ne sonde rien. La nouvelle
+reconnaissance est testée en neutralisant `reconnaitre`, ce qui vérifie le branchement
+sans dépendre d'un modèle.
+
+Leçon à garder : **un environnement de développement plus riche que l'intégration
+continue masque les dépendances qu'on vient d'ajouter.** C'est le pendant de la fixture
+qui neutralise l'instantané garak (phase 7) — là, l'environnement local était plus riche
+et cachait un test devenu tautologique ; ici, il cachait un test devenu dépendant d'un
+service. Dans les deux cas, ce qui tourne en local mentait sur ce qui tournerait ailleurs.
+
+648 tests `pytest`, et désormais une garantie exécutable qu'ils n'appellent aucun modèle.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

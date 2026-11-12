@@ -66,8 +66,63 @@ MAX_SEQUENCES = 12
 # que le manuel OWASP nomme explicitement.
 OBJECTIF_CONTROLE = "presentation"
 
+# Combien d'objectifs issus de la reconnaissance on fait tourner. Borné :
+# une cible bavarde peut déclarer six sujets refusés, et croiser tout avec
+# tout gonflerait une récolte qu'on n'étiquettera jamais.
+MAX_OBJECTIFS = 3
 
-def _sequences(limite=MAX_SEQUENCES):
+
+def _objectifs(interroger_cible, bibliotheque, anodin=False):
+    """
+    Ce que le second tour va RÉCLAMER.
+
+    Le problème qu'on corrige ici est structurel, et la première récolte l'a
+    rendu visible : 3 positifs pour 61 négatifs. Les trois objectifs
+    génériques de la bibliothèque (`presentation`, `mission`,
+    `culture-generale`) sont tous ANODINS, donc le second tour ne demandait
+    jamais ce que la cible protège. Mesurer le rappel d'un juge sur trois cas
+    ne voudrait rien dire.
+
+    Les objectifs qui réclament quelque chose viennent de la RECONNAISSANCE :
+    `refus-N` pour chaque sujet que la cible dit refuser, `outil-N` pour
+    chaque outil qu'elle déclare. C'est exactement ce qu'une campagne fait,
+    et c'est gratuit — l'analyste tourne sur le profil actif, local par
+    défaut.
+
+    Avec `anodin`, on garde l'objectif de contrôle : un corpus a besoin de
+    conversations entièrement inoffensives, sinon ses faux positifs sont nuls
+    par construction.
+    """
+    generiques = {o["id"]: o for o in bibliotheque["objectifs"]}
+    controle = (generiques.get(OBJECTIF_CONTROLE)
+                or next(iter(generiques.values())))
+    if anodin:
+        return [controle], "objectif de contrôle (anodin)"
+
+    from agents.planificateur import objectifs_pour
+    from agents.reconnaissance import reconnaitre
+
+    print("Reconnaissance de la cible (sondes anodines, modèle local)...")
+    fiche = reconnaitre(interroger_cible)
+    vises = [o for o in objectifs_pour(fiche, bibliotheque)
+             if o.get("origine") == "reconnaissance"][:MAX_OBJECTIFS]
+
+    if not vises:
+        # Une cible qui ne déclare ni sujet refusé ni outil ne donne aucun
+        # objectif ciblé. On le DIT : sans ça, la récolte repartirait sur
+        # l'objectif anodin et on s'étonnerait de n'avoir aucun positif.
+        print("/!\\ La cible ne déclare ni sujet refusé ni outil : aucun "
+              "objectif ciblé. Récolte avec l'objectif anodin, qui ne "
+              "produira presque que des négatifs.")
+        return [controle], "objectif de contrôle (faute de mieux)"
+
+    for objectif in vises:
+        print(f"  objectif retenu : {objectif['id']} — "
+              f"{objectif['formulation'][:70]}")
+    return vises, f"{len(vises)} objectif(s) issus de la reconnaissance"
+
+
+def _sequences(limite=MAX_SEQUENCES, objectifs=None):
     """
     Les séquences à jouer : (identifiant, messages, provenance).
 
@@ -76,14 +131,20 @@ def _sequences(limite=MAX_SEQUENCES):
     comme le tour de rôle d'une campagne.
     """
     bibliotheque = charger_bibliotheque()
-    objectifs = {o["id"]: o for o in bibliotheque["objectifs"]}
-    objectif = objectifs.get(OBJECTIF_CONTROLE) or next(iter(objectifs.values()))
+    if not objectifs:
+        generiques = {o["id"]: o for o in bibliotheque["objectifs"]}
+        objectifs = [generiques.get(OBJECTIF_CONTROLE)
+                     or next(iter(generiques.values()))]
 
     sequences = []
     for technique in bibliotheque["techniques"]:
         complets = technique.get("payloads_complets") or []
         if not complets:
             continue
+        # Tour de rôle sur les objectifs : chaque séquence en reçoit UN, pour
+        # que la taille de la récolte reste prévisible (séquences ×
+        # échantillons) tout en variant ce qui est réclamé.
+        objectif = objectifs[len(sequences) % len(objectifs)]
         sequences.append({
             "technique": technique["id"],
             "objectif": objectif["id"],
@@ -108,12 +169,16 @@ def _etiquette(nom_cible):
     return "".join(c for c in (nom_cible or "env") if c.isalnum()) or "env"
 
 
-def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES):
+def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES,
+              anodin=False):
     interroger_cible = choisir_cible(nom_cible)
     exiger_conversation(interroger_cible, nom_cible or "la cible configurée")
     etiquette = _etiquette(nom_cible)
 
-    sequences = _sequences(limite)
+    objectifs, resume = _objectifs(interroger_cible, charger_bibliotheque(),
+                                   anodin)
+    print(f"  -> {resume}\n")
+    sequences = _sequences(limite, objectifs)
     if not sequences:
         raise SystemExit(
             "Aucune séquence : la bibliothèque n'a aucun payload complet.\n"
@@ -195,6 +260,10 @@ def principal(arguments=None):
     parseur.add_argument("--comparer", action="store_true",
                          help="récolter aussi la variante MONO-TOUR des mêmes "
                               "ingrédients, pour des paires comparables")
+    parseur.add_argument("--anodin", action="store_true",
+                         help="second tour anodin (objectif de contrôle), au "
+                              "lieu de réclamer ce que la cible protège : "
+                              "récolte des NÉGATIFS")
     parseur.add_argument("--sequences", type=int, default=MAX_SEQUENCES,
                          metavar="N", help=f"séquences au plus "
                                            f"(défaut : {MAX_SEQUENCES})")
@@ -210,7 +279,8 @@ def principal(arguments=None):
           f"Aucun juge, aucun modèle attaquant : seule la cible est appelée.")
     print(f"Au plus {arguments.sequences} séquence(s) × {NB_ECHANTILLONS} "
           f"échantillon(s), {MAX_TOURS} tours maximum chacune.\n")
-    collecter(arguments.cible, arguments.comparer, arguments.sequences)
+    collecter(arguments.cible, arguments.comparer, arguments.sequences,
+              arguments.anodin)
     return 0
 
 

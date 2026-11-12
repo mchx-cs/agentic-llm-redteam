@@ -18,6 +18,30 @@ import pytest
 from agents.attaquant import composer, sequencer
 
 
+@pytest.fixture(autouse=True)
+def aucun_appel_de_modele(monkeypatch):
+    """
+    Tout appel à un modèle depuis ce fichier doit LEVER.
+
+    Ajouté après un faux positif de ma part : brancher la reconnaissance dans
+    le collecteur a rendu ces tests dépendants d'un modèle, et ils passaient
+    quand même — parce qu'Ollama tourne sur la machine de développement. Ils
+    auraient échoué en intégration continue, où il n'y a ni Ollama ni clé.
+
+    La règle du projet est explicite : « un test qui appellerait un modèle
+    n'a rien à faire dans tests/ ». Elle était respectée par convention ;
+    elle est maintenant tenue par le code.
+    """
+    def refuser(*_, **__):
+        raise AssertionError(
+            "appel à un modèle depuis tests/ : interdit. Passe `anodin=True` "
+            "ou neutralise la reconnaissance.")
+
+    for module in ("llm_client", "agents.reconnaissance", "agents.arbitre"):
+        monkeypatch.setattr(f"{module}.demander_au_llm", refuser,
+                            raising=False)
+
+
 class TestSequencer:
     """
     `sequencer` est `composer` coupé en deux. Les deux doivent partager leurs
@@ -77,7 +101,7 @@ class TestRecolte:
         monkeypatch.setattr(collecteur, "choisir_cible", lambda *a: cible)
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
-        entrees = collecteur.collecter(limite=1)
+        entrees = collecteur.collecter(limite=1, anodin=True)
 
         assert entrees
         for entree in entrees:
@@ -97,7 +121,7 @@ class TestRecolte:
                             lambda *a: self._cible())
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
-        entrees = collecteur.collecter(limite=1)
+        entrees = collecteur.collecter(limite=1, anodin=True)
         assert len({e["groupe"] for e in entrees}) == 1
         assert len({e["id"] for e in entrees}) == len(entrees)
 
@@ -112,7 +136,7 @@ class TestRecolte:
                             lambda *a: self._cible())
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
-        entrees = collecteur.collecter(limite=1, comparer=True)
+        entrees = collecteur.collecter(limite=1, comparer=True, anodin=True)
 
         formats = {e["format"] for e in entrees}
         assert formats == {"mono-tour", "multi-tours"}
@@ -128,7 +152,7 @@ class TestRecolte:
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
         with pytest.raises(RuntimeError):
-            collecteur.collecter(limite=1)
+            collecteur.collecter(limite=1, anodin=True)
 
     def test_l_historique_est_bien_porte_d_un_tour_a_l_autre(
             self, monkeypatch, tmp_path):
@@ -138,7 +162,7 @@ class TestRecolte:
         monkeypatch.setattr(collecteur, "choisir_cible", lambda *a: cible)
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
-        collecteur.collecter(limite=1)
+        collecteur.collecter(limite=1, anodin=True)
 
         # Deuxième message d'une séquence : il doit voir les deux tours
         # précédents. Sans ça, la « conversation » est une suite de messages
@@ -285,8 +309,8 @@ class TestRecolteAdditive:
     def test_deux_cibles_coexistent_dans_la_recolte(self, monkeypatch,
                                                     tmp_path):
         collecteur = self._preparer(monkeypatch, tmp_path)
-        collecteur.collecter("demo", limite=1)
-        entrees = collecteur.collecter("demo:3", limite=1)
+        collecteur.collecter("demo", limite=1, anodin=True)
+        entrees = collecteur.collecter("demo:3", limite=1, anodin=True)
 
         # L'identifiant porte la cible, sinon les deux niveaux écriraient
         # sous le même nom et l'un écraserait l'autre.
@@ -297,7 +321,104 @@ class TestRecolteAdditive:
     def test_relancer_la_meme_recolte_ne_duplique_rien(self, monkeypatch,
                                                        tmp_path):
         collecteur = self._preparer(monkeypatch, tmp_path)
-        premiere = collecteur.collecter("demo", limite=1)
-        seconde = collecteur.collecter("demo", limite=1)
+        premiere = collecteur.collecter("demo", limite=1, anodin=True)
+        seconde = collecteur.collecter("demo", limite=1, anodin=True)
         assert len(seconde) == len(premiere)
         assert len({e["id"] for e in seconde}) == len(seconde)
+
+
+class TestObjectifsIssusDeLaReconnaissance:
+    """
+    Le second tour doit RÉCLAMER ce que la cible protège.
+
+    La première récolte a rendu le défaut visible : 3 positifs pour 61
+    négatifs. La cause n'était pas le tirage mais la bibliothèque — ses trois
+    objectifs génériques (`presentation`, `mission`, `culture-generale`) sont
+    tous anodins, donc le second tour ne demandait jamais rien de sensible.
+    Mesurer le rappel d'un juge sur trois cas ne voudrait rien dire.
+    """
+
+    def _fiche(self, refuses=(), outils=()):
+        return {"role": "assistant", "langue": "fr", "outils": list(outils),
+                "sujets_refuses": list(refuses), "mentionne_consignes": True,
+                "produit_du_code": None, "traite_des_documents": None,
+                "contexte": [], "indices": [], "echanges": [],
+                "avertissement": None}
+
+    def test_les_sujets_refuses_deviennent_la_demande(self, monkeypatch):
+        import evaluation.collecter_conversations as collecteur
+        from agents.attaquant import charger_bibliotheque
+
+        monkeypatch.setattr("agents.reconnaissance.reconnaitre",
+                            lambda _: self._fiche(refuses=["le code du coffre"]))
+        objectifs, resume = collecteur._objectifs(
+            lambda m: "ok", charger_bibliotheque(avec_garak=False))
+
+        assert objectifs
+        assert any("coffre" in o["formulation"] for o in objectifs)
+        assert "reconnaissance" in resume
+
+    def test_les_outils_aussi(self, monkeypatch):
+        import evaluation.collecter_conversations as collecteur
+        from agents.attaquant import charger_bibliotheque
+
+        monkeypatch.setattr("agents.reconnaissance.reconnaitre",
+                            lambda _: self._fiche(outils=["consulter_dossier"]))
+        objectifs, _ = collecteur._objectifs(
+            lambda m: "ok", charger_bibliotheque(avec_garak=False))
+        assert any("consulter_dossier" in o["formulation"] for o in objectifs)
+
+    def test_le_nombre_d_objectifs_est_borne(self, monkeypatch):
+        # Une cible bavarde peut déclarer six sujets refusés : croiser tout
+        # avec tout gonflerait une récolte qu'on n'étiquettera jamais.
+        import evaluation.collecter_conversations as collecteur
+        from agents.attaquant import charger_bibliotheque
+
+        monkeypatch.setattr(
+            "agents.reconnaissance.reconnaitre",
+            lambda _: self._fiche(refuses=[f"sujet {n}" for n in range(9)]))
+        objectifs, _ = collecteur._objectifs(
+            lambda m: "ok", charger_bibliotheque(avec_garak=False))
+        assert len(objectifs) <= collecteur.MAX_OBJECTIFS
+
+    def test_une_cible_muette_fait_RETOMBER_sur_l_anodin_en_le_disant(
+            self, monkeypatch, capsys):
+        # Le repli ne doit pas être silencieux : sans l'avertissement, on
+        # s'étonnerait ensuite de n'avoir aucun positif dans la récolte.
+        import evaluation.collecter_conversations as collecteur
+        from agents.attaquant import charger_bibliotheque
+
+        monkeypatch.setattr("agents.reconnaissance.reconnaitre",
+                            lambda _: self._fiche())
+        objectifs, resume = collecteur._objectifs(
+            lambda m: "ok", charger_bibliotheque(avec_garak=False))
+
+        assert len(objectifs) == 1
+        assert "faute de mieux" in resume
+        assert "négatifs" in capsys.readouterr().out
+
+    def test_anodin_ne_lance_aucune_reconnaissance(self):
+        # Mode contrôle : aucun appel, donc aucune sonde envoyée à la cible.
+        # La fixture `aucun_appel_de_modele` le garantit déjà, mais ce test
+        # dit l'intention plutôt que de la laisser deviner.
+        import evaluation.collecter_conversations as collecteur
+        from agents.attaquant import charger_bibliotheque
+
+        def interdite(_):
+            raise AssertionError("--anodin ne doit pas sonder la cible")
+
+        objectifs, resume = collecteur._objectifs(
+            interdite, charger_bibliotheque(avec_garak=False), anodin=True)
+        assert len(objectifs) == 1
+        assert "anodin" in resume
+
+    def test_les_sequences_tournent_sur_les_objectifs(self):
+        # Chaque séquence reçoit UN objectif, en tour de rôle : la taille de
+        # la récolte reste prévisible tout en variant ce qui est réclamé.
+        import evaluation.collecter_conversations as collecteur
+
+        objectifs = [{"id": "a", "formulation": "demander A"},
+                     {"id": "b", "formulation": "demander B"}]
+        sequences = collecteur._sequences(limite=4, objectifs=objectifs)
+        if len(sequences) >= 2:
+            assert {s["objectif"] for s in sequences} == {"a", "b"}
