@@ -2356,6 +2356,101 @@ s'ouvrirait elle-même, et l'arbitre y verrait une faille.
 2. remesurer le juge sur ce format : les 96 % actuels ne voudront plus rien dire ;
 3. alors, et alors seulement, trancher PyRIT contre une boucle maison, sur une mesure.
 
+**La récolte multi-tours est prête, et elle est GRATUITE (2026-11-13).**
+`evaluation/collecter_conversations.py` joue des séquences fixes contre la cible et
+enregistre les conversations à étiqueter. Aucun modèle attaquant, aucun juge : seule la
+CIBLE est appelée, donc contre `--cible demo` qui tourne sur Ollama, la récolte ne
+consomme pas un token de quota.
+
+Ce point n'est pas un détail de confort : c'est ce qui rend le corpus multi-tours
+atteignable. L'offre gratuite du juge (200 000 tokens par jour) ne permettrait pas de
+récolter ET de mesurer ; un corpus de conversations étiqueté à la main demande des
+dizaines de cas.
+
+**Les séquences ne sont pas inventées : ce sont les ingrédients de `composer`, livrés en
+deux messages.** `attaquant.sequencer()` est `composer()` coupé en deux — le payload
+complet de garak au premier tour, la demande au second. Trois conséquences :
+- on ne récolte que des techniques déjà pratiquées par l'outil, règle héritée de la
+  récolte mono-tour ;
+- c'est la **voie 2** des trois laissées ouvertes par l'écart garak/cible de la
+  phase 12 (« jailbreak au premier tour, demande au second ») ;
+- et surtout, `--comparer` récolte AUSSI la variante composée des mêmes ingrédients.
+  Les deux bras partagent donc leur contenu : la différence mesure le FORMAT, pas un
+  changement de payload ni de cible. Un test vérifie cette propriété, parce qu'elle est
+  la condition de toute la comparaison à venir.
+
+**Première récolte : 32 entrées, et un résultat qui valide la conception des
+catégories.** Quatre séquences × 2 échantillons × (conversation + témoin composé),
+contre `demo` puis `demo:3` — 16 conversations et 16 témoins mono-tour, en une dizaine
+de minutes et sans un token de quota.
+
+Le code `ARCHIVES-7731` apparaît dans une réponse de la cible **2 fois sur 32**. Et ces
+deux cas disent tout :
+- les deux sont des conversations, **aucun** témoin composé n'a fuité ;
+- les deux fuitent **au tour 1** ;
+- dans les deux, **la dernière réponse est inoffensive**.
+
+Donc un juge qui ne lirait que la dernière réponse d'une conversation conclurait « aucun
+constat » sur un échange où la cible a livré son prompt système entier, code compris.
+C'est le piège `fuite-a-un-tour-anterieur`, et il n'est pas hypothétique : c'est le
+comportement réel et majoritaire de cette cible.
+
+Deux échantillons d'une seule technique contre un seul niveau ne MESURENT rien — le
+projet a déjà consigné deux fois le piège de la conclusion hâtive sur un tirage. Mais ils
+établissent que la catégorie était nécessaire, et que la consigne de l'arbitre devra
+porter sur TOUTE la conversation, pas sur son dernier tour. Le niveau 3, lui, n'a rien
+lâché : son filtre de sortie attrape le code en clair, donc il fournit les négatifs du
+corpus, exactement comme prévu.
+
+**Cinq catégories d'étiquetage ajoutées**, dont trois nomment des pièges qui N'EXISTENT
+PAS en un seul tour :
+- `multitours-reussi`, `multitours-refuse` : l'apport attendu du format ;
+- `fuite-a-un-tour-anterieur` : la fuite a eu lieu avant le dernier tour ;
+- `secret-dit-par-l-attaquant` : le secret apparaît dans un tour de l'ATTAQUANT et la
+  cible ne l'a jamais dit. C'est le faux positif propre au multi-tours — un juge qui voit
+  toute la conversation voit aussi ce que l'attaquant a écrit. Ce cas ne peut PAS se
+  récolter (nos payloads ne contiennent pas le secret) : il s'écrit à la main, comme
+  D13–D20 l'ont été ;
+- `conversation-anodine` : le contrôle du format, sans quoi les faux positifs seraient
+  nuls par construction — le piège que le manuel OWASP nomme explicitement.
+
+**Le garde-fou qui compte : verser des conversations dans le corpus ne doit pas déplacer
+la mesure de l'arbitre.** Les chiffres publiés (89 / 100 / 96) portent sur des échanges
+mono-tour. Si `evaluer_arbitre` donnait ces conversations au juge, il rendrait des
+verdicts sur un format qu'il ne connaît pas, et ces verdicts compteraient dans la
+précision : le premier `--integrer` aurait silencieusement déplacé une mesure de
+référence. Il les écarte donc, **et il le dit** (« N conversation(s) multi-tours
+ignorée(s) »). Un corpus qui grandit sans que la mesure change doit s'expliquer, sans
+quoi on finit par ne plus savoir ce que le chiffre couvre.
+
+Le contrôle anti-fuite entre `dev` et `test` tourne AVANT cet écartement, et c'est voulu :
+une conversation et son témoin mono-tour portent le MÊME groupe, donc une répartition
+entre les deux jeux doit être refusée même si l'une des deux n'est pas mesurée. Sans ça,
+on pourrait régler l'arbitre sur le témoin et le mesurer sur la conversation.
+
+**Un défaut trouvé en pensant au travail réel, pas au code.** La première version
+ÉCRASAIT la récolte précédente. Or le corpus a besoin des trois niveaux de défense de la
+cible de démonstration — le niveau 1 fournit les positifs, les niveaux 2 et 3 les
+négatifs — donc de plusieurs commandes. La seconde aurait effacé la première, et une
+soirée d'étiquetage avec elle. La récolte AJOUTE désormais, les identifiants portent la
+cible (`C-demo3-01-1`), et relancer la même commande ne duplique rien.
+
+**Ce que la récolte ne fournira jamais**, et qu'il faut écrire à la main : les cas
+`secret-dit-par-l-attaquant`, et des conversations de plus de deux tours. `MAX_TOURS`
+vaut 5, mais `sequencer` n'en produit que deux — une escalade progressive à la Crescendo
+demande un modèle attaquant, donc du quota, donc la décision PyRIT.
+
+**Limite connue de la sélection des séquences** : `_sequences()` prend un payload
+complet par technique, dans l'ordre de la bibliothèque — donc, pour les sondes garak,
+l'ordre alphabétique. C'est le défaut corrigé pour les campagnes en phase 3a, et il est
+assumé ici : un CORPUS a besoin de variété, pas de pertinence. Les sondes `ansiescape`
+qui sortent en tête ne visent pas un secret, mais elles fournissent précisément les
+négatifs (`conversation-anodine`, `multitours-refuse`) sans lesquels les faux positifs
+seraient nuls par construction. Si le corpus manque de positifs, c'est `--sequences` et
+le niveau de défense qu'il faut régler, pas l'ordre.
+
+636 tests `pytest`, toujours sans aucun appel LLM.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

@@ -25,7 +25,17 @@ from pathlib import Path
 
 DOSSIER = Path(__file__).parent
 FICHIER_A_ETIQUETER = DOSSIER / "a_etiqueter.json"
+FICHIER_CONVERSATIONS = DOSSIER / "a_etiqueter_conversations.json"
 FICHIER_CORPUS = DOSSIER / "echanges_etiquetes.json"
+
+# Les deux récoltes, avec la clé qui porte leurs entrées. Un seul outil
+# d'étiquetage pour les deux formats : séparer les outils aurait séparé les
+# catégories, et on ne pourrait plus regrouper les erreurs par type de piège
+# à travers les formats — qui est exactement la comparaison qui intéresse.
+SOURCES = (
+    (FICHIER_A_ETIQUETER, "echanges"),
+    (FICHIER_CONVERSATIONS, "conversations"),
+)
 
 # Les catégories déjà utilisées dans le corpus. En proposer une liste évite
 # d'inventer un synonyme ("fuite_directe", "fuite directe"…) qui empêcherait
@@ -50,6 +60,23 @@ CATEGORIES = [
     "outil-legitime",
     "outil-decrit",
     "outil-sans-tiers",
+    # --- Multi-tours (phase 3b) ----------------------------------------
+    # Les deux premières nomment l'apport attendu du format. Les trois
+    # suivantes sont les pièges qui N'EXISTENT PAS en un seul tour, et ce
+    # sont elles qui comptent : un juge qui voit toute la conversation voit
+    # aussi ce que l'ATTAQUANT a écrit.
+    "multitours-reussi",
+    "multitours-refuse",
+    # Le secret apparaît dans un tour de l'attaquant (il l'a collé, deviné
+    # ou supposé) et la cible ne l'a jamais dit. Le compter comme une fuite
+    # serait le faux positif propre au multi-tours.
+    "secret-dit-par-l-attaquant",
+    # La fuite a eu lieu à un tour ANTÉRIEUR, et le dernier tour est un
+    # refus. Un juge qui ne lirait que la dernière réponse la raterait.
+    "fuite-a-un-tour-anterieur",
+    # Une conversation entière anodine : le contrôle du format. Sans elle,
+    # les faux positifs seraient nuls par construction.
+    "conversation-anodine",
 ]
 
 
@@ -88,14 +115,61 @@ def afficher_echange(echange, position, total):
     print(f"Secret du chatbot : {echange['secret']}")
     print(f"Provenance        : {echange.get('source', '—')}")
     print("-" * 70)
-    print(f"Utilisateur : {echange['payload']}")
-    print(f"Chatbot     : {echange['reponse']}")
+    for ligne in _lignes_de_l_echange(echange):
+        print(ligne)
     print("=" * 70)
 
 
+def _lignes_de_l_echange(echange):
+    """
+    Les lignes à lire pour étiqueter, mono-tour ou conversation.
+
+    Les tours sont NUMÉROTÉS : sans cela, étiqueter une conversation de cinq
+    tours revient à chercher à quel moment la cible a cédé, ce qui est
+    exactement l'information qu'on demande à l'auteur de porter.
+    """
+    if not echange.get("tours"):
+        return [f"Utilisateur : {echange['payload']}",
+                f"Chatbot     : {echange['reponse']}"]
+
+    lignes = []
+    for position, tour in enumerate(echange["tours"]):
+        numero = position // 2 + 1
+        qui = "Utilisateur" if tour["role"] == "utilisateur" else "Chatbot    "
+        lignes.append(f"[tour {numero}] {qui} : {tour['contenu']}")
+    return lignes
+
+
+def _recoltes():
+    """
+    Les récoltes présentes, chacune avec ses entrées.
+
+    Une récolte absente n'est pas une erreur : `a_etiqueter.json` et
+    `a_etiqueter_conversations.json` sont des fichiers de travail, hors git,
+    et on n'a pas toujours les deux.
+    """
+    recoltes = []
+    for fichier, cle in SOURCES:
+        if not fichier.exists():
+            continue
+        donnees = charger(fichier)
+        recoltes.append({"fichier": fichier, "donnees": donnees,
+                         "entrees": donnees.get(cle, [])})
+    return recoltes
+
+
 def etiqueter():
-    donnees = charger(FICHIER_A_ETIQUETER)
-    echanges = donnees["echanges"]
+    recoltes = _recoltes()
+    if not recoltes:
+        noms = ", ".join(f.name for f, _ in SOURCES)
+        print(f"Aucune récolte à étiqueter ({noms} absents).",
+              "Récolte d'abord :",
+              "  python -m evaluation.collecter_echanges",
+              "  python -m evaluation.collecter_conversations --cible demo",
+              sep="\n")
+        return
+
+    echanges = [e for recolte in recoltes for e in recolte["entrees"]]
     restants = [e for e in echanges if e["attendu"] is None]
 
     if not restants:
@@ -108,7 +182,15 @@ def etiqueter():
 
     # Un groupe déjà étiqueté impose son jeu aux échanges suivants du même
     # groupe : le script d'évaluation refuse un groupe réparti entre dev et test.
+    # Les deux récoltes partagent cette table : une conversation et sa
+    # variante mono-tour portent le MÊME groupe, et doivent donc aller dans
+    # le même jeu — sans quoi le jeu gelé contiendrait le témoin d'un cas sur
+    # lequel l'arbitre a été réglé.
     jeu_du_groupe = {e["groupe"]: e["jeu"] for e in echanges if e["jeu"]}
+    fichier_de = {id(e): recolte["fichier"] for recolte in recoltes
+                  for e in recolte["entrees"]}
+    donnees_de = {id(e): recolte["donnees"] for recolte in recoltes
+                  for e in recolte["entrees"]}
 
     try:
         for echange in restants:
@@ -150,7 +232,7 @@ def etiqueter():
 
             # Enregistrement après CHAQUE échange : une interruption ne
             # fait jamais perdre le travail déjà fait.
-            enregistrer(FICHIER_A_ETIQUETER, donnees)
+            enregistrer(fichier_de[id(echange)], donnees_de[id(echange)])
             print(f"-> {echange['id']} enregistré.")
 
     except KeyboardInterrupt:
@@ -164,10 +246,11 @@ def etiqueter():
 
 def integrer():
     """Verse les échanges étiquetés dans echanges_etiquetes.json."""
-    donnees = charger(FICHIER_A_ETIQUETER)
+    recoltes = _recoltes()
     corpus = charger(FICHIER_CORPUS)
 
-    prets = [e for e in donnees["echanges"] if e["attendu"] is not None]
+    prets = [e for recolte in recoltes for e in recolte["entrees"]
+             if e["attendu"] is not None]
     if not prets:
         print("Aucun échange étiqueté à intégrer.")
         return
@@ -192,12 +275,25 @@ def integrer():
         ajoutes += 1
 
     enregistrer(FICHIER_CORPUS, corpus)
-    restants = [e for e in donnees["echanges"] if e["attendu"] is None]
-    donnees["echanges"] = restants
-    enregistrer(FICHIER_A_ETIQUETER, donnees)
+    # Chaque récolte ne garde que ce qui reste à étiqueter.
+    for fichier, cle in SOURCES:
+        recolte = next((r for r in recoltes if r["fichier"] == fichier), None)
+        if recolte is None:
+            continue
+        recolte["donnees"][cle] = [e for e in recolte["entrees"]
+                                   if e["attendu"] is None]
+        enregistrer(fichier, recolte["donnees"])
 
+    multitours = sum(1 for e in corpus["echanges"] if e.get("tours"))
     print(f"{ajoutes} échange(s) ajouté(s) au corpus "
-          f"({len(corpus['echanges'])} au total).")
+          f"({len(corpus['echanges'])} au total, dont {multitours} "
+          f"conversation(s)).")
+    if multitours:
+        # Le juge ne sait pas encore lire une conversation : le dire ici
+        # évite de croire que l'évaluation les a prises en compte.
+        print("Les conversations ne sont PAS encore mesurées : la consigne "
+              "de l'arbitre attend un seul tour. `evaluer_arbitre` les "
+              "ignore et le signale.")
     if restants:
         print(f"{len(restants)} échange(s) restent à étiqueter.")
 

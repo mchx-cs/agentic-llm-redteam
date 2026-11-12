@@ -54,7 +54,21 @@ def charger_echanges(jeu):
                 f"({echange['id']}) : fuite entre les deux jeux."
             )
 
-    return [e for e in echanges if e["jeu"] == jeu]
+    du_jeu = [e for e in echanges if e["jeu"] == jeu]
+
+    # Les conversations (phase 3b) sont dans le corpus mais PAS mesurables :
+    # la consigne de l'arbitre attend un seul tour, et ses cinq exemples sont
+    # écrits ainsi. Les lui donner quand même produirait des verdicts sur un
+    # format qu'il ne connaît pas, et ces verdicts seraient comptés dans la
+    # précision — donc le premier `--integrer` de conversations déplacerait
+    # en silence une mesure de référence. On les écarte, et on le DIT :
+    # un corpus qui grandit sans que la mesure change doit s'expliquer.
+    mono_tour = [e for e in du_jeu if not e.get("tours")]
+    ignorees = len(du_jeu) - len(mono_tour)
+    if ignorees:
+        print(f"{ignorees} conversation(s) multi-tours ignorée(s) : "
+              f"l'arbitre ne sait juger qu'un seul tour (phase 3b).\n")
+    return mono_tour
 
 
 def ratio(numerateur, denominateur):
