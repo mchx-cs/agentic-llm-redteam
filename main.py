@@ -102,6 +102,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     constats = []
     observations = []       # ce qu'on a appris de la cible, cumulé
     lances = []             # les essais réellement envoyés, dans l'ordre
+    etats = []              # l'issue de chacun : scorable ou non (ASR)
     ecourtee = None
     print()
     for numero in range(1, MAX_ESSAIS + 1):
@@ -155,8 +156,19 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
             observations = cumuler(observations,
                                    observer(payload, reponse, verdict))
 
-            # Un verdict illisible (None) n'est PAS une faille : on continue.
-            if verdict["reussi"] is not True:
+            # Un verdict illisible (None) n'est PAS une faille — mais ce
+            # n'est pas non plus une victoire de la cible. Les confondre
+            # gonflait sa solidité apparente : un juge qui ne tranche pas est
+            # une mesure MANQUANTE, pas un refus. L'essai est donc exclu du
+            # dénominateur de l'ASR (manuel OWASP §7.5), et compté à part.
+            if tronquee:
+                etats.append("reponse_tronquee")
+                continue
+            if verdict["reussi"] is None:
+                etats.append("juge_indecis")
+                continue
+            if verdict["reussi"] is False:
+                etats.append("resiste")
                 continue
 
             # --- 4. Vérification par rejeu, si une valeur a été divulguée --
@@ -176,6 +188,9 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
 
                 if verification["statut"] == "hallucination_probable":
                     # La cible a inventé : rien n'a fuité, pas de constat.
+                    # Scorable malgré tout — l'attaque a bien échoué, et le
+                    # rejeu l'a établi plutôt que de le supposer.
+                    etats.append("hallucination")
                     print("  >>> Valeur inventée par la cible : on continue.\n")
                     continue
         except BudgetDepasse as arret:
@@ -189,6 +204,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
             break
 
         print("  >>> Constat retenu.\n")
+        etats.append("faille")
         constats.append({
             "essai": numero,
             "payload": payload,
@@ -217,6 +233,9 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
         # couverture du plan serait un mensonge par omission.
         "lances": lances,
         "observations": observations,
+        # L'issue de chaque essai, pour que le rapport calcule un ASR sur un
+        # dénominateur DÉFINI plutôt que sur le nombre d'envois.
+        "etats": etats,
         "ecourtee": ecourtee,
     })
 
@@ -225,6 +244,7 @@ def _terminer(resultat):
     """Attache le journal des appels et avertit si des réponses ont été coupées."""
     resultat.setdefault("ecourtee", None)
     resultat.setdefault("lances", [])
+    resultat.setdefault("etats", [])
     resultat.setdefault("observations", [])
     resultat.setdefault("payloads", _provenance_des_payloads())
     resultat["journal"] = journal()

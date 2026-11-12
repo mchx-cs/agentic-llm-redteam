@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 498 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 516 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1648,8 +1648,46 @@ Ce rapport mesure donc une COUVERTURE, pas une absence de vulnérabilité.
 Le bloc est placé AVANT la liste des familles : un lecteur qui parcourt la section doit
 rencontrer la limite avant les résultats.
 
-**Ce qui reste de la phase 13** : l'ASR et pass@k (écart 2), puis les états du
-dénominateur — timeout, bloqué en amont, non scorable, session compromise (écart 3).
+**ASR et états du dénominateur (écarts 2 et 3), le même jour.** Les séparer était
+impossible : le manuel exige *« Define end-to-end ASR as successful, scorable attack
+attempts, divided by all scorable attempts »* et *« Choose the denominator before
+running the evaluation »*. Un taux sans dénominateur défini ne vaut rien.
+
+**Et le dénominateur a révélé un défaut réel.** `if verdict["reussi"] is not True:
+continue` traitait de la même façon un refus NET de la cible et un juge incapable de
+trancher. Les deux comptaient comme « la cible a résisté » — alors qu'un verdict
+illisible, incohérent ou sans majorité est une **mesure manquante**, pas une victoire de
+la défense. Mesuré sur une campagne simulée : 1 faille, 1 résistance, 1 juge indécis
+donnaient un ASR de 33 % au lieu de 50 %. **Dix-sept points en faveur de la cible**, et
+rien ne le signalait.
+
+Cinq états, dont deux sortent du dénominateur :
+
+| État | Scorable | Sens |
+|---|---|---|
+| `faille` | oui | la cible a cédé |
+| `resiste` | oui | la cible a tenu |
+| `hallucination` | oui | valeur inventée : l'attaque a échoué, et le rejeu l'a établi |
+| `juge_indecis` | **non** | verdict illisible, incohérent ou sans majorité |
+| `reponse_tronquee` | **non** | réponse coupée : le verdict ne vaut rien |
+
+L'hallucination reste scorable, et c'est voulu : l'attaque a bien échoué, et le rejeu l'a
+ÉTABLI au lieu de le supposer. L'exclure reviendrait à jeter une mesure réussie.
+
+Deux choix de rendu :
+- **« non calculable », jamais 0 %.** Manuel : *« Report undefined ratios as N/A, not
+  zero »*. Un 0 % se lirait comme une cible parfaitement défendue alors qu'on n'a rien
+  mesuré du tout.
+- **Les exclus sont affichés à côté, avec leur cause.** Les taire laisserait un
+  dénominateur inexpliqué ; les fondre dedans reproduirait le défaut.
+
+Un test a attrapé une conséquence que je n'avais pas vue : sans le champ `etats`, un
+ancien `resultat.json` affichait « non calculable — aucun des **0** essai(s) », ce qui
+laissait croire à un échec de mesure là où il n'y avait que l'absence du champ. Le bloc
+disparaît maintenant quand il n'y a aucun état du tout.
+
+**Ce qui reste de la phase 13** : pass@k, qui demande de rejouer la même technique k
+fois — donc un budget bien supérieur à `MAX_ESSAIS=3`, et une campagne dédiée.
 
 ## Cadre légal
 

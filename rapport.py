@@ -175,6 +175,12 @@ def construire(resultat, cible="inconnue"):
         "portee": statistiques.resumer(
             len(constats), len(lances), independants=False,
             quoi="essais de campagne"),
+        # ASR de bout en bout, sur un dénominateur DÉFINI : les essais que
+        # l'oracle a su trancher. Un verdict illisible ou une réponse coupée
+        # en sont exclus — ce sont des mesures manquantes, pas des victoires
+        # de la cible (manuel OWASP §7.5).
+        "taux_de_succes": statistiques.taux_de_succes(
+            resultat.get("etats") or []),
         "constats": constats,
         "journal": resultat.get("journal", {}),
     }
@@ -188,7 +194,59 @@ def construire(resultat, cible="inconnue"):
 LONGUEUR_EXTRAIT = 300
 
 
-def _bloc_portee(portee, nb_constats):
+def _bloc_asr(taux):
+    """
+    Le taux de succès des attaques, sur un dénominateur défini.
+
+    Manuel §7.5 : « Define end-to-end ASR as successful, scorable attack
+    attempts, divided by all scorable attempts under the stated oracle » —
+    et « Report undefined ratios as N/A, not zero ».
+
+    Les non-scorables sont affichés À CÔTÉ, jamais fondus dans le
+    dénominateur : un verdict que le juge n'a pas su rendre est une mesure
+    manquante, pas un refus de la cible. Les confondre gonflait la solidité
+    apparente de celle-ci — mesuré sur une campagne simulée, l'écart était de
+    17 points.
+    """
+    # Aucun état du tout : c'est un resultat.json d'avant ce changement, pas
+    # une campagne sans essai exploitable. Afficher « non calculable sur 0
+    # essai » y serait absurde, et pire, laisserait croire à un échec de
+    # mesure là où il n'y a eu que l'absence du champ.
+    if not taux or not any(taux.get("comptes", {}).values()):
+        return []
+
+    lignes = []
+    if taux["taux"] is None:
+        lignes += [
+            f"Taux de succès : **non calculable** — aucun des "
+            f"{taux['non_scorables']} essai(s) n'a pu être tranché par "
+            f"l'arbitre. Ce n'est pas 0 % : c'est une absence de mesure.",
+            "",
+        ]
+    else:
+        lignes += [
+            f"Taux de succès des attaques : **{taux['taux']:.0%}** "
+            f"({taux['succes']} sur {taux['scorables']} essai(s) "
+            f"exploitable(s)).",
+            "",
+        ]
+
+    if taux["non_scorables"]:
+        lignes += [
+            f"{taux['non_scorables']} essai(s) sont EXCLUS de ce calcul, "
+            f"faute de verdict exploitable. Les compter comme des échecs "
+            f"d'attaque surévaluerait la résistance de la cible :",
+            "",
+        ]
+        for etat, nombre in taux["comptes"].items():
+            if nombre and not statistiques.est_scorable(etat):
+                lignes.append(f"- {nombre} × {statistiques.ETATS[etat][2]}")
+        lignes.append("")
+
+    return lignes
+
+
+def _bloc_portee(portee, nb_constats, taux=None):
     """
     Ce que le décompte d'essais permet d'affirmer — et surtout pas.
 
@@ -209,6 +267,7 @@ def _bloc_portee(portee, nb_constats):
 
     essais = portee["essais"]
     lignes = ["**Ce que ce résultat permet d'affirmer**", ""]
+    lignes += _bloc_asr(taux)
 
     if nb_constats:
         lignes += [
@@ -434,7 +493,8 @@ def rendre_markdown(rapport, abreger=False):
     # Exigé par le GenAI Red Teaming Manual (§7.5) : un zéro succès ne prouve
     # rien, il borne. Placé AVANT la liste des familles, parce qu'un lecteur
     # qui parcourt la section doit rencontrer la limite avant les résultats.
-    lignes += _bloc_portee(rapport.get("portee"), len(rapport["constats"]))
+    lignes += _bloc_portee(rapport.get("portee"), len(rapport["constats"]),
+                           rapport.get("taux_de_succes"))
 
     lignes += ["**Familles testées**", ""]
     lignes += [f"- `{f}`" for f in couverture["familles_testees"]] or \

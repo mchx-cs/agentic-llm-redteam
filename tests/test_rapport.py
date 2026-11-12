@@ -428,3 +428,51 @@ class TestPorteeDuRejeu:
             constats=[_constat(rejeu="confirmee")], lances=[_payload()])))
         assert "Rejeu" in rendu
         assert "Taux de reproduction" not in rendu
+
+
+class TestTauxDeSucces:
+    """
+    ASR de bout en bout, sur un denominateur DEFINI (manuel OWASP §7.5).
+    """
+
+    @staticmethod
+    def _avec_etats(etats, constats=()):
+        resultat = _resultat(constats=list(constats),
+                             lances=[_payload()] * len(etats))
+        resultat["etats"] = etats
+        return construire(resultat)
+
+    def test_le_taux_est_affiche(self):
+        rendu = rendre_markdown(self._avec_etats(
+            ["faille", "resiste"], [_constat()]))
+        assert "Taux de succès des attaques : **50%**" in rendu
+
+    def test_les_non_scorables_sont_exclus_ET_dits(self):
+        rendu = rendre_markdown(self._avec_etats(
+            ["faille", "resiste", "juge_indecis"], [_constat()]))
+        assert "**50%** (1 sur 2" in rendu          # pas 1 sur 3
+        assert "EXCLUS de ce calcul" in rendu
+        assert "surévaluerait la résistance" in rendu
+
+    def test_chaque_cause_d_exclusion_est_nommee(self):
+        rendu = rendre_markdown(self._avec_etats(
+            ["faille", "juge_indecis", "reponse_tronquee"], [_constat()]))
+        assert "verdict illisible" in rendu
+        assert "réponse coupée" in rendu
+
+    def test_aucun_scorable_dit_NON_CALCULABLE_pas_zero(self):
+        # « 0 % » se lirait comme une cible parfaitement defendue.
+        rendu = rendre_markdown(self._avec_etats(["juge_indecis"] * 2))
+        assert "non calculable" in rendu
+        assert "Ce n'est pas 0 %" in rendu
+
+    def test_sans_etats_le_bloc_n_apparait_pas(self):
+        # Un resultat.json d'avant ce changement reste lisible.
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()])))
+        assert "Taux de succès" not in rendu
+
+    def test_le_detail_est_dans_le_json(self):
+        rapport = self._avec_etats(["faille", "juge_indecis"], [_constat()])
+        taux = rapport["taux_de_succes"]
+        assert taux["scorables"] == 1 and taux["non_scorables"] == 1
+        assert taux["comptes"]["juge_indecis"] == 1
