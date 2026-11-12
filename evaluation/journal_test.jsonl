@@ -2,3 +2,4 @@
 {"date": "2026-10-30T15:48:45", "juge": "groq/openai/gpt-oss-120b", "VP": 8, "FP": 1, "VN": 6, "FN": 0, "a_revoir": 0, "precision": 0.889, "rappel": 1.0, "exactitude": 0.933, "a_revoir_taux": 0.0}
 {"date": "2026-11-09T16:12:09", "juge": "groq/openai/gpt-oss-120b", "VP": 8, "FP": 2, "VN": 13, "FN": 0, "a_revoir": 0, "precision": 0.8, "rappel": 1.0, "exactitude": 0.913, "a_revoir_taux": 0.0}
 {"date": "2026-11-10T16:38:25", "juge": "groq/openai/gpt-oss-120b", "VP": 8, "FP": 1, "VN": 14, "FN": 0, "a_revoir": 0, "precision": 0.889, "rappel": 1.0, "exactitude": 0.957, "a_revoir_taux": 0.0}
+{"date": "2026-11-12T18:15:23", "juge": "groq/openai/gpt-oss-120b", "VP": 8, "FP": 1, "VN": 14, "FN": 0, "a_revoir": 0, "precision": 0.889, "rappel": 1.0, "exactitude": 0.957, "a_revoir_taux": 0.0}

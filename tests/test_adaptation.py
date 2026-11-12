@@ -527,3 +527,69 @@ class TestGrainDeLaDiversite:
         delta, _ = ajuster(self._sonde("encoding", "base64", priorite=0),
                            observations, lances)
         assert delta == BONUS_TECHNIQUE_EFFICACE + POIDS_DIVERSITE
+
+
+class TestTemoinStatique:
+    """
+    `--sans-adaptation` rejoue le plan statique : meme vivier, meme ordre de
+    priorite, mais sans rien apprendre des reponses.
+
+    Pourquoi il existe : jusqu'ici le gain de l'adaptation n'etait mesure que
+    sur cibles SIMULEES (`evaluation/mesurer_adaptation.py`). Comparer sur une
+    vraie cible exige un temoin, et un temoin exige ce drapeau.
+    """
+
+    @staticmethod
+    def _campagne(adaptatif, essais=4):
+        import contextlib
+        import io as _io
+        import main
+
+        fiche = {"role": "a", "langue": "fr", "outils": [],
+                 "sujets_refuses": ["le code"], "mentionne_consignes": True,
+                 "produit_du_code": None, "traite_des_documents": None,
+                 "contexte": [], "indices": [], "echanges": [],
+                 "avertissement": None}
+        originaux = (main.reconnaitre, main.juger_par_vote, main.MAX_ESSAIS)
+        main.reconnaitre = lambda c: dict(fiche)
+        main.MAX_ESSAIS = essais
+        tours = {"n": 0}
+
+        def juger(payload, reponse):
+            tours["n"] += 1
+            premier = tours["n"] == 1
+            return {"reussi": premier,
+                    "critere": "obeissance" if premier else "aucun",
+                    "analyse": "x", "valeur": None,
+                    "votes": [premier] * 3, "brut": ""}
+
+        main.juger_par_vote = juger
+        try:
+            with contextlib.redirect_stdout(_io.StringIO()):
+                resultat = main.lancer_campagne(
+                    lambda m: "Je ne peux pas.", "simulee",
+                    adaptatif=adaptatif)
+            return [e["technique"] for e in resultat["lances"]]
+        finally:
+            main.reconnaitre, main.juger_par_vote, main.MAX_ESSAIS = originaux
+
+    def test_l_adaptatif_creuse_ce_qui_a_marche(self):
+        lances = self._campagne(adaptatif=True)
+        assert lances[0] == lances[1]      # la technique qui a cédé repasse
+
+    def test_le_temoin_poursuit_son_balayage(self):
+        lances = self._campagne(adaptatif=False)
+        assert len(set(lances)) == len(lances)   # aucune repetition
+
+    def test_les_deux_bras_different(self):
+        # Sinon le temoin ne temoignerait de rien.
+        assert self._campagne(True) != self._campagne(False)
+
+    def test_le_temoin_part_du_MEME_plan(self):
+        # Le premier essai doit etre identique : ce qui change, c'est ce qui
+        # se passe APRES la premiere reponse, pas le point de depart.
+        assert self._campagne(True)[0] == self._campagne(False)[0]
+
+    def test_le_temoin_lance_autant_d_essais(self):
+        # A budget egal, sinon la comparaison ne vaut rien.
+        assert len(self._campagne(True)) == len(self._campagne(False))

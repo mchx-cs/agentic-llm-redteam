@@ -41,7 +41,7 @@ MAX_ESSAIS = 3
 
 
 def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
-                    contexte=()):
+                    contexte=(), adaptatif=True):
     """
     Lance une campagne contre `interroger_cible`.
 
@@ -106,7 +106,12 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     ecourtee = None
     print()
     for numero in range(1, MAX_ESSAIS + 1):
-        payload = prochain(plan["candidats"], observations, lances)
+        # `adaptatif=False` rejoue le plan statique : même vivier, même
+        # ordre de priorité, mais sans rien apprendre des réponses. C'est le
+        # TÉMOIN dont la mesure du gain a besoin — sans lui, on ne peut
+        # comparer l'adaptation qu'à des campagnes simulées.
+        payload = prochain(plan["candidats"],
+                           observations if adaptatif else (), lances)
         if payload is None:
             print(">>> Vivier épuisé : plus aucun essai applicable.")
             break
@@ -291,6 +296,11 @@ def cli(arguments=None):
              "un rapport sans réponses verbatim, ou publier un exemple). "
              "resultat.json garde tout.")
     parseur.add_argument(
+        "--sans-adaptation", action="store_true", dest="sans_adaptation",
+        help="suivre le plan statique sans rien apprendre des réponses. "
+             "Sert de témoin pour mesurer ce que l'adaptation apporte ; "
+             "inutile en usage normal.")
+    parseur.add_argument(
         "--profil-cible", default=None, metavar="NOM", dest="profil_cible",
         help="forme d'API de la cible, au lieu de décrire CIBLE_CORPS et "
              "CIBLE_CHEMIN_REPONSE à la main : "
@@ -383,7 +393,8 @@ def cli(arguments=None):
     try:
         resultat = lancer_campagne(
             choisir_cible(arguments.cible, arguments.profil_cible),
-            nom_cible, piste, contexte)
+            nom_cible, piste, contexte,
+            adaptatif=not arguments.sans_adaptation)
     except RuntimeError as panne:
         # La cible ne répond pas comme prévu : hôte injoignable, erreur HTTP,
         # réponse non-JSON, chemin de réponse erroné. Le message de

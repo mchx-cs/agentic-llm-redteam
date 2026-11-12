@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 542 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 547 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -1737,6 +1737,57 @@ de notre nom. Quand ATLAS redeviendra joignable, il suffira de compléter
 **Deux tests existants ont dû être corrigés**, et c'était légitime : ils vérifiaient que
 la dernière ligne de la piste était `fin_campagne`. Le sceau la ferme désormais, et la
 clôture la précède.
+
+**Jeu de test gelé consulté le 2026-11-12, après l'ajout du critère `abus_outils`.**
+Résultat : précision 89 %, rappel 100 %, exactitude 96 %, aucun faux négatif. Seule
+erreur, T10, l'hallucination connue — limite structurelle du juge aveugle.
+
+**Chiffres identiques à la consultation du 2026-11-10**, au cas près (VP=8, FP=1, VN=14,
+FN=0 dans les deux). Donc **zéro régression** : ajouter un troisième critère n'a pas
+dégradé le juge sur des cas qu'il n'avait jamais vus, et la discipline a tenu — les dix
+cas D16–D20 ont tous été versés en `dev`, et le jeu gelé n'a pas été ouvert pendant les
+réglages.
+
+**Ce que cette consultation ne prouve PAS, et c'est important.** Le jeu `test` ne
+contient **aucun cas `abus_outils`** — vérifié : ses onze catégories vont de `controle`
+à `jeu-de-role-anodin`, et les cinq catégories d'abus d'outils sont toutes en `dev`. Ce
+résultat mesure donc l'ABSENCE DE RÉGRESSION sur les deux anciens critères, pas la
+justesse du nouveau sur des cas gelés.
+
+Pour mesurer le critère lui-même sur des cas jamais regardés, il faudrait un second
+corpus d'abus d'outils, étiqueté à la main puis gelé. C'est le travail qu'exige la règle
+du projet, et il n'est pas fait.
+
+Troisième consultation du jeu gelé depuis sa création, toutes journalisées dans
+`evaluation/journal_test.jsonl` : 2026-11-09 (80/100/91), 2026-11-10 (89/100/96),
+2026-11-12 (89/100/96).
+
+**Mesurer le gain de l'adaptation sur une VRAIE cible coûte bien plus que prévu
+(recalculé le 2026-11-12).** L'estimation de ~90 000 tokens était fausse d'un facteur
+six. Mesuré sur la campagne du jour : **13 000 tokens par essai**, votes et rejeux
+compris. Donc :
+
+| Budget | Une campagne | Une PAIRE adaptatif / statique |
+|---|---|---|
+| 10 | ~130 000 | ~260 000 |
+| 20 | ~260 000 | **~520 000**, soit 2,6 jours de quota |
+
+Et une seule paire ne conclurait rien : la cible est probabiliste, et le projet a déjà
+consigné ce piège (« conclusion hâtive sur UN tirage »). Il en faudrait cinq à dix, soit
+plusieurs semaines de quota gratuit. **La mesure telle qu'elle était planifiée est
+infaisable.**
+
+**La voie praticable : juge LOCAL, cible locale, coût nul.** `--cible demo` tourne sur
+Ollama et `PROFIL_ARBITRE=local` aussi : la mesure devient gratuite, donc répétable sur
+autant de paires qu'il faut. `--sans-adaptation` fournit le témoin — même vivier, même
+ordre de priorité, mais sans rien apprendre des réponses.
+
+**Le biais de cette approche n'est PAS symétrique, et c'est ce qui la rend exploitable.**
+llama3.2 comme juge plafonne à 50 % de rappel. Or l'adaptation se nourrit des VERDICTS
+(`technique_efficace`) : un juge médiocre la prive de la moitié de son signal, sans rien
+changer au bras statique. La mesure **sous-estime** donc le gain. Conséquence pratique :
+si l'adaptatif gagne malgré ça, c'est une borne basse du gain réel et le résultat est
+solide ; s'il ne gagne pas, on ne peut rien conclure.
 
 ## Cadre légal
 
