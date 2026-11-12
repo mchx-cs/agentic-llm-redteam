@@ -161,9 +161,14 @@ That last command shows the real dividing line isn't "does it call a model". It 
 none, and still doesn't belong in CI: it answers in *numbers to read* rather than
 pass/fail, and depends on a random draw, so any threshold would flip on the first weight
 change. So `tests/` holds what must be true regardless; `evaluation/` holds what gets
-measured. Its current answer is honest rather than flattering — the gain grows with the
-budget (+0.4 findings at 3 attempts, +4.7 at 40) and essentially all of it comes from
-one signal, "this technique just worked, try its other payloads".
+measured. Its current answer is honest rather than flattering: against *simulated*
+targets the gain grows with the budget (+0.4 findings at 3 attempts, +4.7 at 40) and
+essentially all of it comes from one signal, "this technique just worked, try its other
+payloads". Against the *real* demo target, 40 pre-registered pairs went the other way —
+the static plan won, p = 0.03. That may well be the local judge's fault rather than the
+adaptation's (a judge that misses half the leaks doesn't just starve the adaptation of
+signal, it misinforms it), but the honest statement is that **phase 3a is not
+demonstrated on a real target**.
 
 
 ### Trying it in one command

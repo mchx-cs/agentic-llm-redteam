@@ -1858,6 +1858,45 @@ Ce que la mesure établit quand même : **l'arbitrage couverture/constats est r�
 chiffré** — l'adaptation échange 0,8 module de couverture contre 0,4 constat. C'est la
 première fois qu'on l'observe sur une vraie cible et non en simulation.
 
+**La série décisive a RENVERSÉ ce résultat (40 paires, 2026-11-12).** Protocole déclaré
+AVANT lancement : N = 40, budget 8, juge local, analyse des 40 seules sans les 20
+précédentes, test des signes unilatéral au seuil 0,05.
+
+| | constats | modules |
+|---|---|---|
+| adaptatif | 0,62 | 7,12 |
+| **statique** | **0,80** | 8,00 |
+
+L'adaptatif fait mieux 5 fois, **moins bien 14 fois**, égalité 21 fois. L'hypothèse
+déclarée (« l'adaptatif fait mieux ») donne **p = 0,99**. En sens inverse, le statique
+l'emporte avec **p = 0,032 — significatif**.
+
+Les 20 premières paires donnaient 9 mieux / 3 moins bien. **C'était du bruit.** Et c'est
+exactement pourquoi N avait été fixé à l'avance : en prolongeant « encore quelques
+paires » après les 20, il y avait toutes les occasions de s'arrêter sur un résultat
+flatteur. Le p-hacking évité ici n'est pas une précaution théorique — il aurait produit
+une affirmation fausse, consignée, et vitrine.
+
+**Ce qu'on ne peut PAS conclure, et la raison était écrite avant de voir le chiffre.**
+Le juge local a 50 % de rappel. Le script annonçait qu'il PRIVE l'adaptation de signal ;
+en réalité il fait pire, il la **DÉSINFORME** — une faille ratée devient un
+`technique_bloquee`, donc l'adaptation s'éloigne d'une technique qui marchait. Ce
+mécanisme n'avait pas été anticipé, et il suffit à expliquer un résultat défavorable
+sans rien dire de l'adaptation elle-même.
+
+**Ce qui est établi malgré tout, et ce sont trois faits :**
+1. **On ne peut plus affirmer que l'adaptation aide sur une vraie cible.** La seule
+   mesure favorable est simulée, et le projet l'avait déjà marquée comme telle.
+2. **Le coût en couverture est constant** : ~7,1 modules contre 8,0, sur les 60 paires.
+3. **L'adaptation dépend de la QUALITÉ DU JUGE** d'une façon qui n'avait jamais été
+   mesurée — et qui était structurellement invisible en simulation, où le juge est
+   parfait par construction. C'est le résultat le plus intéressant de la série.
+
+**La mesure qui trancherait** reste infaisable : refaire ces 40 paires avec le juge Groq
+(100 % de rappel) coûterait ~520 000 tokens par paire. Donc la phase 3a reste
+**non démontrée sur cible réelle**, et le dire est préférable à la laisser passer pour
+acquise.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

@@ -13,19 +13,26 @@ tokens par essai avec le juge Groq, soit ~520 000 tokens pour une seule paire
 cible étant probabiliste : il en faudrait cinq à dix, donc des semaines. Avec
 un juge local la mesure est gratuite, donc répétable autant qu'il faut.
 
-LE BIAIS, ET POURQUOI IL EST EXPLOITABLE. llama3.2 comme juge plafonne à 50 %
-de rappel : il rate une faille sur deux. Ce biais n'est PAS symétrique entre
-les deux bras, et c'est le point — l'adaptation se nourrit des VERDICTS
-(`technique_efficace` remonte ce qui vient de marcher), donc un juge médiocre
-la prive de la moitié de son signal, alors que le bras statique suit son plan
-sans rien écouter. La mesure SOUS-ESTIME donc le gain de l'adaptation.
+LE BIAIS, ET CE QU'IL FAUT EN LIRE. llama3.2 comme juge plafonne à 50 % de
+rappel : il rate une faille sur deux. Ce biais n'est PAS symétrique entre les
+deux bras, et c'est le point — l'adaptation se nourrit des VERDICTS
+(`technique_efficace` remonte ce qui vient de marcher), alors que le bras
+statique suit son plan sans rien écouter.
 
-Conséquence, et c'est ce qui rend le résultat lisible :
+**Correction apportée après les 40 paires du 2026-11-12 :** cette note disait
+qu'un juge médiocre PRIVE l'adaptation de signal, donc que la mesure
+sous-estime son gain. C'est incomplet, et l'erreur compte. Un juge qui rate
+une faille ne reste pas muet : il rend un verdict NÉGATIF, que l'adaptation
+lit comme `technique_bloquee` et qui l'éloigne d'une technique qui marchait.
+Il ne l'affame pas, il la DÉSINFORME. Le biais peut donc rendre l'adaptatif
+activement moins bon que le témoin, et pas seulement moins bon qu'il ne l'est.
+
+Conséquence pour lire un résultat :
 - si l'adaptatif gagne malgré ce handicap, c'est une BORNE BASSE du gain réel,
   et le résultat est solide ;
-- s'il ne gagne pas, on ne peut RIEN conclure — ni dans un sens ni dans
-  l'autre, parce qu'on ne saura pas distinguer « l'adaptation n'apporte rien »
-  de « le juge l'a aveuglée ».
+- s'il perd ou fait match nul, on ne peut RIEN conclure sur l'adaptation —
+  seulement que l'ensemble {adaptation + ce juge} ne vaut pas le plan statique.
+  Ce qui est utile à savoir, mais ne répond pas à la question posée.
 
 Lance-le depuis la racine du projet, avec PROFIL_ARBITRE=local :
     python -m evaluation.mesurer_adaptation_reelle --paires 3 --budget 8
