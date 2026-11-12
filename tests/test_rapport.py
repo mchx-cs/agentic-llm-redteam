@@ -10,7 +10,10 @@ Ce qui est surveillé de près : que le rapport ne puisse jamais laisser croire
 
 import pytest
 
-from rapport import construire, evaluer_gravite, rendre_markdown
+import re
+
+from rapport import (ATLAS_PAR_FAMILLE, atlas_pour, construire,
+                     evaluer_gravite, rendre_markdown)
 
 
 def _payload(technique="t", famille="LLM02"):
@@ -476,3 +479,75 @@ class TestTauxDeSucces:
         taux = rapport["taux_de_succes"]
         assert taux["scorables"] == 1 and taux["non_scorables"] == 1
         assert taux["comptes"]["juge_indecis"] == 1
+
+
+class TestCorrespondanceAtlas:
+    """
+    Le manuel demande de mapper chaque cas de test a OWASP LLM ET a MITRE
+    ATLAS. Les identifiants viennent du manuel lui-meme avec leurs libelles
+    verbatim : atlas.mitre.org renvoyait 404 sur la matrice et sur chaque
+    page de technique le 2026-11-12, donc la source primaire n'etait pas
+    consultable.
+
+    D'ou un mapping VOLONTAIREMENT incomplet. Un ID ATLAS plausible mais non
+    verifie dans un rapport de securite est pire qu'une case vide : il a
+    l'air verifiable et ne l'est pas.
+    """
+
+    def test_LLM01_est_mappee(self):
+        techniques = atlas_pour("LLM01:2025 Prompt Injection")
+        assert ("AML.T0051", "LLM Prompt Injection") in techniques
+        assert ("AML.T0054", "LLM Jailbreak") in techniques
+
+    @pytest.mark.parametrize("famille", [
+        "LLM02:2025 Sensitive Information Disclosure",
+        "LLM07:2025 System Prompt Leakage",
+        "LLM06:2025 Excessive Agency",
+    ])
+    def test_les_familles_sans_source_ne_sont_PAS_mappees(self, famille):
+        assert atlas_pour(famille) == []
+
+    def test_une_famille_absente_ne_leve_pas(self):
+        assert atlas_pour(None) == []
+        assert atlas_pour("") == []
+
+    def test_le_rapport_cite_les_identifiants(self):
+        essai = _payload(famille="LLM01:2025 Prompt Injection")
+        rendu = rendre_markdown(construire(_resultat(lances=[essai])))
+        assert "AML.T0051" in rendu
+        assert "AML.T0054" in rendu
+
+    def test_le_rapport_NOMME_ce_qui_n_est_pas_mappe(self):
+        # Une case vide passerait pour un oubli ; la nommer dit que c'est un
+        # choix, et pourquoi.
+        essai = _payload(famille="LLM02:2025 Sensitive Information Disclosure")
+        rendu = rendre_markdown(construire(_resultat(lances=[essai])))
+        assert "Sans correspondance vérifiée" in rendu
+        assert "pire qu'une case vide" in rendu
+
+    def test_la_source_est_citee(self):
+        # Un identifiant sans source n'est pas verifiable par le lecteur.
+        essai = _payload(famille="LLM01:2025 Prompt Injection")
+        rendu = rendre_markdown(construire(_resultat(lances=[essai])))
+        assert "GenAI Red Teaming Manual" in rendu
+
+    def test_chaque_identifiant_a_le_bon_format(self):
+        for techniques in ATLAS_PAR_FAMILLE.values():
+            for identifiant, nom in techniques:
+                assert re.fullmatch(r"AML\.T\d{4}(\.\d{3})?", identifiant)
+                assert nom.strip()
+
+
+class TestTelemetrieAuRapport:
+    def test_le_case_id_et_le_sceau_sont_dans_le_json(self):
+        resultat = _resultat(lances=[_payload()])
+        resultat["case_id"] = "20261112-180000-demo"
+        resultat["sceau_piste"] = "a" * 64
+        campagne = construire(resultat)["campagne"]
+        assert campagne["case_id"] == "20261112-180000-demo"
+        assert campagne["sceau_piste"] == "a" * 64
+
+    def test_un_ancien_resultat_sans_ces_champs_ne_leve_pas(self):
+        campagne = construire(_resultat(lances=[_payload()]))["campagne"]
+        assert campagne["case_id"] is None
+        assert campagne["telemetrie"] is None

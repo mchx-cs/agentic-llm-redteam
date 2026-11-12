@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 from audit import (FICHIER_AUTORISATION, AutorisationManquante, PisteAudit,
-                   exiger)
+                   exiger, telemetrie)
 from agents.adaptation import cumuler, observer, prochain
 from agents.arbitre import juger, juger_par_vote
 from agents.planificateur import planifier, resumer as resumer_plan
@@ -377,7 +377,8 @@ def cli(arguments=None):
     # La piste d'audit est écrite TOUJOURS, même sans --rapport : elle est
     # la trace de ce qu'on a envoyé, pas un livrable optionnel.
     piste = PisteAudit(Path(dossier) / f"{horodatage}-journal.jsonl",
-                       nom_cible, autorisation)
+                       nom_cible, autorisation,
+                       contexte=telemetrie(nom_cible, arguments.profil_cible))
 
     try:
         resultat = lancer_campagne(

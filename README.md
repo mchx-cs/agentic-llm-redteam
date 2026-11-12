@@ -575,7 +575,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **11** | Campaign budget — hard ceiling in calls or tokens, clean stop when reached | **Done** |
 | **12** | Reproducible demo — a deliberately vulnerable target shipped with the project, one command to reproduce a detection, campaign output excerpt in this README | **Done** |
 | **13** | Statistically defensible results — Wilson bound on "no findings", ASR, explicit denominator states | In progress |
-| **14** | Engagement-grade evidence — SHA-256 hashing, case IDs, target telemetry, MITRE ATLAS mapping | Planned |
+| **14** | Engagement-grade evidence — SHA-256 hashing, case IDs, target telemetry, MITRE ATLAS mapping | **Done** |
 
 Phases 1, 6 and 8 are what it takes to run the tool against systems you own. Phases 2,
 9, 10 and 11 are what separates that from a tool fit for a client engagement: a

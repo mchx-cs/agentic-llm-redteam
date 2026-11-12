@@ -350,8 +350,11 @@ class TestEchecDeCibleEnCampagne:
         assert len(pistes) == 1
         lignes = [json.loads(l) for l in
                   pistes[0].read_text(encoding="utf-8").splitlines() if l]
-        assert lignes[-1]["type"] == "fin_campagne"
-        assert lignes[-1]["statut"] == "interrompue"
+        # La piste est scellée même sur une panne : le sceau ferme, la
+        # clôture le précède.
+        assert lignes[-1]["type"] == "sceau"
+        assert lignes[-2]["type"] == "fin_campagne"
+        assert lignes[-2]["statut"] == "interrompue"
 
     def test_une_cible_distante_exige_le_mandat_AVANT_la_campagne(
             self, campagne_qui_echoue, tmp_path, capsys):

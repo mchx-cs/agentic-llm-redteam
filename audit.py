@@ -20,7 +20,9 @@ distant, lui, exige un mandat. Imposer le même formulaire aux deux apprendrait
 surtout à cliquer sans lire.
 """
 
+import hashlib
 import json
+import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -126,6 +128,66 @@ def exiger(nom_cible, chemin=FICHIER_AUTORISATION):
     return verifier(charger(chemin), nom_cible)
 
 
+# --- Chaîne de preuve (manuel OWASP §7.3) ------------------------------------
+# « Tag each artifact with a unique Case ID […]. Calculate a SHA-256 hash of
+# raw evidence at collection. »
+#
+# Ce que ces empreintes font, et ce qu'elles ne font pas : elles permettent de
+# montrer qu'une piste n'a pas été retouchée entre sa production et sa
+# remise, et de citer une preuve par son empreinte sans recopier la réponse
+# verbatim d'un client. Elles ne constituent PAS une conservation en lecture
+# seule — le manuel l'exige aussi, et c'est une affaire d'infrastructure, pas
+# de code.
+
+def empreinte(contenu):
+    """SHA-256 d'un texte, en hexadécimal."""
+    if contenu is None:
+        contenu = ""
+    return hashlib.sha256(str(contenu).encode("utf-8")).hexdigest()
+
+
+def _case_id(cible):
+    """
+    Identifiant de dossier : horodaté, lisible, et stable pour une campagne.
+
+    Dérivé plutôt qu'aléatoire : un opérateur qui voit « 20261112-174500-demo »
+    sait de quelle campagne il s'agit sans rien aller rapprocher. Un UUID
+    serait unique mais muet.
+    """
+    propre = re.sub(r"[^a-zA-Z0-9]+", "-", str(cible)).strip("-").lower()[:40]
+    return f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{propre or 'cible'}"
+
+
+def verifier_sceau(chemin):
+    """
+    Une piste scellée a-t-elle été modifiée depuis sa clôture ?
+
+    Renvoie (intacte, explication). Utile en mission : si un rapport est
+    contesté, on doit pouvoir montrer que la trace n'a pas bougé.
+    """
+    chemin = Path(chemin)
+    lignes = [l for l in chemin.read_text(encoding="utf-8").splitlines() if l]
+    if not lignes:
+        return (False, "Piste vide.")
+
+    try:
+        derniere = json.loads(lignes[-1])
+    except json.JSONDecodeError:
+        return (False, "Dernière ligne illisible : piste tronquée ou altérée.")
+
+    if derniere.get("type") != "sceau":
+        return (False, "Piste non scellée : la campagne ne s'est pas "
+                       "terminée proprement, ou le sceau a été retiré.")
+
+    # Le sceau porte sur tout ce qui le précède, retour à la ligne compris.
+    avant_sceau = "".join(ligne + "\n" for ligne in lignes[:-1])
+    calcule = empreinte(avant_sceau)
+    if calcule == derniere.get("empreinte"):
+        return (True, f"Piste intacte ({derniere.get('case_id', 'sans ID')}).")
+    return (False, "Empreinte NON concordante : la piste a été modifiée "
+                   "après sa clôture.")
+
+
 class PisteAudit:
     """
     Journal rejouable des échanges avec la cible, écrit au fil de l'eau.
@@ -138,16 +200,26 @@ class PisteAudit:
     lisible même si la campagne s'interrompt en plein milieu.
     """
 
-    def __init__(self, chemin, cible, autorisation=None):
+    def __init__(self, chemin, cible, autorisation=None, contexte=None):
         self.chemin = Path(chemin)
         self.chemin.parent.mkdir(parents=True, exist_ok=True)
+        # Identifiant unique de dossier, exigé par le manuel OWASP (§7.3,
+        # « Case Identification »). Dérivé de l'horodatage et de la cible, donc
+        # reproductible et lisible — pas un UUID opaque qu'il faudrait aller
+        # rapprocher d'autre chose.
+        self.case_id = _case_id(cible)
+        self._empreintes = 0
         self._fichier = self.chemin.open("a", encoding="utf-8")
         self._ecrire({
             "type": "debut_campagne",
+            "case_id": self.case_id,
             "cible": cible,
             # None pour une cible locale : on le dit explicitement, plutôt
             # que de laisser croire à un mandat absent par oubli.
             "autorisation": autorisation or "cible locale, aucun mandat requis",
+            # Ce qu'on CONTRÔLE de l'environnement de test, et ce qu'on ne
+            # contrôle pas. Voir `telemetrie()`.
+            "environnement": contexte or {},
         })
 
     def _ecrire(self, entree):
@@ -158,9 +230,21 @@ class PisteAudit:
         self._fichier.flush()
 
     def consigner_echange(self, phase, envoye, recu, tronquee=False):
-        """Un aller-retour avec la cible : reconnaissance, attaque ou rejeu."""
+        """
+        Un aller-retour avec la cible : reconnaissance, attaque ou rejeu.
+
+        Chaque échange porte l'empreinte SHA-256 de ce qui a été envoyé et de
+        ce qui a été reçu (manuel §7.3, « Integrity Hashing »). Le contenu est
+        consigné juste à côté, donc l'empreinte ne protège pas d'une altération
+        du fichier entier — c'est la clôture qui s'en charge. Elle sert à autre
+        chose : citer une preuve dans un rapport, ou dans un échange avec le
+        client, sans recopier une réponse verbatim.
+        """
+        self._empreintes += 1
         self._ecrire({"type": "echange", "phase": phase, "envoye": envoye,
-                      "recu": recu, "tronquee": tronquee})
+                      "recu": recu, "tronquee": tronquee,
+                      "empreinte_envoye": empreinte(envoye),
+                      "empreinte_recu": empreinte(recu)})
 
     def consigner_verdict(self, essai, verdict):
         self._ecrire({"type": "verdict", "essai": essai,
@@ -169,10 +253,24 @@ class PisteAudit:
                       "votes": verdict.get("votes")})
 
     def clore(self, statut, journal):
+        """
+        Referme la piste et la SCELLE.
+
+        L'empreinte finale porte sur tout ce qui précède : elle permet de
+        montrer qu'une piste produite en mission n'a pas été retouchée après
+        coup. Elle est calculée avant d'être écrite, donc elle ne s'inclut pas
+        elle-même — sinon le scellement serait impossible à vérifier.
+        """
         self._ecrire({"type": "fin_campagne", "statut": statut,
                       "appels": journal.get("appels"),
-                      "tokens": journal.get("tokens")})
+                      "tokens": journal.get("tokens"),
+                      "echanges_consignes": self._empreintes})
+        self._fichier.flush()
+        sceau = empreinte(self.chemin.read_text(encoding="utf-8"))
+        self._ecrire({"type": "sceau", "case_id": self.case_id,
+                      "algorithme": "sha256", "empreinte": sceau})
         self._fichier.close()
+        return sceau
 
     def tracer(self, phase, interroger_cible):
         """
@@ -186,3 +284,57 @@ class PisteAudit:
             self.consigner_echange(phase, message, reponse)
             return reponse
         return interroger
+
+
+# --- Télémétrie : ce qu'on contrôle, et ce qu'on ne contrôle pas -------------
+# Manuel §7.3, « Runtime & Environment Telemetry » : model name, version,
+# provider, endpoint, generation parameters, context state… puis, et c'est la
+# phrase qui compte pour nous :
+#
+#     « Residual Non-Determinism: If sampling parameters or backend routing
+#     cannot be locked, explicitly note the potential for variance during
+#     replay. »
+#
+# Un red teamer en boîte noire ne connaît RIEN de la configuration de sa
+# cible : ni son modèle, ni sa température, ni son prompt système — c'est
+# précisément ce qu'il cherche. Prétendre la consigner serait inventer. On
+# consigne donc ce qu'on sait (le nôtre, et ce qu'on a envoyé), et on DÉCLARE
+# ce qu'on ignore, parce qu'une variance non expliquée au rejeu se lirait
+# autrement comme un défaut de la mesure.
+
+def telemetrie(nom_cible, profil_cible=None):
+    """L'environnement de test, côté connu et côté inconnu."""
+    from agents.arbitre import NB_VOTES
+    from agents.verificateur import NB_REJEUX
+    from config import PROFIL_ACTIF, PROFIL_ARBITRE, PROFILS
+
+    arbitre = PROFILS.get(PROFIL_ARBITRE, {})
+    return {
+        # Ce que NOUS exécutons : entièrement connu, donc entièrement consigné.
+        "nos_modeles": {
+            "arbitre": {
+                "profil": PROFIL_ARBITRE,
+                "modele": arbitre.get("modele"),
+                "base_url": arbitre.get("base_url"),
+                "temperature": 0,
+                "votes_par_verdict": NB_VOTES,
+            },
+            "profil_actif": PROFIL_ACTIF,
+        },
+        "cible": {
+            "nom": nom_cible,
+            "profil_http": profil_cible,
+            # Les paramètres de génération de la cible sont HORS de notre
+            # portée en boîte noire. Le dire est une information ; l'omettre
+            # laisserait croire qu'on les a figés.
+            "parametres_de_generation": "inconnus (test en boîte noire)",
+        },
+        "non_determinisme_residuel": [
+            "La cible choisit ses propres paramètres d'échantillonnage : deux "
+            "campagnes identiques peuvent donner des verdicts différents.",
+            "L'arbitre lui-même n'est pas déterministe à température 0 "
+            f"(mesuré) : d'où {NB_VOTES} votes par verdict.",
+            f"Une divulgation est rejouée {NB_REJEUX} fois, ce qui mesure la "
+            "reproductibilité sans l'éliminer.",
+        ],
+    }

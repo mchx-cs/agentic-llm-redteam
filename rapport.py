@@ -146,6 +146,10 @@ def construire(resultat, cible="inconnue"):
             # Avec QUOI on a testé : un « aucun constat » obtenu avec une
             # bibliothèque de trois mois ne dit pas la même chose.
             "payloads": resultat.get("payloads"),
+            # Chaîne de preuve et environnement de test (manuel §7.3).
+            "case_id": resultat.get("case_id"),
+            "sceau_piste": resultat.get("sceau_piste"),
+            "telemetrie": resultat.get("telemetrie"),
         },
         "fiche_cible": resultat.get("fiche"),
         # La couverture est la moitié du rapport : sans elle, « aucune faille »
@@ -192,6 +196,64 @@ def construire(resultat, cible="inconnue"):
 # du contexte, trop court pour republier une attaque ou les réponses
 # verbatim d'un client.
 LONGUEUR_EXTRAIT = 300
+
+
+# --- MITRE ATLAS : seulement ce qui est SOURCÉ -------------------------------
+# Le manuel OWASP demande de mapper chaque cas de test à OWASP LLM *et* à
+# MITRE ATLAS (§1.5, §7.4). Les identifiants ci-dessous sont ceux que le
+# manuel cite lui-même, avec leurs libellés verbatim — atlas.mitre.org était
+# injoignable (404 sur la matrice et sur chaque page de technique) le
+# 2026-11-12, donc impossible de vérifier à la source primaire.
+#
+# D'où un mapping VOLONTAIREMENT incomplet. Les familles non couvertes sont
+# nommées comme telles dans le rapport, plutôt que rapprochées d'un
+# identifiant plausible : un ID ATLAS inventé dans un rapport de sécurité est
+# pire qu'une case vide, parce qu'il a l'air vérifiable et ne l'est pas.
+ATLAS_PAR_FAMILLE = {
+    "LLM01": [("AML.T0051", "LLM Prompt Injection"),
+              ("AML.T0054", "LLM Jailbreak")],
+}
+
+SOURCE_ATLAS = ("identifiants cités par le GenAI Red Teaming Manual v1.0 "
+                "(OWASP, octobre 2026)")
+
+
+def atlas_pour(famille_owasp):
+    """Les techniques ATLAS sourcées pour une famille OWASP, ou []."""
+    if not famille_owasp:
+        return []
+    for prefixe, techniques in ATLAS_PAR_FAMILLE.items():
+        if famille_owasp.startswith(prefixe):
+            return techniques
+    return []
+
+
+def _bloc_atlas(familles):
+    """Le mapping ATLAS de la couverture, et ce qu'il ne couvre pas."""
+    mappees, non_mappees = {}, []
+    for famille in familles:
+        techniques = atlas_pour(famille)
+        if techniques:
+            mappees[famille] = techniques
+        else:
+            non_mappees.append(famille)
+
+    if not mappees and not non_mappees:
+        return []
+
+    lignes = ["", "**Correspondance MITRE ATLAS**", ""]
+    for famille, techniques in sorted(mappees.items()):
+        noms = ", ".join(f"`{ident}` ({nom})" for ident, nom in techniques)
+        lignes.append(f"- {famille} → {noms}")
+    if non_mappees:
+        lignes.append(
+            f"- Sans correspondance vérifiée : "
+            + ", ".join(sorted(non_mappees))
+            + ". Aucun identifiant n'est avancé ici faute de source "
+              "primaire consultable — un ID ATLAS plausible mais non vérifié "
+              "serait pire qu'une case vide.")
+    lignes += ["", f"Source : {SOURCE_ATLAS}.", ""]
+    return lignes
 
 
 def _bloc_asr(taux):
@@ -509,6 +571,8 @@ def rendre_markdown(rapport, abreger=False):
                    "`aucun` n'y signifie donc rien, et ces familles ne "
                    "comptent pas comme testées.", ""]
         lignes += [f"- `{f}`" for f in couverture["familles_effleurees"]]
+
+    lignes += _bloc_atlas(couverture["familles_testees"])
 
     lignes += ["", "**Familles NON testées**", ""]
     if couverture["familles_ecartees"]:

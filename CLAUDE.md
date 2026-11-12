@@ -41,7 +41,7 @@ que la cible a déjà répondu (phase 3a).
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
   exception distincte des pannes : la campagne s'arrête proprement, garde ses constats,
   et le rapport annonce en tête qu'elle a été **écourtée**.
-- **Phase 10** : 516 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
+- **Phase 10** : 542 tests `pytest` dans `tests/`, sans aucun appel LLM, lancés
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
@@ -162,7 +162,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | **Fait** |
 | 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, extrait de sortie au README | **Fait** |
 | 13 | **Résultats statistiquement défendables** : borne de Wilson sur « aucun constat », ASR, états du dénominateur (écarts 1 à 3 de l'audit OWASP) | En cours |
-| 14 | **Traçabilité de niveau mission** : hash SHA-256 des preuves, Case ID, télémétrie de la cible, MITRE ATLAS (écarts 5 à 7) | Prévu |
+| 14 | **Traçabilité de niveau mission** : hash SHA-256 des preuves, Case ID, télémétrie de la cible, MITRE ATLAS (écarts 5 à 7) | **Fait** |
 
 Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
 passage en production, et qu'une feuille de route centrée sur les attaques laissait
@@ -1688,6 +1688,55 @@ disparaît maintenant quand il n'y a aucun état du tout.
 
 **Ce qui reste de la phase 13** : pass@k, qui demande de rejouer la même technique k
 fois — donc un budget bien supérieur à `MAX_ESSAIS=3`, et une campagne dédiée.
+
+**Phase 14 : traçabilité de niveau mission (2026-11-12).** Écarts 5 à 7 de l'audit
+OWASP, tous dans §7.3 et §7.4.
+
+**Chaîne de preuve.** `audit.py` gagne un `case_id` horodaté et lisible
+(`20261112-180042-mock` plutôt qu'un UUID muet : un opérateur doit reconnaître sa
+campagne sans aller rapprocher l'identifiant d'autre chose), une empreinte SHA-256 de
+chaque échange, et un **sceau** calculé à la clôture sur tout ce qui précède.
+`verifier_sceau()` dit si une piste a été retouchée après coup — le cas qui justifie
+l'ensemble : en mission, si un rapport est contesté, on doit pouvoir montrer que la
+trace n'a pas bougé. Vérifié : altérer une réponse dans une piste scellée est détecté.
+
+Ce que ces empreintes NE font pas, et le manuel l'exige aussi : la conservation en
+lecture seule et le journal des accès. C'est de l'infrastructure, pas du code.
+
+**Télémétrie, et c'est là que l'honnêteté compte.** Le manuel demande de consigner le
+modèle, sa version, les paramètres de génération, le prompt système. Or **un red teamer
+en boîte noire ne connaît rien de tout ça** — c'est précisément ce qu'il cherche.
+Prétendre le consigner serait inventer. `telemetrie()` consigne donc :
+- ce que NOUS exécutons, entièrement connu : profil de l'arbitre, modèle, température 0,
+  nombre de votes ;
+- ce qu'on ignore, **déclaré comme tel** : « paramètres de génération de la cible :
+  inconnus (test en boîte noire) ». L'omettre laisserait croire qu'on les a figés ;
+- le **non-déterminisme résiduel** en trois points, ce que le manuel réclame
+  explicitement (*« If sampling parameters or backend routing cannot be locked,
+  explicitly note the potential for variance during replay »*). Sans ça, une variance
+  observée au rejeu se lirait comme un défaut de la mesure plutôt que comme une
+  propriété de la cible.
+
+**MITRE ATLAS : un mapping volontairement INCOMPLET.** Le manuel cite cinq identifiants
+avec leurs libellés — AML.T0015 (Evade ML Model), AML.T0043 (Craft Adversarial Data),
+AML.T0051/.001 (LLM Prompt Injection / Indirect), AML.T0054 (LLM Jailbreak),
+AML.T0070 (RAG Poisoning). Seuls deux s'appliquent à ce que nous testons, et ils
+couvrent LLM01.
+
+J'ai tenté de compléter depuis la source primaire : **atlas.mitre.org renvoyait 404** sur
+la matrice et sur chaque page de technique le 2026-11-12. Donc rien n'est avancé pour
+LLM02, LLM06 et LLM07 — et le rapport le DIT : « Sans correspondance vérifiée : […].
+Aucun identifiant n'est avancé ici faute de source primaire consultable. »
+
+C'est la décision de fond de cette phase : **un identifiant ATLAS plausible mais non
+vérifié, dans un rapport de sécurité, est pire qu'une case vide** — il a l'air
+vérifiable et ne l'est pas. Un lecteur qui le reprendrait propagerait une erreur signée
+de notre nom. Quand ATLAS redeviendra joignable, il suffira de compléter
+`ATLAS_PAR_FAMILLE`.
+
+**Deux tests existants ont dû être corrigés**, et c'était légitime : ils vérifiaient que
+la dernière ligne de la piste était `fin_campagne`. Le sceau la ferme désormais, et la
+clôture la précède.
 
 ## Cadre légal
 
