@@ -160,6 +160,8 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 10 | **Qualité logicielle** : tests sans LLM, intégration continue, paquet, ligne de commande | **Fait** |
 | 11 | **Budget de campagne** : plafond en appels ou en tokens, arrêt propre quand il est atteint | **Fait** |
 | 12 | **Démonstration reproductible** : cible vulnérable livrée, détection en une commande, extrait de sortie au README | **Fait** |
+| 13 | **Résultats statistiquement défendables** : borne de Wilson sur « aucun constat », ASR, états du dénominateur (écarts 1 à 3 de l'audit OWASP) | Prévu |
+| 14 | **Traçabilité de niveau mission** : hash SHA-256 des preuves, Case ID, télémétrie de la cible, MITRE ATLAS (écarts 5 à 7) | Prévu |
 
 Les phases 8 à 11 ont été ajoutées le 2026-11-09 : ce sont les manques qui bloquent le
 passage en production, et qu'une feuille de route centrée sur les attaques laissait
@@ -1542,6 +1544,62 @@ Deux choses vérifiées au passage, et la seconde par accident :
   d'abord `exemple.invalid` et échouaient — sur le mandat, pas sur la cible. C'était le
   bon comportement, et l'ordre des deux garde-fous a maintenant son propre test : rien
   ne part vers un tiers sans autorisation, et aucune piste d'audit n'est même ouverte.
+
+**Audit contre le GenAI Red Teaming Manual d'OWASP (2026-11-12).** Document lu :
+*GenAI Red Teaming Manual v1.0*, octobre 2026, CC BY-SA 4.0, publié par le GenAI
+Security Project (genai.owasp.org). Huit phases : Planning & Scoping, Reconnaissance &
+Fingerprinting, Surface Mapping, Exploitation & Impact, Persistence & Escalation,
+Post-Exploitation, Evaluation & Reporting, Post-Engagement & Remediation.
+
+Audit partiel et assumé comme tel : la **Phase 7 (Evaluation & Reporting)** a été lue en
+détail, parce que c'est exactement le métier de cet outil, plus l'Adversarial Testing
+Advisory et le cadrage (1.5, 1.6). Les 144 pages n'ont pas été auditées.
+
+**Ce que le projet respecte déjà**, dont deux points à la lettre :
+
+| Recommandation | Où, chez nous |
+|---|---|
+| « Validate the scorer separately from the target system » (7.2) | `evaluation/evaluer_arbitre.py`, corpus étiqueté, jeu test gelé |
+| Oracles explicites, dont un état *borderline needing adjudication* | les trois critères, et `juger_par_vote` → `None` |
+| « A missing trace must never be recorded as a defensive pass » (7.3) | détection de réponse tronquée, avertie deux fois |
+| « Record tested, untested, and inconclusive cases, including benign controls » (7.4) | testées / effleurées / écartées, plus la technique `controle` |
+| « Report Effort Alongside Success… tokens expended » (7.5) | journal des appels et des tokens, budget en coupe-circuit |
+| Reproductibilité | instantané garak local, tri stable, zéro réseau en campagne |
+| Piège du corpus 100 % malveillant (« FP et TN nuls par construction ») | 29 contrôles sur 69 dans le jeu dev |
+
+**Les écarts, par importance. Le premier est sévère et touche le cœur du projet.**
+
+1. **Pas de « bounded null ».** Le manuel est catégorique : *« A test round with zero
+   observed successes does not demonstrate that the system is secure; it only bounds how
+   large the true attack success rate could still be. Report negatives as a bounded null
+   with an upper confidence limit, never as proof of security. »* Notre rapport dit
+   « aucun constat » avec une section Couverture honnête, mais **sans borne statistique**
+   — et avec `MAX_ESSAIS=3`, la règle de trois donne 3/3 = **100 %**. Autrement dit, nos
+   « aucun constat » ne bornent rien. C'est le seul endroit où cet outil laisse encore
+   croire à une sécurité qu'il n'a pas vérifiée, ce qui est exactement ce qu'il combat
+   partout ailleurs. Le manuel donne les outils : règle de trois, intervalle de Wilson,
+   et le choix de N à partir du taux résiduel qu'on veut écarter.
+2. **Aucun ASR, Success@N ni pass@k.** On rapporte des constats, pas des taux.
+3. **Les états du dénominateur** (7.5, *The Denominator: Not Every Request Sent Is a Data
+   Point*) : timeout, bloqué en amont, non scorable, session déjà compromise. On a
+   « inconcluant » au rejeu et « partage » au vote, mais pas ces états déclarés.
+4. **Attaques adaptatives** : *« Prioritize frameworks that generate adaptive attacks
+   rather than replaying static lists. A zero-success outcome against a static prompt
+   list provides substantially weaker assurance. »* Confirme la valeur de la phase 3b.
+   Notre adaptation réordonne, elle ne reformule pas — le rapport ne le dit pas au
+   lecteur, alors qu'il devrait.
+5. **Chaîne de preuve** (7.3) : Case ID, **hash SHA-256** des preuves, journal des
+   rédactions. Notre piste est horodatée et écrite au fil de l'eau, mais sans intégrité
+   cryptographique, et `--abreger` tronque sans consigner la rédaction.
+6. **Télémétrie de la CIBLE** : modèle, version, endpoint, température, top_p, seed,
+   prompt système. On journalise nos propres appels, pas la configuration de la cible.
+7. **MITRE ATLAS** absent — le manuel demande OWASP LLM *et* ATLAS (1.5, 7.4).
+
+**Hors périmètre par conception, et à dire plutôt qu'à taire.** Les phases 5 et 6
+(persistance, escalade de privilèges, blast radius) et les traces d'exécution agentique
+supposent une cible agentique et un mandat d'exploitation. Cet outil est un scanner à un
+tour contre un chatbot. Ce n'est pas un défaut, mais le rapport devrait le nommer,
+puisque le manuel exige que la couverture dise ce qui n'a pas été tenté.
 
 ## Cadre légal
 
