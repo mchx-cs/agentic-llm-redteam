@@ -130,7 +130,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 455 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 566 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Four seconds, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -150,6 +150,7 @@ python -m evaluation.evaluer_arbitre         # judge precision and recall on the
 python -m evaluation.evaluer_arbitre --test  # frozen test set, never used for tuning
 python -m evaluation.tester_rejeu            # replay, against targets with known behaviour
 python -m evaluation.mesurer_adaptation      # adaptive vs static plan — needs no model
+PROFIL_ARBITRE=local python -m evaluation.mesurer_adaptation_reelle  # same, real target
 ```
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test set
@@ -408,18 +409,34 @@ instruction is *medium*. A penetration test whose severities change between runs
 indefensible, and the judge is already non-deterministic — stacking a second source of
 variance on top of it would be worse.
 
-A run that finds nothing says so plainly: *"0 findings in 3 attempts does not
-demonstrate the target is safe"*, with what it would take to claim otherwise (about 30
-independent attempts of one technique to rule out a 10% residual rate). It deliberately
-prints **no** confidence bound for the campaign itself — attempts are adaptive and
-heterogeneous, so the binomial model doesn't apply, and a number that looked rigorous
-without being so would be worse than none. The one place a bound *is* justified is the
-replay check, where the same payload is re-sent to the same target: "the value came back
+**The success rate has a defined denominator.** Attempts the judge could not score —
+an unreadable verdict, a split vote, a truncated reply — are excluded and listed
+separately. Counting them as failed attacks would overstate the target's resistance;
+measured on a simulated campaign, that mistake was worth 17 points in the target's
+favour. And when nothing is scorable the report prints *non calculable*, never 0%,
+because a zero reads as a perfectly defended target rather than as an absent
+measurement.
+
+**A run that finds nothing says so plainly**: *"0 findings in 3 attempts does not
+demonstrate the target is safe"*. Whether it then gives a bound depends on what was
+actually run:
+
+- an ordinary campaign gets **no** figure — attempts are adaptive and heterogeneous, so
+  the binomial model doesn't apply, and a number that looked rigorous without being so
+  would be worse than none. The report says what *would* let you claim something: about
+  30 independent attempts of one technique to rule out a 10% residual rate;
+- `--seulement <technique> --sans-adaptation` makes the attempts i.i.d. — same
+  technique, no learning — and then the bound is real: *"0 of 30 proves nothing; the
+  true rate could still reach 10%. To push that to 5%, 60 attempts; to 1%, 300."*
+
+The replay check is bounded too, and that one matters to a client: "the value came back
 2 times out of 3" reads as 67%, when three trials only support a range of 21–94%.
 
 Every report ends with what was **not** tested and why — a tool that hides its coverage
-gives a false sense of security, which is worse than no report at all. With the payload
-library still empty, that section is currently the longest part of the document.
+gives a false sense of security, which is worse than no report at all. Coverage is
+mapped to OWASP LLM and, where a published identifier could be verified, to MITRE ATLAS.
+Where none could, the report says so rather than offering a plausible ID: one that looks
+checkable without being so is worse than an empty cell.
 
 ### Payloads: synced, not hand-written
 
@@ -505,10 +522,34 @@ attacked (a mandate for one client does not cover another), and today must fall 
 the agreed window. A refusal exits with code 2 and an instruction, not a stack trace.
 `autorisation.json` is git-ignored — it names a real client.
 
+The mandate's scope is **enforced**, not just printed. If it excludes techniques, say
+so and they are not sent:
+
+```bash
+python main.py --cible https://host/chat --sauf dan,encoding --rapport
+```
+
+A report that quotes a mandate excluding a technique, then documents running it, is not
+defensible. The mirror option `--seulement LLM07` narrows a campaign instead — to
+re-check one finding after a fix, or to get the i.i.d. attempts a real bound needs.
+Either way the report states in its coverage section that the campaign was restricted;
+staying silent there would imply everything else had been tried and found clean.
+
 Every run also writes a JSONL audit trail, flushed line by line rather than at the end:
 if the campaign dies, the record of what was already sent survives, which is exactly
 when it matters. It holds the mandate, every exchange with the target across
 reconnaissance, attack and replay, every verdict with its votes, and the final usage.
+
+Each run carries a readable case ID (`20261112-180042-demo`, not an opaque UUID), each
+exchange a SHA-256 of what was sent and received, and the trail is **sealed** on close
+with a hash over everything before it. `verifier_sceau()` then answers the only question
+that matters if a report is disputed: has this record been touched since it was written?
+
+The environment is logged with it — and so is what cannot be known. A black-box tester
+has no idea of the target's model, temperature or system prompt; that is what they are
+looking for. Claiming to record it would be inventing, and omitting it would imply the
+sampling was pinned, so the trail states plainly that the target's generation parameters
+are unknown, and names the residual non-determinism that follows.
 
 ### Bounding a campaign
 
