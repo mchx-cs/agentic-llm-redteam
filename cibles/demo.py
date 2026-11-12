@@ -116,12 +116,16 @@ def construire_cible_demo(niveau=NIVEAU_PAR_DEFAUT):
     reglage = NIVEAUX[niveau]
     systeme = _ROLE + reglage["consigne"]
 
-    def interroger(message):
+    def interroger(message, historique=None):
         # Température par défaut, pas 0 : une vraie cible a de l'aléa, et le
         # rejeu en a besoin pour distinguer une fuite d'une hallucination.
-        reponse = demander_au_llm(message, systeme=systeme)
+        reponse = demander_au_llm(message, systeme=systeme,
+                                  historique=historique)
         reponse = _simuler_outil(reponse)
         return _filtrer(reponse) if reglage["filtre_sortie"] else reponse
 
     interroger.__name__ = f"interroger_demo_niveau{niveau}"
+    # Vrai multi-tours : les tours partent comme des messages distincts, donc
+    # le modèle voit un dialogue et non une transcription collée.
+    interroger.conversation = True
     return interroger

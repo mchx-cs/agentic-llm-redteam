@@ -107,8 +107,42 @@ def _client_pour(profil):
     return _clients[profil]
 
 
+def _historique_valide(historique):
+    """
+    L'historique, vérifié, ou une erreur claire.
+
+    Un historique mal formé ne doit PAS être ignoré en silence : la campagne
+    croirait mener une conversation alors qu'elle envoie un tour isolé, et
+    l'arbitre jugerait un échange amputé de son contexte. C'est la même
+    famille de défaut que le gabarit sans `{message}` de la phase 8 — un faux
+    négatif qui ne lève rien.
+    """
+    if not historique:
+        return []
+    if not isinstance(historique, list):
+        raise ValueError(
+            "historique doit être une liste de {'role', 'content'}, "
+            f"reçu : {type(historique).__name__}.")
+
+    valides = []
+    for position, tour in enumerate(historique, start=1):
+        if not isinstance(tour, dict) or "role" not in tour                 or "content" not in tour:
+            raise ValueError(
+                f"historique, tour {position} : attendu "
+                "{'role': ..., 'content': ...}, reçu " + repr(tour) + ".")
+        if tour["role"] not in ("user", "assistant"):
+            raise ValueError(
+                f"historique, tour {position} : rôle "
+                f"'{tour['role']}' inconnu. Attendu 'user' ou 'assistant' "
+                "— la consigne système passe par `systeme`, pas par "
+                "l'historique.")
+        valides.append({"role": tour["role"], "content": str(tour["content"])})
+    return valides
+
+
 def demander_au_llm(message, systeme=None, modele=None, temperature=None,
-                    format_json=False, profil=None, max_tokens=None):
+                    format_json=False, profil=None, max_tokens=None,
+                    historique=None):
     """
     Envoie un message à un LLM et renvoie sa réponse (du texte).
 
@@ -123,6 +157,18 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
     - profil      : le profil de config.py à utiliser ; sinon PROFIL_ACTIF.
     - max_tokens  : plafond de la réponse. Attention : plafonner, c'est risquer
                     de couper une fuite en deux (voir _JOURNAL ci-dessus).
+    - historique  : les tours précédents, pour une conversation multi-tours
+                    (phase 3b). Une liste de {"role", "content"} insérée
+                    ENTRE la consigne système et le message courant, dans
+                    l'ordre. Vide ou None = un seul tour, le comportement
+                    d'avant.
+
+    Pourquoi l'historique passe par ICI et non par un appel direct : c'est
+    `llm_client` qui compte les appels et les tokens, donc qui applique le
+    budget. Le multi-tours est précisément le cas où le coût croît
+    QUADRATIQUEMENT — chaque tour reporte tout ce qui précède. Un attaquant
+    multi-tours qui appellerait le fournisseur lui-même échapperait au
+    coupe-circuit à l'endroit exact où il sert le plus.
     """
     profil = profil or PROFIL_ACTIF
     modele = modele or PROFILS[profil]["modele"]
@@ -130,6 +176,7 @@ def demander_au_llm(message, systeme=None, modele=None, temperature=None,
     messages = []
     if systeme:
         messages.append({"role": "system", "content": systeme})
+    messages += _historique_valide(historique)
     messages.append({"role": "user", "content": message})
 
     # On n'envoie que les options demandées, pour laisser au fournisseur

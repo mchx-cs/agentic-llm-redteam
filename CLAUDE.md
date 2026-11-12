@@ -2246,6 +2246,116 @@ section « Running the judge on a different model » du README.
 Reste en cours : 2 (critères de l'arbitre, trois sur dix familles jugeables) et 5
 (reconnaissance purement déclarative). Prévue : 3b.
 
+**Phase 3b commencée : ce que PyRIT fournit RÉELLEMENT (vérifié le 2026-11-13).**
+Même méthode que pour garak en phase 7 : vérifier contre la source primaire avant de
+concevoir. Trois blogs de 2026 donnaient trois versions différentes de l'API, dont une
+annonçant « v0.11.0 » ; la documentation officielle en dit autre chose.
+
+Faits établis (PyPI + `microsoft.github.io/PyRIT/1.1.0/`) :
+- **le dépôt a DÉMÉNAGÉ** : `Azure/PyRIT` → `github.com/microsoft/PyRIT`, docs sur
+  `microsoft.github.io`. Nos deux liens au README pointaient encore vers l'ancien ;
+- version **1.1.0** (2026-09-04), licence MIT, Python >= 3.10 et < 3.15, classée
+  **« Development Status :: 3 - Alpha »** ;
+- **44 dépendances directes inconditionnelles**, contre 164 pour garak. Une seule est
+  lourde (`transformers`) ; **`torch` n'est PAS inconditionnel**, il arrive par les
+  extras `huggingface`, `gcg` ou `all`. L'objection « c'est trop lourd » ne tient donc
+  pas ici, contrairement à ce que je supposais ;
+- **l'API a changé de nom en 1.x** : plus d'« Orchestrator ». C'est
+  `pyrit.executor.attack` avec `RedTeamingAttack`, `CrescendoAttack`, `TAPAttack`
+  (PAIR n'est que le cas à une branche de TAP), `MultiPromptSendingAttack`,
+  `ChunkedRequestAttack`, `BargeInAttack`, et un `AttackResult` en retour ;
+- **`PromptChatTarget` a été SUPPRIMÉE.** Une cible maison se fait en héritant de
+  `PromptTarget` et en implémentant
+  `_send_prompt_to_target_async(*, normalized_conversation) -> list[Message]`, avec une
+  `TargetConfiguration(supports_multi_turn=True, supports_editable_history=True)` ;
+- les attaques adaptatives exigent un **modèle attaquant** (`AttackAdversarialConfig`) ;
+  les attaques à script fixe n'en ont pas besoin ;
+- **un entrepôt d'état est obligatoire** : `initialize_pyrit_async(memory_db_type=...)`,
+  avec `IN_MEMORY`, `SQLITE` ou `AZURE_SQL`. `IN_MEMORY` ne demande ni compte ni clé.
+
+**Quatre conséquences pour ce projet, par ordre de poids.**
+
+1. **Le coupe-circuit de budget serait contourné, exactement là où il sert le plus.**
+   PyRIT appelle les modèles par SES targets, donc hors de `demander_au_llm()` — seul
+   endroit où les appels et les tokens sont comptés. Or le multi-tours est le cas où le
+   coût croît QUADRATIQUEMENT. Adopter PyRIT naïvement, ce serait désarmer la phase 11
+   au moment précis où elle devient nécessaire.
+   *Mais la sortie existe, et elle est propre* : une `PromptTarget` maison dont
+   `_send_prompt_to_target_async` délègue à `demander_au_llm()` remet le modèle
+   attaquant DANS notre point de passage unique. La règle « aucun appel direct » survit
+   donc par construction, à condition que **les deux** targets soient les nôtres.
+2. **La promesse de dépendance unique ne se contourne pas de la même façon que pour
+   garak.** Les 164 dépendances de garak sont acceptables parce qu'acquisition et usage
+   sont séparés dans le temps : on synchronise une fois, les campagnes lisent un
+   instantané local, zéro réseau. PyRIT, lui, est nécessaire **PENDANT** la campagne. Il
+   ne peut pas vivre dans un venv jetable. Donc soit le projet passe de 1 à 45
+   dépendances d'exécution, soit PyRIT devient un EXTRA (`requirements-pyrit.txt`) et le
+   multi-tours n'est pas disponible sans lui. La seconde option garde la promesse pour
+   le chemin par défaut.
+3. **Alpha, et une API qui renomme ses abstractions centrales.** Entre 0.x et 1.x,
+   « Orchestrator » a disparu et `PromptChatTarget` a été supprimée. C'est le miroir de
+   l'argument garak : la maintenance en amont est un bénéfice pour des PAYLOADS, qui
+   pourrissent, mais un algorithme d'attaque publié ne pourrit pas de la même façon. Ce
+   qu'on gagnerait en logique d'attaque, on le paierait en suivi d'API instable.
+4. **La documentation ne décrit AUCUNE signature de scorer écrit par l'utilisateur.**
+   Elle nomme `Scorer`, `TrueFalseScorer`, `MessageScorer` et `ConversationScorer` (via
+   `create_conversation_scorer()`), mais pas comment brancher un juge maison. Or
+   l'arbitre est le cœur du projet, et il est mesuré. Non bloquant, mais c'est du risque
+   non documenté sur la pièce la moins remplaçable.
+
+**La décision est donc REPORTÉE, et ce n'est pas un ajournement.** Le préalable est le
+même quel que soit l'orchestrateur, et le projet l'avait déjà consigné : **l'arbitre ne
+sait pas juger une conversation.** Sa consigne attend exactement deux lignes, ses cinq
+exemples sont mono-tour, et les 90 échanges du corpus le sont tous. Sans un juge capable
+de ce format, aucune attaque multi-tours n'est mesurable — donc PyRIT ne peut même pas
+être ÉVALUÉ, seulement installé. On ne choisit pas un orchestrateur avant de pouvoir
+mesurer ce qu'il apporte.
+
+**Première tranche livrée : le contrat de cible porte une conversation.**
+`cibles/conversation.py`, et `demander_au_llm()` accepte un `historique` inséré entre la
+consigne système et le message courant.
+
+Quatre décisions, la première étant celle qui compte :
+
+- **La capacité se DÉCLARE, elle ne se devine pas.** Une cible qui ne déclare pas
+  `conversation = True` fait REFUSER la conversation. Le défaut inverse est muet : la
+  campagne croirait mener un dialogue, la cible verrait des messages isolés, l'arbitre
+  jugerait un tour amputé de son contexte, et « le multi-tours n'apporte rien » serait
+  une conclusion fausse que rien ne viendrait contredire. C'est la famille du gabarit
+  sans `{message}` (phase 8) et des trois champs de chaîne de preuve que personne ne
+  remplissait (phase 14) : un défaut qui ne lève pas, ne casse aucun test, et INVERSE la
+  conclusion.
+- **Vrai multi-tours ou transcription aplatie, jamais les deux sous le même nom.** Les
+  tours de `demo`, `leurre` et `mock` partent comme des messages distincts, donc le
+  modèle voit un dialogue. L'adaptateur HTTP ne sait pas faire ça — son gabarit ne porte
+  qu'un seul `{message}` — et il **refuse** plutôt que de coller le dialogue dans un
+  message unique. Ce n'est pas la même mesure : un modèle peut refuser un rôle qu'on lui
+  prête dans un transcript après l'avoir accepté tour par tour.
+- **Un historique mal formé LÈVE**, avec le numéro du tour fautif, et l'erreur nomme le
+  piège le plus courant (la consigne système a son propre paramètre, elle n'a rien à
+  faire dans l'historique).
+- **`rendre()` produit le format que l'arbitre connaît déjà** (`Utilisateur : "..."` /
+  `Chatbot : "..."`, répété). En inventer un autre aurait obligé à réécrire sa consigne
+  et ses cinq exemples, alors que le travail qui compte est ailleurs : ses critères et
+  son corpus.
+
+**Et `mock` est maintenant déterministe SUR LA CONVERSATION**, ce qui donne au projet son
+premier test de bout en bout du multi-tours sans aucun modèle : la même demande se fait
+refuser seule et réussit après un tour d'installation de persona. Trois tests encadrent
+exactement ce qu'il ne faut pas confondre — l'ordre des tours compte (demander puis
+installer la persona ne donne rien), et **seuls les tours de l'ATTAQUANT désarment la
+cible**. Sans cette dernière distinction, une cible qui répète la demande dans son refus
+s'ouvrirait elle-même, et l'arbitre y verrait une faille.
+
+617 tests `pytest`, toujours sans aucun appel LLM.
+
+**Ce qui reste de la phase 3b, dans l'ordre imposé par les dépendances :**
+1. l'arbitre au format conversation (consigne, critères) — et le **corpus multi-tours
+   étiqueté à la main**, que `jouer()` permet enfin de récolter contre `demo` sans
+   quota ; c'est la partie la plus longue, et elle est à faire quoi qu'il arrive ;
+2. remesurer le juge sur ce format : les 96 % actuels ne voudront plus rien dire ;
+3. alors, et alors seulement, trancher PyRIT contre une boucle maison, sur une mesure.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

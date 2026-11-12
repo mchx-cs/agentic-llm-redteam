@@ -417,6 +417,14 @@ def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
             )
         return texte
 
+
+    # Mono-tour, et déclaré comme tel (voir cibles/conversation.py) : le
+    # gabarit `CIBLE_CORPS` ne porte qu'un seul `{message}`, donc on ne sait
+    # pas encore envoyer plusieurs messages à un endpoint. Mieux vaut un
+    # refus net qu'une transcription aplatie qu'on prendrait ensuite pour du
+    # vrai multi-tours.
+    interroger.conversation = False
+
     return interroger
 
 

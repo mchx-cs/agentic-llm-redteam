@@ -19,6 +19,12 @@ PROMPT_SYSTEME_CIBLE = (
 )
 
 
-def interroger_leurre(message):
+def interroger_leurre(message, historique=None):
     """Envoie un message au leurre et renvoie sa réponse."""
-    return demander_au_llm(message, systeme=PROMPT_SYSTEME_CIBLE)
+    return demander_au_llm(message, systeme=PROMPT_SYSTEME_CIBLE,
+                           historique=historique)
+
+
+# Vrai multi-tours : le leurre tourne sur notre propre client, donc les tours
+# partent comme des messages distincts (voir cibles/conversation.py).
+interroger_leurre.conversation = True
