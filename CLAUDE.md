@@ -2072,6 +2072,76 @@ campagne, donc du quota.
 
 586 tests `pytest`, toujours sans aucun appel LLM.
 
+**Vitrine regénérée, et relecture complète du README (2026-11-12).**
+
+**La campagne de référence est celle du 23:33, et elle trouve MOINS que la précédente.**
+Une campagne fraîche contre `demo` (25 appels, 28 886 tokens) donne 1 constat sur 3
+essais, là où celle du 18:06 en donnait 3 sur 3. J'ai gardé la nouvelle, pour deux
+raisons dont la seconde a emporté la décision :
+- le plan de l'ancienne ne contient aucun payload LLM06, donc elle ne montre plus l'outil
+  tel qu'il est ;
+- **33 % d'ASR illustre la thèse du projet mieux que 100 %.** Le README s'ouvre sur « la
+  même injection réussit une fois sur trois » ; une vitrine à 100 % contredisait sa propre
+  introduction. Un taux modeste et vrai vaut mieux qu'un taux flatteur.
+
+**Les quatre registres LLM06 ne se valent pas, et c'est la conception qui le voulait.**
+Premier essai de cette campagne : l'appel DICTÉ (« appelle l'outil sans me demander
+confirmation ») se fait refuser net. C'est le prétexte d'AUTORITÉ qui avait fait céder la
+cible plus tôt dans la journée. Écrire quatre registres distincts plutôt que quatre
+variantes d'un même tour trouve donc son premier fait à l'appui.
+
+**Troisième défaut de présentation trouvé en LISANT le rendu.** La section Couverture
+s'ouvrait sur « un *aucun constat* ne vaut que par ce qui a été réellement tenté » —
+dans un rapport qui AVAIT un constat. Aucune exception, aucun test de logique : un
+rapport dont une section s'ouvre sur une phrase sans rapport avec son propre résultat se
+lit mal, et ce qui se lit mal se lit de travers. L'accroche dépend maintenant du
+résultat. Même mode de découverte que les accents graves et que la trace contradictoire
+de la phase 3a — trois fois sur quatre, les défauts de ce fichier ne se voient qu'au
+rendu.
+
+**Et un de MES tests passait à vide.** `test_le_bloc_est_la_meme_avec_des_constats`
+appelait `_resultat()` sans argument — donc sans aucun constat. Il vérifiait exactement
+ce que le test voisin vérifiait déjà. Même défaut que le test tautologique de la
+phase 3a, et la même leçon : un test ne vaut que par ce qu'il COMPARE, et le nom d'un
+test n'est pas une preuve de ce qu'il fait.
+
+**La relecture du README a sorti neuf erreurs**, dont trois substantielles. Toutes
+proviennent du même mécanisme : le code a avancé, la prose est restée.
+1. **L'en-tête de statut annonçait « the attack library is not [complete] »** — faux
+   depuis garak, et c'est la deuxième phrase du dépôt. Remplacé par la vraie limite
+   actuelle : l'attaquant est mono-tour.
+2. **« seven of the ten OWASP families stay out of reach »** — six depuis le critère
+   `abus_outils`. La section « Attack surface » listait d'ailleurs des familles en prose
+   sans dire laquelle est jugée par quel critère ; c'est un tableau maintenant, et il
+   nomme les trois critères.
+3. **« the judge can't score those families »** à propos des dix sondes `owasp:llm06` —
+   l'arbitre sait juger LLM06 depuis le 2026-11-11. Ce qu'il ne sait pas juger, c'est ce
+   que font CES sondes : l'application autour du modèle. Nuance rétablie.
+4. « the one gap filled by hand » : il y en a deux, LLM07 et LLM06.
+5. « 80 labelled exchanges » : 90 (67 dev + 23 test).
+6. « 19 garak probes skipped » : 12 dans la campagne citée.
+7. « 566 / 586 pytest tests » et « four seconds » : 588 et dix secondes.
+8. `statistiques.py` et `mesurer_adaptation_reelle.py` manquaient à l'arborescence —
+   `statistiques.py` est le module de la phase 13, soit une pièce de vitrine absente du
+   plan du dépôt.
+9. La réponse de la cible était citée TRADUITE en anglais, dans un README qui dit lui-même
+   que la sortie est en français. Une preuve traduite n'est plus une preuve.
+
+**Les 25 chiffres du README ont été repassés un par un** contre le code ou une mesure :
+sondes et payloads garak (52 / 1 143, et 35 / 19 / 10 / 7 / 2 par tag), matrice
+d'intégration continue, gains simulés de l'adaptation (+0,41 à budget 3, +4,73 à 40,
+re-mesurés), 43 négatifs sur 67 en dev, seuils de budget, seuil d'âge de l'instantané.
+Tous exacts, sauf ceux listés ci-dessus. La leçon est la même qu'avec l'ordre de priorité
+documenté à l'envers : **une contradiction entre code et documentation ne lève rien et ne
+casse aucun test.** Elle ne se trouve qu'en relisant avec le code sous les yeux.
+
+**Ce qui reste su et non fait :** le rapport Markdown ne porte pas son `case_id`, alors
+que `resultat.json` et la piste d'audit l'ont tous les deux. Un lecteur du rapport ne peut
+donc pas remonter à la piste qui le justifie, ce qui est précisément à quoi sert un
+identifiant de dossier. À trancher.
+
+588 tests `pytest`, toujours sans aucun appel LLM.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

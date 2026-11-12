@@ -668,5 +668,31 @@ class TestCeQuiNEstPasTente:
     def test_le_bloc_est_la_meme_avec_des_constats(self):
         # Une campagne qui TROUVE quelque chose reste un scanner a un tour :
         # le lecteur d'un rapport non vide a autant besoin de la frontiere.
-        rendu = rendre_markdown(construire(_resultat()))
+        #
+        # Ce test passait a vide : `_resultat()` sans argument n'a AUCUN
+        # constat, donc « avec des constats » ne verifiait rien. Meme defaut
+        # que le test tautologique de la phase 3a, trouve de la meme facon —
+        # en relisant ce qu'il compare vraiment.
+        resultat = _resultat(constats=[_constat()], lances=[_payload()])
+        assert resultat["constats"], "le cas doit bien avoir un constat"
+        rendu = rendre_markdown(construire(resultat))
         assert "un seul tour" in rendu
+
+
+class TestAccrocheDeLaCouverture:
+    """
+    L'accroche de la section Couverture parlait d'« aucun constat » meme dans
+    un rapport qui en avait un. Defaut de lecture, invisible en test de
+    logique : vu en relisant le rendu, comme les autres defauts de
+    presentation de ce fichier.
+    """
+
+    def test_sans_constat_elle_parle_du_zero(self):
+        rendu = rendre_markdown(construire(_resultat(lances=[_payload()])))
+        assert "Un « aucun constat » ne vaut que" in rendu
+
+    def test_avec_un_constat_elle_ne_parle_plus_du_zero(self):
+        rendu = rendre_markdown(construire(_resultat(
+            constats=[_constat()], lances=[_payload()])))
+        assert "Un « aucun constat » ne vaut que" not in rendu
+        assert "ce qui ne l'a pas été" in rendu

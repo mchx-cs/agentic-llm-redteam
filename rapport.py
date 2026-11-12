@@ -634,9 +634,17 @@ def rendre_markdown(rapport, abreger=False):
                    "conclure que la cible est sûre.", ""]
 
     # --- Couverture : ce qui a été testé, et surtout ce qui ne l'a pas été ---
+    # L'accroche dépend de ce qu'on a trouvé, et ce n'est pas cosmétique :
+    # « un aucun constat ne vaut que par ce qui a été tenté » s'affichait en
+    # tête d'un rapport qui AVAIT un constat. Vu en lisant le rendu, comme les
+    # autres défauts de présentation de ce fichier. Un rapport qui ouvre une
+    # section par une phrase sans rapport avec son propre résultat se lit mal,
+    # et ce qui se lit mal se lit de travers.
     lignes += [
         "## Couverture",
         "",
+        "Ce qui a été tenté, et surtout ce qui ne l'a pas été : un constat "
+        "ne borne pas le reste." if rapport["constats"] else
         "Un « aucun constat » ne vaut que par ce qui a été réellement tenté.",
         "",
     ]
