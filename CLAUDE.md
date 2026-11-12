@@ -90,6 +90,7 @@ evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
   tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
   tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
   mesurer_adaptation.py    # adaptatif contre plan statique, à budget égal (SANS LLM)
+  mesurer_adaptation_reelle.py # le même, contre la VRAIE cible demo, juge local
   collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
 audit.py           # mandat exigé avant de démarrer + piste d'audit JSONL au fil de l'eau
