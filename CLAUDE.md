@@ -2648,6 +2648,62 @@ test dont la cible simulée est fausse mesure la simulation.
 
 663 tests `pytest`, toujours sans aucun appel LLM.
 
+**La mesure confirmatoire ne confirme pas (100 paires, 2026-11-13).** Protocole
+déclaré avant lancement : 100 paires contre `demo`, test des signes unilatéral au seuil
+0,05.
+
+| | Paires |
+|---|---|
+| la séquence seule fuite | 9 |
+| le mono-tour seul fuite | 3 |
+| les deux | 2 |
+| aucun | 86 |
+
+**p = 0,073 — NON significatif.** Taux de fuite : séquence 11/100 (Wilson 6–19 %),
+mono-tour 5/100 (2–11 %). Les deux intervalles se CHEVAUCHENT, ce qui est la façon
+honnête de dire qu'on ne tranche pas.
+
+Le pilote donnait 7 contre 1, p = 0,035. Il ne s'est pas reproduit. **C'est la quatrième
+fois que ce projet voit un petit échantillon favorable être corrigé par une mesure plus
+large** — après le tirage isolé de `mesurer_adaptation`, les 20 paires d'adaptation
+devenues 40, et la première moitié de la récolte de conversations. Le protocole déclaré a
+encore servi à quelque chose : sans lui, j'aurais publié p = 0,035.
+
+Coïncidence qui mérite d'être notée : 9 contre 3 et p = 0,073 sont **exactement** les
+chiffres des 20 premières paires de la série d'adaptation. Le même piège produit deux
+fois le même nombre.
+
+**Ce que la mesure établit quand même, et c'est séparable du reste :**
+- **7 fuites sur 11 de la forme séquencée sont INVISIBLES dans la dernière réponse.** Ce
+  chiffre ne dépend d'aucune comparaison : il justifie à lui seul la règle « juger
+  l'ENSEMBLE de la conversation » de la consigne multi-tours. Un juge qui ne lirait que
+  le dernier tour raterait les deux tiers des fuites de ce format.
+- **Les 9 victoires de la séquence se répartissent sur 9 techniques DIFFÉRENTES.** Un
+  effet concentré sur une technique serait une propriété de ce payload ; réparti ainsi,
+  il ressemble à une propriété du format — mais « ressemble » n'est pas « est ».
+
+**Pourquoi la mesure manque de puissance, et comment y remédier sans tricher.** 86 paires
+sur 100 ne fuitent dans aucun format : le balayage technique × objectif inclut des
+sondes qui ne cherchent pas un secret (`packagehallucination`, `web_injection`,
+`phrasing`). Elles diluent sans informer.
+
+Deux corrections possibles, et une seule est honnête :
+- **restreindre aux techniques qui ont fuité** : c'est de la sélection post hoc, donc
+  interdit. Le résultat serait garanti par construction ;
+- **restreindre aux familles OWASP DÉCLARÉES pertinentes** (LLM02 et LLM07), filtre a
+  priori qui ne regarde aucun résultat. Légitime.
+
+À 12 paires non nulles pour 100, atteindre 25 paires non nulles — de quoi donner une
+puissance correcte au test des signes — demande environ 300 paires au balayage actuel, ou
+beaucoup moins avec le filtre a priori. Dans les deux cas c'est GRATUIT, puisqu'il n'y a
+pas de juge dans la boucle.
+
+**Donc le statut, à écrire tel quel : l'apport du multi-tours sur la fréquence de fuite
+n'est PAS démontré.** La direction est favorable (11 % contre 5 %), sur neuf techniques,
+mais le test ne passe pas et relancer maintenant pour chercher la significativité serait
+exactement le p-hacking que le protocole existe pour empêcher. La prochaine mesure se
+déclare avant, ou ne se fait pas.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

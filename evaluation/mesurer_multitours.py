@@ -39,6 +39,28 @@ donc pas un résultat confirmatoire : c'est une hypothèse.
 
 Les paramètres ci-dessous fixent le protocole. Les changer après avoir vu un
 résultat, c'est choisir celui qui plaît.
+
+RÉSULTAT DE LA MESURE CONFIRMATOIRE (100 paires, 2026-11-13)
+------------------------------------------------------------
+9 contre 3, p = 0,073 : **NON significatif**. Le pilote ne s'est pas
+reproduit. Taux de fuite 11/100 contre 5/100, intervalles de Wilson qui se
+chevauchent (6–19 % contre 2–11 %).
+
+L'apport du multi-tours sur la fréquence de fuite n'est donc PAS démontré. La
+direction reste favorable et se répartit sur neuf techniques différentes, mais
+relancer maintenant pour chercher la significativité serait le p-hacking que
+ce protocole existe pour empêcher.
+
+Ce qui est établi et ne dépend d'aucune comparaison : **7 des 11 fuites de la
+forme séquencée sont invisibles dans la dernière réponse.** C'est l'argument
+direct de la règle « juger l'ENSEMBLE de la conversation » de l'arbitre.
+
+Si on veut trancher : 86 paires sur 100 ne fuitent dans aucun format, parce
+que le balayage inclut des sondes qui ne cherchent pas un secret. Le filtre
+légitime est a priori — restreindre aux familles OWASP LLM02 et LLM07, qui
+sont DÉCLARÉES par garak — et non post hoc sur les techniques qui ont fuité,
+ce qui garantirait le résultat par construction. Et il faut déclarer le
+nouveau N avant, pas après.
 """
 
 import argparse
