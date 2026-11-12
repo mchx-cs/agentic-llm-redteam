@@ -154,6 +154,80 @@ def decrire(nom, ref="main"):
     }
 
 
+def _prefixe(famille):
+    """`LLM07` depuis « LLM07:2025 System Prompt Leakage »."""
+    return (famille or "").split(":")[0].strip()
+
+
+def techniques_redondantes(bibliotheque):
+    """
+    Les techniques ÉCRITES À LA MAIN dont garak couvre désormais la famille.
+
+    Pourquoi ce garde-fou. Deux techniques du dépôt existent uniquement parce
+    que garak ne fournissait aucune sonde pour leur famille : les onze
+    payloads LLM07 (vérifié le 2026-11-11) et les quatre payloads LLM06
+    (vérifié le 2026-11-12). Or des payloads écrits à la main pourrissent —
+    un jailbreak de 2026 échoue en 2027 — et leur entretien retombe sur une
+    seule personne, ce qui est exactement l'argument qui a fait choisir garak
+    comme source synchronisée. Le jour où une sonde garak porte LLM06 ou
+    LLM07 en famille PRINCIPALE, le maison devient une dette à relire.
+
+    Rien n'est retiré automatiquement : la machine détecte et signale,
+    l'humain décide et relit. C'est le principe déjà retenu pour la
+    resynchronisation elle-même, et il vaut d'autant plus ici — quatre
+    registres écrits pour une cible précise peuvent rester meilleurs qu'une
+    sonde générique qui porte le bon tag.
+
+    On ne regarde que les familles PRINCIPALES, jamais les secondaires : dix
+    sondes portent `owasp:llm06` en secondaire, et elles visent l'application
+    autour du modèle (exfiltration par URI Markdown, XSS, injection Jinja ou
+    SQL), pas l'appel d'outil. Les compter ici annoncerait un trou comblé
+    qui ne l'est pas.
+    """
+    familles_garak = {_prefixe(technique.get("famille_owasp"))
+                      for technique in bibliotheque["techniques"]
+                      if technique.get("source")}
+    familles_garak.discard("")
+
+    redondantes = []
+    for technique in bibliotheque["techniques"]:
+        if technique.get("source"):
+            continue           # une sonde garak n'est pas une dette maison
+        famille = _prefixe(technique.get("famille_owasp"))
+        # Sans payload, il n'y a rien à retirer : `divulgation-information`
+        # est vide, donc sa redondance avec les sondes LLM02 ne coûte rien et
+        # le planificateur la signale déjà. Et `controle`, qui n'a pas de
+        # famille, n'est jamais redondant : c'est le témoin anodin, qu'aucune
+        # sonde offensive ne remplace.
+        nombre = (len(technique.get("modeles") or [])
+                  + len(technique.get("payloads_complets") or []))
+        if famille and nombre and famille in familles_garak:
+            redondantes.append({
+                "id": technique["id"],
+                "famille": famille,
+                "payloads": nombre,
+                "sondes": sum(1 for autre in bibliotheque["techniques"]
+                              if autre.get("source")
+                              and _prefixe(autre.get("famille_owasp")) == famille),
+            })
+    return redondantes
+
+
+def _signaler_redondances(bibliotheque):
+    """Ce que `--version` dit des techniques maison, à jour ou non."""
+    redondantes = techniques_redondantes(bibliotheque)
+    if not redondantes:
+        return
+    print("\nDes techniques écrites à la main sont peut-être devenues "
+          "redondantes :")
+    for technique in redondantes:
+        print(f"  {technique['id']} ({technique['payloads']} payload(s) "
+              f"maison) — {technique['sondes']} sonde(s) garak portent "
+              f"maintenant {technique['famille']} en famille principale.")
+    print("  Relis ces sondes avant de retirer quoi que ce soit : un tag "
+          "n'est pas une mesure.")
+
+
 def principal(arguments=None):
     parseur = argparse.ArgumentParser(
         description="Inventorie les payloads de garak, sans installer garak.")
@@ -183,10 +257,13 @@ def principal(arguments=None):
                   "\nRelis ce que l'export retient avant de lancer une "
                   "campagne : une nouvelle version peut ajouter des sondes "
                   "hors périmètre.")
-            return 1
-        if distante and locale:
+        elif distante and locale:
             print("\nL'instantané est à jour.")
-        return 0
+        # Signalé dans les deux cas : la redondance porte sur l'instantané
+        # qu'on a, pas sur le retard qu'on a pris. Une version à jour peut
+        # très bien venir de combler le trou LLM06 ou LLM07.
+        _signaler_redondances(charger_bibliotheque())
+        return 1 if en_retard else 0
 
     if arguments.decrire:
         fiche = decrire(arguments.decrire, arguments.ref)

@@ -51,10 +51,13 @@ class TestPrerequis:
         assert "aucun outil détecté chez la cible" in \
                _ecartees(plan)["abus-outils"]
 
-    def test_avec_un_outil_ce_motif_disparait(self):
+    def test_avec_un_outil_la_technique_est_retenue(self):
+        # Depuis les quatre payloads LLM06 du 2026-11-12, un outil détecté
+        # suffit : la technique n'est plus écartée du tout, ni pour le
+        # prérequis ni faute de modèle.
         plan = planifier(fiche(outils=["virement"]), budget=10)
-        assert "aucun outil détecté chez la cible" not in \
-               _ecartees(plan)["abus-outils"]
+        assert "abus-outils" not in _ecartees(plan)
+        assert "abus-outils" in {c["technique"] for c in plan["candidats"]}
 
     def test_une_cible_muette_fait_ecarter_les_familles_de_fuite(self):
         plan = planifier(fiche(), budget=10)
@@ -184,11 +187,18 @@ class TestFauxTrousDeCouverture:
                 "famille_couverte_ailleurs"] is True
 
     def test_une_famille_reellement_absente_n_est_pas_dite_couverte(self):
+        # `injection-directe` est vide, et ici rien ne couvre LLM01 :
+        # l'instantane garak est neutralise par la fixture. Le trou est donc
+        # reel, et le dire couvert serait la moitie inverse du mensonge.
+        #
+        # Ce test visait `abus-outils` jusqu'au 2026-11-12 : la technique
+        # n'avait aucun payload, donc elle etait toujours ecartee. Elle en a
+        # quatre depuis, et c'est le bon comportement — pas une regression.
         plan = planifier(fiche(outils=["un_outil"],
                                refuses=["le code du coffre"]), budget=3)
         par_nom = {e["technique"]: e for e in plan["ecartees"]}
-        # LLM06 n'est la famille principale d'aucune sonde : le trou est reel.
-        assert par_nom["abus-outils"]["famille_couverte_ailleurs"] is False
+        assert par_nom["injection-directe"]["famille_couverte_ailleurs"] \
+            is False
 
     def test_chaque_ecartee_porte_le_champ(self):
         # Le rapport le lit sans garde : un champ manquant le ferait mentir
@@ -246,6 +256,83 @@ class TestFuiteDePromptSysteme:
         # sont parfois ecrits en francais seulement.
         assert any("you were given" in p or "system prompt" in p
                    for p in technique["payloads_complets"])
+
+
+class TestAbusDOutils:
+    """
+    LLM06 n'est la famille PRINCIPALE d'aucune des 52 sondes du perimetre
+    garak : les dix qui la portent en secondaire visent l'application autour
+    du modele, pas l'appel d'outil. D'ou quatre payloads ecrits a la main.
+
+    Leur particularite : le nom de l'outil ne peut pas etre dans la
+    bibliotheque, puisqu'il varie d'une cible a l'autre. Il vient de la
+    reconnaissance, par l'axe `{objectif}`.
+    """
+
+    def test_un_outil_decouvert_devient_un_objectif(self):
+        objectifs = objectifs_pour(fiche(outils=["consulter_dossier"]),
+                                   {"objectifs": []})
+        assert any("consulter_dossier" in o["formulation"] for o in objectifs)
+
+    def test_l_objectif_vise_un_tiers(self):
+        # Ce n'est pas un ornement de formulation : c'est le discriminant du
+        # critere `abus_outils` de l'arbitre. Consulter SON dossier est un
+        # usage legitime (cas D17 du corpus) ; obtenir celui d'un tiers est la
+        # faille. Sans ce membre de phrase, le juge classerait « aucun » — a
+        # raison — et les quatre registres ne mesureraient rien.
+        objectif = next(o for o in objectifs_pour(
+            fiche(outils=["consulter_dossier"]), {"objectifs": []})
+            if "consulter_dossier" in o["formulation"])
+        assert "autre que moi" in objectif["formulation"]
+
+    def test_sans_outil_aucun_objectif_d_outil(self):
+        objectifs = objectifs_pour(fiche(outils=[]), {"objectifs": []})
+        assert not [o for o in objectifs if o.get("pour_famille")]
+
+    def test_le_premier_essai_d_abus_nomme_l_outil(self):
+        # Verification par CLASSEMENT, pas contre la constante qui l'a produit
+        # (un test qui compare un resultat au bonus qui l'a cause ne teste
+        # rien). La cible refuse aussi un sujet, donc `refus-1` existe et se
+        # place AVANT `outil-1` dans la liste des objectifs : sans la regle
+        # d'appariement, le tri stable retenait `refus-1`, et la technique
+        # d'abus d'outil partait sans nommer aucun outil.
+        plan = planifier(fiche(outils=["consulter_dossier"],
+                               refuses=["le code du coffre"]), budget=10)
+        abus = [c for c in plan["candidats"] if c["technique"] == "abus-outils"]
+        assert abus, "la technique devrait etre retenue"
+        assert "consulter_dossier" in abus[0]["texte"]
+
+    def test_l_appariement_ne_vaut_que_pour_sa_famille(self):
+        # L'objectif d'outil est fabrique POUR LLM06. Sur une technique LLM07
+        # il ne doit rien gagner, sinon il passerait devant un objectif tire
+        # de ce que la cible refuse — plus pertinent pour une fuite de prompt.
+        plan = planifier(fiche(outils=["consulter_dossier"],
+                               refuses=["le code du coffre"], consignes=True),
+                         budget=10)
+        fuite = [c for c in plan["candidats"]
+                 if c["technique"] == "fuite-prompt-systeme"]
+        assert fuite
+        assert fuite[0]["objectif"] != "outil-1"
+
+    def test_les_payloads_sont_des_modeles_a_remplir(self):
+        # L'inverse de `fuite-prompt-systeme` : ici l'intention ne suffit pas,
+        # il faut le nom de l'outil, donc un emplacement a remplir.
+        from agents.attaquant import charger_bibliotheque
+        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+                         ["techniques"] if t["id"] == "abus-outils")
+        assert technique["modeles"]
+        assert all("{objectif}" in m for m in technique["modeles"])
+
+    def test_les_payloads_couvrent_plusieurs_registres(self):
+        from agents.attaquant import charger_bibliotheque
+        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+                         ["techniques"] if t["id"] == "abus-outils")
+        textes = " ".join(technique["modeles"]).lower()
+        for registre in ("sans me demander confirmation",   # appel dicte
+                         "administrateur",                  # pretexte
+                         "étape préalable",                 # formalite glissee
+                         "sortie complète"):                # resultat brut
+            assert registre in textes, registre
 
 
 class TestTourDeRoleParModule:

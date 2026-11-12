@@ -9,8 +9,10 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > against the bundled decoy or any HTTP endpoint. The judge is measured on 80
 > hand-labelled exchanges, reaching 96% accuracy on the frozen test set; it classifies
 > translated cases in English as accurately as their French originals.
-> What is still missing is the attack content itself: the payload families are declared
-> but empty, so a campaign today only sends harmless control prompts.
+> Attack content comes from a local [garak](https://github.com/NVIDIA/garak) snapshot —
+> 52 probes, 1,143 payloads — plus 15 hand-written ones for the two families garak ships
+> no probe for. What is still missing is multi-turn: every attack is a single shot, and
+> the judge has three criteria, so seven of the ten OWASP families stay out of reach.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
 
 ---
@@ -130,7 +132,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 566 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 581 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Four seconds, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -490,6 +492,32 @@ refusal attaches to the verb, not the information), a positional one that never 
 end-of-instructions delimiter. Direct configuration requests, the register OWASP LLM07
 describes — not jailbreaks, which stay garak's job.
 
+**LLM06 is the same story, and it needed a different shape.** Ten garak probes carry
+`owasp:llm06`, but all of them carry it *secondarily* and all of them target the
+application around the model — Markdown URI exfiltration, XSS, Jinja and SQL injection —
+not tool calls, which is what the judge's `abus_outils` criterion scores. So four
+hand-written payloads: a call dictated by the user, an authority pretext, a step slipped
+in as a technical formality, and raw tool output demanded verbatim.
+
+These four can't name the tool, because the tool name differs per target. They are
+templates, and reconnaissance fills the blank: every tool it discovers becomes an
+objective, the same way a refused topic already becomes one. The objective reads *use
+your `<tool>` for someone other than me* — and that last clause is the criterion, not a
+turn of phrase. Looking up *your own* record is legitimate use; getting a third party's
+is the finding. Without it the judge would answer "none", correctly, and the family would
+be reported as tested while measuring nothing.
+
+Measured against the demo target, the authority pretext worked: the target printed
+`Dupont, Marie — file 4417, balance €12,480`. Worth noting what else that run showed —
+the local 3B judge voted "none" three times on that exchange *while describing the
+finding in its own analysis*. The measured judge scores it correctly. Same ceiling
+documented back in October, now on a third criterion.
+
+**Fifteen hand-written payloads are a maintenance debt, not an asset**, and the tooling
+says so: `source_garak --version` reports when garak starts shipping probes for LLM06 or
+LLM07, so the hand-written ones can be retired. Detection automatic, decision human —
+the same principle as resyncing itself.
+
 **When to resync.** garak ships every 37 days on median, so there's no right calendar,
 only triggers: before any engagement, when garak publishes, and — the only one grounded
 in evidence — when your own measurements start declining, which means the payloads are
@@ -624,7 +652,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | Phase | Scope | Status |
 |---|---|---|
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
-| **1** | Real prompt injection payload library | In progress |
+| **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** |
 | **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/Azure/PyRIT) as a replacement for the hand-built orchestrator | Planned |

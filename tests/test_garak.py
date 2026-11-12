@@ -283,6 +283,121 @@ class TestDetectionDeVersion:
         assert source.comparer_a_l_instantane("0.17.1") == (None, False)
 
 
+class TestRedondanceAvecGarak:
+    """
+    Deux techniques du dépôt sont écrites à la main parce que garak ne
+    fournit aucune sonde pour leur famille : LLM07 (11 payloads) et LLM06
+    (4 payloads). Des payloads maison pourrissent et leur entretien retombe
+    sur une seule personne — c'est l'argument même qui a fait choisir garak
+    comme source synchronisée. Donc le jour où garak comble le trou, il faut
+    le SAVOIR.
+
+    Détection automatique, décision humaine : le principe déjà retenu pour la
+    resynchronisation. Rien n'est retiré tout seul.
+    """
+
+    def _bibliotheque(self, familles_garak=(), maison=()):
+        techniques = [{"id": f"garak-{i}", "source": "garak",
+                       "famille_owasp": famille, "payloads_complets": ["x"]}
+                      for i, famille in enumerate(familles_garak)]
+        techniques += list(maison)
+        return {"techniques": techniques}
+
+    def test_rien_a_signaler_avec_les_familles_d_aujourd_hui(self, instantane):
+        # L'état mesuré le 2026-11-12 : les 52 sondes du périmètre portent
+        # LLM01 ou LLM02 en famille principale, jamais LLM06 ni LLM07. Les
+        # deux techniques maison restent donc seules à couvrir la leur.
+        #
+        # L'instantané est FABRIQUÉ pour le test, comme partout dans ce
+        # fichier : un test qui lirait l'instantané local passerait ou non
+        # selon qu'on a lancé l'exportateur.
+        from payloads.source_garak import techniques_redondantes
+        instantane([_sonde(familles=("owasp:llm01",)),
+                    _sonde(nom="probes.leakreplay.Fake",
+                           familles=("owasp:llm02",))])
+        assert techniques_redondantes(charger_bibliotheque()) == []
+
+    def test_une_sonde_qui_comble_le_trou_est_signalee(self):
+        from payloads.source_garak import techniques_redondantes
+        bibliotheque = self._bibliotheque(
+            familles_garak=["LLM06:2025 Excessive Agency"],
+            maison=[{"id": "abus-outils",
+                     "famille_owasp": "LLM06:2025 Excessive Agency",
+                     "modeles": ["a", "b"]}])
+        signalees = techniques_redondantes(bibliotheque)
+        assert [t["id"] for t in signalees] == ["abus-outils"]
+        assert signalees[0]["payloads"] == 2
+        assert signalees[0]["sondes"] == 1
+
+    def test_le_millesime_owasp_n_entre_pas_en_jeu(self):
+        # Le rapprochement porte sur `LLM06`, pas sur le libellé complet :
+        # faire dépendre la règle du millésime la casserait à la prochaine
+        # révision du Top 10.
+        from payloads.source_garak import techniques_redondantes
+        bibliotheque = self._bibliotheque(
+            familles_garak=["LLM06:2027 Excessive Agency"],
+            maison=[{"id": "abus-outils",
+                     "famille_owasp": "LLM06:2025 Excessive Agency",
+                     "modeles": ["a"]}])
+        assert len(techniques_redondantes(bibliotheque)) == 1
+
+    def test_une_autre_famille_ne_declenche_rien(self):
+        from payloads.source_garak import techniques_redondantes
+        bibliotheque = self._bibliotheque(
+            familles_garak=["LLM01:2025 Prompt Injection"],
+            maison=[{"id": "abus-outils",
+                     "famille_owasp": "LLM06:2025 Excessive Agency",
+                     "modeles": ["a"]}])
+        assert techniques_redondantes(bibliotheque) == []
+
+    def test_une_famille_secondaire_ne_comble_aucun_trou(self):
+        # Dix sondes portent `owasp:llm06` en SECONDAIRE, et elles visent
+        # l'application autour du modèle — exfiltration par URI Markdown,
+        # XSS, injection Jinja ou SQL — pas l'appel d'outil. Les compter ici
+        # annoncerait un trou comblé qui ne l'est pas, et ferait retirer
+        # quatre payloads qui testent autre chose.
+        from payloads.source_garak import techniques_redondantes
+        bibliotheque = {"techniques": [
+            {"id": "garak-web", "source": "garak",
+             "famille_owasp": "LLM02:2025 Sensitive Information Disclosure",
+             "familles_non_jugeables": ["LLM06:2025 Excessive Agency"],
+             "payloads_complets": ["x"]},
+            {"id": "abus-outils",
+             "famille_owasp": "LLM06:2025 Excessive Agency",
+             "modeles": ["a"]}]}
+        assert techniques_redondantes(bibliotheque) == []
+
+    def test_une_technique_maison_vide_n_est_pas_signalee(self):
+        # `divulgation-information` est vide : il n'y a rien à retirer, et le
+        # planificateur signale déjà son absence de payload. La signaler ici
+        # noierait le seul cas qui demande une décision.
+        from payloads.source_garak import techniques_redondantes
+        bibliotheque = self._bibliotheque(
+            familles_garak=["LLM02:2025 Sensitive Information Disclosure"],
+            maison=[{"id": "divulgation-information",
+                     "famille_owasp": "LLM02:2025 Sensitive Information "
+                                      "Disclosure",
+                     "modeles": []}])
+        assert techniques_redondantes(bibliotheque) == []
+
+    def test_le_temoin_anodin_n_est_jamais_redondant(self):
+        # `controle` n'a pas de famille OWASP : c'est le témoin, et aucune
+        # sonde offensive ne le remplace.
+        from payloads.source_garak import techniques_redondantes
+        bibliotheque = self._bibliotheque(
+            familles_garak=["LLM01:2025 Prompt Injection"],
+            maison=[{"id": "controle", "famille_owasp": None,
+                     "modeles": ["bonjour"]}])
+        assert techniques_redondantes(bibliotheque) == []
+
+    def test_une_sonde_garak_n_est_pas_une_dette_maison(self):
+        from payloads.source_garak import techniques_redondantes
+        bibliotheque = self._bibliotheque(
+            familles_garak=["LLM01:2025 Prompt Injection",
+                            "LLM01:2025 Prompt Injection"])
+        assert techniques_redondantes(bibliotheque) == []
+
+
 class TestProvenanceDansLeRapport:
     def _rapport(self, payloads):
         from rapport import construire, rendre_markdown
