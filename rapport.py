@@ -172,7 +172,7 @@ def construire(resultat, cible="inconnue"):
         # l'ordre des essais. Sans cette trace, un lecteur ne pourrait pas
         # contester le choix des essais : il verrait un ordre, pas un motif.
         "adaptation": resultat.get("observations") or [],
-        # Ce que ce décompte permet d'affirmer. `independants=False` est le
+        # Ce que ce décompte permet d'affirmer. `independent=False` est le
         # point de la chose : une campagne choisit chaque essai d'après les
         # réponses précédentes et mélange des familles de sondes, donc aucune
         # borne binomiale ne s'y applique. Le dire vaut mieux qu'un chiffre
@@ -180,10 +180,10 @@ def construire(resultat, cible="inconnue"):
         # `independants` n'est plus toujours faux : une campagne restreinte à
         # UNE technique et lancée sans adaptation produit des essais i.i.d., et
         # son « aucun constat » peut alors être borné pour de bon.
-        "portee": statistiques.resumer(
+        "portee": statistiques.summarise(
             len(constats), len(lances),
-            independants=bool(resultat.get("essais_independants")),
-            quoi="essais de la même technique"
+            independent=bool(resultat.get("essais_independants")),
+            what="essais de la même technique"
                  if resultat.get("essais_independants")
                  else "essais de campagne"),
         # ASR de bout en bout, sur un dénominateur DÉFINI : les essais que
@@ -194,7 +194,7 @@ def construire(resultat, cible="inconnue"):
         # comme complète : c'est le mensonge par omission que cette section
         # existe pour empêcher.
         "perimetre": resultat.get("perimetre") or {"seulement": [], "sauf": []},
-        "taux_de_succes": statistiques.taux_de_succes(
+        "taux_de_succes": statistiques.success_rate(
             resultat.get("etats") or []),
         "constats": constats,
         "journal": resultat.get("journal", {}),
@@ -341,8 +341,8 @@ def _bloc_asr(taux):
             "",
         ]
         for etat, nombre in taux["comptes"].items():
-            if nombre and not statistiques.est_scorable(etat):
-                lignes.append(f"- {nombre} × {statistiques.ETATS[etat][2]}")
+            if nombre and not statistiques.is_scorable(etat):
+                lignes.append(f"- {nombre} × {statistiques.STATES[etat][2]}")
         lignes.append("")
 
     return lignes
@@ -468,8 +468,8 @@ def _bloc_portee(portee, nb_constats, taux=None):
             f"adaptation — donc la borne vaut : {portee['explication']}",
             "",
             f"Pour descendre cette borne à 5 %, il faudrait "
-            f"{statistiques.essais_pour_ecarter(0.05)} essais ; à 1 %, "
-            f"{statistiques.essais_pour_ecarter(0.01)}.",
+            f"{statistiques.attempts_to_rule_out(0.05)} essais ; à 1 %, "
+            f"{statistiques.attempts_to_rule_out(0.01)}.",
             "",
         ]
     else:
@@ -482,7 +482,7 @@ def _bloc_portee(portee, nb_constats, taux=None):
             lignes.append(
                 f"- Pour écarter un taux de succès résiduel de {taux:.0%} sur "
                 f"UNE technique, il faudrait environ "
-                f"{statistiques.essais_pour_ecarter(taux)} essais "
+                f"{statistiques.attempts_to_rule_out(taux)} essais "
                 f"indépendants de cette même technique — ce qu'obtient "
                 f"`--seulement <technique> --sans-adaptation`.")
         lignes.append("")
@@ -535,7 +535,7 @@ def _bloc_constat(constat, abreger=False):
                 f"  - Taux de reproduction : entre "
                 f"{portee['borne']['basse']:.0%} et "
                 f"{portee['borne']['haute']:.0%} "
-                f"({portee['borne']['methode']}, {statistiques.CONFIANCE:.0%}) "
+                f"({portee['borne']['methode']}, {statistiques.CONFIDENCE:.0%}) "
                 f"— sur {portee['essais']} rejeux seulement.")
     if constat["votes"]:
         lignes.append(f"- **Votes du juge** : {constat['votes']}")

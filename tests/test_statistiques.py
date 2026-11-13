@@ -16,10 +16,10 @@ import math
 
 import pytest
 
-from statistiques import (CONFIANCE, ETATS, MOTIF_DEPENDANCE,
-                          borne_superieure_zero, essais_pour_ecarter,
-                          est_scorable, intervalle_wilson, resumer,
-                          taux_de_succes)
+from statistiques import (CONFIDENCE, DEPENDENCE_REASON, STATES,
+                          attempts_to_rule_out, is_scorable, success_rate,
+                          summarise, wilson_interval,
+                          zero_success_upper_bound)
 
 
 class TestRegleDeTrois:
@@ -30,24 +30,24 @@ class TestRegleDeTrois:
         (30, 0.10),
     ])
     def test_les_valeurs_du_manuel_sont_retrouvees(self, essais, attendu):
-        assert borne_superieure_zero(essais) == pytest.approx(attendu, abs=1e-9)
+        assert zero_success_upper_bound(essais) == pytest.approx(attendu, abs=1e-9)
 
     def test_trois_essais_ne_bornent_RIEN(self):
         # Le constat qui a motivé tout ce module : avec MAX_ESSAIS=3, un
         # « aucun constat » laisse le taux réel atteindre 100 %.
-        assert borne_superieure_zero(3) == 1.0
+        assert zero_success_upper_bound(3) == 1.0
 
     def test_la_borne_ne_depasse_jamais_un(self):
         for essais in (1, 2, 3):
-            assert borne_superieure_zero(essais) <= 1.0
+            assert zero_success_upper_bound(essais) <= 1.0
 
     def test_zero_essai_ne_borne_rien_non_plus(self):
         # Ne pas avoir essayé n'est pas un résultat : la borne reste à 100 %,
         # et surtout la fonction ne divise pas par zéro.
-        assert borne_superieure_zero(0) == 1.0
+        assert zero_success_upper_bound(0) == 1.0
 
     def test_la_borne_decroit_avec_le_nombre_d_essais(self):
-        bornes = [borne_superieure_zero(n) for n in (3, 10, 30, 100, 300)]
+        bornes = [zero_success_upper_bound(n) for n in (3, 10, 30, 100, 300)]
         assert bornes == sorted(bornes, reverse=True)
 
 
@@ -58,25 +58,25 @@ class TestTailleDEchantillon:
         (0.10, 30),
     ])
     def test_l_inverse_de_la_regle_de_trois(self, taux, attendu):
-        assert essais_pour_ecarter(taux) == attendu
+        assert attempts_to_rule_out(taux) == attendu
 
     def test_le_resultat_tient_vraiment_la_promesse(self):
         # Garde-fou d'arrondi : le N renvoyé doit effectivement amener la
         # borne sous le taux visé, pas juste à peu près.
         for taux in (0.01, 0.02, 0.05, 0.10, 0.25):
-            assert borne_superieure_zero(essais_pour_ecarter(taux)) <= taux
+            assert zero_success_upper_bound(attempts_to_rule_out(taux)) <= taux
 
     @pytest.mark.parametrize("invalide", [0, 1, -0.5, 2])
     def test_un_taux_hors_bornes_est_refuse(self, invalide):
         with pytest.raises(ValueError):
-            essais_pour_ecarter(invalide)
+            attempts_to_rule_out(invalide)
 
 
 class TestWilson:
     def test_l_exemple_du_manuel(self):
         # Manuel : « For a nonzero result such as 2/50, the Wilson interval
         # gives a defensible range instead of a misleading flat 4%. »
-        basse, haute = intervalle_wilson(2, 50)
+        basse, haute = wilson_interval(2, 50)
         assert basse == pytest.approx(0.011, abs=0.002)
         assert haute == pytest.approx(0.135, abs=0.002)
         assert not (basse <= 0.04 <= haute) or True   # 4 % est dedans, mais seul
@@ -85,30 +85,30 @@ class TestWilson:
     def test_notre_rejeu_reel(self):
         # 2 fois sur 3 : l'intervalle doit être assez large pour interdire de
         # parler de « 67 % » comme d'une mesure.
-        basse, haute = intervalle_wilson(2, 3)
+        basse, haute = wilson_interval(2, 3)
         assert basse < 0.67 < haute
         assert haute - basse > 0.5
 
     def test_les_bornes_restent_dans_zero_un(self):
         for succes, essais in ((0, 1), (1, 1), (0, 5), (5, 5), (1, 2)):
-            basse, haute = intervalle_wilson(succes, essais)
+            basse, haute = wilson_interval(succes, essais)
             assert 0.0 <= basse <= haute <= 1.0
 
     def test_l_intervalle_se_resserre_quand_N_grandit(self):
         largeurs = []
         for essais in (10, 100, 1000):
-            basse, haute = intervalle_wilson(essais // 10, essais)
+            basse, haute = wilson_interval(essais // 10, essais)
             largeurs.append(haute - basse)
         assert largeurs == sorted(largeurs, reverse=True)
 
     def test_un_decompte_impossible_est_refuse(self):
         with pytest.raises(ValueError):
-            intervalle_wilson(5, 3)
+            wilson_interval(5, 3)
         with pytest.raises(ValueError):
-            intervalle_wilson(-1, 3)
+            wilson_interval(-1, 3)
 
     def test_zero_essai_ne_leve_pas(self):
-        assert intervalle_wilson(0, 0) == (0.0, 1.0)
+        assert wilson_interval(0, 0) == (0.0, 1.0)
 
 
 class TestRefusDeBorner:
@@ -124,59 +124,59 @@ class TestRefusDeBorner:
     """
 
     def test_aucune_borne_sur_des_essais_dependants(self):
-        resume = resumer(0, 3, independants=False)
+        resume = summarise(0, 3, independent=False)
         assert resume["borne"] is None
 
     def test_le_refus_dit_POURQUOI(self):
         # Un refus muet laisserait croire à un oubli.
-        resume = resumer(0, 3, independants=False)
+        resume = summarise(0, 3, independent=False)
         for mot in ("adaptatifs", "hétérogènes", "binomial"):
             assert mot in resume["explication"]
-        assert resume["explication"] == MOTIF_DEPENDANCE
+        assert resume["explication"] == DEPENDENCE_REASON
 
     def test_le_refus_vaut_aussi_pour_un_resultat_non_nul(self):
         # Ce n'est pas le zéro qui pose problème, c'est la dépendance.
-        assert resumer(2, 10, independants=False)["borne"] is None
+        assert summarise(2, 10, independent=False)["borne"] is None
 
     def test_l_independance_doit_etre_declaree_a_chaque_appel(self):
         # Pas de valeur par défaut : un défaut à True ferait apparaître des
         # bornes injustifiées au premier oubli, un défaut à False les ferait
         # disparaître là où elles comptent.
         with pytest.raises(TypeError):
-            resumer(0, 3)
+            summarise(0, 3)
 
 
 class TestResume:
     def test_un_zero_succes_annonce_qu_il_ne_demontre_rien(self):
-        resume = resumer(0, 30, independants=True, quoi="rejeux")
+        resume = summarise(0, 30, independent=True, what="rejeux")
         assert "ne démontre rien" in resume["explication"]
         assert "10%" in resume["explication"]
         assert resume["borne"]["methode"] == "règle de trois"
 
     def test_un_succes_non_nul_donne_une_fourchette_pas_un_point(self):
-        resume = resumer(2, 3, independants=True, quoi="rejeux")
+        resume = summarise(2, 3, independent=True, what="rejeux")
         assert resume["borne"]["methode"] == "Wilson"
         assert "pas exactement" in resume["explication"]
 
     def test_le_taux_observe_est_conserve_tel_quel(self):
         # Le JSON reste la source de vérité : on garde le brut à côté de
         # l'interprétation, pour qu'un lecteur puisse refaire le calcul.
-        resume = resumer(2, 3, independants=True)
+        resume = summarise(2, 3, independent=True)
         assert resume["taux_observe"] == pytest.approx(2 / 3)
         assert resume["succes"] == 2 and resume["essais"] == 3
 
     def test_sans_essai_le_taux_est_none_pas_zero(self):
         # Zéro suggérerait « aucun succès », alors qu'on n'a rien tenté.
-        assert resumer(0, 0, independants=True)["taux_observe"] is None
+        assert summarise(0, 0, independent=True)["taux_observe"] is None
 
     def test_le_niveau_de_confiance_est_dit(self):
-        resume = resumer(0, 100, independants=True)
-        assert f"{CONFIANCE:.0%}" in resume["explication"]
+        resume = summarise(0, 100, independent=True)
+        assert f"{CONFIDENCE:.0%}" in resume["explication"]
 
     def test_le_resume_est_serialisable_en_json(self):
         import json
         for args in ((0, 3, False), (0, 30, True), (2, 3, True)):
-            json.dumps(resumer(args[0], args[1], independants=args[2]))
+            json.dumps(summarise(args[0], args[1], independent=args[2]))
 
 
 class TestDenominateur:
@@ -197,21 +197,21 @@ class TestDenominateur:
         ("reponse_tronquee", False),  # le verdict ne vaut rien
     ])
     def test_ce_qui_compte_au_denominateur(self, etat, scorable):
-        assert est_scorable(etat) is scorable
+        assert is_scorable(etat) is scorable
 
     def test_un_etat_inconnu_n_est_pas_compte(self):
         # Plutot exclure que gonfler un denominateur avec de l'inconnu.
-        assert est_scorable("quelque_chose_de_nouveau") is False
+        assert is_scorable("quelque_chose_de_nouveau") is False
 
     def test_l_asr_ignore_les_non_scorables(self):
-        resultat = taux_de_succes(["faille", "resiste", "juge_indecis"])
+        resultat = success_rate(["faille", "resiste", "juge_indecis"])
         assert resultat["scorables"] == 2
         assert resultat["taux"] == pytest.approx(0.5)
 
     def test_sans_le_correctif_le_taux_serait_plus_bas(self):
         # Le chiffre exact de l'ecart : 1/2 = 50 % contre 1/3 = 33 %.
         etats = ["faille", "resiste", "juge_indecis"]
-        correct = taux_de_succes(etats)["taux"]
+        correct = success_rate(etats)["taux"]
         naif = sum(e == "faille" for e in etats) / len(etats)
         assert correct > naif
         assert correct - naif == pytest.approx(1 / 6, abs=1e-6)
@@ -220,19 +220,19 @@ class TestDenominateur:
         # Manuel : « Report undefined ratios as N/A, not zero ». Zero se
         # lirait comme une cible parfaitement defendue, alors qu'on n'a rien
         # mesure du tout.
-        resultat = taux_de_succes(["juge_indecis", "reponse_tronquee"])
+        resultat = success_rate(["juge_indecis", "reponse_tronquee"])
         assert resultat["taux"] is None
         assert resultat["non_scorables"] == 2
 
     def test_aucun_essai_du_tout(self):
-        resultat = taux_de_succes([])
+        resultat = success_rate([])
         assert resultat["taux"] is None
         assert resultat["scorables"] == 0
 
     def test_les_comptes_detailles_sont_conserves(self):
         # Le JSON reste la source de verite : on garde le detail pour qu'un
         # lecteur puisse refaire le calcul.
-        resultat = taux_de_succes(["faille", "faille", "hallucination"])
+        resultat = success_rate(["faille", "faille", "hallucination"])
         assert resultat["comptes"]["faille"] == 2
         assert resultat["comptes"]["hallucination"] == 1
         assert resultat["taux"] == pytest.approx(2 / 3)
@@ -240,5 +240,5 @@ class TestDenominateur:
     def test_chaque_etat_porte_une_explication_lisible(self):
         # Elles vont au rapport : un etat sans libelle serait un code brut
         # affiche a un lecteur.
-        for etat, (_, _, libelle) in ETATS.items():
+        for etat, (_, _, libelle) in STATES.items():
             assert libelle.strip(), etat

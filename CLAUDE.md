@@ -133,12 +133,22 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 
 ## Conventions
 
-- Code et commentaires **en français**, noms de variables inclus (`cible`, `attaquant`,
-  `arbitre`, `payload`, `verdict`).
-- Messages de commit **en français**, descriptifs (l'historique est public).
-- README **en anglais** (visibilité internationale) — ne pas le basculer en français.
+**Décision du 2026-11-13 : le projet bascule EN ANGLAIS, appareil de mesure compris.**
+La convention précédente (code et commentaires en français) est abandonnée. Voir la
+section « Bascule en anglais » pour l'ordre des étapes et les trois limites.
+
+- Code, commentaires, docstrings et identifiants **en anglais**.
+- Messages de commit **en anglais** à partir de maintenant. Les 91 commits existants
+  restent en français : réécrire l'historique public changerait chaque empreinte.
+- README **en anglais** (il l'était déjà).
+- `GLOSSAIRE.md` est la source unique des termes. **Rien ne se renomme sans y figurer** :
+  918 fonctions et classes sur 55 fichiers ne se renomment pas de mémoire, et le projet
+  connaît déjà la dérive par synonymes qu'il combat pour les catégories d'étiquettes.
 - Commentaires pédagogiques assumés : ce projet sert aussi à apprendre, les blocs
-  expliquent le pourquoi, pas seulement le quoi.
+  expliquent le pourquoi, pas seulement le quoi. Ça ne change pas avec la langue.
+- **Ce fichier reste en français pour l'instant** : c'est la mémoire du projet, 2 900
+  lignes, et sa traduction n'apporte rien tant que le code n'est pas passé. Elle vient en
+  dernier.
 
 ## Environnement de développement
 
@@ -2893,6 +2903,47 @@ un tour — la sévérité n'est pas la même, et le corriger changerait le form
 mesures peuvent être refaites sur une base saine.
 
 693 tests `pytest`, toujours sans aucun appel LLM.
+
+**Bascule en anglais : décision, ordre et limites (2026-11-13).** Demande explicite,
+maintenue après que j'aie exposé les conséquences. Ampleur mesurée : **55 fichiers,
+13 001 lignes** — 5 173 de code applicatif, 5 745 de tests, 2 083 d'évaluation, et
+918 fonctions ou classes.
+
+**La distinction qui structure le chantier** : le projet contient deux sortes de
+français, et les traiter pareil casserait des choses.
+- *ce que le projet DIT* — commentaires, docstrings, identifiants : traduisible sans
+  risque fonctionnel, et c'est le gain réel (un lecteur qui ouvre un fichier) ;
+- *ce que le projet ENVOIE ET LIT* — l'appareil de mesure : motifs de refus, prompt
+  système de la cible, critères, catégories, clés JSON persistées. Là, traduire change
+  le comportement ou invalide une mesure.
+
+**Ordre imposé, des feuilles vers la racine**, pour que les tests restent au vert à
+chaque étape : socle sans dépendance (`statistiques`, `detecteurs`) → cibles → agents →
+orchestration → tests → évaluation. Les clés de données JSON font une passe COORDONNÉE à
+la fin, parce qu'elles traversent tout.
+
+**Trois limites, dont une que je refuse quelle que soit la consigne.**
+1. **Les échanges enregistrés du corpus ne seront PAS traduits.** Une réponse qu'une
+   cible a réellement produite est une PREUVE ; la traduire fabriquerait une donnée
+   qu'aucune cible n'a jamais produite. Le corpus sera donc soit conservé comme donnée
+   historique française, soit retiré et reconstruit par une nouvelle récolte contre une
+   cible anglophone. Les deux se décident, aucun des deux ne passe par une traduction.
+2. **Les 18 pistes d'audit scellées et les 91 commits ne se réécrivent pas.** Un sceau
+   dont le contenu change n'est plus un sceau, et réécrire l'historique public changerait
+   chaque empreinte.
+3. **La consigne de l'arbitre passe en dernier, et seulement après la correction de
+   l'injection.** Basculer ses étiquettes en `User:` / `Assistant:` arme un forgeage de
+   tour que **59 payloads** permettent. Le test écrit le 2026-11-13 bloque la bascule
+   jusque-là, par conception — c'est exactement le cas pour lequel il a été écrit, et il
+   l'a rencontré trois heures plus tard.
+
+**Ce que la bascule coûtera en mesures**, à prévoir plutôt qu'à découvrir : traduire les
+motifs de refus arrête l'adaptation contre une cible francophone ; traduire le prompt de
+`demo` change l'objet mesuré, donc les trois niveaux de défense, le rapport d'exemple et
+l'extrait du README ; renommer les critères et les catégories est une migration sur la
+vérité terrain ; renommer les clés de `resultat.json` casse la lecture des anciens
+résultats, que le projet soutient explicitement. Toutes les mesures publiées devront être
+refaites, et les 90 étiquettes revalidées à la main par l'auteur.
 
 ## Cadre légal
 

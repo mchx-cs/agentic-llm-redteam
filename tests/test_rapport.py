@@ -411,8 +411,8 @@ class TestPorteeDuRejeu:
     def _constat_avec_rejeu(concordantes, essais=3):
         import statistiques
         constat = _constat(rejeu="confirmee")
-        constat["verification"]["portee"] = statistiques.resumer(
-            concordantes, essais, independants=True, quoi="rejeux")
+        constat["verification"]["portee"] = statistiques.summarise(
+            concordantes, essais, independent=True, what="rejeux")
         return constat
 
     def test_la_fourchette_est_affichee(self):

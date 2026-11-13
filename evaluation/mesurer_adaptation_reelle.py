@@ -72,7 +72,7 @@ def _mesures(resultat):
     import statistiques
 
     etats = resultat.get("etats") or []
-    taux = statistiques.taux_de_succes(etats)
+    taux = statistiques.success_rate(etats)
     return {
         "constats": len(resultat.get("constats") or []),
         "essais": len(resultat.get("lances") or []),

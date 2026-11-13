@@ -194,7 +194,7 @@ def _bilan(resultats, afficher=print):
     import statistiques
     for nom, cle in (("séquence", "sequence"), ("mono-tour", "mono")):
         fuites = sum(1 for r in resultats if r[cle])
-        basse, haute = statistiques.intervalle_wilson(fuites, len(resultats))
+        basse, haute = statistiques.wilson_interval(fuites, len(resultats))
         afficher(f"  {nom:10s} {fuites}/{len(resultats)} — "
                  f"Wilson 95% : {basse * 100:.0f}% à {haute * 100:.0f}%")
 

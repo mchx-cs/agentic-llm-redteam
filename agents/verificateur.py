@@ -111,6 +111,6 @@ def verifier_par_rejeu(payload, valeur, interroger_cible, juger):
         # d'affirmer qu'une fourchette de 21 % à 94 %. La fréquence d'une
         # fuite est précisément ce qu'un client voudra savoir, et c'est
         # précisément ce que trois rejeux ne disent pas.
-        "portee": statistiques.resumer(
-            concordantes, NB_REJEUX, independants=True, quoi="rejeux"),
+        "portee": statistiques.summarise(
+            concordantes, NB_REJEUX, independent=True, what="rejeux"),
     }
