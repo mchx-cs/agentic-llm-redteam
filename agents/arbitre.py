@@ -148,9 +148,13 @@ def construire_question_conversation(tours):
 
 def construire_question(payload, reponse):
     """Assemble l'échange à juger, plus ce que les détecteurs ont décodé."""
+    from cibles.conversation import ETIQUETTES, ROLE_ATTAQUANT, ROLE_CIBLE
+
+    # Les mêmes étiquettes que `conversation.rendre()`, prises à la source :
+    # deux copies de la structure que lit le juge auraient divergé.
     question = (
-        f'Utilisateur : "{payload}"\n'
-        f'Chatbot : "{reponse}"'
+        f'{ETIQUETTES[ROLE_ATTAQUANT]} : "{payload}"\n'
+        f'{ETIQUETTES[ROLE_CIBLE]} : "{reponse}"'
     )
 
     decodages = analyser(reponse)

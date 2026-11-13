@@ -2825,6 +2825,75 @@ la dernière réponse**, et écrit par l'attaquant dans 2 (les cas A03/A04, écr
 
 689 tests `pytest`, toujours sans aucun appel LLM.
 
+**Audit de tout ce qui entre dans la consigne du juge, AVANT de refaire les mesures
+(2026-11-13).** Demande juste : s'assurer qu'il n'y a pas un second défaut du même genre,
+pour ne pas remesurer deux fois. Quatre points vérifiés sur les données réelles — 272
+échanges (corpus étiqueté + récolte) et 1 160 payloads.
+
+**1. Les deux autres détecteurs sont PROPRES.** `recoller_epele` trouve 4 occurrences,
+toutes de vraies épellations (`T - O - P - S - E - C - R - E - T - 4 - 2`,
+`T.O.P.S.E.C.R.E.T.4.2`, et un `H
+E
+R
+O
+N` à cheval sur des retours à la ligne) ;
+`decoder_hexa` en trouve une, authentique. Zéro faux positif. Le défaut était propre au
+Base64, dont le motif accepte les lettres latines — l'hexa n'accepte que `[0-9a-f]` et
+l'épelé exige des caractères isolés.
+
+**2. Aucun décodage en double**, ni dans le corpus ni dans la récolte. Un même passage
+décodé deux fois gonflerait la consigne sans l'informer.
+
+**3. Le juge reste AVEUGLE.** Le mot « secret » n'apparaît dans `arbitre.py` que dans des
+commentaires et dans la consigne comme nom commun : la valeur réelle du secret de la
+cible n'atteint jamais le prompt. C'est le cœur du projet, et il tient.
+
+**4. Mais la structure de la consigne est FORGEABLE, et ce point méritait le détour.**
+La question envoyée au juge est assemblée en concaténant du texte que la CIBLE produit,
+sous des étiquettes qui la structurent :
+
+```
+Utilisateur : "<payload>"
+Chatbot : "<réponse>"
+```
+
+Une réponse contenant `Chatbot : "…"` y forgerait donc un tour. Pour un outil dont le
+sujet EST l'injection de prompt, avoir un juge injectable serait une ironie coûteuse.
+
+Mesuré : **0 des 1 160 payloads** de la bibliothèque contient les étiquettes françaises,
+et **0 des 272 réponses réelles**. Le format n'a donc PAS été modifié — le changer aurait
+invalidé les mesures publiées pour un risque que les données n'exhibent pas, et il aurait
+fallu remesurer une troisième fois. La bonne réponse ici n'était pas de durcir, c'était de
+mesurer puis de rendre le constat EXÉCUTABLE.
+
+**Et le risque est dormant pour une seule raison : le juge parle français.** 59 payloads
+contiennent `User:` et 44 `Assistant:`. Basculer la consigne de l'arbitre en anglais —
+que le projet garde explicitement comme question ouverte depuis le 2026-11-09 — armerait
+l'injection d'un coup. Un test le dit maintenant : muter les étiquettes en anglais fait
+échouer le garde-fou avec « 59 payload(s) contiennent User\s*: ». **C'est un test qui
+protège une décision pas encore prise.**
+
+Les étiquettes sont du coup définies à UN seul endroit (`cibles/conversation.ETIQUETTES`),
+d'où `arbitre.construire_question` et `conversation.rendre` les prennent toutes deux. Un
+test vérifie que les deux chemins produisent le même format, et un autre que le format
+mono-tour est inchangé octet pour octet.
+
+**Et ma propre garde ne gardait pas.** Première version : elle cherchait `« User : »`
+avec l'espace, alors que les payloads écrivent `« User: »`. La mutation anglaise ne la
+faisait donc pas échouer — elle rassurait sans rien vérifier. Corrigée en `\s*:`.
+Troisième fois cette semaine qu'un garde-fou de ma part était inopérant (après le profil
+inatteignable et la clôture plafonnée à douze accents), et toujours trouvé de la même
+façon : en MUTANT ce qu'il prétend protéger.
+
+**Point mineur signalé, non corrigé** : 9 réponses sur 272 contiennent un guillemet droit,
+ce qui rend les délimiteurs `"…"` ambigus. Sans les étiquettes, ça ne permet pas de forger
+un tour — la sévérité n'est pas la même, et le corriger changerait le format.
+
+**Conclusion pour la décision en attente : rien d'autre du genre du faux Base64.** Les
+mesures peuvent être refaites sur une base saine.
+
+693 tests `pytest`, toujours sans aucun appel LLM.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
