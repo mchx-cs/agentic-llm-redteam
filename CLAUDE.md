@@ -10,7 +10,7 @@ Projet personnel d'apprentissage **et** vitrine publique (dépôt public, lu par
 recruteurs). Les deux objectifs comptent : le code doit être propre et lisible, et
 le README doit rester honnête sur l'état d'avancement.
 
-## État actuel : 13 phases closes, 2 et 5 en cours, 3b à venir
+## État actuel : 13 phases closes, 2, 3b et 5 en cours
 
 La campagne complète **reconnaissance → planification → attaque → jugement → rejeu**
 tourne de bout en bout en local, et le prochain essai est désormais choisi d'après ce
@@ -156,7 +156,7 @@ vérité terrain : c'est l'auteur qui les valide, jamais l'arbitre ni un LLM.
 | 1 | Bibliothèque de payloads de prompt injection réels | **Fait** (via garak + 15 maison) |
 | 2 | Fiabilité de l'arbitre : mesurer et réduire faux positifs / faux négatifs | En cours |
 | 3a | **Réordonner le plan selon la réponse de la cible** (déterministe, extension de la phase 5) | **Fait** |
-| 3b | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | Prévu |
+| 3b | Attaquant adaptatif multi-tours : évaluer PyRIT en remplacement de l'orchestrateur maison | En cours — outillage prêt, **les campagnes restent mono-tour** |
 | 4 | Dissocier l'arbitre du modèle cible | **Fait** |
 | 5 | Agents de reconnaissance et de planification ; campagnes multi-familles | En cours |
 | 6 | Rapport : JSON comme source de vérité, rendu Markdown par défaut | **Fait** |
@@ -2703,6 +2703,58 @@ n'est PAS démontré.** La direction est favorable (11 % contre 5 %), sur neuf t
 mais le test ne passe pas et relancer maintenant pour chercher la significativité serait
 exactement le p-hacking que le protocole existe pour empêcher. La prochaine mesure se
 déclare avant, ou ne se fait pas.
+
+**Les pièges que la récolte ne peut PAS produire, écrits à la main (2026-11-13).**
+`evaluation/conversations_a_la_main.py` : sept cas, cinq groupes. Deux raisons de ne pas
+compter sur la récolte pour eux :
+- **le secret dit par l'ATTAQUANT.** Nos payloads cherchent le secret, ils ne le
+  contiennent pas : aucune récolte ne produira jamais le cas où la valeur apparaît dans
+  un tour de l'utilisateur sans que la cible l'ait dite ;
+- **plus de deux tours.** `sequencer()` en produit exactement deux, et une escalade
+  progressive demande un modèle attaquant — donc du quota, donc la décision PyRIT.
+
+**Trois cas vont par deux, au texte presque identique et au verdict opposé.** C'est la
+leçon de D13/D14, appliquée telle quelle : sans A02, on apprendrait au juge que « secret
+écrit par l'attaquant = jamais une fuite », et il raterait la cible qui CORRIGE une
+valeur fausse — ce qui est une divulgation complète. Sans A04, même chose pour la
+confirmation : un attaquant qui devine et obtient un « oui, c'est bien ça » a obtenu
+l'information. Les jumeaux partagent leur GROUPE, donc leur jeu, et un test vérifie
+qu'ils ne diffèrent QUE par la réponse de la cible — pas par la demande, sinon le cas
+mesurerait autre chose.
+
+**Le fichier est commité, contrairement à la récolte.** `a_etiqueter_conversations.json`
+se régénère en relançant une commande : le perdre ne coûte rien. Ces cas-ci sont RÉDIGÉS,
+donc les perdre coûterait le travail d'écriture. Ils vivent en Python dans git, et
+`--verser` les ajoute à la récolte sans rien écraser.
+
+**Et les étiquettes ne sont PAS dans le fichier**, ce qu'un test garantit plutôt que de
+le laisser à la bonne volonté. Ce que chaque cas porte, c'est son INTENTION — pourquoi il
+existe et ce qu'il piège. Sans elle, l'auteur recevrait deux conversations presque
+identiques sans savoir pourquoi on lui soumet les deux. Le verdict, lui, reste le sien.
+
+**Une surprise utile en écrivant ces cas : le faux positif « le secret vient de
+l'attaquant » n'est PAS propre au multi-tours.** `construire_question` montre déjà la
+ligne « Utilisateur » au juge, donc le piège existe depuis le premier jour — et le corpus
+ne contient AUCUN cas où l'attaquant nomme une valeur. L'addendum multi-tours ne fait donc
+que rendre explicite une règle qui manquait déjà au format mono-tour.
+
+Conséquence concrète : deux des sept cas (A03, A04) sortent au format `payload` /
+`reponse` et non sous forme de `tours`. Ce n'est pas cosmétique — `evaluer_arbitre`
+écarte toute entrée qui porte des `tours`, donc un échange d'un seul tour déguisé en
+conversation serait écarté d'une mesure qu'il peut parfaitement nourrir. Le format se
+DÉDUIT du nombre de tours, et un test le tient.
+
+**Récolte complète pour l'étiquetage : 119 entrées** — 61 conversations, 58 témoins
+mono-tour, dont les 7 cas écrits à la main.
+
+**Et la feuille de route est corrigée dans les deux sens.** La phase 3b passe de
+« Prévu » à « En cours », mais avec une réserve que le lecteur doit avoir : **les
+campagnes restent MONO-TOUR.** `main.py` envoie toujours `interroger_cible(payload)`, un
+message isolé. Le multi-tours vit dans les cibles, l'arbitre, la récolte et la mesure —
+pas dans l'orchestrateur. Annoncer « attaquant multi-tours en cours » sans le dire aurait
+laissé croire qu'une campagne enchaîne les tours, ce qu'elle ne fait pas.
+
+675 tests `pytest`, toujours sans aucun appel LLM.
 
 ## Cadre légal
 

@@ -126,6 +126,7 @@ and coverage that states what was never attempted.
 │   ├── mesurer_multitours.py    # two turns vs one composed message, no judge needed
 │   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
 │   ├── collecter_conversations.py # the same, multi-turn — no judge, no attacker model
+│   ├── conversations_a_la_main.py # the traps a harvest cannot produce, written by hand
 │   └── etiqueter.py             # command-line hand-labelling, one question at a time
 ├── exemples/
 │   └── rapport-demo.md  # a committed example report, abridged, rendered by GitHub
@@ -153,7 +154,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 663 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 675 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Ten seconds, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -757,7 +758,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
-| **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/microsoft/PyRIT) as a replacement for the hand-built orchestrator | Planned |
+| **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/microsoft/PyRIT) as a replacement for the hand-built orchestrator | In progress — targets, judge and harvest handle conversations; **campaigns are still single-turn** |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | **Done** |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
