@@ -30,7 +30,7 @@ from agents.planificateur import planifier, resumer as resumer_plan
 from agents.reconnaissance import (CONTEXTES_CONNUS, reconnaitre,
                                     resumer as resumer_fiche)
 from agents.verificateur import verifier_par_rejeu
-from cibles import choisir_cible
+from cibles import choose_target
 from cibles.http import PROFILS_CIBLE, tester as tester_cible_http
 from config import BUDGET_APPELS, BUDGET_TOKENS, CIBLE
 from llm_client import BudgetDepasse, journal, reinitialiser_journal
@@ -53,7 +53,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     échange avec la cible y est consigné au fil de l'eau — y compris ceux de
     la reconnaissance et du rejeu, puisque la cible y est tracée en amont.
     """
-    interroger_cible = interroger_cible or choisir_cible()
+    interroger_cible = interroger_cible or choose_target()
     nom_cible = nom_cible or CIBLE
 
     print("=== Campagne ===\n")
@@ -372,7 +372,7 @@ def cli(arguments=None):
     # qui s'était juste trompé de lettre. On vérifie donc le nom avant tout,
     # ce qui n'envoie aucune requête et ne touche pas à l'ordre du mandat.
     try:
-        choisir_cible(nom_cible, arguments.profil_cible)
+        choose_target(nom_cible, arguments.profil_cible)
     except (ValueError, RuntimeError) as refus:
         print(f"Cible inutilisable.\n{refus}", file=sys.stderr)
         raise SystemExit(2)
@@ -430,7 +430,7 @@ def cli(arguments=None):
 
     try:
         resultat = lancer_campagne(
-            choisir_cible(arguments.cible, arguments.profil_cible),
+            choose_target(arguments.cible, arguments.profil_cible),
             nom_cible, piste, contexte,
             adaptatif=not arguments.sans_adaptation,
             seulement=perimetre(arguments.seulement),

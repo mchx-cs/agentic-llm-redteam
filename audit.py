@@ -48,9 +48,9 @@ def est_locale(nom_cible):
     une cible livrée finirait par exiger un mandat (c'est arrivé avec `demo`
     le 2026-11-11, ce qui cassait la démonstration en une commande).
     """
-    from cibles import est_cible_livree
+    from cibles import is_bundled_target
 
-    if est_cible_livree(nom_cible):
+    if is_bundled_target(nom_cible):
         return True
     return any(marque in nom_cible for marque in _MARQUES_LOCALES)
 

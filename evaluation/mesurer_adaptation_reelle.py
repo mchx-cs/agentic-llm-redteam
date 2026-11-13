@@ -55,13 +55,13 @@ CIBLE = "demo"
 def _campagne(adaptatif, budget):
     """Une campagne complète, sans bruit sur la sortie standard."""
     import main
-    from cibles import choisir_cible
+    from cibles import choose_target
 
     budget_initial = main.MAX_ESSAIS
     main.MAX_ESSAIS = budget
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            return main.lancer_campagne(choisir_cible(CIBLE), CIBLE,
+            return main.lancer_campagne(choose_target(CIBLE), CIBLE,
                                         adaptatif=adaptatif)
     finally:
         main.MAX_ESSAIS = budget_initial

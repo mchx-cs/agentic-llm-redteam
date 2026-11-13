@@ -70,8 +70,8 @@ import math
 from pathlib import Path
 
 from agents.attaquant import charger_bibliotheque, composer, sequencer
-from cibles import choisir_cible
-from cibles.conversation import exiger_conversation, jouer
+from cibles import choose_target
+from cibles.conversation import require_conversation, play
 
 # --- Protocole déclaré -------------------------------------------------------
 # Un SEUL niveau de défense. Le pilote mélangeait les niveaux 1, 2 et 3, et
@@ -95,7 +95,7 @@ def _a_fuite(tours):
 
 
 def _combinaisons(limite):
-    """Les couples (payload complet, objectif) à jouer, en tour de rôle."""
+    """Les couples (payload complet, objectif) à play, en tour de rôle."""
     bibliotheque = charger_bibliotheque()
     objectifs = [o for o in bibliotheque["objectifs"]]
     complets = [(t["id"], t["payloads_complets"][0])
@@ -117,7 +117,7 @@ def _combinaisons(limite):
 
 def une_paire(interroger_cible, payload, objectif):
     """Les deux formats, dans la foulée, contre la même cible."""
-    tours = jouer(interroger_cible, sequencer(payload, objectif))
+    tours = play(interroger_cible, sequencer(payload, objectif))
     mono = interroger_cible(composer(payload, objectif))
     return {
         "sequence": _a_fuite(tours),
@@ -139,8 +139,8 @@ def test_des_signes(favorables, defavorables):
 
 
 def mesurer(paires=PAIRES, nom_cible=CIBLE, sortie=None, afficher=print):
-    interroger_cible = choisir_cible(nom_cible)
-    exiger_conversation(interroger_cible, nom_cible)
+    interroger_cible = choose_target(nom_cible)
+    require_conversation(interroger_cible, nom_cible)
 
     afficher(f"Protocole : {paires} paires contre {nom_cible}, test des "
              f"signes unilatéral au seuil {SEUIL}.")

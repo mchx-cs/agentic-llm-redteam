@@ -66,7 +66,7 @@ GRAVITES = {
 
 ORDRE_GRAVITE = {"elevee": 0, "moyenne": 1, "a_verifier": 2}
 
-ETIQUETTES = {
+SEVERITY_LABELS = {
     "elevee": "Élevée",
     "moyenne": "Moyenne",
     "a_verifier": "À vérifier",
@@ -506,7 +506,7 @@ def _extrait(texte, abreger):
 
 def _bloc_constat(constat, abreger=False):
     lignes = [
-        f"### {constat['id']} — {ETIQUETTES[constat['gravite']]} : "
+        f"### {constat['id']} — {SEVERITY_LABELS[constat['gravite']]} : "
         f"{constat['famille_owasp'] or constat['technique']}",
         "",
         f"{constat['pourquoi']}",
@@ -609,7 +609,7 @@ def rendre_markdown(rapport, abreger=False):
     compte = {}
     for constat in constats:
         compte[constat["gravite"]] = compte.get(constat["gravite"], 0) + 1
-    resume = ", ".join(f"{nombre} {ETIQUETTES[gravite].lower()}"
+    resume = ", ".join(f"{nombre} {SEVERITY_LABELS[gravite].lower()}"
                        for gravite, nombre in sorted(
                            compte.items(), key=lambda p: ORDRE_GRAVITE[p[0]]))
 

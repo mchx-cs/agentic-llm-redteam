@@ -171,9 +171,9 @@ class TestLaStructureDeLaConsigneNEstPasForgeable:
         """
         import re
 
-        from cibles.conversation import ETIQUETTES
+        from cibles.conversation import LABELS
         return [re.compile(rf"{re.escape(etiquette)}\s*:")
-                for etiquette in ETIQUETTES.values()]
+                for etiquette in LABELS.values()]
 
     def test_aucun_payload_de_la_bibliotheque_ne_porte_les_etiquettes(self):
         from agents.attaquant import charger_bibliotheque
@@ -205,15 +205,15 @@ class TestLaStructureDeLaConsigneNEstPasForgeable:
                     f"{echange['id']} porte « {motif.pattern} » en réponse"
 
     def test_les_etiquettes_ne_sont_definies_qu_a_UN_endroit(self):
-        # `arbitre.construire_question` et `conversation.rendre` produisent le
+        # `arbitre.construire_question` et `conversation.render` produisent le
         # même format : deux copies auraient divergé, et le juge aurait reçu
         # deux structures différentes selon le chemin d'appel.
         from agents.arbitre import construire_question
-        from cibles.conversation import (ROLE_ATTAQUANT, ROLE_CIBLE, rendre)
+        from cibles.conversation import (ATTACKER_ROLE, TARGET_ROLE, render)
 
         mono = construire_question("demande", "réponse")
-        conversation = rendre([{"role": ROLE_ATTAQUANT, "contenu": "demande"},
-                               {"role": ROLE_CIBLE, "contenu": "réponse"}])
+        conversation = render([{"role": ATTACKER_ROLE, "contenu": "demande"},
+                               {"role": TARGET_ROLE, "contenu": "réponse"}])
         assert mono == conversation
 
     def test_le_format_mono_tour_est_INCHANGE(self):

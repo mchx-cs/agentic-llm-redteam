@@ -130,13 +130,13 @@ def construire_question_conversation(tours):
     au juge comme si le chatbot l'avait écrit. On fabriquerait la fuite qu'on
     prétend détecter.
     """
-    from cibles.conversation import ROLE_CIBLE, rendre
+    from cibles.conversation import TARGET_ROLE, render
 
-    question = rendre(tours)
+    question = render(tours)
 
     decodages = []
     for tour in tours:
-        if tour["role"] == ROLE_CIBLE:
+        if tour["role"] == TARGET_ROLE:
             decodages += analyse(tour["contenu"])
     if decodages:
         lignes = [f'- {d["type"]} : "{d["original"]}" → "{d["decode"]}"'
@@ -148,13 +148,13 @@ def construire_question_conversation(tours):
 
 def construire_question(payload, reponse):
     """Assemble l'échange à juger, plus ce que les détecteurs ont décodé."""
-    from cibles.conversation import ETIQUETTES, ROLE_ATTAQUANT, ROLE_CIBLE
+    from cibles.conversation import LABELS, ATTACKER_ROLE, TARGET_ROLE
 
-    # Les mêmes étiquettes que `conversation.rendre()`, prises à la source :
+    # Les mêmes étiquettes que `conversation.render()`, prises à la source :
     # deux copies de la structure que lit le juge auraient divergé.
     question = (
-        f'{ETIQUETTES[ROLE_ATTAQUANT]} : "{payload}"\n'
-        f'{ETIQUETTES[ROLE_CIBLE]} : "{reponse}"'
+        f'{LABELS[ATTACKER_ROLE]} : "{payload}"\n'
+        f'{LABELS[TARGET_ROLE]} : "{reponse}"'
     )
 
     decodages = analyse(reponse)

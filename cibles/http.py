@@ -333,7 +333,7 @@ def verifier_gabarit(corps):
     )
 
 
-def construire_cible_http(url, entetes=None, corps=None, chemin_reponse=None,
+def build_http_target(url, entetes=None, corps=None, chemin_reponse=None,
                           delai=None, profil=None):
     """
     Renvoie une fonction `interroger(message) -> str` qui vise `url`.
@@ -507,7 +507,7 @@ def tester(url, entetes=None, corps=None, chemin_reponse=None, delai=None,
         afficher(f"ÉCHEC — {erreur}")
         return False
 
-    interroger = construire_cible_http(url, entetes, corps_final,
+    interroger = build_http_target(url, entetes, corps_final,
                                        chemin_final, delai, profil=None)
     afficher(f"Envoi    : {MESSAGE_DE_TEST}")
     try:

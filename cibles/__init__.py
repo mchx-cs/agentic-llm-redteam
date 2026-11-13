@@ -1,103 +1,99 @@
 """
-cibles/ — Les systèmes testés, et le choix entre eux.
+cibles/ — The systems under test, and the choice between them.
 
-Jusqu'ici la cible était codée en dur : l'outil ne pouvait tester que
-lui-même. Chaque cible est maintenant un ADAPTATEUR, et tous respectent le
-même contrat, délibérément minimal :
+The target used to be hard-coded: the tool could only test itself. Each target
+is now an ADAPTER, and they all honour the same deliberately minimal contract:
 
     interroger(message: str) -> str
 
-C'est ce contrat qui permet à `reconnaissance.py` et `verificateur.py` de
-recevoir la cible en paramètre, et aux tests d'utiliser des cibles simulées
-en quelques lignes.
+That contract is what lets `reconnaissance.py` and `verificateur.py` receive
+the target as a parameter, and lets tests use simulated targets in a few lines.
 
-Quatre adaptateurs :
-- `demo`   : volontairement mal protégée, avec trois niveaux de défense. Elle
-  cède RÉELLEMENT, et sert autant à la démonstration qu'à mesurer jusqu'où
-  l'outil sait aller.
-- `leurre` : le chatbot-jouet local, avec un secret factice à protéger.
-  C'est la cible par défaut, pour que le dépôt tourne sans configuration.
-- `mock`   : déterministe, sans aucun LLM. Instantanée, gratuite, toujours
-  identique : c'est elle qui rend possibles des tests de bout en bout.
-- `http`   : un vrai endpoint, décrit dans `.env`. C'est l'adaptateur qui
-  fait passer l'outil de « il se teste lui-même » à « il vise une cible ».
+Four adapters:
+- `demo`   : deliberately badly protected, with three defence levels. It gives
+  in FOR REAL, and serves as much for the demonstration as for measuring how
+  far the tool can go.
+- `leurre` : the local toy chatbot, with a fictional secret to protect. It is
+  the default target, so the repository runs with no configuration.
+- `mock`   : deterministic, with no LLM at all. Instant, free, always
+  identical: it is what makes end-to-end tests possible.
+- `http`   : a real endpoint, described in `.env`. This is the adapter that
+  takes the tool from "it tests itself" to "it aims at a target".
 
-Un mot sur la règle « aucun appel direct à un fournisseur de LLM » : elle
-vise les modèles QUE NOUS utilisons (arbitre, analyste, leurre), pour qu'ils
-restent interchangeables depuis `config.py`. La cible, elle, est un système
-tiers arbitraire — souvent une application, pas un modèle nu — et
-l'adaptateur `http` l'appelle donc directement. C'est volontaire.
+A word on the "no direct call to an LLM provider" rule: it covers the models WE
+use (judge, analyst, decoy), so they stay interchangeable from `config.py`. The
+target is an arbitrary third-party system — often an application, not a bare
+model — so the `http` adapter calls it directly. That is deliberate.
 """
 
-from cibles.demo import NIVEAUX, construire_cible_demo
-from cibles.http import construire_cible_http
-from cibles.leurre import interroger_leurre
-from cibles.mock import interroger_mock
+from cibles.demo import LEVELS, build_demo_target
+from cibles.http import build_http_target
+from cibles.leurre import ask_decoy
+from cibles.mock import ask_mock
 
-# Les cibles sans configuration : on les choisit par leur nom.
-CIBLES_NOMMEES = {
-    "leurre": interroger_leurre,
-    "mock": interroger_mock,
+# The targets that need no configuration: chosen by name.
+NAMED_TARGETS = {
+    "leurre": ask_decoy,
+    "mock": ask_mock,
 }
 
 
-def est_cible_livree(nom):
+def is_bundled_target(name):
     """
-    Vrai si `nom` désigne une cible fournie avec le projet.
+    True if `name` denotes a target shipped with the project.
 
-    Ces cibles tournent en local et ne contiennent que des secrets factices :
-    `audit.py` s'en sert pour n'exiger un mandat que face à un système tiers.
+    These targets run locally and hold nothing but fictional secrets:
+    `audit.py` uses this to require a mandate only against a third party.
     """
-    return nom in CIBLES_NOMMEES or nom == "demo" or nom.startswith("demo:")
+    return name in NAMED_TARGETS or name == "demo" or name.startswith("demo:")
 
 
-def choisir_cible(nom=None, profil=None):
+def choose_target(name=None, profil=None):
     """
-    Renvoie la fonction d'interrogation correspondant à `nom`.
+    Return the asking function matching `name`.
 
-    - un nom connu ("leurre", "mock") ;
-    - "demo", ou "demo:N" pour choisir le niveau de défense (1, 2 ou 3) ;
-    - une URL (http:// ou https://) → adaptateur HTTP configuré par .env,
-      ou par `profil` (voir cibles.http.PROFILS_CIBLE) pour une forme d'API
-      connue : décrire le corps JSON à la main est la partie la plus pénible
-      du branchement, et pour le cas courant elle est prévisible ;
-    - None → la valeur de CIBLE dans .env, sinon le leurre local.
+    - a known name ("leurre", "mock");
+    - "demo", or "demo:N" to pick the defence level (1, 2 or 3);
+    - a URL (http:// or https://) → the HTTP adapter configured from `.env`,
+      or from `profil` (see cibles.http.PROFILS_CIBLE) for a known API shape:
+      describing the JSON body by hand is the most tedious part of wiring a
+      target, and for the common case it is entirely predictable;
+    - None → the value of CIBLE in `.env`, otherwise the local decoy.
     """
-    from config import CIBLE  # importé ici pour éviter un import circulaire
+    from config import CIBLE  # imported here to avoid a circular import
 
-    nom = nom or CIBLE
+    name = name or CIBLE
 
-    # EN PREMIER, avant toute branche : un profil ne vaut que pour une cible
-    # HTTP. Placé plus bas, ce contrôle était inatteignable — les cibles
-    # nommées retournent avant lui — et le profil était ignoré en silence,
-    # exactement ce qu'il devait empêcher. Un test l'a montré.
-    if profil and not nom.startswith(("http://", "https://")):
+    # FIRST, before any branch: a profile only applies to an HTTP target.
+    # Placed lower down, this check was unreachable — the named targets return
+    # before it — and the profile was silently ignored, exactly what it was
+    # meant to prevent. A test showed it.
+    if profil and not name.startswith(("http://", "https://")):
         raise ValueError(
             f"Le profil de cible « {profil} » décrit la forme d'une API "
-            f"http(s) ; la cible '{nom}' est livrée avec le projet et n'a "
+            f"http(s) ; la cible '{name}' est livrée avec le projet et n'a "
             f"rien à configurer.")
 
-    if nom in CIBLES_NOMMEES:
-        return CIBLES_NOMMEES[nom]
+    if name in NAMED_TARGETS:
+        return NAMED_TARGETS[name]
 
-    # La cible de démonstration porte son niveau dans son nom : « demo:3 ».
-    # Pas de nouvelle option en ligne de commande pour un réglage qui ne
-    # concerne qu'une cible sur quatre.
-    if nom == "demo" or nom.startswith("demo:"):
-        _, _, niveau = nom.partition(":")
+    # The demo target carries its level in its name: "demo:3". No new
+    # command-line option for a setting that concerns one target out of four.
+    if name == "demo" or name.startswith("demo:"):
+        _, _, level = name.partition(":")
         try:
-            return construire_cible_demo(int(niveau) if niveau else 1)
-        except ValueError as erreur:
+            return build_demo_target(int(level) if level else 1)
+        except ValueError as error:
             raise ValueError(
-                f"Niveau de démonstration invalide dans '{nom}' : {erreur}\n"
+                f"Niveau de démonstration invalide dans '{name}' : {error}\n"
                 f"  Attendu : demo, ou demo:N avec N dans "
-                f"{{{', '.join(str(n) for n in NIVEAUX)}}}."
-            ) from erreur
+                f"{{{', '.join(str(n) for n in LEVELS)}}}."
+            ) from error
 
-    if nom.startswith(("http://", "https://")):
-        return construire_cible_http(nom, profil=profil)
+    if name.startswith(("http://", "https://")):
+        return build_http_target(name, profil=profil)
 
     raise ValueError(
-        f"Cible inconnue : '{nom}'. Attendu : "
-        f"{', '.join(CIBLES_NOMMEES)}, demo[:N], ou une URL http(s)."
+        f"Cible inconnue : '{name}'. Attendu : "
+        f"{', '.join(NAMED_TARGETS)}, demo[:N], ou une URL http(s)."
     )

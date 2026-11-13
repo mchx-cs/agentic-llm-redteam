@@ -98,7 +98,7 @@ class TestRecolte:
         import evaluation.collecter_conversations as collecteur
 
         cible = self._cible()
-        monkeypatch.setattr(collecteur, "choisir_cible", lambda *a: cible)
+        monkeypatch.setattr(collecteur, "choose_target", lambda *a: cible)
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
         entrees = collecteur.collecter(limite=1, anodin=True)
@@ -117,7 +117,7 @@ class TestRecolte:
         # gelé contiendrait une reformulation d'un cas de réglage.
         import evaluation.collecter_conversations as collecteur
 
-        monkeypatch.setattr(collecteur, "choisir_cible",
+        monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
@@ -132,7 +132,7 @@ class TestRecolte:
         # l'une et de le mesurer sur l'autre.
         import evaluation.collecter_conversations as collecteur
 
-        monkeypatch.setattr(collecteur, "choisir_cible",
+        monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
@@ -148,7 +148,7 @@ class TestRecolte:
 
         def mono(message):
             return "ok"
-        monkeypatch.setattr(collecteur, "choisir_cible", lambda *a: mono)
+        monkeypatch.setattr(collecteur, "choose_target", lambda *a: mono)
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
         with pytest.raises(RuntimeError):
@@ -159,7 +159,7 @@ class TestRecolte:
         import evaluation.collecter_conversations as collecteur
 
         cible = self._cible()
-        monkeypatch.setattr(collecteur, "choisir_cible", lambda *a: cible)
+        monkeypatch.setattr(collecteur, "choose_target", lambda *a: cible)
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
         collecteur.collecter(limite=1, anodin=True)
@@ -300,7 +300,7 @@ class TestRecolteAdditive:
 
     def _preparer(self, monkeypatch, tmp_path):
         import evaluation.collecter_conversations as collecteur
-        monkeypatch.setattr(collecteur, "choisir_cible",
+        monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")
@@ -446,7 +446,7 @@ class TestLIdentifiantPorteLObjectif:
                                                   tmp_path):
         import evaluation.collecter_conversations as collecteur
 
-        monkeypatch.setattr(collecteur, "choisir_cible",
+        monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
         monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
                             tmp_path / "sortie.json")

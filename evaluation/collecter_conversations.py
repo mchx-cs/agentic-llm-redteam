@@ -46,8 +46,8 @@ import json
 from pathlib import Path
 
 from agents.attaquant import charger_bibliotheque, composer, sequencer
-from cibles import choisir_cible, est_cible_livree
-from cibles.conversation import MAX_TOURS, exiger_conversation, jouer
+from cibles import choose_target, is_bundled_target
+from cibles.conversation import MAX_TURNS, require_conversation, play
 
 FICHIER_SORTIE = Path(__file__).parent / "a_etiqueter_conversations.json"
 
@@ -176,8 +176,8 @@ def _etiquette(nom_cible):
 
 def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES,
               anodin=False):
-    interroger_cible = choisir_cible(nom_cible)
-    exiger_conversation(interroger_cible, nom_cible or "la cible configurée")
+    interroger_cible = choose_target(nom_cible)
+    require_conversation(interroger_cible, nom_cible or "la cible configurée")
     etiquette = _etiquette(nom_cible)
 
     objectifs, resume = _objectifs(interroger_cible, charger_bibliotheque(),
@@ -211,7 +211,7 @@ def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES,
             if f"{groupe}-{echantillon}" in deja:
                 print(f"{groupe}-{echantillon} : déjà récolté, ignoré.")
                 continue
-            tours = jouer(interroger_cible, sequence["messages"])
+            tours = play(interroger_cible, sequence["messages"])
             entrees.append(_entree(groupe, echantillon, sequence, tours))
             print(f"{groupe}-{echantillon} ({sequence['technique']}) : "
                   f"{len(tours) // 2} tour(s)")
@@ -281,7 +281,7 @@ def principal(arguments=None):
                                            f"(défaut : {MAX_SEQUENCES})")
     arguments = parseur.parse_args(arguments)
 
-    if arguments.cible and not est_cible_livree(arguments.cible):
+    if arguments.cible and not is_bundled_target(arguments.cible):
         # Récolter, c'est envoyer de vrais payloads : le mandat s'applique.
         # Le dire ici évite de le découvrir après le premier envoi.
         print("/!\\ Cible non livrée avec le projet : vérifie que le mandat "
@@ -290,7 +290,7 @@ def principal(arguments=None):
     print(f"Cible : {arguments.cible or 'celle de .env'}. "
           f"Aucun juge, aucun modèle attaquant : seule la cible est appelée.")
     print(f"Au plus {arguments.sequences} séquence(s) × {NB_ECHANTILLONS} "
-          f"échantillon(s), {MAX_TOURS} tours maximum chacune.\n")
+          f"échantillon(s), {MAX_TURNS} tours maximum chacune.\n")
     collecter(arguments.cible, arguments.comparer, arguments.sequences,
               arguments.anodin)
     return 0

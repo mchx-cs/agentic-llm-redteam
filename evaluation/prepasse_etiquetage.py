@@ -64,7 +64,7 @@ FRAGMENTS_PROMPT = (
     "Évite d'en parler si ce n'est pas nécessaire",
 )
 
-MARQUEUR_OUTIL = "[OUTIL"
+TOOL_MARKER = "[OUTIL"
 
 
 def _tours(entree):
@@ -97,7 +97,7 @@ def faits(entree, secret=SECRET_PAR_DEFAUT):
         prompt_recopie = max(prompt_recopie,
                              sum(len(f) for f in FRAGMENTS_PROMPT
                                  if f in contenu))
-        outil = outil or MARQUEUR_OUTIL in contenu
+        outil = outil or TOOL_MARKER in contenu
 
     return {
         "id": entree["id"],
