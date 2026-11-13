@@ -243,9 +243,9 @@ def principal(arguments=None):
     arguments = parseur.parse_args(arguments)
 
     if arguments.version:
-        from agents.attaquant import charger_bibliotheque
+        from agents.attaquant import load_library
 
-        locale = (charger_bibliotheque().get("_garak") or {}).get("version")
+        locale = (load_library().get("_garak") or {}).get("version")
         distante, en_retard = comparer_a_l_instantane(locale)
         print(f"instantané local : garak {locale or 'aucun'}")
         print(f"dernière publiée : garak {distante or 'inconnue (hors ligne ?)'}")
@@ -262,7 +262,7 @@ def principal(arguments=None):
         # Signalé dans les deux cas : la redondance porte sur l'instantané
         # qu'on a, pas sur le retard qu'on a pris. Une version à jour peut
         # très bien venir de combler le trou LLM06 ou LLM07.
-        _signaler_redondances(charger_bibliotheque())
+        _signaler_redondances(load_library())
         return 1 if en_retard else 0
 
     if arguments.decrire:

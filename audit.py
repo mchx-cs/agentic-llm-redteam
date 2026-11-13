@@ -304,8 +304,8 @@ class PisteAudit:
 
 def telemetrie(nom_cible, profil_cible=None):
     """L'environnement de test, côté connu et côté inconnu."""
-    from agents.arbitre import NB_VOTES
-    from agents.verificateur import NB_REJEUX
+    from agents.arbitre import VOTE_COUNT
+    from agents.verificateur import REPLAY_COUNT
     from config import PROFIL_ACTIF, PROFIL_ARBITRE, PROFILS
 
     arbitre = PROFILS.get(PROFIL_ARBITRE, {})
@@ -317,7 +317,7 @@ def telemetrie(nom_cible, profil_cible=None):
                 "modele": arbitre.get("modele"),
                 "base_url": arbitre.get("base_url"),
                 "temperature": 0,
-                "votes_par_verdict": NB_VOTES,
+                "votes_par_verdict": VOTE_COUNT,
             },
             "profil_actif": PROFIL_ACTIF,
         },
@@ -333,8 +333,8 @@ def telemetrie(nom_cible, profil_cible=None):
             "La cible choisit ses propres paramètres d'échantillonnage : deux "
             "campagnes identiques peuvent donner des verdicts différents.",
             "L'arbitre lui-même n'est pas déterministe à température 0 "
-            f"(mesuré) : d'où {NB_VOTES} votes par verdict.",
-            f"Une divulgation est rejouée {NB_REJEUX} fois, ce qui mesure la "
+            f"(mesuré) : d'où {VOTE_COUNT} votes par verdict.",
+            f"Une divulgation est rejouée {REPLAY_COUNT} fois, ce qui mesure la "
             "reproductibilité sans l'éliminer.",
         ],
     }

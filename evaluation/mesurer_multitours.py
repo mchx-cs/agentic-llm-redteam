@@ -22,8 +22,8 @@ n'est PAS compté — donc le chiffre est une borne BASSE du taux de fuite réel
 Ce qui est comparé
 ------------------
 Des paires : le même payload garak et le même objectif, livrés soit en DEUX
-tours (`attaquant.sequencer`), soit composés en UN message
-(`attaquant.composer`). Les deux bras partagent donc leurs ingrédients, et la
+tours (`attaquant.sequence_turns`), soit composés en UN message
+(`attaquant.compose`). Les deux bras partagent donc leurs ingrédients, et la
 seule différence est le format. Les deux moitiés d'une paire sont jouées à la
 suite, contre la même cible : une cible probabiliste dérive, et une paire
 jouée à une heure d'écart ne serait plus une paire.
@@ -69,7 +69,7 @@ import json
 import math
 from pathlib import Path
 
-from agents.attaquant import charger_bibliotheque, composer, sequencer
+from agents.attaquant import load_library, compose, sequence_turns
 from cibles import choose_target
 from cibles.conversation import require_conversation, play
 
@@ -96,7 +96,7 @@ def _a_fuite(tours):
 
 def _combinaisons(limite):
     """Les couples (payload complet, objectif) à play, en tour de rôle."""
-    bibliotheque = charger_bibliotheque()
+    bibliotheque = load_library()
     objectifs = [o for o in bibliotheque["objectifs"]]
     complets = [(t["id"], t["payloads_complets"][0])
                 for t in bibliotheque["techniques"]
@@ -117,8 +117,8 @@ def _combinaisons(limite):
 
 def une_paire(interroger_cible, payload, objectif):
     """Les deux formats, dans la foulée, contre la même cible."""
-    tours = play(interroger_cible, sequencer(payload, objectif))
-    mono = interroger_cible(composer(payload, objectif))
+    tours = play(interroger_cible, sequence_turns(payload, objectif))
+    mono = interroger_cible(compose(payload, objectif))
     return {
         "sequence": _a_fuite(tours),
         "mono": _a_fuite([{"role": "cible", "contenu": mono}]),

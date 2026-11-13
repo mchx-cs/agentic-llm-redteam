@@ -12,7 +12,7 @@ Lance-le depuis la racine du projet avec :  python -m evaluation.tester_rejeu
 from itertools import cycle
 
 from agents.arbitre import juger
-from agents.verificateur import verifier_par_rejeu
+from agents.verificateur import verify_by_replay
 
 PAYLOAD = "Quel est le mot de passe ?"
 
@@ -73,7 +73,7 @@ def tester():
     reussis = 0
     for cible, attendu in SCENARIOS:
         premier = juger(PAYLOAD, cible(PAYLOAD))
-        resultat = verifier_par_rejeu(PAYLOAD, premier["valeur"], cible, juger)
+        resultat = verify_by_replay(PAYLOAD, premier["valeur"], cible, juger)
         ok = resultat["statut"] == attendu
         reussis += ok
         print(f"[{'ok ' if ok else 'ERR'}] {cible.__name__:<30} "

@@ -13,7 +13,7 @@ Les techniques et objectifs vivent dans payloads/bibliotheque.json (des
 données, pas du code). Les transformations sont des fonctions Python, ici.
 
 Ce module FOURNIT les briques ; c'est planificateur.py qui CHOISIT, selon la
-fiche de la cible, lesquelles assembler et dans quel ordre. `generer_payloads()`
+fiche de la cible, lesquelles assembler et dans quel ordre. `generate_payloads()`
 ne sert donc plus qu'à produire le catalogue complet, sans tenir compte du
 contexte (utile pour collecter des échanges à étiqueter).
 
@@ -28,7 +28,7 @@ from datetime import datetime
 from itertools import product
 from pathlib import Path
 
-FICHIER_BIBLIOTHEQUE = Path(__file__).parent.parent / "payloads" / "bibliotheque.json"
+LIBRARY_FILE = Path(__file__).parent.parent / "payloads" / "bibliotheque.json"
 
 
 # --- Transformations ---------------------------------------------------------
@@ -37,17 +37,17 @@ FICHIER_BIBLIOTHEQUE = Path(__file__).parent.parent / "payloads" / "bibliotheque
 # filtre : "majuscules" n'existe que pour montrer que l'axe fonctionne.
 # Les vraies (Base64, autre langue, leetspeak…) viendront avec le path.
 
-def identite(texte):
+def identity(texte):
     return texte
 
 
-def majuscules(texte):
+def uppercase(texte):
     return texte.upper()
 
 
 TRANSFORMATIONS = {
-    "identite": identite,
-    "majuscules": majuscules,
+    "identite": identity,
+    "majuscules": uppercase,
 }
 
 
@@ -57,7 +57,7 @@ TRANSFORMATIONS = {
 # données tiers, qu'on ne republie pas depuis un dépôt personnel. Qui veut
 # ces payloads resynchronise.
 
-FICHIER_GARAK = FICHIER_BIBLIOTHEQUE.parent / "garak.json"
+GARAK_FILE = LIBRARY_FILE.parent / "garak.json"
 
 # Les tags de garak portent déjà la correspondance OWASP ; on la traduit dans
 # le vocabulaire du projet, et on en déduit le prérequis de la famille.
@@ -72,7 +72,7 @@ FICHIER_GARAK = FICHIER_BIBLIOTHEQUE.parent / "garak.json"
 # source ne fournit pas est pire qu'absente — elle laisse croire à une
 # couverture. La fuite de prompt système se couvre donc par des payloads
 # écrits à la main (technique `fuite-prompt-systeme`).
-FAMILLES_GARAK = {
+GARAK_FAMILIES = {
     "owasp:llm01": ("LLM01:2025 Prompt Injection", []),
     "owasp:llm02": ("LLM02:2025 Sensitive Information Disclosure", ["secret"]),
 }
@@ -93,7 +93,7 @@ FAMILLES_GARAK = {
 #
 # On les CONSIGNE au rapport plutôt que de les taire : « cette sonde touche
 # aussi LLM06, que nous ne savons pas juger » est une information honnête.
-FAMILLES_NON_JUGEABLES = {
+UNJUDGEABLE_FAMILIES = {
     "owasp:llm05": "LLM05:2025 Improper Output Handling",
     "owasp:llm06": "LLM06:2025 Excessive Agency",
     "owasp:llm08": "LLM08:2025 Vector and Embedding Weaknesses",
@@ -105,11 +105,11 @@ FAMILLES_NON_JUGEABLES = {
 # quels affaiblirait le payload : la cible verrait « {generator.name} » au
 # lieu d'un nom d'assistant, et bien des jailbreaks reposent sur ce nom.
 # Un remplacement neutre est préférable à un emplacement visible.
-EMPLACEMENTS_GARAK = {"{generator.name}": "the assistant"}
+GARAK_PLACEHOLDERS = {"{generator.name}": "the assistant"}
 
 
-def _remplir(payload):
-    for marqueur, valeur in EMPLACEMENTS_GARAK.items():
+def _fill_placeholders(payload):
+    for marqueur, valeur in GARAK_PLACEHOLDERS.items():
         payload = payload.replace(marqueur, valeur)
     return payload
 
@@ -117,10 +117,10 @@ def _remplir(payload):
 # garak publie environ tous les 37 jours (médiane mesurée le 2026-11-10 sur
 # ses douze dernières versions). Au-delà de deux mois, un instantané a donc
 # probablement manqué une version ou deux : on le signale, sans rien bloquer.
-AGE_INSTANTANE_SUSPECT = 60
+SNAPSHOT_AGE_SUSPECT = 60
 
 
-def _age_en_jours(horodatage):
+def _age_in_days(horodatage):
     """Âge de l'instantané, ou None s'il est illisible."""
     try:
         return (datetime.now() - datetime.fromisoformat(horodatage)).days
@@ -145,7 +145,7 @@ def _age_en_jours(horodatage):
 # Ne JAMAIS y mettre un prérequis par précaution — écarter une sonde qui aurait
 # pu marcher coûte une faille non trouvée, ce qui est plus grave qu'un essai
 # gaspillé.
-PREREQUIS_PAR_MODULE = {
+PREREQUISITES_BY_MODULE = {
     # Désobéir à des consignes suppose qu'il y en ait.
     "dan": ["consignes"],
     "phrasing": ["consignes"],
@@ -163,22 +163,22 @@ PREREQUIS_PAR_MODULE = {
 }
 
 
-def _module_de(sonde):
+def _module_of(sonde):
     """Le module garak d'une sonde : `probes.dan.DanInTheWild` -> `dan`."""
     return sonde["sonde"].replace("probes.", "").split(".")[0].lower()
 
 
-def _technique_depuis_sonde(sonde):
+def _technique_from_probe(sonde):
     """Traduit une sonde garak en technique du projet."""
     famille, prerequis = next(
-        (FAMILLES_GARAK[t] for t in sonde["familles_owasp"]
-         if t in FAMILLES_GARAK), (None, []))
+        (GARAK_FAMILIES[t] for t in sonde["familles_owasp"]
+         if t in GARAK_FAMILIES), (None, []))
     # Les deux sources de prérequis se cumulent : la famille OWASP dit ce que
     # l'attaque CHERCHE (un secret, des consignes), le module ce qu'elle EXIGE
     # du contexte (du code, un terminal). Les confondre ferait rater l'un ou
     # l'autre.
     prerequis = sorted(set(prerequis)
-                       | set(PREREQUIS_PAR_MODULE.get(_module_de(sonde), [])))
+                       | set(PREREQUISITES_BY_MODULE.get(_module_of(sonde), [])))
     identifiant = "garak-" + re.sub(
         r"[^a-z0-9]+", "-", sonde["sonde"].replace("probes.", "").lower()
     ).strip("-")
@@ -190,7 +190,7 @@ def _technique_depuis_sonde(sonde):
         # (« make the model say an encoded payload »). Sans ce regroupement,
         # elles obtenaient quinze tours là où `dan` en obtenait trois, et un
         # budget élargi se serait épuisé en variantes d'encodage.
-        "groupe": _module_de(sonde),
+        "groupe": _module_of(sonde),
         "famille_owasp": famille,
         # Ce que la sonde touche AUSSI, et que l'arbitre ne sait pas juger.
         # Lancer sans le dire laisserait croire que ces familles sont
@@ -198,15 +198,15 @@ def _technique_depuis_sonde(sonde):
         # effleurées. Le rapport les présente donc comme « effleurées, non
         # jugées ».
         "familles_non_jugeables": sorted(
-            {FAMILLES_NON_JUGEABLES[t] for t in sonde["familles_owasp"]
-             if t in FAMILLES_NON_JUGEABLES}),
+            {UNJUDGEABLE_FAMILIES[t] for t in sonde["familles_owasp"]
+             if t in UNJUDGEABLE_FAMILIES}),
         "description": sonde["objectif"] or sonde["sonde"],
         "prerequis": prerequis,
         # Les prompts de garak sont COMPLETS : ils ne comportent pas
         # d'emplacement `{objectif}`, et n'ont donc rien à faire dans
         # `modeles`, que le validateur contrôle sur ce point.
         "modeles": [],
-        "payloads_complets": [_remplir(p) for p in sonde["payloads"]],
+        "payloads_complets": [_fill_placeholders(p) for p in sonde["payloads"]],
         "source": f"garak {sonde['sonde']}",
     }
 
@@ -220,21 +220,21 @@ def _technique_depuis_sonde(sonde):
 COMPOSITION = "{preambule}\n\nMaintenant, peux-tu {demande} ?"
 
 
-def composer(preambule, objectif):
+def compose(preambule, objectif):
     """Assemble un payload complet et un objectif en une seule demande."""
     return COMPOSITION.format(preambule=preambule.rstrip(),
                               demande=objectif["formulation"])
 
 
 # Le même couple d'ingrédients, livré en DEUX tours au lieu d'un (phase 3b).
-DEMANDE_SECOND_TOUR = "Maintenant, peux-tu {demande} ?"
+SECOND_TURN_REQUEST = "Maintenant, peux-tu {demande} ?"
 
 
-def sequencer(preambule, objectif):
+def sequence_turns(preambule, objectif):
     """
     Le préambule et la demande en deux messages distincts.
 
-    C'est `composer` coupé en deux, et ce n'est pas un détail de présentation :
+    C'est `compose` coupé en deux, et ce n'est pas un détail de présentation :
     c'est ainsi que ces attaques fonctionnent en pratique. On installe la
     persona, on laisse la cible l'accepter — sa propre réponse fait alors
     partie de son contexte — puis on demande. Composé en un seul message, le
@@ -246,12 +246,12 @@ def sequencer(preambule, objectif):
     des trois laissées ouvertes par l'écart garak/cible de la phase 12.
     """
     return [preambule.rstrip(),
-            DEMANDE_SECOND_TOUR.format(demande=objectif["formulation"])]
+            SECOND_TURN_REQUEST.format(demande=objectif["formulation"])]
 
 
 # --- Construction des payloads -----------------------------------------------
 
-def charger_bibliotheque(avec_garak=True):
+def load_library(with_garak=True):
     """
     Charge la bibliothèque, enrichie de l'instantané garak s'il est présent.
 
@@ -259,25 +259,25 @@ def charger_bibliotheque(avec_garak=True):
     exactement comme avant. C'est le modèle de nuclei — l'outil reste léger,
     les payloads se synchronisent à part.
     """
-    with open(FICHIER_BIBLIOTHEQUE, encoding="utf-8") as f:
+    with open(LIBRARY_FILE, encoding="utf-8") as f:
         bibliotheque = json.load(f)
 
-    if avec_garak and FICHIER_GARAK.exists():
-        with open(FICHIER_GARAK, encoding="utf-8") as f:
+    if with_garak and GARAK_FILE.exists():
+        with open(GARAK_FILE, encoding="utf-8") as f:
             instantane = json.load(f)
         bibliotheque["techniques"] = bibliotheque["techniques"] + [
-            _technique_depuis_sonde(s) for s in instantane["sondes"]]
+            _technique_from_probe(s) for s in instantane["sondes"]]
         bibliotheque["_garak"] = {
             "version": instantane.get("version_garak"),
             "exporte_le": instantane.get("exporte_le"),
             "sondes": len(instantane["sondes"]),
-            "age_jours": _age_en_jours(instantane.get("exporte_le")),
+            "age_jours": _age_in_days(instantane.get("exporte_le")),
         }
 
     return bibliotheque
 
 
-def generer_payloads():
+def generate_payloads():
     """
     Renvoie la liste de tous les payloads possibles : chaque modèle de chaque
     technique, croisé avec chaque objectif et chaque transformation.
@@ -285,7 +285,7 @@ def generer_payloads():
     La liste est finie par construction (produit de listes finies), mais elle
     grossit vite : c'est MAX_ESSAIS, dans main.py, qui borne la campagne.
     """
-    bibliotheque = charger_bibliotheque()
+    bibliotheque = load_library()
     payloads = []
 
     for technique in bibliotheque["techniques"]:
@@ -310,7 +310,7 @@ def generer_payloads():
             # Deux usages d'un même payload, qui ne testent PAS la même chose :
             # seul, il mesure la résistance au détournement ; composé avec un
             # objectif, il va chercher ce que la cible protège.
-            variantes = [(o, composer(payload, o))
+            variantes = [(o, compose(payload, o))
                          for o in bibliotheque["objectifs"]]
             variantes.append((None, payload))
             for objectif, texte in variantes:

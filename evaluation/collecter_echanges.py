@@ -23,7 +23,7 @@ Lance-le depuis la racine du projet avec :  python -m evaluation.collecter_echan
 import json
 from pathlib import Path
 
-from agents.attaquant import generer_payloads
+from agents.attaquant import generate_payloads
 from cibles import choose_target
 
 FICHIER_SORTIE = Path(__file__).parent / "a_etiqueter.json"
@@ -37,7 +37,7 @@ def collecter():
     # Celle que désigne .env : on collecte donc aussi bien depuis le leurre
     # que depuis une vraie cible, sans toucher à ce script.
     interroger_cible = choose_target()
-    payloads = generer_payloads()
+    payloads = generate_payloads()
     echanges = []
 
     # Boucles bornées : payloads (liste finie) × NB_ECHANTILLONS.

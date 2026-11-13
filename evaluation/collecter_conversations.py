@@ -20,11 +20,11 @@ D'où viennent les séquences
 ---------------------------
 Des mêmes ingrédients que la composition mono-tour : un payload complet de
 garak sert de premier tour, et l'objectif issu de la reconnaissance fournit le
-second (`attaquant.sequencer`). Rien n'est inventé pour l'occasion — on ne
+second (`attaquant.sequence_turns`). Rien n'est inventé pour l'occasion — on ne
 récolte que des techniques déjà pratiquées par l'outil.
 
 Conséquence utile : la variante mono-tour des mêmes ingrédients existe déjà
-(`attaquant.composer`). `--comparer` récolte les deux, ce qui donne des paires
+(`attaquant.compose`). `--comparer` récolte les deux, ce qui donne des paires
 dont la seule différence est le nombre de tours. C'est la mesure qui tranchera
 l'intérêt du multi-tours, et elle ne vaut que si les deux bras partagent leurs
 ingrédients.
@@ -45,7 +45,7 @@ import argparse
 import json
 from pathlib import Path
 
-from agents.attaquant import charger_bibliotheque, composer, sequencer
+from agents.attaquant import load_library, compose, sequence_turns
 from cibles import choose_target, is_bundled_target
 from cibles.conversation import MAX_TURNS, require_conversation, play
 
@@ -99,12 +99,12 @@ def _objectifs(interroger_cible, bibliotheque, anodin=False):
     if anodin:
         return [controle], "objectif de contrôle (anodin)"
 
-    from agents.planificateur import objectifs_pour
-    from agents.reconnaissance import reconnaitre
+    from agents.planificateur import objectives_for
+    from agents.reconnaissance import reconnoitre
 
     print("Reconnaissance de la cible (sondes anodines, modèle local)...")
-    fiche = reconnaitre(interroger_cible)
-    vises = [o for o in objectifs_pour(fiche, bibliotheque)
+    fiche = reconnoitre(interroger_cible)
+    vises = [o for o in objectives_for(fiche, bibliotheque)
              if o.get("origine") == "reconnaissance"][:MAX_OBJECTIFS]
 
     if not vises:
@@ -130,7 +130,7 @@ def _sequences(limite=MAX_SEQUENCES, objectifs=None):
     techniques vaut mieux que plusieurs variantes de la même, exactement
     comme le tour de rôle d'une campagne.
     """
-    bibliotheque = charger_bibliotheque()
+    bibliotheque = load_library()
     if not objectifs:
         generiques = {o["id"]: o for o in bibliotheque["objectifs"]}
         objectifs = [generiques.get(OBJECTIF_CONTROLE)
@@ -148,8 +148,8 @@ def _sequences(limite=MAX_SEQUENCES, objectifs=None):
         sequences.append({
             "technique": technique["id"],
             "objectif": objectif["id"],
-            "messages": sequencer(complets[0], objectif),
-            "mono_tour": composer(complets[0], objectif),
+            "messages": sequence_turns(complets[0], objectif),
+            "mono_tour": compose(complets[0], objectif),
         })
         if len(sequences) >= limite:
             break
@@ -180,7 +180,7 @@ def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES,
     require_conversation(interroger_cible, nom_cible or "la cible configurée")
     etiquette = _etiquette(nom_cible)
 
-    objectifs, resume = _objectifs(interroger_cible, charger_bibliotheque(),
+    objectifs, resume = _objectifs(interroger_cible, load_library(),
                                    anodin)
     print(f"  -> {resume}\n")
     sequences = _sequences(limite, objectifs)

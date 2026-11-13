@@ -67,7 +67,7 @@ TARGET_ROLE = "cible"
 _API_ROLES = {ATTACKER_ROLE: "user", TARGET_ROLE: "assistant"}
 
 # The labels of the format the judge reads. Defined HERE and nowhere else:
-# `arbitre.construire_question` uses them too, and two copies of the structure
+# `arbitre.build_question` uses them too, and two copies of the structure
 # the judge reads would have drifted apart.
 #
 # These are what STRUCTURES the judge's instruction. A text containing them

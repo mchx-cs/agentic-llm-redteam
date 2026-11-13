@@ -20,7 +20,7 @@ import json
 import re
 import sys
 
-from agents.attaquant import (AGE_INSTANTANE_SUSPECT, FICHIER_BIBLIOTHEQUE,
+from agents.attaquant import (SNAPSHOT_AGE_SUSPECT, LIBRARY_FILE,
                               TRANSFORMATIONS)
 
 # Les familles OWASP acceptées. Une famille inconnue n'est pas forcément une
@@ -44,8 +44,8 @@ MOTIF_IDENTIFIANT = re.compile(r"^[a-z0-9-]+$")
 def _prerequis_connus():
     # Importé ici : le planificateur importe l'attaquant, et on évite ainsi
     # une boucle d'imports au chargement du module.
-    from agents.planificateur import PREREQUIS
-    return set(PREREQUIS)
+    from agents.planificateur import PREREQUISITES
+    return set(PREREQUISITES)
 
 
 def valider(bibliotheque):
@@ -145,7 +145,7 @@ def valider(bibliotheque):
     # au-delà de deux mois une version a sans doute été manquée. On signale,
     # on ne bloque pas.
     age = (bibliotheque.get("_garak") or {}).get("age_jours")
-    if age is not None and age > AGE_INSTANTANE_SUSPECT:
+    if age is not None and age > SNAPSHOT_AGE_SUSPECT:
         avertissements.append(
             f"instantané garak vieux de {age} jours : une resynchronisation "
             f"vaut sans doute le coup (voir payloads/exporter_garak.py).")
@@ -157,9 +157,9 @@ def principal():
     # On valide la bibliothèque TELLE QUE LA CAMPAGNE LA VERRA, instantané
     # garak compris : une sonde mal traduite doit être repérée ici, pas au
     # milieu d'une campagne.
-    from agents.attaquant import charger_bibliotheque
+    from agents.attaquant import load_library
 
-    bibliotheque = charger_bibliotheque()
+    bibliotheque = load_library()
     erreurs, avertissements = valider(bibliotheque)
 
     techniques = bibliotheque.get("techniques", [])
@@ -178,7 +178,7 @@ def principal():
                   f"{garak['version']}, exportées le {garak['exporte_le']}"
                   + (f" (il y a {age} jour(s))" if age is not None else ""))
 
-    print(f"{FICHIER_BIBLIOTHEQUE.name} : {len(techniques)} technique(s), "
+    print(f"{LIBRARY_FILE.name} : {len(techniques)} technique(s), "
           f"dont {len(utilisables)} utilisable(s) — {combinaisons} payload(s) "
           f"au catalogue.{source}")
 

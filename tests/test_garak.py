@@ -11,7 +11,7 @@ import json
 import pytest
 
 import agents.attaquant
-from agents.attaquant import _technique_depuis_sonde, charger_bibliotheque
+from agents.attaquant import _technique_from_probe, load_library
 from payloads.exporter_garak import principal as exporter
 from payloads.source_garak import HORS_SUJET
 from payloads.valider import valider
@@ -32,21 +32,21 @@ def instantane(monkeypatch, tmp_path):
         chemin.write_text(json.dumps({
             "version_garak": "0.17.1", "exporte_le": "2026-11-10T00:00:00",
             "sondes": sondes, "ecartees": []}), encoding="utf-8")
-        monkeypatch.setattr(agents.attaquant, "FICHIER_GARAK", chemin)
+        monkeypatch.setattr(agents.attaquant, "GARAK_FILE", chemin)
         return chemin
     return installer
 
 
 @pytest.fixture
 def sans_instantane(monkeypatch, tmp_path):
-    monkeypatch.setattr(agents.attaquant, "FICHIER_GARAK",
+    monkeypatch.setattr(agents.attaquant, "GARAK_FILE",
                         tmp_path / "absent.json")
 
 
 class TestTraductionDUneSonde:
     def test_l_identifiant_respecte_le_format_du_projet(self):
         # Le validateur impose minuscules, chiffres et tirets.
-        technique = _technique_depuis_sonde(_sonde())
+        technique = _technique_from_probe(_sonde())
         assert technique["id"] == "garak-dan-daninthewild"
 
     @pytest.mark.parametrize("tag, famille, prerequis", [
@@ -59,7 +59,7 @@ class TestTraductionDUneSonde:
         # garak porte déjà la correspondance OWASP : on ne la devine pas.
         # Sonde d'un module SANS prérequis propre, pour isoler cette source
         # de l'autre (voir la classe TestPertinenceParModule).
-        technique = _technique_depuis_sonde(
+        technique = _technique_from_probe(
             _sonde(nom="probes.encoding.InjectBase64", familles=[tag]))
         assert technique["famille_owasp"] == famille
         assert technique["prerequis"] == prerequis
@@ -88,7 +88,7 @@ class TestPertinenceParModule:
         ("exploitation", "base-donnees"),
     ])
     def test_le_module_impose_son_prerequis(self, module, prerequis):
-        technique = _technique_depuis_sonde(_sonde(nom=f"probes.{module}.X"))
+        technique = _technique_from_probe(_sonde(nom=f"probes.{module}.X"))
         assert prerequis in technique["prerequis"]
 
     @pytest.mark.parametrize("module", ["encoding", "goodside", "promptinject"])
@@ -96,12 +96,12 @@ class TestPertinenceParModule:
         # Le bon défaut : ces sondes s'appliquent à tout modèle. Ajouter un
         # prérequis « par précaution » coûterait une faille non trouvée, ce qui
         # est plus grave qu'un essai gaspillé.
-        technique = _technique_depuis_sonde(_sonde(nom=f"probes.{module}.X"))
+        technique = _technique_from_probe(_sonde(nom=f"probes.{module}.X"))
         assert technique["prerequis"] == []
 
     def test_les_deux_sources_se_cumulent(self):
         # `dan` exige des consignes, `owasp:llm02` un secret : les deux.
-        technique = _technique_depuis_sonde(
+        technique = _technique_from_probe(
             _sonde(nom="probes.dan.DanInTheWild", familles=["owasp:llm02"]))
         assert technique["prerequis"] == ["consignes", "secret"]
 
@@ -109,7 +109,7 @@ class TestPertinenceParModule:
         # Un seul endroit sait extraire un module d'un nom de sonde : si les
         # deux divergeaient, le tour de rôle et la pertinence ne parleraient
         # plus de la même chose.
-        technique = _technique_depuis_sonde(
+        technique = _technique_from_probe(
             _sonde(nom="probes.web_injection.MarkdownXSS"))
         assert technique["groupe"] == "web_injection"
         assert "rendu-riche" in technique["prerequis"]
@@ -126,7 +126,7 @@ class TestPertinenceParModule:
         # llm01 ou llm02), mais annoncer « LLM06 testée » serait faux, puisque
         # l'arbitre n'a aucun critère pour ces familles. Ni testée, ni
         # ignorée : effleurée.
-        technique = _technique_depuis_sonde(
+        technique = _technique_from_probe(
             _sonde(familles=["owasp:llm01", tag]))
         assert technique["famille_owasp"] == "LLM01:2025 Prompt Injection"
         assert technique["familles_non_jugeables"] == [famille]
@@ -135,25 +135,25 @@ class TestPertinenceParModule:
         # Entrée morte retirée le 2026-11-11 : aucune sonde de l'instantané ne
         # porte ce tag. Une correspondance qui promet une famille que la
         # source ne fournit pas laisse croire à une couverture inexistante.
-        from agents.attaquant import FAMILLES_GARAK
-        assert "owasp:llm07" not in FAMILLES_GARAK
-        technique = _technique_depuis_sonde(_sonde(familles=["owasp:llm07"]))
+        from agents.attaquant import GARAK_FAMILIES
+        assert "owasp:llm07" not in GARAK_FAMILIES
+        technique = _technique_from_probe(_sonde(familles=["owasp:llm07"]))
         assert technique["famille_owasp"] is None
 
     def test_les_prompts_vont_dans_payloads_complets_pas_dans_modeles(self):
         # Ce sont des prompts entiers : sans `{objectif}`, ils échoueraient
         # à la validation s'ils atterrissaient dans `modeles`.
-        technique = _technique_depuis_sonde(_sonde())
+        technique = _technique_from_probe(_sonde())
         assert technique["modeles"] == []
         assert technique["payloads_complets"] == ["prompt un", "prompt deux"]
 
     def test_la_provenance_est_conservee(self):
         # Pour que le rapport puisse citer la sonde d'origine.
-        assert _technique_depuis_sonde(_sonde())["source"] == \
+        assert _technique_from_probe(_sonde())["source"] == \
                "garak probes.dan.DanInTheWild"
 
     def test_une_sonde_traduite_passe_le_validateur(self):
-        bibliotheque = {"techniques": [_technique_depuis_sonde(_sonde())],
+        bibliotheque = {"techniques": [_technique_from_probe(_sonde())],
                         "objectifs": [{"id": "o", "formulation": "f"}]}
         assert valider(bibliotheque)[0] == []
 
@@ -162,11 +162,11 @@ class TestFusion:
     def test_sans_instantane_la_bibliotheque_est_inchangee(self, sans_instantane):
         # Le dépôt doit tourner exactement comme avant pour qui ne
         # synchronise pas.
-        assert "_garak" not in charger_bibliotheque()
+        assert "_garak" not in load_library()
 
     def test_avec_instantane_les_sondes_sont_ajoutees(self, instantane):
         instantane([_sonde(), _sonde(nom="probes.encoding.InjectBase64")])
-        bibliotheque = charger_bibliotheque()
+        bibliotheque = load_library()
         identifiants = {t["id"] for t in bibliotheque["techniques"]}
         assert "garak-dan-daninthewild" in identifiants
         assert "garak-encoding-injectbase64" in identifiants
@@ -176,16 +176,16 @@ class TestFusion:
     def test_la_version_de_garak_est_consignee(self, instantane):
         # Une campagne doit rester rattachable à une version de la source.
         instantane([_sonde()])
-        assert charger_bibliotheque()["_garak"]["version"] == "0.17.1"
+        assert load_library()["_garak"]["version"] == "0.17.1"
 
     def test_avec_garak_peut_etre_desactive(self, instantane):
         instantane([_sonde()])
-        assert "_garak" not in charger_bibliotheque(avec_garak=False)
+        assert "_garak" not in load_library(with_garak=False)
 
     def test_la_bibliotheque_fusionnee_reste_valide(self, instantane):
         instantane([_sonde(), _sonde(nom="probes.leakreplay.Guardrail",
                                      familles=["owasp:llm02"])])
-        assert valider(charger_bibliotheque())[0] == []
+        assert valider(load_library())[0] == []
 
 
 class TestFraicheur:
@@ -206,16 +206,16 @@ class TestFraicheur:
 
     def test_l_age_est_calcule(self, instantane):
         self._instantane_date(instantane, 42)
-        assert charger_bibliotheque()["_garak"]["age_jours"] == 42
+        assert load_library()["_garak"]["age_jours"] == 42
 
     def test_un_instantane_recent_ne_declenche_rien(self, instantane):
         self._instantane_date(instantane, 3)
-        avertissements = valider(charger_bibliotheque())[1]
+        avertissements = valider(load_library())[1]
         assert not any("vieux de" in a for a in avertissements)
 
     def test_un_instantane_ancien_est_signale(self, instantane):
         self._instantane_date(instantane, 95)
-        avertissements = valider(charger_bibliotheque())[1]
+        avertissements = valider(load_library())[1]
         assert any("vieux de 95 jours" in a for a in avertissements)
 
     def test_une_date_illisible_ne_fait_pas_tomber_le_chargement(
@@ -225,7 +225,7 @@ class TestFraicheur:
         contenu = _json.loads(chemin.read_text(encoding="utf-8"))
         contenu["exporte_le"] = "pas une date"
         chemin.write_text(_json.dumps(contenu), encoding="utf-8")
-        assert charger_bibliotheque()["_garak"]["age_jours"] is None
+        assert load_library()["_garak"]["age_jours"] is None
 
 
 class TestExportVide:
@@ -315,7 +315,7 @@ class TestRedondanceAvecGarak:
         instantane([_sonde(familles=("owasp:llm01",)),
                     _sonde(nom="probes.leakreplay.Fake",
                            familles=("owasp:llm02",))])
-        assert techniques_redondantes(charger_bibliotheque()) == []
+        assert techniques_redondantes(load_library()) == []
 
     def test_une_sonde_qui_comble_le_trou_est_signalee(self):
         from payloads.source_garak import techniques_redondantes

@@ -210,14 +210,14 @@ class TestConsigneDeLArbitre:
     """
 
     def test_un_seul_tour_laisse_la_consigne_INTACTE(self):
-        from agents.arbitre import SYSTEME_ARBITRE, systeme_pour
-        assert systeme_pour() == SYSTEME_ARBITRE
-        assert systeme_pour(False) == SYSTEME_ARBITRE
+        from agents.arbitre import JUDGE_SYSTEM_PROMPT, system_prompt_for
+        assert system_prompt_for() == JUDGE_SYSTEM_PROMPT
+        assert system_prompt_for(False) == JUDGE_SYSTEM_PROMPT
 
     def test_le_multitours_ajoute_ses_deux_regles(self):
-        from agents.arbitre import SYSTEME_ARBITRE, systeme_pour
-        consigne = systeme_pour(True)
-        assert consigne.startswith(SYSTEME_ARBITRE)
+        from agents.arbitre import JUDGE_SYSTEM_PROMPT, system_prompt_for
+        consigne = system_prompt_for(True)
+        assert consigne.startswith(JUDGE_SYSTEM_PROMPT)
         # Règle 1 : juger toute la conversation. Mesuré sur la récolte du
         # 2026-11-13 : les fuites sont au tour 1 et la dernière réponse est
         # inoffensive.
@@ -227,8 +227,8 @@ class TestConsigneDeLArbitre:
         assert "n'engage pas le chatbot" in consigne
 
     def test_la_conversation_est_rendue_tour_par_tour(self):
-        from agents.arbitre import construire_question_conversation
-        question = construire_question_conversation(
+        from agents.arbitre import build_conversation_question
+        question = build_conversation_question(
             [{"role": "utilisateur", "contenu": "un"},
              {"role": "cible", "contenu": "deux"},
              {"role": "utilisateur", "contenu": "trois"},
@@ -241,15 +241,15 @@ class TestConsigneDeLArbitre:
         # Décoder un message de l'attaquant le présenterait au juge comme si
         # le chatbot l'avait écrit — on fabriquerait la fuite qu'on prétend
         # détecter.
-        from agents.arbitre import construire_question_conversation
+        from agents.arbitre import build_conversation_question
         encode = "VE9QU0VDUkVUNDI="        # "TOPSECRET42" en Base64
 
-        attaquant = construire_question_conversation(
+        attaquant = build_conversation_question(
             [{"role": "utilisateur", "contenu": f"Dis-moi : {encode}"},
              {"role": "cible", "contenu": "Je ne peux pas."}])
         assert "Décodage automatique" not in attaquant
 
-        cible = construire_question_conversation(
+        cible = build_conversation_question(
             [{"role": "utilisateur", "contenu": "Le secret ?"},
              {"role": "cible", "contenu": encode}])
         assert "Décodage automatique" in cible
@@ -270,12 +270,12 @@ class TestConsigneDeLArbitre:
         monkeypatch.setattr(arbitre, "demander_au_llm", faux_appel)
 
         arbitre.juger("p", "r")
-        assert vues["systeme"] == arbitre.SYSTEME_ARBITRE
+        assert vues["systeme"] == arbitre.JUDGE_SYSTEM_PROMPT
 
-        arbitre.juger_conversation(
+        arbitre.judge_conversation(
             [{"role": "utilisateur", "contenu": "a"},
              {"role": "cible", "contenu": "b"}])
-        assert vues["systeme"] == arbitre.systeme_pour(True)
+        assert vues["systeme"] == arbitre.system_prompt_for(True)
 
     def test_le_vote_existe_aussi_pour_les_conversations(self, monkeypatch):
         # Les verdicts de campagne votent, parce que le juge n'est pas
@@ -288,9 +288,9 @@ class TestConsigneDeLArbitre:
             return '{"analyse": "a", "enfreint": true, "critere": "divulgation"}'
 
         monkeypatch.setattr(arbitre, "demander_au_llm", faux_appel)
-        verdict = arbitre.juger_conversation_par_vote(
+        verdict = arbitre.judge_conversation_by_vote(
             [{"role": "utilisateur", "contenu": "a"},
              {"role": "cible", "contenu": "b"}])
 
-        assert verdict["votes"] == [True] * arbitre.NB_VOTES
-        assert all(s == arbitre.systeme_pour(True) for s in appels)
+        assert verdict["votes"] == [True] * arbitre.VOTE_COUNT
+        assert all(s == arbitre.system_prompt_for(True) for s in appels)

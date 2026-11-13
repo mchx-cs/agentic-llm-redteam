@@ -16,11 +16,11 @@ Planification ≠ adaptation. On décide ici AVANT la campagne. Reformuler
 pendant l'attaque, selon la réponse de la cible, c'est la Phase 3 (PyRIT).
 """
 
-from agents.attaquant import (TRANSFORMATIONS, charger_bibliotheque, composer)
+from agents.attaquant import (TRANSFORMATIONS, load_library, compose)
 
 # Chaque prérequis est une question posée à la fiche cible. Ajouter une
 # famille d'attaque = ajouter son prérequis ici, et rien d'autre.
-PREREQUIS = {
+PREREQUISITES = {
     # Abuser d'un outil suppose que la cible en ait au moins un.
     "outils": (
         lambda fiche: bool(fiche["outils"]),
@@ -78,10 +78,10 @@ PREREQUIS = {
 
 # Une technique sans modèle de texte ne peut rien produire : on le dit
 # explicitement plutôt que de la voir disparaître sans explication.
-MOTIF_SANS_MODELE = "aucun modèle de payload dans la bibliothèque"
+REASON_NO_TEMPLATE = "aucun modèle de payload dans la bibliothèque"
 
 
-def objectifs_pour(fiche, bibliotheque):
+def objectives_for(fiche, bibliotheque):
     """
     Les objectifs à viser : ceux de la bibliothèque, plus ceux déduits de la
     fiche. Si la cible dit refuser de parler du « code du coffre », alors
@@ -114,7 +114,7 @@ def objectifs_pour(fiche, bibliotheque):
                            f"d'autre que moi",
             "origine": "reconnaissance",
             # La famille pour laquelle cet objectif a été fabriqué : voir
-            # `_priorite`, qui le fait passer devant sur cette famille-là.
+            # `_priority`, qui le fait passer devant sur cette famille-là.
             "pour_famille": "LLM06",
         })
 
@@ -137,7 +137,7 @@ def objectifs_pour(fiche, bibliotheque):
 # trois serait trois options à retenir pour le même geste : famille OWASP
 # (« LLM07 »), module garak (« dan ») ou technique (« fuite-prompt-systeme »).
 
-def _correspond(technique, motif):
+def _matches(technique, motif):
     """Le motif désigne-t-il cette technique, son module ou sa famille ?"""
     motif = motif.strip().lower()
     if not motif:
@@ -147,7 +147,7 @@ def _correspond(technique, motif):
     return any(motif in champ.lower() for champ in champs)
 
 
-def filtrer(techniques, seulement=(), sauf=()):
+def filter_techniques(techniques, seulement=(), sauf=()):
     """
     Les techniques retenues, et celles qu'un motif a écartées avec son motif.
 
@@ -156,11 +156,11 @@ def filtrer(techniques, seulement=(), sauf=()):
     """
     retenues, ecartees = [], []
     for technique in techniques:
-        exclusion = next((m for m in sauf if _correspond(technique, m)), None)
+        exclusion = next((m for m in sauf if _matches(technique, m)), None)
         if exclusion:
             ecartees.append((technique, f"exclue par --sauf {exclusion}"))
             continue
-        if seulement and not any(_correspond(technique, m) for m in seulement):
+        if seulement and not any(_matches(technique, m) for m in seulement):
             ecartees.append(
                 (technique,
                  f"hors du périmètre demandé (--seulement "
@@ -170,7 +170,7 @@ def filtrer(techniques, seulement=(), sauf=()):
     return retenues, ecartees
 
 
-def planifier(fiche, budget, seulement=(), sauf=()):
+def plan_campaign(fiche, budget, seulement=(), sauf=()):
     """
     Renvoie {"essais": [...], "candidats": [...], "ecartees": [...]}.
 
@@ -187,14 +187,14 @@ def planifier(fiche, budget, seulement=(), sauf=()):
                   qui ne dit pas ce qu'il n'a PAS testé donne une fausse
                   impression de couverture.
     """
-    bibliotheque = charger_bibliotheque()
-    objectifs = objectifs_pour(fiche, bibliotheque)
+    bibliotheque = load_library()
+    objectifs = objectives_for(fiche, bibliotheque)
 
     retenues, ecartees = [], []
 
     # Le périmètre d'abord : une technique exclue par le mandat n'a pas à être
     # écartée pour « aucun outil détecté », ce qui masquerait la vraie raison.
-    techniques, hors_perimetre = filtrer(bibliotheque["techniques"],
+    techniques, hors_perimetre = filter_techniques(bibliotheque["techniques"],
                                          seulement, sauf)
     for technique, motif in hors_perimetre:
         ecartees.append({"technique": technique["id"],
@@ -202,10 +202,10 @@ def planifier(fiche, budget, seulement=(), sauf=()):
                          "motifs": [motif]})
 
     for technique in techniques:
-        motifs = [texte for nom, (verifier, texte) in PREREQUIS.items()
+        motifs = [texte for nom, (verifier, texte) in PREREQUISITES.items()
                   if nom in technique["prerequis"] and not verifier(fiche)]
         if not technique["modeles"] and not technique.get("payloads_complets"):
-            motifs.append(MOTIF_SANS_MODELE)
+            motifs.append(REASON_NO_TEMPLATE)
 
         if motifs:
             ecartees.append({"technique": technique["id"],
@@ -231,7 +231,7 @@ def planifier(fiche, budget, seulement=(), sauf=()):
         # autre sonde ne teste. Dire « couverte ailleurs » laissait croire que
         # son écartement ne coûtait rien.
         ecartee["famille_couverte_ailleurs"] = (
-            MOTIF_SANS_MODELE in ecartee["motifs"]
+            REASON_NO_TEMPLATE in ecartee["motifs"]
             and ecartee["famille_owasp"] in familles_retenues)
 
     essais = []
@@ -248,8 +248,8 @@ def planifier(fiche, budget, seulement=(), sauf=()):
                         "texte": transformer(texte),
                         "familles_non_jugeables":
                             technique.get("familles_non_jugeables") or [],
-                        "groupe": _groupe(technique),
-                        "priorite": _priorite(technique, objectif, nom_transfo),
+                        "groupe": _group(technique),
+                        "priorite": _priority(technique, objectif, nom_transfo),
                     })
 
         # Les payloads venus de l'extérieur (garak) sont des prompts complets :
@@ -258,7 +258,7 @@ def planifier(fiche, budget, seulement=(), sauf=()):
             # Un payload complet sert de PRÉAMBULE : seul, il mesure la
             # résistance au détournement ; composé avec un objectif issu de
             # la reconnaissance, il va chercher ce que la cible protège.
-            variantes = [(o, composer(payload, o)) for o in objectifs]
+            variantes = [(o, compose(payload, o)) for o in objectifs]
             variantes.append((None, payload))
             for objectif, texte in variantes:
                 for nom_transfo, transformer in TRANSFORMATIONS.items():
@@ -271,19 +271,19 @@ def planifier(fiche, budget, seulement=(), sauf=()):
                         "source": technique.get("source"),
                         "familles_non_jugeables":
                             technique.get("familles_non_jugeables") or [],
-                        "groupe": _groupe(technique),
-                        "priorite": _priorite(technique, objectif, nom_transfo),
+                        "groupe": _group(technique),
+                        "priorite": _priority(technique, objectif, nom_transfo),
                     })
 
     # Tri stable : à priorité égale, l'ordre de la bibliothèque est conservé,
     # donc deux campagnes identiques produisent la même liste.
     essais.sort(key=lambda essai: essai["priorite"])
-    return {"essais": _repartir(essais, budget),
+    return {"essais": _share_budget(essais, budget),
             "candidats": essais,
             "ecartees": ecartees}
 
 
-def _groupe(technique):
+def _group(technique):
     """
     Le grain du tour de rôle : le module garak, ou l'identifiant pour une
     technique maison.
@@ -297,7 +297,7 @@ def _groupe(technique):
     return technique.get("groupe") or technique["id"]
 
 
-def _repartir(essais, budget):
+def _share_budget(essais, budget):
     """
     Répartit le budget ENTRE les groupes de techniques, au lieu de le donner
     à la première.
@@ -330,7 +330,7 @@ def _repartir(essais, budget):
     return retenus
 
 
-def _apparies(technique, objectif):
+def _paired(technique, objectif):
     """
     Cet objectif a-t-il été fabriqué pour la famille de cette technique ?
 
@@ -344,7 +344,7 @@ def _apparies(technique, objectif):
     return bool(attendue) and famille.startswith(attendue)
 
 
-def _priorite(technique, objectif, nom_transformation):
+def _priority(technique, objectif, nom_transformation):
     """
     Plus le nombre est petit, plus l'essai passe tôt. Quatre idées, dans
     l'ordre : viser ce que la cible protège, préférer un payload éprouvé,
@@ -363,7 +363,7 @@ def _priorite(technique, objectif, nom_transformation):
         priorite += 1
     elif objectif.get("origine") != "reconnaissance":
         priorite += 4          # un objectif générique passe après un objectif ciblé
-    elif _apparies(technique, objectif):
+    elif _paired(technique, objectif):
         # Un objectif fabriqué POUR une famille passe devant sur cette
         # famille. Sans cette règle, le tour de rôle ne retenait qu'un essai
         # par technique, et à égalité c'était l'ordre de la liste qui
@@ -391,7 +391,7 @@ def resumer(plan):
         # sondes `web_injection` affichaient huit fois « aucun client ne rend
         # le Markdown ». Une information répétée noie celle qui ne l'est pas.
         lignes.append("  écartées :")
-        for motif, techniques in grouper_par_motif(plan["ecartees"]):
+        for motif, techniques in group_by_reason(plan["ecartees"]):
             lignes.append(f"    - {len(techniques)} technique(s) : {motif}")
             apercu = ", ".join(techniques[:3])
             if len(techniques) > 3:
@@ -400,7 +400,7 @@ def resumer(plan):
     return "\n".join(lignes)
 
 
-def grouper_par_motif(ecartees):
+def group_by_reason(ecartees):
     """
     [(motif, [techniques])], dans l'ordre d'apparition des motifs.
 

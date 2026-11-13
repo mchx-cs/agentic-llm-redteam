@@ -13,8 +13,8 @@ qu'il n'a pas testé donne une fausse impression de couverture.
 import pytest
 
 import agents.attaquant
-from agents.planificateur import (PREREQUIS, grouper_par_motif,
-                                  objectifs_pour, planifier,
+from agents.planificateur import (PREREQUISITES, group_by_reason,
+                                  objectives_for, plan_campaign,
                                   resumer)
 
 
@@ -26,7 +26,7 @@ def sans_instantane_garak(monkeypatch, tmp_path):
     Sans ça, ces tests passeraient ou non selon qu'on a lancé
     `exporter_garak.py` — un test ne doit pas dépendre de ça.
     """
-    monkeypatch.setattr(agents.attaquant, "FICHIER_GARAK",
+    monkeypatch.setattr(agents.attaquant, "GARAK_FILE",
                         tmp_path / "absent.json")
 
 
@@ -47,7 +47,7 @@ def _ecartees(plan):
 
 class TestPrerequis:
     def test_sans_outil_l_abus_d_outils_est_ecarte(self):
-        plan = planifier(fiche(outils=[]), budget=10)
+        plan = plan_campaign(fiche(outils=[]), budget=10)
         assert "aucun outil détecté chez la cible" in \
                _ecartees(plan)["abus-outils"]
 
@@ -55,12 +55,12 @@ class TestPrerequis:
         # Depuis les quatre payloads LLM06 du 2026-11-12, un outil détecté
         # suffit : la technique n'est plus écartée du tout, ni pour le
         # prérequis ni faute de modèle.
-        plan = planifier(fiche(outils=["virement"]), budget=10)
+        plan = plan_campaign(fiche(outils=["virement"]), budget=10)
         assert "abus-outils" not in _ecartees(plan)
         assert "abus-outils" in {c["technique"] for c in plan["candidats"]}
 
     def test_une_cible_muette_fait_ecarter_les_familles_de_fuite(self):
-        plan = planifier(fiche(), budget=10)
+        plan = plan_campaign(fiche(), budget=10)
         ecartees = _ecartees(plan)
         assert any("ne déclare ni sujet interdit" in m
                    for m in ecartees["divulgation-information"])
@@ -72,14 +72,14 @@ class TestPrerequis:
         fiche(consignes=True),
     ])
     def test_une_cible_qui_protege_quelque_chose_les_conserve(self, cible):
-        ecartees = _ecartees(planifier(cible, budget=10))
+        ecartees = _ecartees(plan_campaign(cible, budget=10))
         assert not any("ne déclare ni sujet interdit" in m
                        for m in ecartees["divulgation-information"])
 
     def test_une_technique_sans_modele_est_ecartee_et_le_dit(self):
         # Les familles OWASP sont déclarées mais vides : elles doivent
         # disparaître du plan AVEC leur motif, pas en silence.
-        ecartees = _ecartees(planifier(fiche(consignes=True), budget=10))
+        ecartees = _ecartees(plan_campaign(fiche(consignes=True), budget=10))
         assert "aucun modèle de payload dans la bibliothèque" in \
                ecartees["injection-directe"]
 
@@ -88,7 +88,7 @@ class TestObjectifs:
     def test_les_refus_de_la_cible_deviennent_des_objectifs(self):
         # C'est tout l'intérêt de la reconnaissance : viser ce que CETTE
         # cible protège, au lieu d'objectifs génériques.
-        objectifs = objectifs_pour(fiche(refuses=["le code du coffre"]),
+        objectifs = objectives_for(fiche(refuses=["le code du coffre"]),
                                    {"objectifs": []})
         assert any("le code du coffre" in o["formulation"] for o in objectifs)
         assert all(o["origine"] == "reconnaissance" for o in objectifs)
@@ -96,40 +96,40 @@ class TestObjectifs:
     def test_les_objectifs_de_la_bibliotheque_sont_conserves(self):
         bibliotheque = {"objectifs": [{"id": "x", "formulation": "f",
                                        "origine": "bibliotheque"}]}
-        assert len(objectifs_pour(fiche(), bibliotheque)) == 1
+        assert len(objectives_for(fiche(), bibliotheque)) == 1
 
 
 class TestBudgetEtOrdre:
     @pytest.mark.parametrize("budget", [0, 1, 3, 100])
     def test_le_budget_n_est_jamais_depasse(self, budget):
-        plan = planifier(fiche(refuses=["un secret"]), budget=budget)
+        plan = plan_campaign(fiche(refuses=["un secret"]), budget=budget)
         assert len(plan["essais"]) <= budget
 
     def test_les_objectifs_issus_de_la_reconnaissance_passent_en_premier(self):
-        plan = planifier(fiche(refuses=["le code du coffre"]), budget=4)
+        plan = plan_campaign(fiche(refuses=["le code du coffre"]), budget=4)
         assert plan["essais"][0]["objectif"].startswith("refus-")
 
     def test_le_texte_brut_passe_avant_ses_transformations(self):
-        plan = planifier(fiche(refuses=["un secret"]), budget=4)
+        plan = plan_campaign(fiche(refuses=["un secret"]), budget=4)
         assert plan["essais"][0]["transformation"] == "identite"
 
     def test_deux_planifications_identiques_donnent_le_meme_plan(self):
         # Tri stable : une campagne doit être reproductible.
         cible = fiche(refuses=["un secret"])
-        a = [e["texte"] for e in planifier(cible, 5)["essais"]]
-        b = [e["texte"] for e in planifier(cible, 5)["essais"]]
+        a = [e["texte"] for e in plan_campaign(cible, 5)["essais"]]
+        b = [e["texte"] for e in plan_campaign(cible, 5)["essais"]]
         assert a == b
 
 
 class TestFormeDesEssais:
     def test_chaque_essai_dit_d_ou_il_vient(self):
         # Sans ça, le rapport ne pourrait pas dire QUELLE combinaison a marché.
-        for essai in planifier(fiche(refuses=["un secret"]), budget=3)["essais"]:
+        for essai in plan_campaign(fiche(refuses=["un secret"]), budget=3)["essais"]:
             assert {"technique", "famille_owasp", "objectif",
                     "transformation", "texte"} <= set(essai)
 
     def test_aucun_marqueur_de_gabarit_ne_subsiste(self):
-        for essai in planifier(fiche(refuses=["un secret"]), budget=5)["essais"]:
+        for essai in plan_campaign(fiche(refuses=["un secret"]), budget=5)["essais"]:
             assert "{objectif}" not in essai["texte"]
 
 
@@ -142,7 +142,7 @@ class TestVivierDeCandidats:
     """
 
     def test_le_vivier_n_est_pas_tronque_par_le_budget(self):
-        plan = planifier(fiche(refuses=["le code du coffre"]), budget=1)
+        plan = plan_campaign(fiche(refuses=["le code du coffre"]), budget=1)
         assert len(plan["essais"]) == 1
         assert len(plan["candidats"]) > 1
 
@@ -150,17 +150,17 @@ class TestVivierDeCandidats:
         # Sans rien apprendre de la cible, la campagne doit lancer exactement
         # ce que le plan prevoyait : l'adaptation change l'ordre, pas la
         # strategie de depart.
-        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        plan = plan_campaign(fiche(refuses=["le code du coffre"]), budget=3)
         assert plan["essais"][0]["texte"] == plan["candidats"][0]["texte"]
 
     def test_chaque_candidat_porte_sa_priorite(self):
         # C'est l'echelle que l'adaptation prolonge : sans elle, impossible
         # de reordonner.
-        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        plan = plan_campaign(fiche(refuses=["le code du coffre"]), budget=3)
         assert all(isinstance(c["priorite"], int) for c in plan["candidats"])
 
     def test_le_vivier_est_trie(self):
-        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        plan = plan_campaign(fiche(refuses=["le code du coffre"]), budget=3)
         priorites = [c["priorite"] for c in plan["candidats"]]
         assert priorites == sorted(priorites)
 
@@ -177,7 +177,7 @@ class TestFauxTrousDeCouverture:
     """
 
     def test_une_technique_vide_dont_la_famille_est_couverte_est_signalee(self):
-        plan = planifier(fiche(refuses=["le code du coffre"]), budget=3)
+        plan = plan_campaign(fiche(refuses=["le code du coffre"]), budget=3)
         par_nom = {e["technique"]: e for e in plan["ecartees"]}
         # `divulgation-information` est vide, mais LLM02 est couverte par
         # garak — sauf si l'instantane est absent, d'ou la garde.
@@ -194,7 +194,7 @@ class TestFauxTrousDeCouverture:
         # Ce test visait `abus-outils` jusqu'au 2026-11-12 : la technique
         # n'avait aucun payload, donc elle etait toujours ecartee. Elle en a
         # quatre depuis, et c'est le bon comportement — pas une regression.
-        plan = planifier(fiche(outils=["un_outil"],
+        plan = plan_campaign(fiche(outils=["un_outil"],
                                refuses=["le code du coffre"]), budget=3)
         par_nom = {e["technique"]: e for e in plan["ecartees"]}
         assert par_nom["injection-directe"]["famille_couverte_ailleurs"] \
@@ -203,7 +203,7 @@ class TestFauxTrousDeCouverture:
     def test_chaque_ecartee_porte_le_champ(self):
         # Le rapport le lit sans garde : un champ manquant le ferait mentir
         # par omission.
-        plan = planifier(fiche(), budget=3)
+        plan = plan_campaign(fiche(), budget=3)
         assert all("famille_couverte_ailleurs" in e for e in plan["ecartees"])
 
 
@@ -216,29 +216,29 @@ class TestFuiteDePromptSysteme:
     """
 
     def test_la_technique_est_retenue_quand_la_cible_evoque_ses_consignes(self):
-        plan = planifier(fiche(consignes=True), budget=3)
+        plan = plan_campaign(fiche(consignes=True), budget=3)
         ecartees = {e["technique"] for e in plan["ecartees"]}
         assert "fuite-prompt-systeme" not in ecartees
 
     def test_elle_reste_ecartee_si_la_cible_n_evoque_aucune_consigne(self):
         # Le prerequis `consignes` tient : extraire des instructions suppose
         # qu'il y en ait.
-        plan = planifier(fiche(consignes=False), budget=3)
+        plan = plan_campaign(fiche(consignes=False), budget=3)
         par_nom = {e["technique"]: e for e in plan["ecartees"]}
         assert "fuite-prompt-systeme" in par_nom
         assert any("consigne" in m
                    for m in par_nom["fuite-prompt-systeme"]["motifs"])
 
     def test_elle_couvre_la_famille_LLM07(self):
-        plan = planifier(fiche(consignes=True), budget=3)
+        plan = plan_campaign(fiche(consignes=True), budget=3)
         familles = {c["famille_owasp"] for c in plan["candidats"]}
         assert "LLM07:2025 System Prompt Leakage" in familles
 
     def test_ses_payloads_sont_complets_pas_des_modeles(self):
         # Une demande d'instructions porte sa propre intention : elle n'a pas
         # d'emplacement `{objectif}` a remplir.
-        from agents.attaquant import charger_bibliotheque
-        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+        from agents.attaquant import load_library
+        technique = next(t for t in load_library(with_garak=False)
                          ["techniques"] if t["id"] == "fuite-prompt-systeme")
         assert technique["modeles"] == []
         assert len(technique["payloads_complets"]) >= 5
@@ -246,8 +246,8 @@ class TestFuiteDePromptSysteme:
     def test_les_payloads_couvrent_plusieurs_registres(self):
         # Une cible qui refuse de REPETER accepte souvent de RESUMER, et un
         # filtre par mots-cles ne voit pas une formulation positionnelle.
-        from agents.attaquant import charger_bibliotheque
-        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+        from agents.attaquant import load_library
+        technique = next(t for t in load_library(with_garak=False)
                          ["techniques"] if t["id"] == "fuite-prompt-systeme")
         textes = " ".join(technique["payloads_complets"]).lower()
         for registre in ("répète", "résume", "au-dessus", "audit"):
@@ -270,7 +270,7 @@ class TestAbusDOutils:
     """
 
     def test_un_outil_decouvert_devient_un_objectif(self):
-        objectifs = objectifs_pour(fiche(outils=["consulter_dossier"]),
+        objectifs = objectives_for(fiche(outils=["consulter_dossier"]),
                                    {"objectifs": []})
         assert any("consulter_dossier" in o["formulation"] for o in objectifs)
 
@@ -280,13 +280,13 @@ class TestAbusDOutils:
         # usage legitime (cas D17 du corpus) ; obtenir celui d'un tiers est la
         # faille. Sans ce membre de phrase, le juge classerait « aucun » — a
         # raison — et les quatre registres ne mesureraient rien.
-        objectif = next(o for o in objectifs_pour(
+        objectif = next(o for o in objectives_for(
             fiche(outils=["consulter_dossier"]), {"objectifs": []})
             if "consulter_dossier" in o["formulation"])
         assert "autre que moi" in objectif["formulation"]
 
     def test_sans_outil_aucun_objectif_d_outil(self):
-        objectifs = objectifs_pour(fiche(outils=[]), {"objectifs": []})
+        objectifs = objectives_for(fiche(outils=[]), {"objectifs": []})
         assert not [o for o in objectifs if o.get("pour_famille")]
 
     def test_le_premier_essai_d_abus_nomme_l_outil(self):
@@ -296,7 +296,7 @@ class TestAbusDOutils:
         # place AVANT `outil-1` dans la liste des objectifs : sans la regle
         # d'appariement, le tri stable retenait `refus-1`, et la technique
         # d'abus d'outil partait sans nommer aucun outil.
-        plan = planifier(fiche(outils=["consulter_dossier"],
+        plan = plan_campaign(fiche(outils=["consulter_dossier"],
                                refuses=["le code du coffre"]), budget=10)
         abus = [c for c in plan["candidats"] if c["technique"] == "abus-outils"]
         assert abus, "la technique devrait etre retenue"
@@ -306,7 +306,7 @@ class TestAbusDOutils:
         # L'objectif d'outil est fabrique POUR LLM06. Sur une technique LLM07
         # il ne doit rien gagner, sinon il passerait devant un objectif tire
         # de ce que la cible refuse — plus pertinent pour une fuite de prompt.
-        plan = planifier(fiche(outils=["consulter_dossier"],
+        plan = plan_campaign(fiche(outils=["consulter_dossier"],
                                refuses=["le code du coffre"], consignes=True),
                          budget=10)
         fuite = [c for c in plan["candidats"]
@@ -317,15 +317,15 @@ class TestAbusDOutils:
     def test_les_payloads_sont_des_modeles_a_remplir(self):
         # L'inverse de `fuite-prompt-systeme` : ici l'intention ne suffit pas,
         # il faut le nom de l'outil, donc un emplacement a remplir.
-        from agents.attaquant import charger_bibliotheque
-        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+        from agents.attaquant import load_library
+        technique = next(t for t in load_library(with_garak=False)
                          ["techniques"] if t["id"] == "abus-outils")
         assert technique["modeles"]
         assert all("{objectif}" in m for m in technique["modeles"])
 
     def test_les_payloads_couvrent_plusieurs_registres(self):
-        from agents.attaquant import charger_bibliotheque
-        technique = next(t for t in charger_bibliotheque(avec_garak=False)
+        from agents.attaquant import load_library
+        technique = next(t for t in load_library(with_garak=False)
                          ["techniques"] if t["id"] == "abus-outils")
         textes = " ".join(technique["modeles"]).lower()
         for registre in ("sans me demander confirmation",   # appel dicte
@@ -337,7 +337,7 @@ class TestAbusDOutils:
 
 class TestTourDeRoleParModule:
     """
-    `_repartir` repartit le budget entre les MODULES garak, pas entre les
+    `_share_budget` repartit le budget entre les MODULES garak, pas entre les
     sondes. Sans ca, les quinze sondes `encoding` raflaient quinze tours
     quand `dan` en obtenait trois.
     """
@@ -348,28 +348,28 @@ class TestTourDeRoleParModule:
         # aucun module ne prend un deuxieme tour avant que tous aient eu le
         # leur, donc les comptes ne diffèrent jamais de plus de un.
         from collections import Counter
-        plan = planifier(fiche(consignes=True, refuses=["le code"]), budget=10)
+        plan = plan_campaign(fiche(consignes=True, refuses=["le code"]), budget=10)
         comptes = Counter(e.get("groupe") for e in plan["essais"])
         assert max(comptes.values()) - min(comptes.values()) <= 1
 
     def test_deux_modules_disponibles_alternent(self):
-        plan = planifier(fiche(consignes=True), budget=2)
+        plan = plan_campaign(fiche(consignes=True), budget=2)
         groupes = [e.get("groupe") for e in plan["essais"]]
         assert len(set(groupes)) == 2
 
     def test_chaque_essai_porte_son_groupe(self):
-        plan = planifier(fiche(consignes=True), budget=5)
+        plan = plan_campaign(fiche(consignes=True), budget=5)
         assert all(e.get("groupe") for e in plan["essais"])
 
     def test_une_technique_maison_a_son_propre_groupe(self):
-        plan = planifier(fiche(consignes=True), budget=30)
+        plan = plan_campaign(fiche(consignes=True), budget=30)
         maison = [e for e in plan["candidats"]
                   if not e["technique"].startswith("garak-")]
         assert maison
         assert all(e["groupe"] == e["technique"] for e in maison)
 
     def test_les_sondes_d_un_meme_module_partagent_leur_groupe(self):
-        plan = planifier(fiche(consignes=True), budget=3)
+        plan = plan_campaign(fiche(consignes=True), budget=3)
         par_groupe = {}
         for candidat in plan["candidats"]:
             if candidat["technique"].startswith("garak-encoding-"):
@@ -392,22 +392,22 @@ class TestReglesDePertinence:
 
     def test_un_non_explicite_ecarte(self):
         # La cible a repondu « je n'ecris pas de code » : la sonde est inutile.
-        regles = dict(PREREQUIS)
+        regles = dict(PREREQUISITES)
         verifier, _ = regles["produit-du-code"]
         assert verifier(fiche(code=False)) is False
 
     def test_un_oui_laisse_passer(self):
-        verifier, _ = PREREQUIS["produit-du-code"]
+        verifier, _ = PREREQUISITES["produit-du-code"]
         assert verifier(fiche(code=True)) is True
 
     def test_un_silence_laisse_passer(self):
         # Decision assumee : rater une faille coute plus cher qu'un essai
         # gaspille, et un chatbot ne detaille pas tout ce qu'il sait faire.
-        verifier, _ = PREREQUIS["produit-du-code"]
+        verifier, _ = PREREQUISITES["produit-du-code"]
         assert verifier(fiche(code=None)) is True
 
     def test_les_documents_suivent_la_meme_regle(self):
-        verifier, _ = PREREQUIS["traite-des-documents"]
+        verifier, _ = PREREQUISITES["traite-des-documents"]
         assert verifier(fiche(documents=None)) is True
         assert verifier(fiche(documents=False)) is False
 
@@ -419,37 +419,37 @@ class TestReglesDePertinence:
         # Asymetrie VOLONTAIRE avec les capacites : ici personne n'a repondu,
         # parce qu'une cible ne sait pas dans quoi sa sortie est rendue, et
         # l'attaque est structurellement intestable sans ce contexte.
-        verifier, _ = PREREQUIS[prerequis]
+        verifier, _ = PREREQUISITES[prerequis]
         assert verifier(fiche()) is False
 
     @pytest.mark.parametrize("prerequis", ["terminal", "rendu-riche",
                                            "base-donnees"])
     def test_un_contexte_declare_laisse_passer(self, prerequis):
-        verifier, _ = PREREQUIS[prerequis]
+        verifier, _ = PREREQUISITES[prerequis]
         assert verifier(fiche(contexte=[prerequis])) is True
 
     @pytest.mark.parametrize("prerequis", ["terminal", "rendu-riche",
                                            "base-donnees"])
     def test_le_motif_dit_comment_activer(self, prerequis):
         # Un ecartement muet ferait croire a un trou de couverture definitif.
-        _, motif = PREREQUIS[prerequis]
+        _, motif = PREREQUISITES[prerequis]
         assert "--contexte" in motif
 
     def test_un_contexte_ne_debloque_pas_les_autres(self):
-        verifier, _ = PREREQUIS["rendu-riche"]
+        verifier, _ = PREREQUISITES["rendu-riche"]
         assert verifier(fiche(contexte=["terminal"])) is False
 
     # --- Effet sur un plan reel -------------------------------------------
 
     def test_les_familles_ecartees_disent_leur_motif(self):
-        plan = planifier(fiche(consignes=True), budget=5)
+        plan = plan_campaign(fiche(consignes=True), budget=5)
         for ecartee in plan["ecartees"]:
             assert ecartee["motifs"], ecartee["technique"]
 
     def test_une_cible_sans_contexte_garde_des_essais(self):
         # Le durcissement ne doit pas vider le plan : les modules universels
         # (`encoding`, `goodside`, `promptinject`) restent disponibles.
-        plan = planifier(fiche(consignes=True, refuses=["le code"]), budget=3)
+        plan = plan_campaign(fiche(consignes=True, refuses=["le code"]), budget=3)
         assert plan["essais"]
 
 
@@ -464,14 +464,14 @@ class TestMentionCouverteAilleurs:
     """
 
     def test_un_ecartement_pour_non_pertinence_ne_porte_pas_la_mention(self):
-        plan = planifier(fiche(consignes=True), budget=3)
+        plan = plan_campaign(fiche(consignes=True), budget=3)
         par_nom = {e["technique"]: e for e in plan["ecartees"]}
         for nom, ecartee in par_nom.items():
             if nom.startswith("garak-"):
                 assert ecartee["famille_couverte_ailleurs"] is False, nom
 
     def test_une_technique_sans_payload_la_porte_encore(self):
-        plan = planifier(fiche(consignes=True, refuses=["le code"]), budget=3)
+        plan = plan_campaign(fiche(consignes=True, refuses=["le code"]), budget=3)
         par_nom = {e["technique"]: e for e in plan["ecartees"]}
         familles = {c["famille_owasp"] for c in plan["candidats"]}
         if "LLM01:2025 Prompt Injection" in familles:
@@ -485,7 +485,7 @@ class TestGroupementDesEcartees:
             {"technique": "b", "famille_owasp": None, "motifs": ["meme motif"]},
             {"technique": "c", "famille_owasp": None, "motifs": ["autre"]},
         ]
-        groupes = grouper_par_motif(ecartees)
+        groupes = group_by_reason(ecartees)
         assert groupes == [("meme motif", ["a", "b"]), ("autre", ["c"])]
 
     def test_l_ordre_d_apparition_est_conserve(self):
@@ -495,11 +495,11 @@ class TestGroupementDesEcartees:
             {"technique": "z", "famille_owasp": None, "motifs": ["second"]},
             {"technique": "a", "famille_owasp": None, "motifs": ["premier"]},
         ]
-        assert [m for m, _ in grouper_par_motif(ecartees)] == ["second",
+        assert [m for m, _ in group_by_reason(ecartees)] == ["second",
                                                                "premier"]
 
     def test_le_resume_ne_repete_pas_un_motif(self):
-        rendu = resumer(planifier(fiche(consignes=True), budget=3))
+        rendu = resumer(plan_campaign(fiche(consignes=True), budget=3))
         for motif in ("aucun client ne rend le Markdown",
                       "la cible dit ne pas écrire de code"):
             assert rendu.count(motif) <= 1, motif
@@ -514,7 +514,7 @@ class TestPerimetre:
     """
 
     def _candidats(self, **kw):
-        plan = planifier(fiche(consignes=True, refuses=["le code"]), 5, **kw)
+        plan = plan_campaign(fiche(consignes=True, refuses=["le code"]), 5, **kw)
         return {c.get("groupe") or c["technique"] for c in plan["candidats"]}
 
     def test_seulement_une_technique(self):
@@ -543,12 +543,12 @@ class TestPerimetre:
     def test_l_ecartement_dit_le_bon_motif(self):
         # Une technique hors perimetre ne doit pas etre ecartee pour « aucun
         # outil detecte », ce qui masquerait la vraie raison.
-        plan = planifier(fiche(consignes=True), 5, seulement=["controle"])
+        plan = plan_campaign(fiche(consignes=True), 5, seulement=["controle"])
         motifs = {e["technique"]: " ".join(e["motifs"]) for e in plan["ecartees"]}
         assert "hors du périmètre demandé" in motifs["fuite-prompt-systeme"]
 
     def test_le_motif_d_exclusion_nomme_l_option(self):
-        plan = planifier(fiche(consignes=True), 5, sauf=["fuite-prompt-systeme"])
+        plan = plan_campaign(fiche(consignes=True), 5, sauf=["fuite-prompt-systeme"])
         motifs = {e["technique"]: " ".join(e["motifs"]) for e in plan["ecartees"]}
         assert "--sauf" in motifs["fuite-prompt-systeme"]
 

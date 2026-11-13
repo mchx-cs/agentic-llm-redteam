@@ -25,7 +25,7 @@ sécurité, ce qui est pire que pas de rapport du tout.
 import json
 import re
 import statistiques
-from agents.planificateur import grouper_par_motif
+from agents.planificateur import group_by_reason
 from datetime import datetime
 from pathlib import Path
 
@@ -722,7 +722,7 @@ def rendre_markdown(rapport, abreger=False):
         # modules entiers qui sont écartés, et une liste plate répétait huit
         # fois « aucun client ne rend le Markdown ». Le motif porte
         # l'information, les techniques ne sont que le détail.
-        for motif, techniques in grouper_par_motif(
+        for motif, techniques in group_by_reason(
                 couverture["familles_ecartees"]):
             # Une technique maison encore vide dont la famille est par
             # ailleurs couverte n'est PAS un trou : l'annoncer comme tel

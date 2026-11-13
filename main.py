@@ -8,7 +8,7 @@ Déroulement d'une campagne :
   4. Une divulgation est vérifiée par REJEU avant d'être déclarée (une cible
      qui invente un mot de passe n'a rien divulgué).
 
-Deux budgets, parce que deux boucles : BUDGET_RECONNAISSANCE pour l'observation,
+Deux budgets, parce que deux boucles : RECON_BUDGET pour l'observation,
 MAX_ESSAIS pour l'attaque. Sans eux, un agent adaptatif tournerait sans fin.
 
 Lance-le avec :
@@ -24,12 +24,12 @@ from pathlib import Path
 
 from audit import (FICHIER_AUTORISATION, AutorisationManquante, PisteAudit,
                    exiger, telemetrie)
-from agents.adaptation import cumuler, observer, prochain
-from agents.arbitre import juger, juger_par_vote
-from agents.planificateur import planifier, resumer as resumer_plan
-from agents.reconnaissance import (CONTEXTES_CONNUS, reconnaitre,
+from agents.adaptation import accumulate, observe, next_attempt
+from agents.arbitre import juger, judge_by_vote
+from agents.planificateur import plan_campaign, resumer as resumer_plan
+from agents.reconnaissance import (KNOWN_CONTEXTS, reconnoitre,
                                     resumer as resumer_fiche)
-from agents.verificateur import verifier_par_rejeu
+from agents.verificateur import verify_by_replay
 from cibles import choose_target
 from cibles.http import TARGET_PROFILES, probe_target as probe_http_target
 from config import BUDGET_APPELS, BUDGET_TOKENS, CIBLE
@@ -65,7 +65,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     # --- 1. Reconnaissance : qui est cette cible ? -------------------------
     print("--- Reconnaissance ---")
     try:
-        fiche = reconnaitre(piste.tracer("reconnaissance", interroger_cible)
+        fiche = reconnoitre(piste.tracer("reconnaissance", interroger_cible)
                             if piste else interroger_cible)
     except BudgetDepasse as arret:
         print(f"\n>>> {arret}")
@@ -82,7 +82,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
 
     # --- 2. Planification : que lancer, et dans quel ordre ? ---------------
     print("\n--- Plan ---")
-    plan = planifier(fiche, MAX_ESSAIS, seulement, sauf)
+    plan = plan_campaign(fiche, MAX_ESSAIS, seulement, sauf)
     print(resumer_plan(plan))
 
     if not plan["essais"]:
@@ -110,7 +110,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
         # ordre de priorité, mais sans rien apprendre des réponses. C'est le
         # TÉMOIN dont la mesure du gain a besoin — sans lui, on ne peut
         # comparer l'adaptation qu'à des campagnes simulées.
-        payload = prochain(plan["candidats"],
+        payload = next_attempt(plan["candidats"],
                            observations if adaptatif else (), lances)
         if payload is None:
             print(">>> Vivier épuisé : plus aucun essai applicable.")
@@ -148,7 +148,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
             # Vote : le juge n'est pas déterministe sur les cas limites, et
             # une faille qui apparaît selon le tirage n'a rien à faire dans
             # un rapport.
-            verdict = juger_par_vote(payload["texte"], reponse)
+            verdict = judge_by_vote(payload["texte"], reponse)
             if piste:
                 piste.consigner_verdict(numero, verdict)
             print(f"  [Arbitre]   enfreint={verdict['reussi']} "
@@ -158,8 +158,8 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
             # Ce que cet échange nous apprend, pour le choix du prochain
             # essai. Enregistré AVANT tout `continue` : un échec instruit
             # autant qu'un succès, et c'est même sa seule utilité.
-            observations = cumuler(observations,
-                                   observer(payload, reponse, verdict))
+            observations = accumulate(observations,
+                                   observe(payload, reponse, verdict))
 
             # Un verdict illisible (None) n'est PAS une faille — mais ce
             # n'est pas non plus une victoire de la cible. Les confondre
@@ -182,7 +182,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
                 # Le rejeu reçoit `juger` sans vote : il interroge déjà la
                 # cible plusieurs fois, ce qui lisse le bruit. Voter en plus
                 # coûterait neuf appels là où trois suffisent.
-                verification = verifier_par_rejeu(
+                verification = verify_by_replay(
                     payload["texte"], verdict["valeur"],
                     piste.tracer("rejeu", interroger_cible) if piste
                     else interroger_cible,
@@ -284,14 +284,14 @@ def _terminer(resultat):
 
 def _provenance_des_payloads():
     """Avec quelle bibliothèque la campagne a travaillé, et de quand date-t-elle."""
-    from agents.attaquant import AGE_INSTANTANE_SUSPECT, charger_bibliotheque
+    from agents.attaquant import SNAPSHOT_AGE_SUSPECT, load_library
 
-    garak = charger_bibliotheque().get("_garak")
+    garak = load_library().get("_garak")
     if not garak:
         return None
     age = garak.get("age_jours")
     return {**garak,
-            "perime": age is not None and age > AGE_INSTANTANE_SUSPECT}
+            "perime": age is not None and age > SNAPSHOT_AGE_SUSPECT}
 
 
 def perimetre(valeur):
@@ -355,7 +355,7 @@ def cli(arguments=None):
         "--contexte", default="", metavar="LISTE",
         help="ce que l'application AUTOUR de la cible fait de sa sortie, "
              "séparé par des virgules : "
-             + ", ".join(CONTEXTES_CONNUS)
+             + ", ".join(KNOWN_CONTEXTS)
              + ". Certaines familles de sondes n'ont aucun sens sans ça, et "
                "une cible ne peut pas le déclarer elle-même.")
     parseur.add_argument(
@@ -382,10 +382,10 @@ def cli(arguments=None):
     # personne comprenne pourquoi. Même logique que le profil inconnu, qui
     # échoue dès l'import avec la liste des valeurs valides.
     contexte = [c.strip() for c in arguments.contexte.split(",") if c.strip()]
-    inconnus = [c for c in contexte if c not in CONTEXTES_CONNUS]
+    inconnus = [c for c in contexte if c not in KNOWN_CONTEXTS]
     if inconnus:
         print(f"Contexte inconnu : {', '.join(inconnus)}.\n"
-              f"Valeurs acceptées : {', '.join(CONTEXTES_CONNUS)}.",
+              f"Valeurs acceptées : {', '.join(KNOWN_CONTEXTS)}.",
               file=sys.stderr)
         raise SystemExit(2)
 

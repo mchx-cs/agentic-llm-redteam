@@ -107,7 +107,7 @@ class TestLesPiegesInatteignablesSontCouverts:
         assert trouve
 
     def test_des_conversations_depassent_deux_tours(self):
-        # `sequencer()` n'en produit que deux : au-delà, c'est à la main.
+        # `sequence_turns()` n'en produit que deux : au-delà, c'est à la main.
         assert any(len(tours) // 2 > 2 for _, _, _, tours in CAS)
 
     def test_il_y_a_des_controles_entierement_anodins(self):

@@ -13,8 +13,8 @@ Lance-le depuis la racine du projet avec :
     python -m evaluation.tester_reconnaissance
 """
 
-from agents.planificateur import planifier
-from agents.reconnaissance import reconnaitre, resumer
+from agents.planificateur import plan_campaign
+from agents.reconnaissance import reconnoitre, resumer
 
 BUDGET = 6
 
@@ -63,10 +63,10 @@ def tester():
     for cible, attendu, familles_a_ecarter in SCENARIOS:
         print("\n" + "=" * 70)
         print(f"Cible simulée : {cible.__name__}")
-        fiche = reconnaitre(cible)
+        fiche = reconnoitre(cible)
         print(resumer(fiche))
 
-        plan = planifier(fiche, BUDGET)
+        plan = plan_campaign(fiche, BUDGET)
         ecartees = {e["technique"] for e in plan["ecartees"]}
 
         # 1. La fiche a-t-elle vu ce qu'il fallait voir ?

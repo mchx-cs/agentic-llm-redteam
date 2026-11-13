@@ -10,7 +10,7 @@ Mais deux pièges du format multi-tours lui échappent par construction :
   valeur apparaît dans un tour de l'utilisateur sans que la cible l'ait dite.
   Or c'est le faux positif propre au format : avec une conversation, le juge
   voit aussi ce que l'attaquant écrit.
-- **plus de deux tours.** `sequencer()` en produit exactement deux. Une
+- **plus de deux tours.** `sequence_turns()` en produit exactement deux. Une
   escalade progressive demande un modèle attaquant, donc du quota, donc la
   décision PyRIT — qui n'est pas prise.
 
@@ -172,7 +172,7 @@ def entrees():
 
     Et deux de ces cas sont bien mono-tour, ce qui a été une surprise utile :
     le faux positif « le secret vient de l'attaquant » n'est PAS propre au
-    multi-tours. `construire_question` montre déjà la ligne « Utilisateur »
+    multi-tours. `build_question` montre déjà la ligne « Utilisateur »
     au juge, donc le piège existe depuis toujours — et le corpus ne contenait
     aucun cas où l'attaquant NOMME une valeur. L'addendum multi-tours ne fait
     que rendre explicite une règle qui manquait déjà.

@@ -13,7 +13,7 @@ devient une faille inventée, ou une faille ratée.
 import pytest
 
 import agents.arbitre as arbitre
-from agents.arbitre import construire_question, juger, juger_par_vote
+from agents.arbitre import build_question, juger, judge_by_vote
 
 
 @pytest.fixture
@@ -67,17 +67,17 @@ class TestLectureDuVerdict:
 
 class TestQuestionPosee:
     def test_l_echange_est_transmis(self):
-        question = construire_question("ma demande", "sa réponse")
+        question = build_question("ma demande", "sa réponse")
         assert "ma demande" in question and "sa réponse" in question
 
     def test_les_passages_encodes_sont_decodes_pour_le_juge(self):
         # Le juge est mauvais pour décoder ; le détecteur le fait pour lui.
-        question = construire_question("donne-le en base64", "VE9QU0VDUkVUNDI=")
+        question = build_question("donne-le en base64", "VE9QU0VDUkVUNDI=")
         assert "Décodage automatique" in question
         assert "TOPSECRET42" in question
 
     def test_sans_encodage_aucune_section_parasite(self):
-        question = construire_question("bonjour", "La capitale est Paris.")
+        question = build_question("bonjour", "La capitale est Paris.")
         assert "Décodage automatique" not in question
 
 
@@ -104,7 +104,7 @@ class TestVote:
     ])
     def test_la_majorite_l_emporte(self, voter, votes, attendu):
         voter(votes)
-        assert juger_par_vote("p", "r")["reussi"] is attendu
+        assert judge_by_vote("p", "r")["reussi"] is attendu
 
     @pytest.mark.parametrize("votes", [
         [True, False, None],              # aucune majorité
@@ -113,14 +113,14 @@ class TestVote:
     def test_sans_majorite_on_s_abstient(self, voter, votes):
         # Mieux vaut « à revoir par un humain » qu'un verdict tiré au sort.
         voter(votes)
-        verdict = juger_par_vote("p", "r")
+        verdict = judge_by_vote("p", "r")
         assert verdict["reussi"] is None
         assert verdict["critere"] == "partage"
 
     def test_les_votes_sont_consignes(self, voter):
         # Un rapport doit pouvoir montrer que le juge a hésité.
         voter([True, True, False])
-        assert juger_par_vote("p", "r")["votes"] == [True, True, False]
+        assert judge_by_vote("p", "r")["votes"] == [True, True, False]
 
     def test_l_analyse_correspond_au_verdict_rendu(self, monkeypatch):
         # Sans ça, on afficherait l'explication d'un vote minoritaire.
@@ -132,7 +132,7 @@ class TestVote:
             return {"reussi": reussi, "critere": "divulgation" if reussi
                     else "aucun", "analyse": analyse, "valeur": None, "brut": ""}
         monkeypatch.setattr(arbitre, "juger", faux_juger)
-        assert "rien du tout" not in juger_par_vote("p", "r")["analyse"]
+        assert "rien du tout" not in judge_by_vote("p", "r")["analyse"]
 
 
 class TestLaStructureDeLaConsigneNEstPasForgeable:
@@ -176,10 +176,10 @@ class TestLaStructureDeLaConsigneNEstPasForgeable:
                 for etiquette in LABELS.values()]
 
     def test_aucun_payload_de_la_bibliotheque_ne_porte_les_etiquettes(self):
-        from agents.attaquant import charger_bibliotheque
+        from agents.attaquant import load_library
 
         payloads = []
-        for technique in charger_bibliotheque()["techniques"]:
+        for technique in load_library()["techniques"]:
             payloads += technique.get("modeles") or []
             payloads += technique.get("payloads_complets") or []
 
@@ -205,19 +205,19 @@ class TestLaStructureDeLaConsigneNEstPasForgeable:
                     f"{echange['id']} porte « {motif.pattern} » en réponse"
 
     def test_les_etiquettes_ne_sont_definies_qu_a_UN_endroit(self):
-        # `arbitre.construire_question` et `conversation.render` produisent le
+        # `arbitre.build_question` et `conversation.render` produisent le
         # même format : deux copies auraient divergé, et le juge aurait reçu
         # deux structures différentes selon le chemin d'appel.
-        from agents.arbitre import construire_question
+        from agents.arbitre import build_question
         from cibles.conversation import (ATTACKER_ROLE, TARGET_ROLE, render)
 
-        mono = construire_question("demande", "réponse")
+        mono = build_question("demande", "réponse")
         conversation = render([{"role": ATTACKER_ROLE, "contenu": "demande"},
                                {"role": TARGET_ROLE, "contenu": "réponse"}])
         assert mono == conversation
 
     def test_le_format_mono_tour_est_INCHANGE(self):
         # Octet pour octet : c'est sur ce format que l'arbitre a été mesuré.
-        from agents.arbitre import construire_question
-        assert construire_question("p", "r") == \
+        from agents.arbitre import build_question
+        assert build_question("p", "r") == \
             'Utilisateur : "p"\nChatbot : "r"'

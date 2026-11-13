@@ -11,40 +11,40 @@ import json
 import pytest
 
 import agents.attaquant
-from agents.attaquant import (FICHIER_BIBLIOTHEQUE, TRANSFORMATIONS,
-                              charger_bibliotheque, generer_payloads)
+from agents.attaquant import (LIBRARY_FILE, TRANSFORMATIONS,
+                              load_library, generate_payloads)
 
 
 @pytest.fixture(autouse=True)
 def sans_instantane_garak(monkeypatch, tmp_path):
     """Isole les tests de l'instantané garak éventuellement présent."""
-    monkeypatch.setattr(agents.attaquant, "FICHIER_GARAK",
+    monkeypatch.setattr(agents.attaquant, "GARAK_FILE",
                         tmp_path / "absent.json")
 
 
 class TestBibliotheque:
     def test_elle_est_du_json_valide(self):
-        json.loads(FICHIER_BIBLIOTHEQUE.read_text(encoding="utf-8"))
+        json.loads(LIBRARY_FILE.read_text(encoding="utf-8"))
 
     def test_chaque_technique_a_les_champs_attendus(self):
-        for technique in charger_bibliotheque()["techniques"]:
+        for technique in load_library()["techniques"]:
             assert {"id", "famille_owasp", "description", "prerequis",
                     "modeles"} <= set(technique)
 
     def test_chaque_modele_contient_le_marqueur_objectif(self):
         # Un modèle sans `{objectif}` enverrait toujours le même texte.
-        for technique in charger_bibliotheque()["techniques"]:
+        for technique in load_library()["techniques"]:
             for modele in technique["modeles"]:
                 assert "{objectif}" in modele, technique["id"]
 
     def test_les_prerequis_sont_connus_du_planificateur(self):
-        from agents.planificateur import PREREQUIS
-        for technique in charger_bibliotheque()["techniques"]:
+        from agents.planificateur import PREREQUISITES
+        for technique in load_library()["techniques"]:
             for prerequis in technique["prerequis"]:
-                assert prerequis in PREREQUIS, technique["id"]
+                assert prerequis in PREREQUISITES, technique["id"]
 
     def test_les_identifiants_sont_uniques(self):
-        identifiants = [t["id"] for t in charger_bibliotheque()["techniques"]]
+        identifiants = [t["id"] for t in load_library()["techniques"]]
         assert len(identifiants) == len(set(identifiants))
 
 
@@ -60,16 +60,16 @@ class TestTransformations:
 
 class TestGenerationDesPayloads:
     def test_aucun_marqueur_ne_subsiste(self):
-        for payload in generer_payloads():
+        for payload in generate_payloads():
             assert "{objectif}" not in payload["texte"]
 
     def test_chaque_payload_dit_d_ou_il_vient(self):
-        for payload in generer_payloads():
+        for payload in generate_payloads():
             assert {"technique", "famille_owasp", "objectif",
                     "transformation", "texte"} <= set(payload)
 
     def test_le_catalogue_croise_bien_les_axes(self):
-        bibliotheque = charger_bibliotheque()
+        bibliotheque = load_library()
         gabarits = sum(len(t["modeles"]) for t in bibliotheque["techniques"])
         complets = sum(len(t.get("payloads_complets", []))
                        for t in bibliotheque["techniques"])
@@ -86,7 +86,7 @@ class TestGenerationDesPayloads:
         # terme valait zéro. Les payloads LLM07 l'ont réveillé.
         attendu = len(TRANSFORMATIONS) * (
             gabarits * objectifs + complets * (objectifs + 1))
-        assert len(generer_payloads()) == attendu
+        assert len(generate_payloads()) == attendu
 
 
 class TestConfiguration:

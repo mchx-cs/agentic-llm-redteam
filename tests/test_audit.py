@@ -195,7 +195,7 @@ class TestChaineDePreuve:
                 chemin.read_text(encoding="utf-8").splitlines() if l]
 
     def test_le_case_id_est_lisible_pas_opaque(self, tmp_path):
-        # Un UUID serait unique mais muet : un operateur doit reconnaitre sa
+        # Un UUID serait unique mais muet : un operateur doit reconnoitre sa
         # campagne sans aller rapprocher l'identifiant d'autre chose.
         piste = PisteAudit(tmp_path / "j.jsonl", "chatbot.client.fr")
         assert "chatbot-client-fr" in piste.case_id

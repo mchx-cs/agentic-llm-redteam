@@ -40,7 +40,7 @@ import random
 from statistics import mean
 
 import agents.adaptation as adaptation
-from agents.planificateur import planifier
+from agents.planificateur import plan_campaign
 
 NB_TIRAGES = 150
 BUDGETS = (3, 6, 10, 20, 40)
@@ -77,7 +77,7 @@ def construire_vivier():
     """Le vivier du planificateur, réduit à quelques payloads par technique."""
     comptes = {}
     vivier = []
-    for candidat in planifier(FICHE, 1)["candidats"]:
+    for candidat in plan_campaign(FICHE, 1)["candidats"]:
         technique = candidat["technique"]
         if comptes.get(technique, 0) < PAYLOADS_PAR_TECHNIQUE:
             comptes[technique] = comptes.get(technique, 0) + 1
@@ -96,7 +96,7 @@ def campagne(vivier, budget, adaptatif, cedent, signaux=None):
     lances, observations, constats = [], [], 0
 
     for _ in range(budget):          # boucle bornée, comme partout ailleurs
-        essai = adaptation.prochain(
+        essai = adaptation.next_attempt(
             vivier, observations if adaptatif else (), lances)
         if essai is None:
             break
@@ -104,13 +104,13 @@ def campagne(vivier, budget, adaptatif, cedent, signaux=None):
 
         reussi = essai["technique"] in cedent
         constats += reussi
-        nouvelles = adaptation.observer(
+        nouvelles = adaptation.observe(
             essai, FUITE if reussi else REFUSAL,
             {"reussi": reussi,
              "critere": "divulgation" if reussi else "aucun"})
         if signaux is not None:
             nouvelles = [o for o in nouvelles if o["signal"] in signaux]
-        observations = adaptation.cumuler(observations, nouvelles)
+        observations = adaptation.accumulate(observations, nouvelles)
 
     return constats
 

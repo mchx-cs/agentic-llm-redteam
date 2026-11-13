@@ -99,6 +99,8 @@ wrong. Each entry here cost a broken test run.
 | `analyser` | two unrelated meanings: *to analyse* (the detectors) and *the analyst* — the model reconnaissance uses to extract the profile. Renaming the detector function hit a pytest fixture named after the analyst, and 19 tests errored on a missing fixture |
 | `taux_de_succes` | the FUNCTION is `success_rate`; the identically-named JSON KEY in `resultat.json` must stay. Rename the call, not the string |
 | `tester` | two meanings again: *probe the wiring* (`cibles/http.py`) and *run this measurement* (`evaluation/tester_*.py`). Renaming the first gave the evaluation scripts a `probe_target()` that probes nothing |
+| French PROSE containing an identifier | the worst of the four, because the suite stays green. Renaming `prochain` → `next_attempt` rewrote twelve French sentences, including two strings rendered into the client-facing report and — worst — a target reply pinned VERBATIM in `tests/test_adaptation.py`. A test whose data is falsified no longer tests what it claims. A detector now scans for English identifiers inside French sentences after every rename pass |
+| data keys that look like identifiers | `TRANSFORMATIONS`' keys (`"identite"`, `"majuscules"`) travel into `resultat.json`, the committed example and the README excerpt. A `identite` rename hits the string literal too, and the tests follow silently because they were renamed in the same pass |
 | keyword arguments | `independants=` / `quoi=` are passed by name from four call sites. Renaming the parameter without them turned 693 green tests into 99 failures in one step — which is exactly why the order runs leaves-to-root |
 
 ## Terms whose translation changes BEHAVIOUR

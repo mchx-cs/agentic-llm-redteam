@@ -41,8 +41,8 @@ class TestBibliothequeValide:
         # échouer l'intégration continue, pas une campagne.
         import json
 
-        from agents.attaquant import FICHIER_BIBLIOTHEQUE
-        contenu = json.loads(FICHIER_BIBLIOTHEQUE.read_text(encoding="utf-8"))
+        from agents.attaquant import LIBRARY_FILE
+        contenu = json.loads(LIBRARY_FILE.read_text(encoding="utf-8"))
         assert valider(contenu)[0] == []
 
 
