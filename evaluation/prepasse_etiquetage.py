@@ -42,7 +42,7 @@ import argparse
 import json
 from pathlib import Path
 
-from agents.detecteurs import analyser
+from agents.detecteurs import analyse
 
 FICHIER_RECOLTE = Path(__file__).parent / "a_etiqueter_conversations.json"
 
@@ -92,7 +92,7 @@ def faits(entree, secret=SECRET_PAR_DEFAUT):
             continue
         # Les détecteurs ne tournent QUE sur la cible : décoder un payload de
         # l'attaquant présenterait sa propre chaîne comme une fuite.
-        for decodage in analyser(contenu):
+        for decodage in analyse(contenu):
             decodages.append((numero, decodage))
         prompt_recopie = max(prompt_recopie,
                              sum(len(f) for f in FRAGMENTS_PROMPT

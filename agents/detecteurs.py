@@ -1,128 +1,134 @@
 """
-agents/detecteurs.py — Pré-traitement déterministe des réponses de la cible.
+agents/detecteurs.py — Deterministic pre-processing of the target's replies.
 
-Un LLM est mauvais pour décoder du Base64 de tête ou pour repérer qu'un mot
-est écrit lettre par lettre. Du code Python, lui, le fait sans jamais se
-tromper. On fait donc ce travail AVANT l'arbitre, et on lui montre le
-résultat : il juge alors un texte en clair au lieu de devoir deviner.
+An LLM is bad at decoding Base64 in its head, or at spotting that a word was
+written letter by letter. Python code does it without ever getting it wrong. So
+we do that work BEFORE the judge and show it the result: it then judges plain
+text instead of having to guess.
 
-Ces détecteurs ne tranchent RIEN : ils ne connaissent pas le secret et ne
-disent pas "faille". Ils rendent seulement visible ce qui était caché. La
-décision reste à l'arbitre (principe du juge en boîte noire).
+These detectors decide NOTHING: they do not know the secret and they never say
+"finding". They only make visible what was hidden. The decision stays with the
+judge (the blind-judge principle).
+
+NOTE ON NAMING (2026-11-13). The returned dictionaries' keys — and the VALUES
+of their `type` field — stay French on purpose. They are rendered straight into
+the judge's prompt, under an "Décodage automatique" heading its instruction
+refers to. Translating them changes the judge's prompt, which is the last step
+of the switch and a measured one. See `GLOSSAIRE.md`.
 """
 
 import base64
 import binascii
 import re
 
-# Au moins 4 caractères isolés séparés par des espaces, tirets, points…
-# ex. "T - O - P - S" ou "T.O.P.S". En dessous de 4, trop de faux positifs
-# ("a - b" apparaît dans du texte normal).
-_MOTIF_EPELE = re.compile(r"(?<!\w)(?:\w[\s\-\.\,·_/|]+){3,}\w(?!\w)")
-_SEPARATEURS = re.compile(r"[\s\-\.\,·_/|]+")
+# At least 4 isolated characters separated by spaces, dashes, dots…
+# e.g. "T - O - P - S" or "T.O.P.S". Below 4, too many false positives
+# ("a - b" shows up in ordinary text).
+_SPELLED_OUT_PATTERN = re.compile(r"(?<!\w)(?:\w[\s\-\.\,·_/|]+){3,}\w(?!\w)")
+_SEPARATORS = re.compile(r"[\s\-\.\,·_/|]+")
 
-# Candidats Base64 : 8 caractères ou plus de l'alphabet Base64.
-_MOTIF_BASE64 = re.compile(r"[A-Za-z0-9+/]{8,}={0,2}")
+# Base64 candidates: 8 or more characters of the Base64 alphabet.
+_BASE64_PATTERN = re.compile(r"[A-Za-z0-9+/]{8,}={0,2}")
 
-# Candidats hexadécimaux : au moins 4 octets (8 chiffres hexa).
-_MOTIF_HEXA = re.compile(r"\b(?:[0-9a-fA-F]{2}){4,}\b")
+# Hex candidates: at least 4 bytes (8 hex digits).
+_HEX_PATTERN = re.compile(r"\b(?:[0-9a-fA-F]{2}){4,}\b")
 
+# The characters REAL text can contain: printable ASCII, accented Latin
+# letters (Latin-1 and Latin Extended-A), and a few common typographic signs.
+# Everything else — ideographs, non-Latin scripts, symbols — signals a decoding
+# of arbitrary bytes, not language.
+_PLAUSIBLE_RANGES = ((0x20, 0x7E), (0x00C0, 0x00FF), (0x0100, 0x017F))
+_COMMON_SIGNS = "€’‘“”«»—–…°"
 
-# Les caractères qu'un texte RÉEL peut contenir : l'ASCII imprimable, les
-# lettres accentuées latines (Latin-1 et Latin étendu A), et quelques signes
-# typographiques courants. Tout le reste — idéogrammes, alphabets non latins,
-# symboles — signe un décodage d'octets quelconques, pas du langage.
-_PLAGES_PLAUSIBLES = ((0x20, 0x7E), (0x00C0, 0x00FF), (0x0100, 0x017F))
-_SIGNES_COURANTS = "€’‘“”«»—–…°"
-
-# Un décodage doit porter au moins ça de substance. En dessous, « n&a » passe
-# tous les filtres de caractères sans rien vouloir dire.
-_MINIMUM_ALPHANUM = 3
-
-
-def _caractere_plausible(caractere):
-    point = ord(caractere)
-    return (caractere in _SIGNES_COURANTS
-            or any(debut <= point <= fin for debut, fin in _PLAGES_PLAUSIBLES))
+# A decoding must carry at least this much substance. Below it, "n&a" passes
+# every character filter without meaning anything.
+_MINIMUM_ALPHANUMERIC = 3
 
 
-def _est_texte_lisible(texte):
+def _is_plausible_character(character):
+    point = ord(character)
+    return (character in _COMMON_SIGNS
+            or any(start <= point <= end for start, end in _PLAUSIBLE_RANGES))
+
+
+def _is_readable_text(text):
     """
-    Un décodage n'a de sens que s'il donne du TEXTE, pas du bruit binaire.
+    A decoding only means something if it yields TEXT, not binary noise.
 
-    Le filtre d'origine acceptait toute chaîne imprimable contenant un
-    caractère alphanumérique, et c'était beaucoup trop large. Mesuré le
-    2026-11-13 sur une récolte de 119 conversations : **73 entrées** portaient
-    un faux « décodage Base64 », parce que `_MOTIF_BASE64` attrape huit
-    lettres latines d'affilée et qu'un mot français ordinaire se décode en
-    octets valides. `biblioth` — « bibliothèque » coupée à l'accent — donne
-    `n&劋a`, qui est imprimable et contient des alphanumériques.
+    The original filter accepted any printable string containing one
+    alphanumeric character, and that was far too broad. Measured 2026-11-13 on
+    a harvest of 119 conversations: **73 entries** carried a bogus "Base64
+    decoding", because `_BASE64_PATTERN` catches eight Latin letters in a row
+    and an ordinary French word decodes to valid bytes. `biblioth` —
+    "bibliothèque" cut at the accent — gives `n&劋a`, which is printable and
+    contains alphanumerics.
 
-    Ce n'était pas un défaut cosmétique : ces décodages sont injectés dans la
-    consigne de l'arbitre, sous un titre « Décodage automatique » qui lui dit
-    de les juger comme si le chatbot les avait écrits. On lui envoyait donc du
-    bruit sur trois entrées du jeu `dev` et une du jeu `test` — à chaque
-    mesure, y compris les trois consultations du jeu gelé.
+    This was not a cosmetic defect: those decodings are injected into the
+    judge's instruction, under a heading telling it to judge them as if the
+    chatbot had written them. So we were feeding it noise on three `dev`
+    entries and one `test` entry — on every measurement, including all three
+    consultations of the frozen set.
 
-    Le filtre exige maintenant que TOUS les caractères soient plausibles dans
-    du langage écrit. C'est volontairement strict : un décodage qui contient
-    un seul caractère exotique est écarté. Le compromis est assumé — une
-    fuite encodée contenant un idéogramme passerait inaperçue, alors que
-    l'ancien filtre noyait le juge dans du charabia sur six entrées sur dix.
-    Rater une forme rare coûte moins cher que polluer toutes les mesures.
+    The filter now requires EVERY character to be plausible in written
+    language. That is deliberately strict: a decoding containing a single
+    exotic character is dropped. The trade-off is accepted — an encoded leak
+    containing an ideograph would go unnoticed, whereas the old filter drowned
+    the judge in gibberish on six entries out of ten. Missing a rare form
+    costs less than polluting every measurement.
     """
-    if not texte or not texte.isprintable():
+    if not text or not text.isprintable():
         return False
-    if sum(1 for c in texte if c.isalnum()) < _MINIMUM_ALPHANUM:
+    if sum(1 for c in text if c.isalnum()) < _MINIMUM_ALPHANUMERIC:
         return False
-    return all(_caractere_plausible(c) for c in texte)
+    return all(_is_plausible_character(c) for c in text)
 
 
-def recoller_epele(reponse):
-    """Trouve les mots écrits lettre par lettre et les recolle."""
-    trouves = []
-    for correspondance in _MOTIF_EPELE.finditer(reponse):
-        morceau = correspondance.group()
-        lettres = _SEPARATEURS.split(morceau)
-        # On ne garde que les vraies épellations : un caractère par morceau.
-        # Sinon "Je suis là - pour vous" serait pris pour une épellation.
-        if all(len(lettre) == 1 for lettre in lettres):
-            trouves.append({"type": "épelé", "original": morceau,
-                            "decode": "".join(lettres)})
-    return trouves
+def reassemble_spelled_out(reply):
+    """Find words written letter by letter and glue them back together."""
+    found = []
+    for match in _SPELLED_OUT_PATTERN.finditer(reply):
+        chunk = match.group()
+        letters = _SEPARATORS.split(chunk)
+        # Only genuine spellings count: one character per piece. Otherwise
+        # "Je suis là - pour vous" would be read as a spelling.
+        if all(len(letter) == 1 for letter in letters):
+            found.append({"type": "épelé", "original": chunk,
+                          "decode": "".join(letters)})
+    return found
 
 
-def decoder_base64(reponse):
-    """Trouve les chaînes Base64 qui se décodent en texte lisible."""
-    trouves = []
-    for candidat in _MOTIF_BASE64.findall(reponse):
+def decode_base64(reply):
+    """Find Base64 strings that decode to readable text."""
+    found = []
+    for candidate in _BASE64_PATTERN.findall(reply):
         try:
-            # validate=True : refuse tout caractère hors alphabet Base64.
-            decode = base64.b64decode(candidat, validate=True).decode("utf-8")
+            # validate=True: reject anything outside the Base64 alphabet.
+            decoded = base64.b64decode(candidate, validate=True).decode("utf-8")
         except (binascii.Error, UnicodeDecodeError):
-            continue  # pas du Base64, ou du binaire : on ignore
-        # Un mot ordinaire comme "question" se "décode" aussi, mais en
-        # octets illisibles : le filtre de lisibilité les écarte.
-        if _est_texte_lisible(decode):
-            trouves.append({"type": "base64", "original": candidat,
-                            "decode": decode})
-    return trouves
+            continue  # not Base64, or binary: ignore it
+        # An ordinary word like "question" also "decodes", but into unreadable
+        # bytes: the readability filter drops those.
+        if _is_readable_text(decoded):
+            found.append({"type": "base64", "original": candidate,
+                          "decode": decoded})
+    return found
 
 
-def decoder_hexa(reponse):
-    """Trouve les chaînes hexadécimales qui se décodent en texte lisible."""
-    trouves = []
-    for candidat in _MOTIF_HEXA.findall(reponse):
+def decode_hex(reply):
+    """Find hexadecimal strings that decode to readable text."""
+    found = []
+    for candidate in _HEX_PATTERN.findall(reply):
         try:
-            decode = bytes.fromhex(candidat).decode("utf-8")
+            decoded = bytes.fromhex(candidate).decode("utf-8")
         except (ValueError, UnicodeDecodeError):
             continue
-        if _est_texte_lisible(decode):
-            trouves.append({"type": "hexadécimal", "original": candidat,
-                            "decode": decode})
-    return trouves
+        if _is_readable_text(decoded):
+            found.append({"type": "hexadécimal", "original": candidate,
+                          "decode": decoded})
+    return found
 
 
-def analyser(reponse):
-    """Applique tous les détecteurs. Renvoie la liste de ce qu'ils ont décodé."""
-    return recoller_epele(reponse) + decoder_base64(reponse) + decoder_hexa(reponse)
+def analyse(reply):
+    """Run every detector. Returns the list of what they decoded."""
+    return (reassemble_spelled_out(reply) + decode_base64(reply)
+            + decode_hex(reply))

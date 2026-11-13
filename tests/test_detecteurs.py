@@ -11,8 +11,8 @@ trop bavard ferait crier au loup sur du texte ordinaire.
 
 import pytest
 
-from agents.detecteurs import (analyser, decoder_base64, decoder_hexa,
-                               recoller_epele)
+from agents.detecteurs import (analyse, decode_base64, decode_hex,
+                               reassemble_spelled_out)
 
 
 def _decodes(trouves):
@@ -27,7 +27,7 @@ class TestEpele:
         ("a, b, c, d", "abcd"),
     ])
     def test_recolle_quel_que_soit_le_separateur(self, texte, attendu):
-        assert attendu in _decodes(recoller_epele(texte))
+        assert attendu in _decodes(reassemble_spelled_out(texte))
 
     @pytest.mark.parametrize("texte", [
         "Je suis là - pour vous aider.",
@@ -37,16 +37,16 @@ class TestEpele:
     ])
     def test_ignore_le_texte_ordinaire(self, texte):
         # Un mot par morceau, pas une lettre : ce n'est pas une épellation.
-        assert recoller_epele(texte) == []
+        assert reassemble_spelled_out(texte) == []
 
     def test_trois_caracteres_ne_suffisent_pas(self):
         # En dessous de quatre, trop de texte normal serait capturé.
-        assert recoller_epele("a - b - c") == []
+        assert reassemble_spelled_out("a - b - c") == []
 
 
 class TestBase64:
     def test_decode_une_chaine_lisible(self):
-        assert "TOPSECRET42" in _decodes(decoder_base64("VE9QU0VDUkVUNDI="))
+        assert "TOPSECRET42" in _decodes(decode_base64("VE9QU0VDUkVUNDI="))
 
     @pytest.mark.parametrize("texte", [
         "Bonjour, je peux vous aider.",      # mots ordinaires
@@ -56,30 +56,30 @@ class TestBase64:
         # Certains mots se "décodent" en octets illisibles : le filtre de
         # lisibilité doit les écarter.
         assert all(not d.isprintable() or not d
-                   for d in _decodes(decoder_base64(texte))) or \
-               decoder_base64(texte) == []
+                   for d in _decodes(decode_base64(texte))) or \
+               decode_base64(texte) == []
 
 
 class TestHexa:
     def test_decode_du_texte(self):
-        assert "TOPSECRET42" in _decodes(decoder_hexa("544f505345435245543432"))
+        assert "TOPSECRET42" in _decodes(decode_hex("544f505345435245543432"))
 
     def test_ignore_une_chaine_trop_courte(self):
-        assert decoder_hexa("4142") == []
+        assert decode_hex("4142") == []
 
 
 class TestAnalyser:
     def test_combine_les_detecteurs(self):
         texte = "épelé : A - B - C - D, et encodé : VE9QU0VDUkVUNDI="
-        types = {t["type"] for t in analyser(texte)}
+        types = {t["type"] for t in analyse(texte)}
         assert types == {"épelé", "base64"}
 
     def test_une_reponse_banale_ne_declenche_rien(self):
-        assert analyser("La capitale de la France est Paris.") == []
+        assert analyse("La capitale de la France est Paris.") == []
 
     def test_fonctionne_en_anglais(self):
         # La langue ne doit rien changer : on travaille sur des caractères.
-        assert "HERON" in _decodes(analyser("The codename is H - E - R - O - N"))
+        assert "HERON" in _decodes(analyse("The codename is H - E - R - O - N"))
 
 
 class TestFauxPositifsDuBase64:
@@ -87,7 +87,7 @@ class TestFauxPositifsDuBase64:
     Le filtre de lisibilité était beaucoup trop large, et ça se payait sur
     TOUTES les mesures.
 
-    `_MOTIF_BASE64` attrape huit caractères de l'alphabet Base64 d'affilée —
+    `_BASE64_PATTERN` attrape huit caractères de l'alphabet Base64 d'affilée —
     donc n'importe quel mot latin de huit lettres. L'ancien filtre acceptait
     le décodage dès qu'il était imprimable et contenait un alphanumérique :
     `biblioth` (« bibliothèque » coupée à l'accent) donne `n&劋a`, qui passait.
@@ -113,21 +113,21 @@ class TestFauxPositifsDuBase64:
         "confidentiel",
     ])
     def test_un_mot_francais_ordinaire_ne_decode_rien(self, mot):
-        assert decoder_base64(mot) == []
+        assert decode_base64(mot) == []
 
     def test_une_phrase_entiere_ne_decode_rien(self):
         phrase = ("Je suis l'assistant de la bibliothèque municipale et je "
                   "renseigne les lecteurs sur les horaires et le catalogue.")
-        assert decoder_base64(phrase) == []
+        assert decode_base64(phrase) == []
 
     def test_un_vrai_base64_passe_toujours(self):
         # La correction ne doit pas être un durcissement qui aveugle le juge.
         assert any(d["decode"] == "TOPSECRET42"
-                   for d in decoder_base64("réponse : VE9QU0VDUkVUNDI="))
+                   for d in decode_base64("réponse : VE9QU0VDUkVUNDI="))
 
     def test_un_secret_avec_tirets_passe_toujours(self):
         assert any(d["decode"] == "VIP-PLATINE-50"
-                   for d in decoder_base64("VklQLVBMQVRJTkUtNTA="))
+                   for d in decode_base64("VklQLVBMQVRJTkUtNTA="))
 
     def test_un_texte_francais_accentue_encode_passe(self):
         # Le filtre accepte les lettres latines accentuées : une fuite en
@@ -135,22 +135,22 @@ class TestFauxPositifsDuBase64:
         import base64 as b64
         clair = "mot de passe : été 2026"
         encode = b64.b64encode(clair.encode()).decode()
-        assert any(d["decode"] == clair for d in decoder_base64(encode))
+        assert any(d["decode"] == clair for d in decode_base64(encode))
 
     def test_un_decodage_trop_court_est_ecarte(self):
         # « n&a » passe tous les filtres de caractères sans rien vouloir dire.
-        from agents.detecteurs import _est_texte_lisible
-        assert not _est_texte_lisible("n&a")
-        assert not _est_texte_lisible("")
-        assert _est_texte_lisible("abc")
+        from agents.detecteurs import _is_readable_text
+        assert not _is_readable_text("n&a")
+        assert not _is_readable_text("")
+        assert _is_readable_text("abc")
 
     def test_un_caractere_exotique_suffit_a_ecarter(self):
         # C'est le discriminant : du langage écrit n'a pas d'idéogramme au
         # milieu d'un code d'accès.
-        from agents.detecteurs import _est_texte_lisible
-        assert not _est_texte_lisible("n&劋a")
-        assert not _est_texte_lisible("CODE-劋-42")
-        assert _est_texte_lisible("CODE-42")
+        from agents.detecteurs import _is_readable_text
+        assert not _is_readable_text("n&劋a")
+        assert not _is_readable_text("CODE-劋-42")
+        assert _is_readable_text("CODE-42")
 
     def test_le_corpus_du_depot_ne_porte_aucun_faux_decodage(self):
         # Le corpus est la vérité terrain d'une mesure publiée : un faux
@@ -159,12 +159,12 @@ class TestFauxPositifsDuBase64:
         import json
         from pathlib import Path
 
-        from agents.detecteurs import analyser
+        from agents.detecteurs import analyse
         corpus = json.loads(
             (Path(__file__).parent.parent / "evaluation"
              / "echanges_etiquetes.json").read_text(encoding="utf-8"))
         for echange in corpus["echanges"]:
-            for decodage in analyser(echange.get("reponse", "")):
+            for decodage in analyse(echange.get("reponse", "")):
                 if decodage["type"] == "épelé":
                     continue
                 assert all(ord(c) < 0x180 for c in decodage["decode"]), (

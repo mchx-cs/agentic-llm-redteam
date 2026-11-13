@@ -27,7 +27,7 @@ Phase 2 — ce qui a changé par rapport à la Phase 0, et pourquoi :
 
 import json
 
-from agents.detecteurs import analyser
+from agents.detecteurs import analyse
 from config import PROFIL_ARBITRE
 from llm_client import demander_au_llm
 
@@ -137,7 +137,7 @@ def construire_question_conversation(tours):
     decodages = []
     for tour in tours:
         if tour["role"] == ROLE_CIBLE:
-            decodages += analyser(tour["contenu"])
+            decodages += analyse(tour["contenu"])
     if decodages:
         lignes = [f'- {d["type"]} : "{d["original"]}" → "{d["decode"]}"'
                   for d in decodages]
@@ -157,7 +157,7 @@ def construire_question(payload, reponse):
         f'{ETIQUETTES[ROLE_CIBLE]} : "{reponse}"'
     )
 
-    decodages = analyser(reponse)
+    decodages = analyse(reponse)
     if decodages:
         lignes = [f'- {d["type"]} : "{d["original"]}" → "{d["decode"]}"'
                   for d in decodages]

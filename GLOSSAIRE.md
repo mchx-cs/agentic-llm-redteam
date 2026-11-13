@@ -75,6 +75,17 @@ data migration, not a translation.
 | OWASP family labels (`LLM01:2025 …`) | they are the standard's own strings |
 | garak probe names and tags | they come from upstream |
 
+## Renaming hazards met in practice
+
+A blanket search-and-replace is how this gets done, and it is also how it goes
+wrong. Each entry here cost a broken test run.
+
+| Word | Why a global rename breaks |
+|---|---|
+| `analyser` | two unrelated meanings: *to analyse* (the detectors) and *the analyst* — the model reconnaissance uses to extract the profile. Renaming the detector function hit a pytest fixture named after the analyst, and 19 tests errored on a missing fixture |
+| `taux_de_succes` | the FUNCTION is `success_rate`; the identically-named JSON KEY in `resultat.json` must stay. Rename the call, not the string |
+| keyword arguments | `independants=` / `quoi=` are passed by name from four call sites. Renaming the parameter without them turned 693 green tests into 99 failures in one step — which is exactly why the order runs leaves-to-root |
+
 ## Terms whose translation changes BEHAVIOUR
 
 Flagged here so nobody treats them as prose:
