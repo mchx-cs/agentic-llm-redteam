@@ -764,3 +764,61 @@ class TestChaineDePreuve:
         # Et le rendu Markdown le porte vraiment, pas seulement le JSON.
         rapport = next(tmp_path.glob("*-rapport.md"))
         assert resultat["case_id"] in rapport.read_text(encoding="utf-8")
+
+
+class TestLeSchemaDeDonneesEstEPINGLE:
+    """
+    Les clés de `resultat.json` sont un CONTRAT, pas des identifiants.
+
+    Elles sont persistées dans 18 pistes d'audit scellées, dans le rapport
+    d'exemple commité et dans l'extrait du README. Elles ne bougent qu'à la
+    passe coordonnée de la bascule en anglais, avec une migration.
+
+    Ce test existe parce que le défaut s'est produit TROIS fois pendant cette
+    bascule : un renommage de variable locale attrape la clé homonyme du
+    dictionnaire voisin (`"echanges"`, `"identite"`, `"majuscules"`). Les
+    tests l'ont vu chaque fois, mais par ricochet ; celui-ci le dit
+    directement, et nommera la clé fautive.
+    """
+
+    SCHEMA_RAPPORT = {"campagne", "fiche_cible", "couverture", "constats",
+                      "journal", "adaptation", "perimetre", "portee",
+                      "taux_de_succes"}
+
+    SCHEMA_CAMPAGNE = {"date", "cible", "statut", "essais_prevus",
+                       "essais_lances", "ecourtee", "autorisation",
+                       "payloads", "case_id", "piste", "sceau_piste",
+                       "telemetrie"}
+
+    def test_les_cles_du_rapport_sont_celles_attendues(self):
+        rapport = construire(_resultat(lances=[_payload()]))
+        assert set(rapport) == self.SCHEMA_RAPPORT
+
+    def test_les_cles_de_la_campagne_sont_celles_attendues(self):
+        campagne = construire(_resultat(lances=[_payload()]))["campagne"]
+        assert set(campagne) == self.SCHEMA_CAMPAGNE
+
+    def test_les_cles_de_la_portee_sont_celles_attendues(self):
+        import statistiques
+        portee = statistiques.summarise(0, 3, independent=True)
+        assert set(portee) == {"succes", "essais", "independants", "quoi",
+                               "taux_observe", "borne", "explication"}
+
+    def test_les_cles_du_taux_de_succes_sont_celles_attendues(self):
+        import statistiques
+        taux = statistiques.success_rate(["faille", "resiste"])
+        assert set(taux) == {"comptes", "scorables", "non_scorables",
+                             "succes", "taux"}
+
+    def test_les_etats_scorables_gardent_leurs_noms(self):
+        # Ils pilotent l'ASR et sont écrits dans chaque resultat.json.
+        import statistiques
+        assert set(statistiques.STATES) == {
+            "faille", "resiste", "hallucination", "juge_indecis",
+            "reponse_tronquee"}
+
+    def test_les_transformations_gardent_leurs_noms(self):
+        # Elles apparaissent dans chaque essai consigné, donc dans le rapport
+        # d'exemple et dans l'extrait du README.
+        from agents.attaquant import TRANSFORMATIONS
+        assert set(TRANSFORMATIONS) == {"identite", "majuscules"}
