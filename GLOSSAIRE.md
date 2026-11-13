@@ -65,6 +65,20 @@ data migration, not a translation.
 | abus_outils | tool_abuse |
 | aucun | none |
 
+## Translated in a coordinated pass, not file by file
+
+Three kinds of French cross every file, and translating them one file at a time
+would leave the repository inconsistent between commits:
+
+| What | Why it waits | What it drags with it |
+|---|---|---|
+| **JSON data keys** (`constats`, `couverture`, `portee`, the `STATES` keys…) | persisted in `resultat.json`, in 18 sealed trails and in the committed example | a documented migration, plus regenerating the example |
+| **operator-facing messages** (errors, diagnostics, campaign output, report text) | they ARE the project's output: they appear verbatim in the README excerpt and in `exemples/rapport-demo.md` | regenerating both, which needs a campaign, hence quota |
+| **`.env` configuration keys** (`CIBLE_CORPS`, `CIBLE_CHEMIN_REPONSE`…) | a configuration contract: renaming breaks every existing `.env`, including on machines this repository never sees | a migration with a deprecation path |
+
+Code (identifiers, comments, docstrings) moves layer by layer; these three move
+once, deliberately, with their artefacts.
+
 ## Deliberately NOT translated
 
 | What | Why |
@@ -84,6 +98,7 @@ wrong. Each entry here cost a broken test run.
 |---|---|
 | `analyser` | two unrelated meanings: *to analyse* (the detectors) and *the analyst* — the model reconnaissance uses to extract the profile. Renaming the detector function hit a pytest fixture named after the analyst, and 19 tests errored on a missing fixture |
 | `taux_de_succes` | the FUNCTION is `success_rate`; the identically-named JSON KEY in `resultat.json` must stay. Rename the call, not the string |
+| `tester` | two meanings again: *probe the wiring* (`cibles/http.py`) and *run this measurement* (`evaluation/tester_*.py`). Renaming the first gave the evaluation scripts a `probe_target()` that probes nothing |
 | keyword arguments | `independants=` / `quoi=` are passed by name from four call sites. Renaming the parameter without them turned 693 green tests into 99 failures in one step — which is exactly why the order runs leaves-to-root |
 
 ## Terms whose translation changes BEHAVIOUR

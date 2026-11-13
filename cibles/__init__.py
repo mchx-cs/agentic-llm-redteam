@@ -55,7 +55,7 @@ def choose_target(name=None, profil=None):
     - a known name ("leurre", "mock");
     - "demo", or "demo:N" to pick the defence level (1, 2 or 3);
     - a URL (http:// or https://) → the HTTP adapter configured from `.env`,
-      or from `profil` (see cibles.http.PROFILS_CIBLE) for a known API shape:
+      or from `profil` (see cibles.http.TARGET_PROFILES) for a known API shape:
       describing the JSON body by hand is the most tedious part of wiring a
       target, and for the common case it is entirely predictable;
     - None → the value of CIBLE in `.env`, otherwise the local decoy.

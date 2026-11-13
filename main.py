@@ -31,7 +31,7 @@ from agents.reconnaissance import (CONTEXTES_CONNUS, reconnaitre,
                                     resumer as resumer_fiche)
 from agents.verificateur import verifier_par_rejeu
 from cibles import choose_target
-from cibles.http import PROFILS_CIBLE, tester as tester_cible_http
+from cibles.http import TARGET_PROFILES, probe_target as probe_http_target
 from config import BUDGET_APPELS, BUDGET_TOKENS, CIBLE
 from llm_client import BudgetDepasse, journal, reinitialiser_journal
 from rapport import enregistrer
@@ -342,7 +342,7 @@ def cli(arguments=None):
         "--profil-cible", default=None, metavar="NOM", dest="profil_cible",
         help="forme d'API de la cible, au lieu de décrire CIBLE_CORPS et "
              "CIBLE_CHEMIN_REPONSE à la main : "
-             + ", ".join(PROFILS_CIBLE)
+             + ", ".join(TARGET_PROFILES)
              + ". L'emporte sur CIBLE_CORPS et CIBLE_CHEMIN_REPONSE de .env : "
                "la ligne de commande est plus spécifique. Pour un corps sur mesure, "
                "règle .env et ne passe pas de profil.")
@@ -400,7 +400,7 @@ def cli(arguments=None):
                   file=sys.stderr)
             raise SystemExit(2)
         try:
-            ok = tester_cible_http(nom_cible, profil=arguments.profil_cible)
+            ok = probe_http_target(nom_cible, profil=arguments.profil_cible)
         except RuntimeError as refus:
             print(refus, file=sys.stderr)
             raise SystemExit(2)

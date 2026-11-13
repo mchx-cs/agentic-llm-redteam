@@ -16,13 +16,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from cibles import choose_target
-from cibles.http import (CHEMIN_TEXTE_BRUT, MESSAGE_DE_TEST,
-                         PROFIL_PAR_TYPE_ANNONCE, _profil_conseille,
-                         PROFILS_CIBLE, _diagnostiquer,
-                         lire_reponse,
+from cibles.http import (RAW_TEXT_PATH, PROBE_MESSAGE,
+                         PROFILE_BY_DECLARED_TYPE, _advised_profile,
+                         TARGET_PROFILES, _diagnose,
+                         read_reply,
                          build_http_target,
-                         tester as verifier_branchement,
-                         verifier_gabarit)
+                         probe_target as check_wiring,
+                         check_template)
 from cibles.mock import ask_mock
 
 CORPS_IMBRIQUE = {"messages": [{"role": "user", "content": "{message}"}]}
@@ -151,7 +151,7 @@ class TestPannes:
 
 class TestGabaritMuet:
     """
-    LE faux negatif silencieux, trouve le 2026-11-11 : `_injecter` renvoyait
+    LE faux negatif silencieux, trouve le 2026-11-11 : `_inject` renvoyait
     le gabarit inchange quand le marqueur manquait. Une faute de frappe
     (`{mesage}`), un corps recopie d'une documentation — et la campagne
     envoyait le MEME texte fixe a chaque essai. L'arbitre repondait « aucune
@@ -169,7 +169,7 @@ class TestGabaritMuet:
     ])
     def test_un_gabarit_sans_marqueur_est_refuse(self, corps):
         with pytest.raises(RuntimeError, match="marqueur"):
-            verifier_gabarit(corps)
+            check_template(corps)
 
     @pytest.mark.parametrize("corps", [
         {"message": "{message}"},
@@ -177,7 +177,7 @@ class TestGabaritMuet:
         {"a": {"b": ["{message}"]}},
     ])
     def test_un_gabarit_valide_passe(self, corps):
-        verifier_gabarit(corps)
+        check_template(corps)
 
     def test_le_refus_arrive_a_la_CONSTRUCTION_pas_a_l_envoi(self, base):
         # Decouvrir ca apres avoir consomme du debit sur la cible d'un client
@@ -202,8 +202,8 @@ class TestProfilsDeCible:
 
     def test_chaque_profil_porte_un_gabarit_valide(self):
         # Un profil livre avec un gabarit muet serait pire que pas de profil.
-        for nom, reglages in PROFILS_CIBLE.items():
-            verifier_gabarit(reglages["corps"])
+        for nom, reglages in TARGET_PROFILES.items():
+            check_template(reglages["corps"])
             assert reglages["chemin_reponse"]
             assert reglages["description"]
 
@@ -225,7 +225,7 @@ class TestProfilsDeCible:
         # ne doit pas se traduire par un comportement par defaut silencieux.
         with pytest.raises(RuntimeError) as echec:
             build_http_target("http://127.0.0.1:9/x", profil="openaii")
-        for nom in PROFILS_CIBLE:
+        for nom in TARGET_PROFILES:
             assert nom in str(echec.value)
 
     def test_un_profil_ne_s_applique_pas_a_une_cible_livree(self):
@@ -243,7 +243,7 @@ class TestVerificationDuBranchement:
     @staticmethod
     def _sortie(**kwargs):
         lignes = []
-        ok = verifier_branchement(afficher=lignes.append, **kwargs)
+        ok = check_wiring(show=lignes.append, **kwargs)
         return ok, "\n".join(lignes)
 
     def test_un_branchement_correct_est_declare_valide(self, base):
@@ -255,7 +255,7 @@ class TestVerificationDuBranchement:
         # Une verification precede souvent le mandat : elle ne doit rien
         # laisser dans les journaux de la cible qui ressemble a une attaque.
         for mot in ("ignore", "oublie", "secret", "mot de passe", "DAN"):
-            assert mot.lower() not in MESSAGE_DE_TEST.lower()
+            assert mot.lower() not in PROBE_MESSAGE.lower()
 
     def test_un_chemin_errone_propose_les_chemins_qui_marchent(self, base):
         ok, sortie = self._sortie(url=f"{base}/imbrique",
@@ -390,20 +390,20 @@ class TestDiagnosticDUneReponseNonJSON:
         ("   ", "VIDE"),
     ])
     def test_la_cause_probable_est_nommee(self, brut, attendu):
-        assert attendu in _diagnostiquer(brut)
+        assert attendu in _diagnose(brut)
 
     def test_le_diagnostic_page_dit_comment_trouver_l_endpoint(self):
         # Sans ca, « ce n'est pas une API » laisse le lecteur sans issue.
-        message = _diagnostiquer("<html></html>")
+        message = _diagnose("<html></html>")
         assert "Réseau" in message            # l'onglet du navigateur
         assert "POST" in message
 
     def test_le_diagnostic_flux_nomme_le_reglage(self):
-        assert '"stream": false' in _diagnostiquer('data: {"a":1}')
+        assert '"stream": false' in _diagnose('data: {"a":1}')
 
     def test_un_cas_inconnu_reste_utile(self):
         # Ni page, ni flux, ni vide : on ne devine pas, mais on oriente.
-        message = _diagnostiquer("une réponse en texte brut")
+        message = _diagnose("une réponse en texte brut")
         assert "endpoint" in message
 
     def test_le_diagnostic_accompagne_l_erreur_reelle(self, base):
@@ -439,76 +439,76 @@ class TestReponsesNonJSON:
     # --- Texte brut --------------------------------------------------------
 
     def test_le_corps_entier_est_pris_tel_quel(self):
-        assert lire_reponse("Bonjour, je suis le bot.",
-                            CHEMIN_TEXTE_BRUT) == "Bonjour, je suis le bot."
+        assert read_reply("Bonjour, je suis le bot.",
+                            RAW_TEXT_PATH) == "Bonjour, je suis le bot."
 
     def test_le_texte_brut_n_essaie_meme_pas_de_lire_du_json(self):
         # Une application maison peut renvoyer n'importe quoi : des accolades
         # dans la phrase du bot ne doivent pas devenir une erreur de parsing.
         phrase = 'Il a dit {"bonjour"} puis est parti.'
-        assert lire_reponse(phrase, CHEMIN_TEXTE_BRUT) == phrase
+        assert read_reply(phrase, RAW_TEXT_PATH) == phrase
 
     # --- Flux SSE ----------------------------------------------------------
 
     def test_les_fragments_sont_recolles_dans_l_ordre(self):
-        assert lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI) == (
+        assert read_reply(FLUX_OPENAI, CHEMIN_FLUX_OPENAI) == (
             "Le code est ARCHIVES-7731.")
 
     def test_les_lignes_de_controle_sont_ignorees(self):
         # Un flux contient des commentaires, des pings, des evenements sans
         # contenu et une sentinelle : s'arreter au premier perdrait la
         # reponse entiere alors qu'elle est la.
-        assert "ping" not in lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
-        assert "[DONE]" not in lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
-        assert "assistant" not in lire_reponse(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
+        assert "ping" not in read_reply(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
+        assert "[DONE]" not in read_reply(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
+        assert "assistant" not in read_reply(FLUX_OPENAI, CHEMIN_FLUX_OPENAI)
 
     def test_un_fragment_illisible_ne_perd_pas_les_autres(self):
         flux = (FLUX_OPENAI.replace("data: [DONE]",
                                     "data: {ceci n'est pas du json}\n\n"
                                     "data: [DONE]"))
-        assert lire_reponse(flux, CHEMIN_FLUX_OPENAI) == (
+        assert read_reply(flux, CHEMIN_FLUX_OPENAI) == (
             "Le code est ARCHIVES-7731.")
 
     def test_un_chemin_interne_faux_le_dit_clairement(self):
         # Erreur la plus probable : le chemin DANS chaque fragment est
         # different de celui d'une reponse complete (delta, pas message).
         with pytest.raises(ValueError, match="aucun fragment lisible"):
-            lire_reponse(FLUX_OPENAI, "@flux:choices.0.message.content")
+            read_reply(FLUX_OPENAI, "@flux:choices.0.message.content")
 
     def test_un_flux_sans_aucun_contenu_echoue(self):
         with pytest.raises(ValueError, match="aucun fragment lisible"):
-            lire_reponse("data: [DONE]\n\n", CHEMIN_FLUX_OPENAI)
+            read_reply("data: [DONE]\n\n", CHEMIN_FLUX_OPENAI)
 
     # --- Le JSON reste le defaut ------------------------------------------
 
     def test_un_chemin_ordinaire_est_inchange(self):
-        assert lire_reponse('{"reply": "salut"}', "reply") == "salut"
+        assert read_reply('{"reply": "salut"}', "reply") == "salut"
 
     def test_une_reponse_non_json_reste_une_ERREUR_par_defaut(self):
         # Deviner ferait passer une page d'erreur HTML pour la reponse d'un
         # chatbot, et l'arbitre jugerait du HTML. Les deux formes ci-dessus
         # sont des cas DECLARES, jamais devines.
         with pytest.raises(json.JSONDecodeError):
-            lire_reponse("<html>erreur</html>", "reply")
+            read_reply("<html>erreur</html>", "reply")
 
     # --- Profils correspondants -------------------------------------------
 
     @pytest.mark.parametrize("profil, chemin", [
         ("openai-flux", CHEMIN_FLUX_OPENAI),
-        ("texte", CHEMIN_TEXTE_BRUT),
+        ("texte", RAW_TEXT_PATH),
     ])
     def test_un_profil_existe_pour_chaque_forme(self, profil, chemin):
-        assert PROFILS_CIBLE[profil]["chemin_reponse"] == chemin
-        verifier_gabarit(PROFILS_CIBLE[profil]["corps"])
+        assert TARGET_PROFILES[profil]["chemin_reponse"] == chemin
+        check_template(TARGET_PROFILES[profil]["corps"])
 
     def test_le_profil_de_flux_demande_bien_un_flux(self):
         # Incoherent autrement : lire un flux en demandant du non-flux.
-        assert PROFILS_CIBLE["openai-flux"]["corps"]["stream"] is True
+        assert TARGET_PROFILES["openai-flux"]["corps"]["stream"] is True
 
     def test_le_diagnostic_propose_la_lecture_du_flux(self, base):
         # Avant, il ne proposait que « stream: false », ce qui suppose qu'on
         # controle le corps — faux quand on teste l'application d'un client.
-        message = _diagnostiquer('data: {"a":1}')
+        message = _diagnose('data: {"a":1}')
         assert "@flux:" in message
         assert "openai-flux" in message
 
@@ -531,20 +531,20 @@ class TestFormatAnnonceParLaCible:
     ])
     def test_le_type_annonce_nomme_le_profil(self, type_annonce, profil,
                                              chemin):
-        message = _diagnostiquer("peu importe le corps", type_annonce)
+        message = _diagnose("peu importe le corps", type_annonce)
         assert "ANNONCE" in message
         assert f"--profil-cible {profil}" in message
         assert chemin in message
 
     def test_le_profil_conseille_existe_vraiment(self):
         # Conseiller un profil inexistant serait pire que ne rien conseiller.
-        for profil in PROFIL_PAR_TYPE_ANNONCE.values():
+        for profil in PROFILE_BY_DECLARED_TYPE.values():
             if profil is not None:
-                assert profil in PROFILS_CIBLE
+                assert profil in TARGET_PROFILES
 
     def test_du_html_annonce_reste_une_erreur_d_adresse(self):
         # text/html n'a PAS de profil : c'est qu'on a vise la page.
-        message = _diagnostiquer("sans aucune balise", "text/html")
+        message = _diagnose("sans aucune balise", "text/html")
         assert "PAGE WEB" in message
         assert "profil-cible" not in message
 
@@ -552,14 +552,14 @@ class TestFormatAnnonceParLaCible:
         # LE garde-fou. Bien des passerelles renvoient une page d'erreur
         # annoncee `application/json`. Si la declaration faisait basculer le
         # mode de lecture, l'arbitre se retrouverait a juger du HTML.
-        message = _diagnostiquer("<html>502 Bad Gateway</html>",
+        message = _diagnose("<html>502 Bad Gateway</html>",
                                  "application/json")
         assert "PAGE WEB" in message
 
     def test_sans_annonce_on_retombe_sur_le_corps(self):
         # Une cible qui n'annonce rien doit rester diagnosticable.
-        assert "FLUX" in _diagnostiquer('data: {"a":1}', "")
-        assert "PAGE WEB" in _diagnostiquer("<html></html>", "")
+        assert "FLUX" in _diagnose('data: {"a":1}', "")
+        assert "PAGE WEB" in _diagnose("<html></html>", "")
 
     def test_le_type_annonce_figure_dans_l_erreur(self, base):
         # Bout en bout : l'erreur cite ce que la cible a declare, pour qu'on
@@ -571,7 +571,7 @@ class TestFormatAnnonceParLaCible:
 
     def test_un_type_inconnu_ne_conseille_rien(self):
         for inconnu in ("application/xml", "image/png", "", None):
-            assert _profil_conseille(inconnu) is None
+            assert _advised_profile(inconnu) is None
 
 
 class TestOrdreDePriorite:
