@@ -2756,6 +2756,75 @@ laissé croire qu'une campagne enchaîne les tours, ce qu'elle ne fait pas.
 
 675 tests `pytest`, toujours sans aucun appel LLM.
 
+**Un faux positif des détecteurs polluait TOUTES les mesures depuis le début
+(2026-11-13).** Trouvé en générant une pré-passe mécanique pour accélérer l'étiquetage —
+pas en lisant le code, pas par un test.
+
+`_MOTIF_BASE64` attrape huit caractères de l'alphabet Base64 d'affilée, donc n'importe
+quel mot latin de huit lettres. Et `_est_texte_lisible` acceptait le décodage dès qu'il
+était imprimable et contenait un alphanumérique. Résultat : `biblioth` —
+« bibliothèque » coupée à l'accent, puisque le motif ne prend pas les accents — se décode
+en `n&劋a`, qui passait le filtre.
+
+**Mesuré : 73 entrées sur 119** de la récolte portaient un faux décodage, dont 126
+occurrences du seul `biblioth`. Et surtout **quatre entrées du corpus étiqueté** : D13-2,
+D14-2, D20-2 en `dev`, et **R09-2 dans le jeu GELÉ**.
+
+Ce n'est pas cosmétique. Ces décodages partent dans la consigne de l'arbitre sous un
+titre « Décodage automatique » qui lui dit explicitement de les juger *comme si le chatbot
+les avait écrits*. On lui envoyait donc du charabia à juger — sur six entrées sur dix
+d'une récolte, et sur quatre entrées de chaque évaluation, y compris les **trois
+consultations du jeu gelé**.
+
+**Le filtre exige maintenant que TOUS les caractères soient plausibles dans du langage
+écrit** : ASCII imprimable, lettres accentuées latines (Latin-1 et Latin étendu A),
+quelques signes typographiques, et au moins trois caractères alphanumériques. Vérifié des
+trois côtés : les quatre vrais décodages du corpus passent toujours (`TOPSECRET42`,
+`VIP-PLATINE-50`), les quatre faux disparaissent, un texte français accentué encodé
+passe, et la récolte tombe de 73 à **0**.
+
+Compromis assumé et écrit dans le code : une fuite encodée qui contiendrait un idéogramme
+serait désormais ratée. Rater une forme rare coûte moins cher que noyer le juge dans du
+bruit six fois sur dix.
+
+**Ce que ce défaut dit de la couverture des tests, et c'est le plus instructif.** Les 675
+tests du dépôt passaient **à l'identique** avec le filtre trop large et avec le filtre
+corrigé. `tests/test_detecteurs.py` avait bien des tests de faux positifs — mais sur des
+mots COURTS (« question »), qui échouaient au décodage pour une autre raison. Aucun ne
+prenait un mot de huit lettres, c'est-à-dire exactement la longueur que le motif exige.
+
+Huit tests ajoutés, dont les mots réellement rencontrés (`biblioth`, `demandez`,
+`diverses`, `diffuser`) et un qui vérifie que **le corpus du dépôt ne porte aucun faux
+décodage** — parce qu'un corpus est la vérité terrain d'une mesure publiée. La mutation
+inverse (revenir à l'ancien filtre) fait échouer huit tests.
+
+**Conséquence à trancher, et elle coûte du quota.** Les mesures publiées
+(`dev` 89/100/96, jeu gelé 89/100/96) ont été obtenues avec ce bruit. Rien ne dit qu'elles
+changent — le juge a peut-être ignoré le charabia — mais rien ne dit le contraire, et
+l'unique faux positif du jeu gelé porte précisément sur une entrée polluée (R09-2,
+`controle`, attendu `false`). Refaire `dev` coûte ~100 000 tokens ; le jeu gelé ~35 000,
+et sa consultation est un « moment clé » au sens de la règle du projet, donc légitime et
+journalisée. **À décider, pas à supposer.**
+
+**La pré-passe elle-même** (`evaluation/prepasse_etiquetage.py`) ne propose AUCUN verdict,
+et c'est sa raison d'être. Elle donne quatre faits strictement mécaniques : la chaîne
+exacte du secret et **par qui** elle est dite (un secret écrit par l'attaquant n'est pas
+une divulgation), ce que `detecteurs.py` décode des réponses de la cible, le nombre de
+caractères du prompt système recopiés mot pour mot, et la présence d'un marqueur d'appel
+d'outil.
+
+La frontière est celle que le projet tient déjà : `detecteurs.py` décode AVANT le juge, et
+`collecter_echanges.py` n'enregistre jamais son avis. **Décoder aide à voir ; conclure
+appartient à l'auteur.** Dès qu'un signal demanderait d'interpréter — « est-ce un
+refus ? », « un résumé des consignes compte-t-il ? » — il sort du périmètre, parce qu'une
+suggestion mécanique sur une question d'interprétation deviendrait l'étiquette par
+paresse.
+
+Sur les 119 entrées : le secret est dit par la cible dans **10**, dont **5 invisibles dans
+la dernière réponse**, et écrit par l'attaquant dans 2 (les cas A03/A04, écrits pour ça).
+
+689 tests `pytest`, toujours sans aucun appel LLM.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des

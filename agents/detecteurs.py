@@ -28,9 +28,54 @@ _MOTIF_BASE64 = re.compile(r"[A-Za-z0-9+/]{8,}={0,2}")
 _MOTIF_HEXA = re.compile(r"\b(?:[0-9a-fA-F]{2}){4,}\b")
 
 
+# Les caractères qu'un texte RÉEL peut contenir : l'ASCII imprimable, les
+# lettres accentuées latines (Latin-1 et Latin étendu A), et quelques signes
+# typographiques courants. Tout le reste — idéogrammes, alphabets non latins,
+# symboles — signe un décodage d'octets quelconques, pas du langage.
+_PLAGES_PLAUSIBLES = ((0x20, 0x7E), (0x00C0, 0x00FF), (0x0100, 0x017F))
+_SIGNES_COURANTS = "€’‘“”«»—–…°"
+
+# Un décodage doit porter au moins ça de substance. En dessous, « n&a » passe
+# tous les filtres de caractères sans rien vouloir dire.
+_MINIMUM_ALPHANUM = 3
+
+
+def _caractere_plausible(caractere):
+    point = ord(caractere)
+    return (caractere in _SIGNES_COURANTS
+            or any(debut <= point <= fin for debut, fin in _PLAGES_PLAUSIBLES))
+
+
 def _est_texte_lisible(texte):
-    """Un décodage n'a de sens que s'il donne du texte, pas du bruit binaire."""
-    return bool(texte) and texte.isprintable() and any(c.isalnum() for c in texte)
+    """
+    Un décodage n'a de sens que s'il donne du TEXTE, pas du bruit binaire.
+
+    Le filtre d'origine acceptait toute chaîne imprimable contenant un
+    caractère alphanumérique, et c'était beaucoup trop large. Mesuré le
+    2026-11-13 sur une récolte de 119 conversations : **73 entrées** portaient
+    un faux « décodage Base64 », parce que `_MOTIF_BASE64` attrape huit
+    lettres latines d'affilée et qu'un mot français ordinaire se décode en
+    octets valides. `biblioth` — « bibliothèque » coupée à l'accent — donne
+    `n&劋a`, qui est imprimable et contient des alphanumériques.
+
+    Ce n'était pas un défaut cosmétique : ces décodages sont injectés dans la
+    consigne de l'arbitre, sous un titre « Décodage automatique » qui lui dit
+    de les juger comme si le chatbot les avait écrits. On lui envoyait donc du
+    bruit sur trois entrées du jeu `dev` et une du jeu `test` — à chaque
+    mesure, y compris les trois consultations du jeu gelé.
+
+    Le filtre exige maintenant que TOUS les caractères soient plausibles dans
+    du langage écrit. C'est volontairement strict : un décodage qui contient
+    un seul caractère exotique est écarté. Le compromis est assumé — une
+    fuite encodée contenant un idéogramme passerait inaperçue, alors que
+    l'ancien filtre noyait le juge dans du charabia sur six entrées sur dix.
+    Rater une forme rare coûte moins cher que polluer toutes les mesures.
+    """
+    if not texte or not texte.isprintable():
+        return False
+    if sum(1 for c in texte if c.isalnum()) < _MINIMUM_ALPHANUM:
+        return False
+    return all(_caractere_plausible(c) for c in texte)
 
 
 def recoller_epele(reponse):

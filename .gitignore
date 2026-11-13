@@ -16,6 +16,8 @@ __pycache__/
 # Fichier de travail : régénéré par collecter_echanges, vidé par etiqueter --integrer
 evaluation/a_etiqueter.json
 evaluation/a_etiqueter_conversations.json
+# Pré-passe mécanique : dérivée de la récolte, régénérable.
+evaluation/prepasse.md
 
 # Rapports produits par les campagnes : horodatés, régénérables.
 # Un rapport d'EXEMPLE sera commité à part (phase 12), pas ceux-ci.
