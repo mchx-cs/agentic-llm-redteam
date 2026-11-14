@@ -12,8 +12,8 @@ import pytest
 
 import agents.attaquant
 from agents.attaquant import _technique_from_probe, load_library
-from payloads.exporter_garak import principal as exporter
-from payloads.source_garak import HORS_SUJET
+from payloads.exporter_garak import main as exporter
+from payloads.source_garak import OUT_OF_SCOPE
 from payloads.valider import valider
 
 
@@ -244,7 +244,7 @@ class TestExportVide:
         faux = types.ModuleType("garak")
         faux.__version__ = "0.17.1"
         monkeypatch.setitem(sys.modules, "garak", faux)
-        monkeypatch.setattr(module, "collecter",
+        monkeypatch.setattr(module, "collect",
                             lambda **k: ([], [{"nom": "x", "motif": "y"}]))
 
         sortie = tmp_path / "garak.json"
@@ -270,17 +270,17 @@ class TestDetectionDeVersion:
     def test_le_retard_est_detecte(self, monkeypatch, locale, distante,
                                    attendu):
         import payloads.source_garak as source
-        monkeypatch.setattr(source, "derniere_version", lambda delai=10: distante)
-        assert source.comparer_a_l_instantane(locale)[1] is attendu
+        monkeypatch.setattr(source, "latest_version", lambda timeout=10: distante)
+        assert source.compare_to_snapshot(locale)[1] is attendu
 
     def test_un_reseau_indisponible_ne_bloque_rien(self, monkeypatch):
         # Une campagne ne doit pas dépendre de GitHub.
         import payloads.source_garak as source
-        monkeypatch.setattr(source, "_recuperer",
+        monkeypatch.setattr(source, "_fetch",
                             lambda *a, **k: (_ for _ in ()).throw(
                                 RuntimeError("hors ligne")))
-        assert source.derniere_version() is None
-        assert source.comparer_a_l_instantane("0.17.1") == (None, False)
+        assert source.latest_version() is None
+        assert source.compare_to_snapshot("0.17.1") == (None, False)
 
 
 class TestRedondanceAvecGarak:
@@ -311,20 +311,20 @@ class TestRedondanceAvecGarak:
         # L'instantané est FABRIQUÉ pour le test, comme partout dans ce
         # fichier : un test qui lirait l'instantané local passerait ou non
         # selon qu'on a lancé l'exportateur.
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         instantane([_sonde(familles=("owasp:llm01",)),
                     _sonde(nom="probes.leakreplay.Fake",
                            familles=("owasp:llm02",))])
-        assert techniques_redondantes(load_library()) == []
+        assert redundant_techniques(load_library()) == []
 
     def test_une_sonde_qui_comble_le_trou_est_signalee(self):
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         bibliotheque = self._bibliotheque(
             familles_garak=["LLM06:2025 Excessive Agency"],
             maison=[{"id": "abus-outils",
                      "famille_owasp": "LLM06:2025 Excessive Agency",
                      "modeles": ["a", "b"]}])
-        signalees = techniques_redondantes(bibliotheque)
+        signalees = redundant_techniques(bibliotheque)
         assert [t["id"] for t in signalees] == ["abus-outils"]
         assert signalees[0]["payloads"] == 2
         assert signalees[0]["sondes"] == 1
@@ -333,22 +333,22 @@ class TestRedondanceAvecGarak:
         # Le rapprochement porte sur `LLM06`, pas sur le libellé complet :
         # faire dépendre la règle du millésime la casserait à la prochaine
         # révision du Top 10.
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         bibliotheque = self._bibliotheque(
             familles_garak=["LLM06:2027 Excessive Agency"],
             maison=[{"id": "abus-outils",
                      "famille_owasp": "LLM06:2025 Excessive Agency",
                      "modeles": ["a"]}])
-        assert len(techniques_redondantes(bibliotheque)) == 1
+        assert len(redundant_techniques(bibliotheque)) == 1
 
     def test_une_autre_famille_ne_declenche_rien(self):
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         bibliotheque = self._bibliotheque(
             familles_garak=["LLM01:2025 Prompt Injection"],
             maison=[{"id": "abus-outils",
                      "famille_owasp": "LLM06:2025 Excessive Agency",
                      "modeles": ["a"]}])
-        assert techniques_redondantes(bibliotheque) == []
+        assert redundant_techniques(bibliotheque) == []
 
     def test_une_famille_secondaire_ne_comble_aucun_trou(self):
         # Dix sondes portent `owasp:llm06` en SECONDAIRE, et elles visent
@@ -356,7 +356,7 @@ class TestRedondanceAvecGarak:
         # XSS, injection Jinja ou SQL — pas l'appel d'outil. Les compter ici
         # annoncerait un trou comblé qui ne l'est pas, et ferait retirer
         # quatre payloads qui testent autre chose.
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         bibliotheque = {"techniques": [
             {"id": "garak-web", "source": "garak",
              "famille_owasp": "LLM02:2025 Sensitive Information Disclosure",
@@ -365,37 +365,37 @@ class TestRedondanceAvecGarak:
             {"id": "abus-outils",
              "famille_owasp": "LLM06:2025 Excessive Agency",
              "modeles": ["a"]}]}
-        assert techniques_redondantes(bibliotheque) == []
+        assert redundant_techniques(bibliotheque) == []
 
     def test_une_technique_maison_vide_n_est_pas_signalee(self):
         # `divulgation-information` est vide : il n'y a rien à retirer, et le
         # planificateur signale déjà son absence de payload. La signaler ici
         # noierait le seul cas qui demande une décision.
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         bibliotheque = self._bibliotheque(
             familles_garak=["LLM02:2025 Sensitive Information Disclosure"],
             maison=[{"id": "divulgation-information",
                      "famille_owasp": "LLM02:2025 Sensitive Information "
                                       "Disclosure",
                      "modeles": []}])
-        assert techniques_redondantes(bibliotheque) == []
+        assert redundant_techniques(bibliotheque) == []
 
     def test_le_temoin_anodin_n_est_jamais_redondant(self):
         # `controle` n'a pas de famille OWASP : c'est le témoin, et aucune
         # sonde offensive ne le remplace.
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         bibliotheque = self._bibliotheque(
             familles_garak=["LLM01:2025 Prompt Injection"],
             maison=[{"id": "controle", "famille_owasp": None,
                      "modeles": ["bonjour"]}])
-        assert techniques_redondantes(bibliotheque) == []
+        assert redundant_techniques(bibliotheque) == []
 
     def test_une_sonde_garak_n_est_pas_une_dette_maison(self):
-        from payloads.source_garak import techniques_redondantes
+        from payloads.source_garak import redundant_techniques
         bibliotheque = self._bibliotheque(
             familles_garak=["LLM01:2025 Prompt Injection",
                             "LLM01:2025 Prompt Injection"])
-        assert techniques_redondantes(bibliotheque) == []
+        assert redundant_techniques(bibliotheque) == []
 
 
 class TestProvenanceDansLeRapport:
@@ -427,5 +427,5 @@ class TestPerimetre:
     def test_les_sujets_hors_perimetre_sont_nommes(self):
         # Ils mesurent la modération du modèle, pas sa résistance à
         # l'injection, et l'arbitre n'a aucun critère pour les juger.
-        assert "harmful_behaviors.json" in HORS_SUJET
-        assert all(raison for raison in HORS_SUJET.values())
+        assert "harmful_behaviors.json" in OUT_OF_SCOPE
+        assert all(raison for raison in OUT_OF_SCOPE.values())

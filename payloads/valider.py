@@ -1,19 +1,19 @@
 """
-payloads/valider.py — Vérifie la bibliothèque avant de lancer une campagne.
+payloads/valider.py — Checks the library before a campaign is launched.
 
-La bibliothèque est un fichier de DONNÉES, édité à la main ou alimenté par
-une source extérieure (garak, phase 7). Une erreur y est silencieuse : un
-`{objectif}` oublié enverrait toujours le même texte, un prérequis mal
-orthographié ne serait jamais évalué, et un identifiant en double rendrait
-les rapports illisibles. Rien de tout ça ne lève d'exception — ça produit
-juste une campagne qui ne teste pas ce qu'on croit.
+The library is a DATA file, edited by hand or fed from an outside source
+(garak, phase 7). A mistake in it is silent: a forgotten `{objectif}` would
+always send the same text, a misspelled prerequisite would never be
+evaluated, and a duplicate identifier would make the reports unreadable. None
+of that raises an exception — it just produces a campaign that does not test
+what you think.
 
-D'où cette commande, à lancer après chaque modification :
+Hence this command, to be run after every change:
 
     python -m payloads.valider
 
-Elle sort en code 1 si quelque chose cloche, pour pouvoir être enchaînée
-dans un script ou en intégration continue.
+It exits with code 1 if something is wrong, so it can be chained in a script
+or in continuous integration.
 """
 
 import json
@@ -23,9 +23,9 @@ import sys
 from agents.attaquant import (SNAPSHOT_AGE_SUSPECT, LIBRARY_FILE,
                               TRANSFORMATIONS)
 
-# Les familles OWASP acceptées. Une famille inconnue n'est pas forcément une
-# faute — la liste évolue — mais elle mérite qu'on la signale.
-FAMILLES_CONNUES = {
+# The accepted OWASP families. An unknown family is not necessarily a mistake
+# — the list evolves — but it deserves to be flagged.
+KNOWN_FAMILIES = {
     "LLM01:2025 Prompt Injection",
     "LLM02:2025 Sensitive Information Disclosure",
     "LLM03:2025 Supply Chain",
@@ -38,161 +38,162 @@ FAMILLES_CONNUES = {
     "LLM10:2025 Unbounded Consumption",
 }
 
-MOTIF_IDENTIFIANT = re.compile(r"^[a-z0-9-]+$")
+IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9-]+$")
 
 
-def _prerequis_connus():
-    # Importé ici : le planificateur importe l'attaquant, et on évite ainsi
-    # une boucle d'imports au chargement du module.
+def _known_prerequisites():
+    # Imported here: the planner imports the attacker, and this avoids an
+    # import cycle at module load.
     from agents.planificateur import PREREQUISITES
     return set(PREREQUISITES)
 
 
-def valider(bibliotheque):
-    """Renvoie (erreurs, avertissements) : deux listes de messages."""
-    erreurs, avertissements = [], []
-    prerequis_connus = _prerequis_connus()
+def valider(library):
+    """Returns (errors, warnings): two lists of messages."""
+    errors, warnings = [], []
+    known_prerequisites = _known_prerequisites()
 
-    techniques = bibliotheque.get("techniques")
-    objectifs = bibliotheque.get("objectifs")
-    if not isinstance(techniques, list) or not isinstance(objectifs, list):
+    techniques = library.get("techniques")
+    objectives = library.get("objectifs")
+    if not isinstance(techniques, list) or not isinstance(objectives, list):
         return ["La bibliothèque doit contenir les listes 'techniques' et "
                 "'objectifs'."], []
 
     # --- Techniques ---------------------------------------------------------
-    vus = set()
-    for numero, technique in enumerate(techniques, start=1):
-        nom = technique.get("id") or f"technique n°{numero}"
+    seen = set()
+    for number, technique in enumerate(techniques, start=1):
+        name = technique.get("id") or f"technique n°{number}"
 
-        manquants = [c for c in ("id", "famille_owasp", "description",
-                                 "prerequis", "modeles") if c not in technique]
-        if manquants:
-            erreurs.append(f"{nom} : champ(s) manquant(s) — "
-                           f"{', '.join(manquants)}.")
+        missing = [f for f in ("id", "famille_owasp", "description",
+                               "prerequis", "modeles") if f not in technique]
+        if missing:
+            errors.append(f"{name} : champ(s) manquant(s) — "
+                          f"{', '.join(missing)}.")
             continue
 
-        if not MOTIF_IDENTIFIANT.match(technique["id"]):
-            erreurs.append(f"{nom} : l'identifiant doit être en minuscules, "
-                           f"chiffres et tirets.")
-        if technique["id"] in vus:
-            erreurs.append(f"{nom} : identifiant en double.")
-        vus.add(technique["id"])
+        if not IDENTIFIER_PATTERN.match(technique["id"]):
+            errors.append(f"{name} : l'identifiant doit être en minuscules, "
+                          f"chiffres et tirets.")
+        if technique["id"] in seen:
+            errors.append(f"{name} : identifiant en double.")
+        seen.add(technique["id"])
 
-        for prerequis in technique["prerequis"]:
-            if prerequis not in prerequis_connus:
-                # Le planificateur ignorerait silencieusement ce prérequis,
-                # et la technique serait lancée contre des cibles où elle
-                # n'a aucun sens.
-                erreurs.append(
-                    f"{nom} : prérequis '{prerequis}' inconnu du "
+        for prerequisite in technique["prerequis"]:
+            if prerequisite not in known_prerequisites:
+                # The planner would silently ignore this prerequisite, and the
+                # technique would be launched against targets where it makes
+                # no sense at all.
+                errors.append(
+                    f"{name} : prérequis '{prerequisite}' inconnu du "
                     f"planificateur. Connus : "
-                    f"{', '.join(sorted(prerequis_connus))}.")
+                    f"{', '.join(sorted(known_prerequisites))}.")
 
-        famille = technique["famille_owasp"]
-        if famille is not None and famille not in FAMILLES_CONNUES:
-            avertissements.append(
-                f"{nom} : famille OWASP '{famille}' non reconnue. "
+        family = technique["famille_owasp"]
+        if family is not None and family not in KNOWN_FAMILIES:
+            warnings.append(
+                f"{name} : famille OWASP '{family}' non reconnue. "
                 f"Faute de frappe, ou liste à mettre à jour ?")
 
-        for modele in technique["modeles"]:
-            if not isinstance(modele, str) or not modele.strip():
-                erreurs.append(f"{nom} : un modèle est vide.")
-            elif "{objectif}" not in modele:
-                # Sans le marqueur, la technique enverrait toujours le même
-                # texte, quel que soit ce qu'on cherche à obtenir.
-                erreurs.append(
-                    f"{nom} : le modèle {modele[:40]!r} ne contient pas "
+        for template in technique["modeles"]:
+            if not isinstance(template, str) or not template.strip():
+                errors.append(f"{name} : un modèle est vide.")
+            elif "{objectif}" not in template:
+                # Without the marker, the technique would always send the same
+                # text, whatever we are trying to obtain.
+                errors.append(
+                    f"{name} : le modèle {template[:40]!r} ne contient pas "
                     f"'{{objectif}}' — il ignorerait l'objectif visé.")
             else:
                 try:
-                    modele.format(objectif="X")
-                except (KeyError, IndexError) as erreur:
-                    erreurs.append(
-                        f"{nom} : accolade non échappée dans {modele[:40]!r} "
-                        f"({erreur}). Doubler les accolades littérales.")
+                    template.format(objectif="X")
+                except (KeyError, IndexError) as error:
+                    errors.append(
+                        f"{name} : accolade non échappée dans "
+                        f"{template[:40]!r} ({error}). Doubler les accolades "
+                        f"littérales.")
 
-        # Les payloads complets (venus de garak) ne portent PAS de
-        # `{objectif}` : ce sont des prompts entiers. Ils n'ont donc rien à
-        # faire dans `modeles`, et on vérifie seulement qu'ils sont du texte.
+        # Complete payloads (from garak) carry NO `{objectif}`: they are whole
+        # prompts. They therefore have no business in `modeles`, and we only
+        # check that they are text.
         for payload in technique.get("payloads_complets", []):
             if not isinstance(payload, str) or not payload.strip():
-                erreurs.append(f"{nom} : un payload complet est vide.")
+                errors.append(f"{name} : un payload complet est vide.")
 
         if (not technique["modeles"] and not technique.get("payloads_complets")
                 and technique["famille_owasp"]):
-            avertissements.append(
-                f"{nom} : aucun modèle ni payload, la technique ne sera jamais "
-                f"lancée (le planificateur le signalera dans le rapport).")
+            warnings.append(
+                f"{name} : aucun modèle ni payload, la technique ne sera "
+                f"jamais lancée (le planificateur le signalera dans le "
+                f"rapport).")
 
-    # --- Objectifs ----------------------------------------------------------
-    vus = set()
-    for numero, objectif in enumerate(objectifs, start=1):
-        nom = objectif.get("id") or f"objectif n°{numero}"
-        if not objectif.get("formulation"):
-            erreurs.append(f"{nom} : formulation vide.")
-        if objectif.get("id") in vus:
-            erreurs.append(f"{nom} : identifiant en double.")
-        vus.add(objectif.get("id"))
+    # --- Objectives ---------------------------------------------------------
+    seen = set()
+    for number, objective in enumerate(objectives, start=1):
+        name = objective.get("id") or f"objectif n°{number}"
+        if not objective.get("formulation"):
+            errors.append(f"{name} : formulation vide.")
+        if objective.get("id") in seen:
+            errors.append(f"{name} : identifiant en double.")
+        seen.add(objective.get("id"))
 
     if not any(t.get("modeles") or t.get("payloads_complets")
                for t in techniques):
-        avertissements.append(
+        warnings.append(
             "Aucune technique n'a de modèle ni de payload : une campagne "
             "n'enverra rien.")
 
-    # Fraîcheur de l'instantané garak : il publie environ tous les 37 jours
-    # (médiane mesurée le 2026-11-10 sur ses douze dernières versions), donc
-    # au-delà de deux mois une version a sans doute été manquée. On signale,
-    # on ne bloque pas.
-    age = (bibliotheque.get("_garak") or {}).get("age_jours")
+    # Freshness of the garak snapshot: it releases roughly every 37 days
+    # (median measured on 2026-11-10 over its last twelve versions), so past
+    # two months a version has probably been missed. We flag, we do not block.
+    age = (library.get("_garak") or {}).get("age_jours")
     if age is not None and age > SNAPSHOT_AGE_SUSPECT:
-        avertissements.append(
+        warnings.append(
             f"instantané garak vieux de {age} jours : une resynchronisation "
             f"vaut sans doute le coup (voir payloads/exporter_garak.py).")
 
-    return erreurs, avertissements
+    return errors, warnings
 
 
-def principal():
-    # On valide la bibliothèque TELLE QUE LA CAMPAGNE LA VERRA, instantané
-    # garak compris : une sonde mal traduite doit être repérée ici, pas au
-    # milieu d'une campagne.
+def main():
+    # We validate the library AS THE CAMPAIGN WILL SEE IT, garak snapshot
+    # included: a badly translated probe must be caught here, not halfway
+    # through a campaign.
     from agents.attaquant import load_library
 
-    bibliotheque = load_library()
-    erreurs, avertissements = valider(bibliotheque)
+    library = load_library()
+    errors, warnings = valider(library)
 
-    techniques = bibliotheque.get("techniques", [])
-    utilisables = [t for t in techniques
-                   if t.get("modeles") or t.get("payloads_complets")]
-    objectifs = len(bibliotheque.get("objectifs", []))
-    combinaisons = len(TRANSFORMATIONS) * (
-        sum(len(t.get("modeles", [])) for t in utilisables) * objectifs
-        + sum(len(t.get("payloads_complets", [])) for t in utilisables))
+    techniques = library.get("techniques", [])
+    usable = [t for t in techniques
+              if t.get("modeles") or t.get("payloads_complets")]
+    objectives = len(library.get("objectifs", []))
+    combinations = len(TRANSFORMATIONS) * (
+        sum(len(t.get("modeles", [])) for t in usable) * objectives
+        + sum(len(t.get("payloads_complets", [])) for t in usable))
 
     source = ""
-    if bibliotheque.get("_garak"):
-        garak = bibliotheque["_garak"]
+    if library.get("_garak"):
+        garak = library["_garak"]
         age = garak.get("age_jours")
         source = (f"\n  dont {garak['sondes']} sonde(s) garak "
                   f"{garak['version']}, exportées le {garak['exporte_le']}"
                   + (f" (il y a {age} jour(s))" if age is not None else ""))
 
     print(f"{LIBRARY_FILE.name} : {len(techniques)} technique(s), "
-          f"dont {len(utilisables)} utilisable(s) — {combinaisons} payload(s) "
+          f"dont {len(usable)} utilisable(s) — {combinations} payload(s) "
           f"au catalogue.{source}")
 
-    for message in avertissements:
+    for message in warnings:
         print(f"  [!]  {message}")
-    for message in erreurs:
+    for message in errors:
         print(f"  [X]  {message}")
 
-    if erreurs:
-        print(f"\n{len(erreurs)} erreur(s) : la bibliothèque n'est pas prête.")
+    if errors:
+        print(f"\n{len(errors)} erreur(s) : la bibliothèque n'est pas prête.")
         return 1
     print("\nBibliothèque valide.")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(principal())
+    sys.exit(main())
