@@ -48,13 +48,13 @@ class BudgetExceeded(RuntimeError):
 #
 # It is also here that the budget is applied (phase 11), and where phase 9
 # draws its audit trail from.
-_CALL_LOG = {"appels": 0, "tokens": 0, "tronquees": [],
-             "max_appels": None, "max_tokens": None}
+_CALL_LOG = {"calls": 0, "tokens": 0, "truncated_replies": [],
+             "max_calls": None, "max_tokens": None}
 
 
 def call_log():
     """A copy of the log's state since the last reset."""
-    return dict(_CALL_LOG, tronquees=list(_CALL_LOG["tronquees"]))
+    return dict(_CALL_LOG, tronquees=list(_CALL_LOG["truncated_replies"]))
 
 
 def reset_call_log(max_calls=None, max_tokens=None):
@@ -67,8 +67,8 @@ def reset_call_log(max_calls=None, max_tokens=None):
     middle of a measurement. It is therefore the orchestrator that arms the
     budget, deliberately.
     """
-    _CALL_LOG.update({"appels": 0, "tokens": 0, "tronquees": [],
-                      "max_appels": max_calls, "max_tokens": max_tokens})
+    _CALL_LOG.update({"calls": 0, "tokens": 0, "truncated_replies": [],
+                      "max_calls": max_calls, "max_tokens": max_tokens})
 
 
 def _check_budget():
@@ -79,10 +79,10 @@ def _check_budget():
     has ALREADY been consumed. An accepted consequence: the token cap can be
     overshot by one call at most.
     """
-    maximum = _CALL_LOG["max_appels"]
-    if maximum is not None and _CALL_LOG["appels"] >= maximum:
+    maximum = _CALL_LOG["max_calls"]
+    if maximum is not None and _CALL_LOG["calls"] >= maximum:
         raise BudgetExceeded(
-            f"Budget atteint : {_CALL_LOG['appels']} appel(s), "
+            f"Budget atteint : {_CALL_LOG['calls']} appel(s), "
             f"plafond {maximum}.")
 
     maximum = _CALL_LOG["max_tokens"]
@@ -107,10 +107,10 @@ def _client_for(profile):
             api_key=cfg["api_key"],
             # Without a timeout, a target that never answers would block the
             # campaign for ever.
-            timeout=cfg.get("delai", 60),
+            timeout=cfg.get("timeout", 60),
             # Automatic retries on a rate limit (error 429): 2 by default in
             # the SDK, more for free tiers.
-            max_retries=cfg.get("relances", 2),
+            max_retries=cfg.get("retries", 2),
         )
     return _clients[profile]
 
@@ -184,7 +184,7 @@ def ask_llm(message, system=None, model=None, temperature=None,
     They move with the operator-facing pass.
     """
     profile = profile or ACTIVE_PROFILE
-    model = model or PROFILES[profile]["modele"]
+    model = model or PROFILES[profile]["model"]
 
     messages = []
     if system:
@@ -227,7 +227,7 @@ def ask_llm(message, system=None, model=None, temperature=None,
 
 def _record(reply, profile, model):
     """Logs the call, and remembers replies cut off part way through."""
-    _CALL_LOG["appels"] += 1
+    _CALL_LOG["calls"] += 1
     usage = getattr(reply, "usage", None)
     if usage and getattr(usage, "total_tokens", None):
         _CALL_LOG["tokens"] += usage.total_tokens
@@ -236,7 +236,7 @@ def _record(reply, profile, model):
     # other stop reasons ("stop", "tool_calls"…) are normal. A provider that
     # reports nothing triggers nothing.
     if getattr(reply.choices[0], "finish_reason", None) == "length":
-        _CALL_LOG["tronquees"].append({"profil": profile, "modele": model})
+        _CALL_LOG["truncated_replies"].append({"profile": profile, "model": model})
 
 
 def _error_message(profile, model, error):

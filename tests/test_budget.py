@@ -85,14 +85,14 @@ class TestWithoutACap:
         reset_call_log()
         for _ in range(50):
             ask_llm("x")
-        assert call_log()["appels"] == 50
+        assert call_log()["calls"] == 50
 
     def test_resetting_disarms_the_cap(self):
         reset_call_log(max_calls=1)
         ask_llm("x")
         reset_call_log()
         ask_llm("x")          # must no longer raise
-        assert call_log()["appels"] == 1
+        assert call_log()["calls"] == 1
 
 
 class TestCleanStop:
@@ -103,23 +103,23 @@ class TestCleanStop:
 
     def test_the_report_announces_a_campaign_cut_short(self):
         result = {
-            "statut": "budget_epuise", "fiche": None,
-            "plan": {"essais": [{"technique": "t", "famille_owasp": "LLM01",
-                                 "objectif": "o", "transformation": "identite",
-                                 "texte": "p"}], "ecartees": []},
-            "constats": [], "ecourtee": "Budget atteint : 6 appel(s).",
-            "journal": {"appels": 6, "tokens": 100, "tronquees": []},
+            "status": "budget_exhausted", "profile": None,
+            "plan": {"attempts": [{"technique": "t", "owasp_family": "LLM01",
+                                 "objective": "o", "transformation": "identity",
+                                 "text": "p"}], "skipped": []},
+            "findings": [], "cut_short": "Budget atteint : 6 appel(s).",
+            "call_log": {"calls": 6, "tokens": 100, "truncated_replies": []},
         }
-        text = render_markdown(build_report(result, target="essai"))
+        text = render_markdown(build_report(result, target="attempt"))
         assert "ÉCOURTÉE" in text
         # And above all: the coverage must denounce itself.
         assert "incomplète" in text
 
     def test_a_complete_campaign_carries_no_warning(self):
         result = {
-            "statut": "aucun_constat", "fiche": None,
-            "plan": {"essais": [], "ecartees": []}, "constats": [],
-            "ecourtee": None, "journal": {},
+            "status": "no_finding", "profile": None,
+            "plan": {"attempts": [], "skipped": []}, "findings": [],
+            "cut_short": None, "call_log": {},
         }
-        text = render_markdown(build_report(result, target="essai"))
+        text = render_markdown(build_report(result, target="attempt"))
         assert "ÉCOURTÉE" not in text

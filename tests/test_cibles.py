@@ -36,8 +36,8 @@ class _Chatbot(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
 
         if self.path == "/imbrique":
-            texte = body["messages"][0]["content"]
-            self._send(200, {"choices": [{"message": {"content": texte}}]})
+            text = body["messages"][0]["content"]
+            self._send(200, {"choices": [{"message": {"content": text}}]})
         elif self.path == "/entetes":
             self._send(200, {"reply": self.headers.get("Authorization", "")})
         elif self.path == "/refuse":
@@ -188,9 +188,9 @@ class TestSilentTemplate:
     def test_the_message_says_what_to_fix(self, base):
         with pytest.raises(RuntimeError) as failure:
             build_http_target(base, body={"input": "fixe"})
-        texte = str(failure.value)
-        assert "CIBLE_CORPS" in texte          # la variable a corriger
-        assert '"input"' in texte              # ce qui a ete lu
+        text = str(failure.value)
+        assert "CIBLE_CORPS" in text          # la variable a corriger
+        assert '"input"' in text              # ce qui a ete lu
 
 
 class TestTargetProfiles:
@@ -203,8 +203,8 @@ class TestTargetProfiles:
     def test_every_profile_carries_a_valid_template(self):
         # Un profil livre avec un gabarit muet serait pire que pas de profil.
         for name, reglages in TARGET_PROFILES.items():
-            check_template(reglages["corps"])
-            assert reglages["chemin_reponse"]
+            check_template(reglages["body"])
+            assert reglages["response_path"]
             assert reglages["description"]
 
     def test_the_openai_profile_reads_a_nested_reply(self, base):
@@ -352,9 +352,9 @@ class TestTargetFailureDuringACampaign:
                   pistes[0].read_text(encoding="utf-8").splitlines() if l]
         # The trail is sealed even on a failure: the seal closes it, and the
         # close precedes it.
-        assert lignes[-1]["type"] == "sceau"
-        assert lignes[-2]["type"] == "fin_campagne"
-        assert lignes[-2]["statut"] == "interrompue"
+        assert lignes[-1]["type"] == "seal"
+        assert lignes[-2]["type"] == "campaign_end"
+        assert lignes[-2]["status"] == "interrupted"
 
     def test_a_remote_target_demands_the_mandate_BEFORE_the_campaign(
             self, failing_campaign, tmp_path, capsys):
@@ -412,9 +412,9 @@ class TestDiagnosingANonJsonReply:
         interroger = build_http_target(f"{base}/pasjson")
         with pytest.raises(RuntimeError) as failure:
             interroger("bonjour")
-        texte = str(failure.value)
-        assert "JSON attendu" in texte        # le fait
-        assert "PAGE WEB" in texte            # la cause probable
+        text = str(failure.value)
+        assert "JSON attendu" in text        # le fait
+        assert "PAGE WEB" in text            # la cause probable
 
 
 FLUX_OPENAI = (
@@ -496,15 +496,15 @@ class TestNonJsonReplies:
 
     @pytest.mark.parametrize("profile, path", [
         ("openai-flux", CHEMIN_FLUX_OPENAI),
-        ("texte", RAW_TEXT_PATH),
+        ("text", RAW_TEXT_PATH),
     ])
     def test_a_profile_exists_for_every_shape(self, profile, path):
-        assert TARGET_PROFILES[profile]["chemin_reponse"] == path
-        check_template(TARGET_PROFILES[profile]["corps"])
+        assert TARGET_PROFILES[profile]["response_path"] == path
+        check_template(TARGET_PROFILES[profile]["body"])
 
     def test_the_stream_profile_really_asks_for_a_stream(self):
         # Incoherent autrement : lire un flux en demandant du non-flux.
-        assert TARGET_PROFILES["openai-flux"]["corps"]["stream"] is True
+        assert TARGET_PROFILES["openai-flux"]["body"]["stream"] is True
 
     def test_the_diagnosis_offers_stream_reading(self, base):
         # Before, it only offered "stream: false", which assumes you
@@ -528,7 +528,7 @@ class TestFormatDeclaredByTheTarget:
     @pytest.mark.parametrize("declared_type, profile, path", [
         ("text/event-stream", "openai-flux", "@flux:"),
         ("text/event-stream; charset=utf-8", "openai-flux", "@flux:"),
-        ("text/plain; charset=utf-8", "texte", "@brut"),
+        ("text/plain; charset=utf-8", "text", "@brut"),
     ])
     def test_the_declared_type_names_the_profile(self, declared_type, profile,
                                              path):
@@ -597,9 +597,9 @@ class TestPriorityOrder:
         # Le piege reel : un corps pose dans .env, et un profil passe en
         # option. C'est le profil qui part sur le reseau.
         import config
-        monkeypatch.setitem(config.HTTP_TARGET, "corps",
+        monkeypatch.setitem(config.HTTP_TARGET, "body",
                             {"message": "{message}"})
-        monkeypatch.setitem(config.HTTP_TARGET, "chemin_reponse", "reply")
+        monkeypatch.setitem(config.HTTP_TARGET, "response_path", "reply")
         interroger = build_http_target(f"{base}/imbrique",
                                            profile="openai")
         # Si .env l'emportait, la cible /imbrique ne saurait pas lire ce corps.
@@ -608,8 +608,8 @@ class TestPriorityOrder:
     def test_env_serves_when_no_profile_is_passed(self, base,
                                                         monkeypatch):
         import config
-        monkeypatch.setitem(config.HTTP_TARGET, "corps", CORPS_IMBRIQUE)
-        monkeypatch.setitem(config.HTTP_TARGET, "chemin_reponse",
+        monkeypatch.setitem(config.HTTP_TARGET, "body", CORPS_IMBRIQUE)
+        monkeypatch.setitem(config.HTTP_TARGET, "response_path",
                             CHEMIN_IMBRIQUE)
         interroger = build_http_target(f"{base}/imbrique")
         assert interroger("bonjour") == "bonjour"

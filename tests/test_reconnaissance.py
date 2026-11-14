@@ -20,10 +20,10 @@ import agents.reconnaissance as reconnaissance
 from agents.reconnaissance import (KNOWN_CONTEXTS, PROBES, reconnoitre,
                                    summarise)
 
-CHAMPS_ATTENDUS = {"role", "langue", "outils", "sujets_refuses",
-                   "mentionne_consignes", "produit_du_code",
-                   "traite_des_documents", "contexte", "indices", "echanges",
-                   "avertissement"}
+CHAMPS_ATTENDUS = {"role", "language", "tools", "refused_subjects",
+                   "mentions_instructions", "writes_code",
+                   "handles_documents", "context", "evidence", "exchanges",
+                   "warning"}
 
 
 @pytest.fixture
@@ -50,26 +50,26 @@ class TestProfileShape:
         analyst("ceci n'est pas du JSON")
         profile = reconnoitre(_target())
         assert set(profile) == CHAMPS_ATTENDUS
-        assert profile["avertissement"]
+        assert profile["warning"]
         assert profile["role"] is None
-        assert profile["outils"] == []
+        assert profile["tools"] == []
 
     def test_an_empty_profile_keeps_the_exchanges(self, analyst):
         # Without them, there is no way to understand why the analysis
         # failed.
         analyst("pas du JSON")
-        assert len(reconnoitre(_target())["echanges"]) == len(PROBES)
+        assert len(reconnoitre(_target())["exchanges"]) == len(PROBES)
 
     def test_the_types_are_enforced(self, analyst):
         # Un champ du mauvais type deviendrait une erreur beaucoup plus loin,
         # dans le planificateur.
-        analyst('{"role": 42, "outils": "pas une liste", '
-                 '"sujets_refuses": [1, "vrai sujet"], "indices": null}')
+        analyst('{"role": 42, "tools": "pas une liste", '
+                 '"refused_subjects": [1, "vrai sujet"], "evidence": null}')
         profile = reconnoitre(_target())
         assert profile["role"] is None
-        assert profile["outils"] == []
-        assert profile["sujets_refuses"] == ["vrai sujet"]
-        assert profile["indices"] == []
+        assert profile["tools"] == []
+        assert profile["refused_subjects"] == ["vrai sujet"]
+        assert profile["evidence"] == []
 
 
 class TestTriStates:
@@ -78,8 +78,8 @@ class TestTriStates:
     (7 probes) and `latentinjection` (9 probes) are skipped.
     """
 
-    @pytest.mark.parametrize("field", ["produit_du_code",
-                                       "traite_des_documents"])
+    @pytest.mark.parametrize("field", ["writes_code",
+                                       "handles_documents"])
     @pytest.mark.parametrize("valeur, attendu", [
         ("true", True),
         ("false", False),
@@ -90,16 +90,16 @@ class TestTriStates:
         analyst('{"%s": %s}' % (field, valeur))
         assert reconnoitre(_target())[field] is attendu
 
-    @pytest.mark.parametrize("field", ["produit_du_code",
-                                       "traite_des_documents"])
+    @pytest.mark.parametrize("field", ["writes_code",
+                                       "handles_documents"])
     def test_a_missing_field_means_none_not_false(self, analyst, field):
         # THE trap: `bool()` or `.get(field, False)` would turn every
         # silence into a refusal, and the campaign would lose sixteen probes.
         analyst('{"role": "assistant"}')
         assert reconnoitre(_target())[field] is None
 
-    @pytest.mark.parametrize("field", ["produit_du_code",
-                                       "traite_des_documents"])
+    @pytest.mark.parametrize("field", ["writes_code",
+                                       "handles_documents"])
     def test_a_non_boolean_value_means_none(self, analyst, field):
         # A model can answer "oui" instead of true: we do not guess, we fall
         # back on "not declared".
@@ -109,8 +109,8 @@ class TestTriStates:
     def test_an_empty_profile_sets_them_to_none(self, analyst):
         analyst("illisible")
         profile = reconnoitre(_target())
-        assert profile["produit_du_code"] is None
-        assert profile["traite_des_documents"] is None
+        assert profile["writes_code"] is None
+        assert profile["handles_documents"] is None
 
 
 class TestDeclaredContext:
@@ -123,7 +123,7 @@ class TestDeclaredContext:
     def test_reconnaissance_never_fills_it(self, analyst):
         # Even if the analyst model claims to know it.
         analyst('{"contexte": ["terminal", "rendu-riche"]}')
-        assert reconnoitre(_target())["contexte"] == []
+        assert reconnoitre(_target())["context"] == []
 
     def test_no_probe_asks_about_the_context(self):
         # Garde-fou contre la tentation : si quelqu'un ajoute « ta sortie est
@@ -136,8 +136,8 @@ class TestDeclaredContext:
         # Ils apparaissent dans le message d'erreur de la ligne de commande :
         # un nom sans explication ne guiderait personne.
         assert KNOWN_CONTEXTS
-        for nom, explication in KNOWN_CONTEXTS.items():
-            assert nom == nom.lower()
+        for name, explication in KNOWN_CONTEXTS.items():
+            assert name == name.lower()
             assert explication.strip()
 
 
@@ -147,17 +147,17 @@ class TestBudgetAndDisplay:
         # MAX_ESSAIS, because probing can already wake the defences.
         monkeypatch.setattr(reconnaissance, "RECON_BUDGET", 2)
         analyst("{}")
-        assert len(reconnoitre(_target())["echanges"]) == 2
+        assert len(reconnoitre(_target())["exchanges"]) == 2
 
     def test_every_probe_targets_one_field(self):
         # A recorded principle: one probe fewer must mean one fact fewer,
         # never a false profile. Hence one probe per probed field.
         assert len(PROBES) == len(
-            {"role", "capacites", "sujets_refuses", "outils",
-             "produit_du_code", "traite_des_documents"})
+            {"role", "capacites", "refused_subjects", "tools",
+             "writes_code", "handles_documents"})
 
     def test_the_summary_shows_the_new_fields(self, analyst):
-        analyst('{"produit_du_code": true, "traite_des_documents": false}')
+        analyst('{"writes_code": true, "handles_documents": false}')
         rendu = summarise(reconnoitre(_target()))
         assert "écrit du code : oui" in rendu
         assert "lit des documents : non" in rendu

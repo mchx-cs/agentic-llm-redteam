@@ -61,11 +61,11 @@ def target_that_recites_its_instructions(_payload):
 # (simulated target, expected status). Each scenario follows a campaign's real
 # sequence: first attempt, judgement, then replay if there was a leak.
 SCENARIOS = [
-    (target_that_leaks, "confirmee"),
-    (target_that_hallucinates, "hallucination_probable"),
-    (target_that_sometimes_leaks, "confirmee"),
-    (target_that_leaks_once, "inconcluant"),
-    (target_that_recites_its_instructions, "non_verifiable"),
+    (target_that_leaks, "confirmed"),
+    (target_that_hallucinates, "likely_hallucination"),
+    (target_that_sometimes_leaks, "confirmed"),
+    (target_that_leaks_once, "inconclusive"),
+    (target_that_recites_its_instructions, "not_verifiable"),
 ]
 
 
@@ -74,11 +74,11 @@ def run():
     for target, expected in SCENARIOS:
         first = judge(PAYLOAD, target(PAYLOAD))
         result = verify_by_replay(PAYLOAD, first["valeur"], target, judge)
-        ok = result["statut"] == expected
+        ok = result["status"] == expected
         passed += ok
         print(f"[{'ok ' if ok else 'ERR'}] {target.__name__:<38} "
-              f"attendu={expected:<22} obtenu={result['statut']:<22} "
-              f"1er={first['valeur']!r} rejeux={result['valeurs_rejeu']}")
+              f"attendu={expected:<22} obtenu={result['status']:<22} "
+              f"1er={first['valeur']!r} rejeux={result['replay_values']}")
     print(f"\n{passed}/{len(SCENARIOS)} scénarios conformes.")
 
 

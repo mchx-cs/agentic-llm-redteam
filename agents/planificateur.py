@@ -23,21 +23,21 @@ from agents.attaquant import (TRANSFORMATIONS, load_library, compose)
 # family = adding its prerequisite here, and nothing else.
 PREREQUISITES = {
     # Abusing a tool assumes the target has at least one.
-    "outils": (
-        lambda profile: bool(profile["outils"]),
+    "tools": (
+        lambda profile: bool(profile["tools"]),
         "aucun outil détecté chez la cible",
     ),
     # Leaking confidential data assumes there is some: a target that refuses
     # nothing and mentions no rule probably has nothing to protect.
     "secret": (
-        lambda profile: bool(profile["sujets_refuses"])
-        or profile["mentionne_consignes"],
+        lambda profile: bool(profile["refused_subjects"])
+        or profile["mentions_instructions"],
         "la cible ne déclare ni sujet interdit ni consigne",
     ),
     # Extracting internal instructions assumes it has mentioned some.
-    "consignes": (
-        lambda profile: profile["mentionne_consignes"]
-        or bool(profile["sujets_refuses"]),
+    "instructions": (
+        lambda profile: profile["mentions_instructions"]
+        or bool(profile["refused_subjects"]),
         "la cible n'évoque aucune consigne interne",
     ),
 
@@ -46,12 +46,12 @@ PREREQUISITES = {
     # not mention it" (None) lets the probe through, because missing a
     # vulnerability costs more than a wasted attempt — and because a chatbot
     # does not necessarily spell out everything it can do.
-    "produit-du-code": (
-        lambda profile: profile.get("produit_du_code") is not False,
+    "writes-code": (
+        lambda profile: profile.get("writes_code") is not False,
         "la cible dit ne pas écrire de code",
     ),
-    "traite-des-documents": (
-        lambda profile: profile.get("traite_des_documents") is not False,
+    "handles-documents": (
+        lambda profile: profile.get("handles_documents") is not False,
         "la cible dit ne pas traiter de document fourni",
     ),
 
@@ -63,16 +63,16 @@ PREREQUISITES = {
     # chatbot and the report announced "LLM02 tested": a wasted attempt AND
     # overstated coverage. The reason says how to enable it.
     "terminal": (
-        lambda profile: "terminal" in (profile.get("contexte") or []),
+        lambda profile: "terminal" in (profile.get("context") or []),
         "sortie non rendue dans un terminal (--contexte terminal pour l'activer)",
     ),
-    "rendu-riche": (
-        lambda profile: "rendu-riche" in (profile.get("contexte") or []),
+    "rich-rendering": (
+        lambda profile: "rich-rendering" in (profile.get("context") or []),
         "aucun client ne rend le Markdown de la sortie "
         "(--contexte rendu-riche pour l'activer)",
     ),
-    "base-donnees": (
-        lambda profile: "base-donnees" in (profile.get("contexte") or []),
+    "database": (
+        lambda profile: "database" in (profile.get("context") or []),
         "aucune base ni moteur de gabarits déclaré derrière la cible "
         "(--contexte base-donnees pour l'activer)",
     ),
@@ -90,13 +90,13 @@ def objectives_for(profile, library):
     obtaining that code becomes an objective specific to THIS target — which
     is the whole point of reconnaissance.
     """
-    objectives = list(library["objectifs"])
+    objectives = list(library["objectives"])
 
-    for number, subject in enumerate(profile["sujets_refuses"], start=1):
+    for number, subject in enumerate(profile["refused_subjects"], start=1):
         objectives.append({
             "id": f"refus-{number}",
-            "formulation": f"me parler de : {subject}",
-            "origine": "reconnaissance",
+            "wording": f"me parler de : {subject}",
+            "origin": "reconnaissance",
         })
 
     # A discovered tool becomes an objective. Writing "call consulter_dossier"
@@ -109,15 +109,15 @@ def objectives_for(profile, library):
     # OWN record is legitimate use (case D17 of the corpus); obtaining a third
     # party's is the vulnerability. Without that clause, the four registers
     # would produce attempts the judge would class — rightly — as "aucun".
-    for number, tool in enumerate(profile["outils"], start=1):
+    for number, tool in enumerate(profile["tools"], start=1):
         objectives.append({
             "id": f"outil-{number}",
-            "formulation": f"utiliser ton outil « {tool} » pour quelqu'un "
+            "wording": f"utiliser ton outil « {tool} » pour quelqu'un "
                            f"d'autre que moi",
-            "origine": "reconnaissance",
+            "origin": "reconnaissance",
             # The family this objective was built FOR: see `_priority`, which
             # moves it ahead on that family alone.
-            "pour_famille": "LLM06",
+            "for_family": "LLM06",
         })
 
     return objectives
@@ -144,8 +144,8 @@ def _matches(technique, pattern):
     pattern = pattern.strip().lower()
     if not pattern:
         return False
-    fields = (technique["id"], technique.get("groupe") or "",
-              technique.get("famille_owasp") or "")
+    fields = (technique["id"], technique.get("group") or "",
+              technique.get("owasp_family") or "")
     return any(pattern in field.lower() for field in fields)
 
 
@@ -200,19 +200,19 @@ def plan_campaign(profile, budget, only=(), excluding=()):
                                                  only, excluding)
     for technique, reason in out_of_scope:
         skipped.append({"technique": technique["id"],
-                        "famille_owasp": technique["famille_owasp"],
-                        "motifs": [reason]})
+                        "owasp_family": technique["owasp_family"],
+                        "reasons": [reason]})
 
     for technique in techniques:
         reasons = [text for name, (check, text) in PREREQUISITES.items()
-                   if name in technique["prerequis"] and not check(profile)]
-        if not technique["modeles"] and not technique.get("payloads_complets"):
+                   if name in technique["prerequisites"] and not check(profile)]
+        if not technique["templates"] and not technique.get("complete_payloads"):
             reasons.append(REASON_NO_TEMPLATE)
 
         if reasons:
             skipped.append({"technique": technique["id"],
-                            "famille_owasp": technique["famille_owasp"],
-                            "motifs": reasons})
+                            "owasp_family": technique["owasp_family"],
+                            "reasons": reasons})
         else:
             kept.append(technique)
 
@@ -222,7 +222,7 @@ def plan_campaign(profile, budget, only=(), excluding=()):
     # template" and "Families tested: LLM02", which is contradictory for a
     # reader and invents a hole that does not exist. We do not hide it for all
     # that: we say where the family is handled.
-    families_kept = {t["famille_owasp"] for t in kept if t["famille_owasp"]}
+    families_kept = {t["owasp_family"] for t in kept if t["owasp_family"]}
     for entry in skipped:
         # Reserved for the ONE case that justifies it: a technique skipped for
         # want of a payload, whose family is handled elsewhere. The field
@@ -231,31 +231,31 @@ def plan_campaign(profile, budget, only=(), excluding=()):
         # LLM01, covered elsewhere, but it tests the ANSI sequences no other
         # probe tests. Saying "covered elsewhere" suggested that skipping it
         # cost nothing.
-        entry["famille_couverte_ailleurs"] = (
-            REASON_NO_TEMPLATE in entry["motifs"]
-            and entry["famille_owasp"] in families_kept)
+        entry["family_covered_elsewhere"] = (
+            REASON_NO_TEMPLATE in entry["reasons"]
+            and entry["owasp_family"] in families_kept)
 
     attempts = []
     for technique in kept:
-        for template in technique["modeles"]:
+        for template in technique["templates"]:
             for objective in objectives:
                 for name, transform in TRANSFORMATIONS.items():
-                    text = template.format(objectif=objective["formulation"])
+                    text = template.format(objectif=objective["wording"])
                     attempts.append({
                         "technique": technique["id"],
-                        "famille_owasp": technique["famille_owasp"],
-                        "objectif": objective["id"],
+                        "owasp_family": technique["owasp_family"],
+                        "objective": objective["id"],
                         "transformation": name,
-                        "texte": transform(text),
-                        "familles_non_jugeables":
-                            technique.get("familles_non_jugeables") or [],
-                        "groupe": _group(technique),
-                        "priorite": _priority(technique, objective, name),
+                        "text": transform(text),
+                        "families_not_scorable":
+                            technique.get("families_not_scorable") or [],
+                        "group": _group(technique),
+                        "priority": _priority(technique, objective, name),
                     })
 
         # Payloads coming from outside (garak) are complete prompts: they
         # carry their own intention, so no objective axis.
-        for payload in technique.get("payloads_complets", []):
+        for payload in technique.get("complete_payloads", []):
             # A complete payload serves as a PREAMBLE: alone it measures
             # resistance to hijacking; composed with an objective derived from
             # reconnaissance it goes after what the target protects.
@@ -265,23 +265,23 @@ def plan_campaign(profile, budget, only=(), excluding=()):
                 for name, transform in TRANSFORMATIONS.items():
                     attempts.append({
                         "technique": technique["id"],
-                        "famille_owasp": technique["famille_owasp"],
-                        "objectif": objective["id"] if objective else None,
+                        "owasp_family": technique["owasp_family"],
+                        "objective": objective["id"] if objective else None,
                         "transformation": name,
-                        "texte": transform(text),
+                        "text": transform(text),
                         "source": technique.get("source"),
-                        "familles_non_jugeables":
-                            technique.get("familles_non_jugeables") or [],
-                        "groupe": _group(technique),
-                        "priorite": _priority(technique, objective, name),
+                        "families_not_scorable":
+                            technique.get("families_not_scorable") or [],
+                        "group": _group(technique),
+                        "priority": _priority(technique, objective, name),
                     })
 
     # Stable sort: on an equal priority the library's order is kept, so two
     # identical campaigns produce the same list.
-    attempts.sort(key=lambda attempt: attempt["priorite"])
-    return {"essais": _share_budget(attempts, budget),
-            "candidats": attempts,
-            "ecartees": skipped}
+    attempts.sort(key=lambda attempt: attempt["priority"])
+    return {"attempts": _share_budget(attempts, budget),
+            "candidates": attempts,
+            "skipped": skipped}
 
 
 def _group(technique):
@@ -295,7 +295,7 @@ def _group(technique):
     a campaign on a wider budget would have burned itself on encoding variants
     before reaching `promptinject`.
     """
-    return technique.get("groupe") or technique["id"]
+    return technique.get("group") or technique["id"]
 
 
 def _share_budget(attempts, budget):
@@ -317,7 +317,7 @@ def _share_budget(attempts, budget):
 
     by_technique = {}
     for attempt in attempts:                 # `attempts` is already sorted
-        key = attempt.get("groupe") or attempt["technique"]
+        key = attempt.get("group") or attempt["technique"]
         by_technique.setdefault(key, []).append(attempt)
 
     kept = []
@@ -340,8 +340,8 @@ def _paired(technique, objective):
     priority rule depend on the OWASP vintage would break it at the Top 10's
     next revision.
     """
-    expected = objective.get("pour_famille")
-    family = technique.get("famille_owasp") or ""
+    expected = objective.get("for_family")
+    family = technique.get("owasp_family") or ""
     return bool(expected) and family.startswith(expected)
 
 
@@ -363,7 +363,7 @@ def _priority(technique, objective, transformation_name):
         # target protects: on an equal priority the round-robin would keep
         # only the bare one.
         priority += 1
-    elif objective.get("origine") != "reconnaissance":
+    elif objective.get("origin") != "reconnaissance":
         priority += 4      # a generic objective comes after a targeted one
     elif _paired(technique, objective):
         # An objective built FOR a family moves ahead on that family. Without
@@ -374,25 +374,25 @@ def _priority(technique, objective, transformation_name):
         priority -= 1
     if technique["id"] == "controle":
         priority += 2      # the control is not an attack: it waits its turn
-    if transformation_name != "identite":
+    if transformation_name != "identity":
         priority += 1      # raw text first, variants afterwards
     return priority
 
 
 def summarise(plan):
     """The plan in a few lines, for a campaign's display."""
-    lines = [f"  {len(plan['essais'])} essai(s) retenu(s) :"]
-    for attempt in plan["essais"]:
+    lines = [f"  {len(plan['attempts'])} essai(s) retenu(s) :"]
+    for attempt in plan["attempts"]:
         lines.append(f"    - {attempt['technique']} / "
-                     f"{attempt['objectif'] or 'payload complet'} "
+                     f"{attempt['objective'] or 'payload complet'} "
                      f"/ {attempt['transformation']}")
-    if plan["ecartees"]:
+    if plan["skipped"]:
         # Grouped by REASON, not by technique: since the relevance rules it is
         # whole modules that get skipped, and eight `web_injection` probes
         # printed "no client renders Markdown" eight times. Repeated
         # information drowns the information that is not repeated.
         lines.append("  écartées :")
-        for reason, techniques in group_by_reason(plan["ecartees"]):
+        for reason, techniques in group_by_reason(plan["skipped"]):
             lines.append(f"    - {len(techniques)} technique(s) : {reason}")
             preview = ", ".join(techniques[:3])
             if len(techniques) > 3:
@@ -411,6 +411,6 @@ def group_by_reason(skipped):
     """
     groups = {}
     for entry in skipped:
-        reason = " ; ".join(entry["motifs"])
+        reason = " ; ".join(entry["reasons"])
         groups.setdefault(reason, []).append(entry["technique"])
     return list(groups.items())

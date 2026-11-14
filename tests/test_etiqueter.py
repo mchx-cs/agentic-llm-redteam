@@ -21,10 +21,10 @@ from evaluation import etiqueter
 
 
 def _entry(identifier, group, expected=True, dataset="dev"):
-    return {"id": identifier, "groupe": group, "categorie": "controle",
-            "jeu": dataset, "secret": "TOPSECRET42", "source": "essai",
-            "payload": "p", "reponse": "r", "attendu": expected,
-            "piege": "x"}
+    return {"id": identifier, "group": group, "category": "controle",
+            "dataset": dataset, "secret": "TOPSECRET42", "source": "attempt",
+            "payload": "p", "reply": "r", "expected": expected,
+            "trap": "x"}
 
 
 @pytest.fixture
@@ -33,13 +33,13 @@ def harvests(tmp_path, monkeypatch):
     to_label = tmp_path / "a_etiqueter.json"
     conversations = tmp_path / "a_etiqueter_conversations.json"
     corpus = tmp_path / "echanges_etiquetes.json"
-    corpus.write_text(json.dumps({"echanges": []}), encoding="utf-8")
+    corpus.write_text(json.dumps({"exchanges": []}), encoding="utf-8")
 
     monkeypatch.setattr(etiqueter, "TO_LABEL_FILE", to_label)
     monkeypatch.setattr(etiqueter, "CONVERSATIONS_FILE", conversations)
     monkeypatch.setattr(etiqueter, "CORPUS_FILE", corpus)
     monkeypatch.setattr(etiqueter, "SOURCES",
-                        ((to_label, "echanges"),
+                        ((to_label, "exchanges"),
                          (conversations, "conversations")))
     return {"a_etiqueter": to_label, "conversations": conversations,
             "corpus": corpus}
@@ -48,14 +48,14 @@ def harvests(tmp_path, monkeypatch):
 class TestIntegration:
     def test_a_labelled_exchange_joins_the_corpus(self, harvests, capsys):
         harvests["a_etiqueter"].write_text(
-            json.dumps({"echanges": [_entry("R01-1", "R01")]}),
+            json.dumps({"exchanges": [_entry("R01-1", "R01")]}),
             encoding="utf-8")
         etiqueter.integrate()
         corpus = json.loads(harvests["corpus"].read_text(encoding="utf-8"))
-        assert [e["id"] for e in corpus["echanges"]] == ["R01-1"]
+        assert [e["id"] for e in corpus["exchanges"]] == ["R01-1"]
         # And the harvest keeps only what is left to label: nothing here.
         left = json.loads(harvests["a_etiqueter"].read_text(encoding="utf-8"))
-        assert left["echanges"] == []
+        assert left["exchanges"] == []
 
     def test_integrate_runs_to_the_end(self, harvests, capsys):
         """
@@ -65,7 +65,7 @@ class TestIntegration:
         loud for the operator, and covered by nothing.
         """
         harvests["a_etiqueter"].write_text(
-            json.dumps({"echanges": [_entry("R01-1", "R01"),
+            json.dumps({"exchanges": [_entry("R01-1", "R01"),
                                      _entry("R02-1", "R02", expected=None)]}),
             encoding="utf-8")
         etiqueter.integrate()                      # must not raise
@@ -76,11 +76,11 @@ class TestIntegration:
 
     def test_nothing_to_integrate_leaves_the_corpus_alone(self, harvests):
         harvests["a_etiqueter"].write_text(
-            json.dumps({"echanges": [_entry("R01-1", "R01", expected=None)]}),
+            json.dumps({"exchanges": [_entry("R01-1", "R01", expected=None)]}),
             encoding="utf-8")
         etiqueter.integrate()
         corpus = json.loads(harvests["corpus"].read_text(encoding="utf-8"))
-        assert corpus["echanges"] == []
+        assert corpus["exchanges"] == []
 
     def test_a_group_is_not_split_between_the_sets(self, harvests, capsys):
         """
@@ -88,14 +88,14 @@ class TestIntegration:
         rewording of a case the judge was tuned on.
         """
         harvests["corpus"].write_text(
-            json.dumps({"echanges": [_entry("R01-1", "R01", dataset="dev")]}),
+            json.dumps({"exchanges": [_entry("R01-1", "R01", dataset="dev")]}),
             encoding="utf-8")
         harvests["a_etiqueter"].write_text(
-            json.dumps({"echanges": [_entry("R01-2", "R01", dataset="test")]}),
+            json.dumps({"exchanges": [_entry("R01-2", "R01", dataset="test")]}),
             encoding="utf-8")
         etiqueter.integrate()
         corpus = json.loads(harvests["corpus"].read_text(encoding="utf-8"))
-        assert [e["id"] for e in corpus["echanges"]] == ["R01-1"]
+        assert [e["id"] for e in corpus["exchanges"]] == ["R01-1"]
         assert "Ignoré" in capsys.readouterr().out
 
     def test_a_conversation_is_flagged_as_not_measured(self, harvests,
@@ -104,8 +104,8 @@ class TestIntegration:
         A corpus that grows without the measurement changing needs explaining.
         """
         conversation = _entry("C-01-1", "C-01")
-        conversation["tours"] = [{"role": "utilisateur", "contenu": "a"},
-                                 {"role": "cible", "contenu": "b"}]
+        conversation["turns"] = [{"role": "attacker", "content": "a"},
+                                 {"role": "target", "content": "b"}]
         harvests["conversations"].write_text(
             json.dumps({"conversations": [conversation]}), encoding="utf-8")
         etiqueter.integrate()
@@ -115,7 +115,7 @@ class TestIntegration:
 class TestWhatIsLeftToLabel:
     def test_it_counts_both_harvests(self, harvests):
         harvests["a_etiqueter"].write_text(
-            json.dumps({"echanges": [_entry("R01-1", "R01", expected=None)]}),
+            json.dumps({"exchanges": [_entry("R01-1", "R01", expected=None)]}),
             encoding="utf-8")
         harvests["conversations"].write_text(
             json.dumps({"conversations": [

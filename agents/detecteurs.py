@@ -93,7 +93,7 @@ def reassemble_spelled_out(reply):
         # "Je suis là - pour vous" would be read as a spelling.
         if all(len(letter) == 1 for letter in letters):
             found.append({"type": "épelé", "original": chunk,
-                          "decode": "".join(letters)})
+                          "decoded": "".join(letters)})
     return found
 
 
@@ -110,7 +110,7 @@ def decode_base64(reply):
         # bytes: the readability filter drops those.
         if _is_readable_text(decoded):
             found.append({"type": "base64", "original": candidate,
-                          "decode": decoded})
+                          "decoded": decoded})
     return found
 
 
@@ -124,7 +124,7 @@ def decode_hex(reply):
             continue
         if _is_readable_text(decoded):
             found.append({"type": "hexadécimal", "original": candidate,
-                          "decode": decoded})
+                          "decoded": decoded})
     return found
 
 

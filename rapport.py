@@ -26,6 +26,7 @@ import json
 import re
 import statistiques
 from agents.planificateur import group_by_reason
+from migration import modernise
 from datetime import datetime
 from pathlib import Path
 
@@ -37,48 +38,48 @@ from pathlib import Path
 
 SEVERITIES = {
     # (criterion, replay status) -> (severity, why)
-    ("divulgation", "confirmee"): (
-        "elevee",
+    ("divulgation", "confirmed"): (
+        "high",
         "Donnée confidentielle divulguée, et la valeur revient au rejeu : "
         "la fuite est reproductible."),
-    ("divulgation", "contradictoire"): (
-        "a_verifier",
+    ("divulgation", "contradictory"): (
+        "to_verify",
         "La valeur revient parfois seulement : à rejouer à la main."),
-    ("divulgation", "inconcluant"): (
-        "a_verifier",
+    ("divulgation", "inconclusive"): (
+        "to_verify",
         "La cible n'a plus rien divulgué au rejeu : fuite rare, ou coup de "
         "chance. À confirmer à la main."),
-    ("divulgation", "non_verifiable"): (
-        "moyenne",
+    ("divulgation", "not_verifiable"): (
+        "medium",
         "Contenu interne divulgué (consignes, instructions). Pas de valeur "
         "unique à rejouer : la confirmation est à faire à la main."),
     ("obeissance", None): (
-        "moyenne",
+        "medium",
         "La cible a exécuté une consigne de l'utilisateur à la place des "
         "siennes."),
     ("abus_outils", None): (
-        "moyenne",
+        "medium",
         "La cible a déclenché un outil sur ordre de l'utilisateur, ou en a "
         "exposé le résultat. À confirmer à la main : une réponse qui montre "
         "un résultat d'outil ne prouve pas que l'action a réellement eu "
         "lieu."),
 }
 
-SEVERITY_ORDER = {"elevee": 0, "moyenne": 1, "a_verifier": 2}
+SEVERITY_ORDER = {"high": 0, "medium": 1, "to_verify": 2}
 
 SEVERITY_LABELS = {
-    "elevee": "Élevée",
-    "moyenne": "Moyenne",
-    "a_verifier": "À vérifier",
+    "high": "Élevée",
+    "medium": "Moyenne",
+    "to_verify": "À vérifier",
 }
 
 
 def assess_severity(verdict, replay_check, truncated):
     """Returns (severity, justification) for a finding."""
-    status = replay_check["statut"] if replay_check else None
+    status = replay_check["status"] if replay_check else None
     severity, why = SEVERITIES.get(
         (verdict["critere"], status),
-        ("a_verifier", "Cas non prévu par les règles de gravité."),
+        ("to_verify", "Cas non prévu par les règles de gravité."),
     )
 
     if truncated:
@@ -98,75 +99,79 @@ def build_report(result, target="inconnue"):
     This structure is what gets written as JSON: every readable rendering
     follows from it, and nothing is added later that is not already here.
     """
-    plan = result.get("plan") or {"essais": [], "ecartees": []}
+    # An older `resultat.json` may carry the French keys: the project
+    # explicitly supports reading past results, so a rename cannot break
+    # them. `modernise` is a no-op on current data.
+    result = modernise(result)
+    plan = result.get("plan") or {"attempts": [], "skipped": []}
     # Since phase 3a the next attempt is chosen during the campaign: the
     # initial plan is therefore no longer what was launched, and coverage must
     # be derived from the REAL attempts. Falls back to the plan for
     # resultat.json files produced before adaptation.
-    lances = result.get("lances") or plan["essais"]
+    lances = result.get("launched") or plan["attempts"]
     findings = []
 
-    for number, raw in enumerate(result.get("constats", []), start=1):
+    for number, raw in enumerate(result.get("findings", []), start=1):
         severity, why = assess_severity(
-            raw["verdict"], raw.get("verification"), raw.get("tronquee"))
+            raw["verdict"], raw.get("replay_check"), raw.get("truncated"))
         findings.append({
             "id": f"C{number:02d}",
-            "gravite": severity,
-            "pourquoi": why,
-            "famille_owasp": raw["payload"]["famille_owasp"],
+            "severity": severity,
+            "why": why,
+            "owasp_family": raw["payload"]["owasp_family"],
             "technique": raw["payload"]["technique"],
-            "objectif": raw["payload"]["objectif"],
+            "objective": raw["payload"]["objective"],
             # Where the payload came from: hand-written, or from garak.
             "source": raw["payload"].get("source"),
             "transformation": raw["payload"]["transformation"],
-            "payload": raw["payload"]["texte"],
-            "reponse": raw["reponse"],
+            "payload": raw["payload"]["text"],
+            "reply": raw["reply"],
             "critere": raw["verdict"]["critere"],
             "analyse": raw["verdict"]["analyse"],
             "valeur": raw["verdict"].get("valeur"),
             "votes": raw["verdict"].get("votes"),
-            "verification": raw.get("verification"),
-            "tronquee": bool(raw.get("tronquee")),
+            "replay_check": raw.get("replay_check"),
+            "truncated": bool(raw.get("truncated")),
         })
 
-    findings.sort(key=lambda c: (SEVERITY_ORDER[c["gravite"]], c["id"]))
+    findings.sort(key=lambda c: (SEVERITY_ORDER[c["severity"]], c["id"]))
 
     return {
-        "campagne": {
+        "campaign": {
             "date": datetime.now().isoformat(timespec="seconds"),
-            "cible": target,
-            "statut": result["statut"],
-            "essais_prevus": len(plan["essais"]),
-            "essais_lances": len(lances),
+            "target": target,
+            "status": result["status"],
+            "attempts_planned": len(plan["attempts"]),
+            "attempts_sent": len(lances),
             # Non-empty = the campaign stopped before the end of its plan.
-            "ecourtee": result.get("ecourtee"),
+            "cut_short": result.get("cut_short"),
             # The mandate the campaign was run under. None for a local
             # target, which does not require one.
-            "autorisation": result.get("autorisation"),
+            "authorisation": result.get("authorisation"),
             # WHAT we tested with: a "no finding" obtained with a
             # three-month-old library does not say the same thing.
             "payloads": result.get("payloads"),
             # Chain of custody and test environment (manual §7.3).
             "case_id": result.get("case_id"),
-            "piste": result.get("piste"),
-            "sceau_piste": result.get("sceau_piste"),
-            "telemetrie": result.get("telemetrie"),
+            "trail": result.get("trail"),
+            "trail_seal": result.get("trail_seal"),
+            "telemetry": result.get("telemetry"),
         },
-        "fiche_cible": result.get("fiche"),
+        "target_profile": result.get("profile"),
         # Coverage is half the report: without it, "no vulnerability" means
         # nothing at all.
-        "couverture": {
-            "familles_testees": sorted({e["famille_owasp"] or e["technique"]
+        "coverage": {
+            "families_tested": sorted({e["owasp_family"] or e["technique"]
                                         for e in lances}),
             # TOUCHED, not tested: the probes launched also reach these
             # families, but the judge has no criterion to score them.
             # Announcing them tested would be false; keeping quiet would
             # suggest they were not approached at all. A reader who sees
             # "LLM06 touched, not judged" knows exactly where they stand.
-            "familles_effleurees": sorted(
+            "families_touched": sorted(
                 {family for essai in lances
-                 for family in (essai.get("familles_non_jugeables") or [])}),
-            "familles_ecartees": plan["ecartees"],
+                 for family in (essai.get("families_not_scorable") or [])}),
+            "families_skipped": plan["skipped"],
         },
         # What the campaign learned about the target along the way, and
         # which changed the order of attempts. Without this trace a reader
@@ -180,11 +185,11 @@ def build_report(result, target="inconnue"):
         # It is no longer always false: a campaign restricted to ONE technique
         # and run without adaptation produces i.i.d. attempts, and its "no
         # finding" can then be bounded for real.
-        "portee": statistiques.summarise(
+        "bounds": statistiques.summarise(
             len(findings), len(lances),
-            independent=bool(result.get("essais_independants")),
+            independent=bool(result.get("independent_attempts")),
             what="essais de la même technique"
-                 if result.get("essais_independants")
+                 if result.get("independent_attempts")
                  else "essais de campagne"),
         # The scope asked for. A restricted campaign must NEVER present its
         # coverage as complete: that is the lie by omission this section
@@ -194,11 +199,11 @@ def build_report(result, target="inconnue"):
         # the oracle could decide. An unreadable verdict or a cut-off reply
         # are excluded — they are missing measurements, not wins for the
         # target (OWASP manual §7.5).
-        "perimetre": result.get("perimetre") or {"seulement": [], "sauf": []},
-        "taux_de_succes": statistiques.success_rate(
-            result.get("etats") or []),
-        "constats": findings,
-        "journal": result.get("journal", {}),
+        "scope": result.get("scope") or {"only": [], "excluding": []},
+        "success_rate": statistiques.success_rate(
+            result.get("states") or []),
+        "findings": findings,
+        "call_log": result.get("call_log", {}),
     }
 
 
@@ -280,7 +285,7 @@ def _scope_block(perimetre):
     """
     if not perimetre:
         return []
-    seulement, sauf = perimetre.get("seulement"), perimetre.get("sauf")
+    seulement, sauf = perimetre.get("only"), perimetre.get("excluding")
     if not seulement and not sauf:
         return []
 
@@ -315,33 +320,33 @@ def _asr_block(rate):
     # a campaign with no usable attempt. Printing "not computable over 0
     # attempts" would be absurd there, and worse, would suggest a measurement
     # failure where there was only a missing field.
-    if not rate or not any(rate.get("comptes", {}).values()):
+    if not rate or not any(rate.get("counts", {}).values()):
         return []
 
     lines = []
-    if rate["taux"] is None:
+    if rate["rate"] is None:
         lines += [
             f"Taux de succès : **non calculable** — aucun des "
-            f"{rate['non_scorables']} essai(s) n'a pu être tranché par "
+            f"{rate['non_scorable']} essai(s) n'a pu être tranché par "
             f"l'arbitre. Ce n'est pas 0 % : c'est une absence de mesure.",
             "",
         ]
     else:
         lines += [
-            f"Taux de succès des attaques : **{rate['taux']:.0%}** "
-            f"({rate['succes']} sur {rate['scorables']} essai(s) "
+            f"Taux de succès des attaques : **{rate['rate']:.0%}** "
+            f"({rate['successes']} sur {rate['scorable']} essai(s) "
             f"exploitable(s)).",
             "",
         ]
 
-    if rate["non_scorables"]:
+    if rate["non_scorable"]:
         lines += [
-            f"{rate['non_scorables']} essai(s) sont EXCLUS de ce calcul, "
+            f"{rate['non_scorable']} essai(s) sont EXCLUS de ce calcul, "
             f"faute de verdict exploitable. Les compter comme des échecs "
             f"d'attaque surévaluerait la résistance de la cible :",
             "",
         ]
-        for state, count in rate["comptes"].items():
+        for state, count in rate["counts"].items():
             if count and not statistiques.is_scorable(state):
                 lines.append(f"- {count} × {statistiques.STATES[state][2]}")
         lines.append("")
@@ -367,12 +372,12 @@ def _evidence_block(campaign):
         return []          # campaign from before the chain of custody
     lines = ["", "## Chaîne de preuve", "",
               f"- **Dossier** : `{campaign['case_id']}`"]
-    if campaign.get("piste"):
-        lines.append(f"- **Piste d'audit** : `{campaign['piste']}` — chaque "
+    if campaign.get("trail"):
+        lines.append(f"- **Piste d'audit** : `{campaign['trail']}` — chaque "
                       f"échange avec la cible, horodaté, avec son empreinte")
-    if campaign.get("sceau_piste"):
+    if campaign.get("trail_seal"):
         lines += [
-            f"- **Sceau de la piste** (SHA-256) : `{campaign['sceau_piste']}`",
+            f"- **Sceau de la piste** (SHA-256) : `{campaign['trail_seal']}`",
             "",
             "Le sceau porte sur tout ce que la piste contient. "
             "`audit.verify_seal(piste)` répond à la seule question qui "
@@ -441,7 +446,7 @@ def _bounds_block(bounds, finding_count, rate=None):
     if not bounds:
         return []
 
-    attempts = bounds["essais"]
+    attempts = bounds["attempts"]
     lines = ["**Ce que ce résultat permet d'affirmer**", ""]
     lines += _asr_block(rate)
 
@@ -462,12 +467,12 @@ def _bounds_block(bounds, finding_count, rate=None):
         "",
     ]
 
-    if bounds.get("borne"):
+    if bounds.get("bound"):
         # The i.i.d. case: one technique, no adaptation. The bound holds,
         # and this is the only configuration where we may give it.
         lines += [
             f"Ici les essais SONT indépendants — même technique, sans "
-            f"adaptation — donc la borne vaut : {bounds['explication']}",
+            f"adaptation — donc la borne vaut : {bounds['explanation']}",
             "",
             f"Pour descendre cette borne à 5 %, il faudrait "
             f"{statistiques.attempts_to_rule_out(0.05)} essais ; à 1 %, "
@@ -477,7 +482,7 @@ def _bounds_block(bounds, finding_count, rate=None):
     else:
         lines += [
             f"Aucune borne chiffrée n'est donnée, et c'est délibéré — "
-            f"{bounds['explication']}",
+            f"{bounds['explanation']}",
             "",
         ]
         for rate in (0.10, 0.05):
@@ -508,13 +513,13 @@ def _excerpt(texte, abridge):
 
 def _finding_block(finding, abridge=False):
     lines = [
-        f"### {finding['id']} — {SEVERITY_LABELS[finding['gravite']]} : "
-        f"{finding['famille_owasp'] or finding['technique']}",
+        f"### {finding['id']} — {SEVERITY_LABELS[finding['severity']]} : "
+        f"{finding['owasp_family'] or finding['technique']}",
         "",
-        f"{finding['pourquoi']}",
+        f"{finding['why']}",
         "",
         f"- **Technique** : `{finding['technique']}` / "
-        + (f"objectif `{finding['objectif']}`" if finding["objectif"]
+        + (f"objectif `{finding['objective']}`" if finding["objective"]
            else "payload complet")
         + f" / transformation `{finding['transformation']}`",
         f"- **Critère retenu** : `{finding['critere']}`",
@@ -523,29 +528,29 @@ def _finding_block(finding, abridge=False):
         lines.append(f"- **Source du payload** : {finding['source']}")
     if finding["valeur"]:
         lines.append(f"- **Valeur obtenue** : `{finding['valeur']}`")
-    if finding["verification"]:
-        lines.append(f"- **Rejeu** : {finding['verification']['statut']} — "
-                      f"{finding['verification']['explication']}")
+    if finding["replay_check"]:
+        lines.append(f"- **Rejeu** : {finding['replay_check']['status']} — "
+                      f"{finding['replay_check']['explanation']}")
         # The FREQUENCY of a leak is what a client will want to know, and
         # "2 times out of 3" reads spontaneously as 67% — whereas three
         # attempts only support a very wide range. The replay being the only
         # i.i.d. place in the project, it is also the only one where that
         # range is justified.
-        bounds = finding["verification"].get("portee")
-        if bounds and bounds.get("borne"):
+        bounds = finding["replay_check"].get("bounds")
+        if bounds and bounds.get("bound"):
             lines.append(
                 f"  - Taux de reproduction : entre "
-                f"{bounds['borne']['basse']:.0%} et "
-                f"{bounds['borne']['haute']:.0%} "
-                f"({bounds['borne']['methode']}, {statistiques.CONFIDENCE:.0%}) "
-                f"— sur {bounds['essais']} rejeux seulement.")
+                f"{bounds['bound']['low']:.0%} et "
+                f"{bounds['bound']['high']:.0%} "
+                f"({bounds['bound']['method']}, {statistiques.CONFIDENCE:.0%}) "
+                f"— sur {bounds['attempts']} rejeux seulement.")
     if finding["votes"]:
         lines.append(f"- **Votes du juge** : {finding['votes']}")
-    if finding["tronquee"]:
+    if finding["truncated"]:
         lines.append("- **Réponse tronquée** : le contenu est incomplet.")
 
     for title, content in (("**Payload envoyé**", finding["payload"]),
-                           ("**Réponse de la cible**", finding["reponse"])):
+                           ("**Réponse de la cible**", finding["reply"])):
         excerpt = _excerpt(content, abridge)
         fence = _fence(excerpt)
         lines += ["", title, "", fence] + excerpt + [fence]
@@ -603,13 +608,13 @@ def render_markdown(report, abridge=False):
     republishing a whole attack. The source of truth keeps everything —
     `resultat.json` is never abridged.
     """
-    campaign = report["campagne"]
-    findings = report["constats"]
-    coverage = report["couverture"]
+    campaign = report["campaign"]
+    findings = report["findings"]
+    coverage = report["coverage"]
 
     counts = {}
     for finding in findings:
-        counts[finding["gravite"]] = counts.get(finding["gravite"], 0) + 1
+        counts[finding["severity"]] = counts.get(finding["severity"], 0) + 1
     summary = ", ".join(f"{count} {SEVERITY_LABELS[severity].lower()}"
                        for severity, count in sorted(
                            counts.items(), key=lambda p: SEVERITY_ORDER[p[0]]))
@@ -617,32 +622,32 @@ def render_markdown(report, abridge=False):
     lines = [
         "# Rapport de campagne",
         "",
-        f"- **Cible** : `{campaign['cible']}`",
+        f"- **Cible** : `{campaign['target']}`",
         f"- **Date** : {campaign['date']}",
     ] + ([f"- **Dossier** : `{campaign['case_id']}`"]
          if campaign.get("case_id") else []) + [
-        f"- **Essais prévus au plan** : {campaign['essais_prevus']}",
+        f"- **Essais prévus au plan** : {campaign['attempts_planned']}",
         f"- **Constats** : {len(findings)}" + (f" ({summary})" if summary else ""),
         "",
     ]
 
-    if campaign.get("ecourtee"):
+    if campaign.get("cut_short"):
         # At the top, in bold, before anything else: reading the findings
         # of a campaign cut short without knowing it would lead to a false
         # conclusion.
         lines += [
-            f"> **Campagne ÉCOURTÉE — {campaign['ecourtee']}**",
+            f"> **Campagne ÉCOURTÉE — {campaign['cut_short']}**",
             "> Le plan n'est pas allé à son terme : les familles listées plus "
             "bas comme « testées » ne l'ont été que partiellement, et "
             "l'absence de constat ne prouve rien.",
             "",
         ]
 
-    if report["journal"]:
-        log = report["journal"]
-        line = (f"{log.get('appels', 0)} appel(s) au LLM, "
+    if report["call_log"]:
+        log = report["call_log"]
+        line = (f"{log.get('calls', 0)} appel(s) au LLM, "
                  f"{log.get('tokens', 0)} tokens.")
-        truncated_count = len(log.get("tronquees", []))
+        truncated_count = len(log.get("truncated_replies", []))
         if truncated_count:
             line += (f" **{truncated_count} réponse(s) tronquée(s)** : les verdicts "
                       f"correspondants sont peu fiables.")
@@ -650,12 +655,12 @@ def render_markdown(report, abridge=False):
 
     payloads = campaign.get("payloads")
     if payloads and payloads.get("version"):
-        age = payloads.get("age_jours")
+        age = payloads.get("age_days")
         line = (f"Payloads : garak {payloads['version']}, "
-                 f"{payloads['sondes']} sonde(s)")
+                 f"{payloads['probes']} sonde(s)")
         if age is not None:
             line += f", exportés il y a {age} jour(s)"
-        if payloads.get("perime"):
+        if payloads.get("stale"):
             line += (". **Bibliothèque vieillissante** : les payloads perdent "
                       "de leur efficacité à mesure que les modèles sont "
                       "corrigés, ce qui affaiblit la portée d'un « aucun "
@@ -681,57 +686,57 @@ def render_markdown(report, abridge=False):
         "## Couverture",
         "",
         "Ce qui a été tenté, et surtout ce qui ne l'a pas été : un constat "
-        "ne borne pas le reste." if report["constats"] else
+        "ne borne pas le reste." if report["findings"] else
         "Un « aucun constat » ne vaut que par ce qui a été réellement tenté.",
         "",
     ]
-    if campaign.get("ecourtee"):
+    if campaign.get("cut_short"):
         lines += [
             f"⚠️ La campagne s'est arrêtée avant la fin de son plan "
-            f"({campaign['ecourtee']}). La couverture ci-dessous est donc "
+            f"({campaign['cut_short']}). La couverture ci-dessous est donc "
             f"**incomplète**, y compris pour les familles dites testées.",
             "",
         ]
 
-    lines += _scope_block(report.get("perimetre"))
+    lines += _scope_block(report.get("scope"))
 
     # --- What this count allows us to claim --------------------------------
     # Required by the GenAI Red Teaming Manual (§7.5): zero successes proves
     # nothing, it bounds. Placed BEFORE the list of families, because a reader
     # skimming the section must meet the limit before the results.
-    lines += _bounds_block(report.get("portee"), len(report["constats"]),
-                           report.get("taux_de_succes"))
+    lines += _bounds_block(report.get("bounds"), len(report["findings"]),
+                           report.get("success_rate"))
 
     lines += ["**Familles testées**", ""]
-    lines += [f"- `{f}`" for f in coverage["familles_testees"]] or \
+    lines += [f"- `{f}`" for f in coverage["families_tested"]] or \
               ["- aucune"]
     # Touched: the probes launched reach them, but nothing can score them.
     # Deciding between "tested" and "not tested" would be false in both
     # directions, hence this third state.
-    if coverage.get("familles_effleurees"):
+    if coverage.get("families_touched"):
         lines += ["", "**Familles effleurées, mais NON jugées**", "",
                    "Les sondes lancées touchent aussi ces familles. "
                    "L'arbitre n'a pas de critère pour les juger : un verdict "
                    "`aucun` n'y signifie donc rien, et ces familles ne "
                    "comptent pas comme testées.", ""]
-        lines += [f"- `{f}`" for f in coverage["familles_effleurees"]]
+        lines += [f"- `{f}`" for f in coverage["families_touched"]]
 
-    lines += _atlas_block(coverage["familles_testees"])
+    lines += _atlas_block(coverage["families_tested"])
 
     lines += ["", "**Familles NON testées**", ""]
-    if coverage["familles_ecartees"]:
+    if coverage["families_skipped"]:
         # Grouped by REASON: since the relevance rules it is whole modules
         # that get skipped, and a flat list repeated "no client renders
         # Markdown" eight times. The reason carries the information, the
         # techniques are only the detail.
         for reason, techniques in group_by_reason(
-                coverage["familles_ecartees"]):
+                coverage["families_skipped"]):
             # A still-empty hand-written technique whose family is covered
             # elsewhere is NOT a hole: announcing it as one would contradict
             # the list of tested families, just above.
             elsewhere = " — la famille est couverte par d'autres sondes" if all(
-                e.get("famille_couverte_ailleurs")
-                for e in coverage["familles_ecartees"]
+                e.get("family_covered_elsewhere")
+                for e in coverage["families_skipped"]
                 if e["technique"] in techniques) else ""
             lines.append(f"- **{reason}**{elsewhere}")
             lines.append(f"  - {len(techniques)} technique(s) : "
@@ -753,50 +758,50 @@ def render_markdown(report, abridge=False):
             "répondu, par des règles déterministes. Ce qui a été appris :",
             "",
         ]
-        lines += [f"- {o['explication']}" for o in report["adaptation"]]
+        lines += [f"- {o['explanation']}" for o in report["adaptation"]]
         lines += [
             "",
             "Un essai relégué n'est jamais écarté : il reste dans le vivier, "
             "car une attaque probabiliste peut réussir plus tard.",
         ]
 
-    authorisation = campaign.get("autorisation")
+    authorisation = campaign.get("authorisation")
     if authorisation:
         # On an engagement, a report that does not say under which mandate
         # it was produced is not enforceable.
         lines += [
             "", "## Mandat", "",
             f"- **Référence** : {authorisation['reference']}",
-            f"- **Autorisé par** : {authorisation['autorise_par']}",
-            f"- **Fenêtre** : du {authorisation['debut']} au "
-            f"{authorisation['fin']}",
+            f"- **Autorisé par** : {authorisation['authorised_by']}",
+            f"- **Fenêtre** : du {authorisation['start']} au "
+            f"{authorisation['end']}",
         ]
-        if authorisation.get("portee"):
-            lines.append(f"- **Portée** : {authorisation['portee']}")
+        if authorisation.get("bounds"):
+            lines.append(f"- **Portée** : {authorisation['bounds']}")
 
     lines += _evidence_block(campaign)
 
-    if report["fiche_cible"]:
-        profile = report["fiche_cible"]
+    if report["target_profile"]:
+        profile = report["target_profile"]
         lines += [
             "", "## Fiche de la cible", "",
             "Établie par l'agent de reconnaissance, à partir de questions "
             "anodines. Chaque fait vient de ce que la cible a dit.", "",
             f"- **Rôle** : {profile.get('role') or '—'}",
-            f"- **Langue** : {profile.get('langue') or '—'}",
+            f"- **Langue** : {profile.get('language') or '—'}",
             f"- **Outils déclarés** : "
-            f"{', '.join(profile.get('outils') or []) or 'aucun'}",
+            f"{', '.join(profile.get('tools') or []) or 'aucun'}",
             f"- **Sujets refusés** : "
-            f"{', '.join(profile.get('sujets_refuses') or []) or 'aucun'}",
-            f"- **Écrit du code** : {_tri_state_label(profile.get('produit_du_code'))}",
+            f"{', '.join(profile.get('refused_subjects') or []) or 'aucun'}",
+            f"- **Écrit du code** : {_tri_state_label(profile.get('writes_code'))}",
             f"- **Lit des documents fournis** : "
-            f"{_tri_state_label(profile.get('traite_des_documents'))}",
+            f"{_tri_state_label(profile.get('handles_documents'))}",
         ]
         # The context gates whole families of probes, and it comes from the
         # OPERATOR, not from the target. A report that kept quiet about it
         # left its reader with no way to understand why `web_injection` or
         # `ansiescape` were skipped.
-        context = profile.get("contexte") or []
+        context = profile.get("context") or []
         lines.append(
             f"- **Contexte déclaré par l'opérateur** : "
             f"{', '.join(context) if context else 'aucun'}")

@@ -63,18 +63,64 @@ part of the change, not a detail.
 | écourtée | cut short | the budget stopped the campaign |
 | clôture | fence | the report's code-block delimiter |
 
-## Judge criteria — DATA, not prose
+## Judge criteria — HELD, and the reason is measured
 
-These are **keys**: they appear in `resultat.json`, in 18 sealed audit trails,
-in the committed example report and in the labelled corpus. Renaming them is a
-data migration, not a translation.
+These four values, and the four fields of the judge's JSON output (`analyse`,
+`enfreint`, `critere`, `valeur`), live **inside `JUDGE_SYSTEM_PROMPT`** —
+verified, not assumed. Renaming any of them changes the artefact the
+89 / 100 / 96 were measured on, so the published figures would stop describing
+the prompt in the repository.
 
-| French | English |
-|---|---|
-| divulgation | disclosure |
-| obeissance | compliance |
-| abus_outils | tool_abuse |
-| aucun | none |
+| French | Would become | Status |
+|---|---|---|
+| divulgation | disclosure | **held** |
+| obeissance | compliance | **held** |
+| abus_outils | tool_abuse | **held** |
+| aucun | none | **held** |
+| analyse / enfreint / critere / valeur | the output schema | **held** |
+
+Moving them is one commit of renaming plus a dev run (~100,000 tokens) and a
+frozen-set consultation (~35,000), in that order, with both results recorded
+before anything is published. `tests/test_migration.py` holds the wall:
+it pins the prompt's length and asserts that none of the eight appears in the
+migration map.
+
+Two other vocabularies stay French for their own reasons:
+
+- **the labelling categories** (`controle`, `fuite-directe`,
+  `multitours-reussi`…): the author's taxonomy, named by its labels throughout
+  CLAUDE.md and in the labelling menu. Renaming buys nothing functional and
+  moves a vocabulary the author uses by hand.
+- **the target names** (`leurre`, `demo`, `mock`): values of `--cible`, hence
+  a documented interface.
+
+## Everything else moved, in one pass
+
+Keys are STRUCTURE, so they translated; internal enumerations (statuses,
+severities, scorable states, replay outcomes, trail entry types, transformation
+names, prerequisite names) went with them. 1,603 string replacements across 57
+files, plus the three committed data files.
+
+The rule that made it safe is the mirror image of the tokenizer rule for
+identifiers: **replace a string only when its whole content is exactly a key**.
+A French error message is never exactly `statut`, so prose is untouchable by
+construction. Two passes are needed, because an f-string is a single token
+before Python 3.12: the exact-match pass, then a regex for `['key']` subscripts
+written inside f-strings.
+
+What the pass could NOT see, and what caught it:
+
+| Case | What broke | What found it |
+|---|---|---|
+| a prerequisite NAME | `outils` was both a profile key and a prerequisite name; the key moved, the data value did not | the validator test |
+| the analyst's prompt | it asks the model for French keys, and the normalisation now reads English ones | the reconnaissance tests |
+| a test helper's keyword | `_technique(modeles=…)` merged into a dict whose key had become `templates`, so the dict gained BOTH | the validator test |
+| an assertion that reads like a key | `assert any("cible" in p …)` over French prose became `"target"` | the telemetry test |
+
+Older data is read through `migration.modernise()`, which is deliberately
+one-way: nothing writes the old names any more. It matters most for the three
+kinds of file outside git — the local garak snapshot, a harvest waiting to be
+labelled, and every `resultat.json` and sealed trail already produced.
 
 ## Translated in a coordinated pass, not file by file
 

@@ -39,23 +39,25 @@ TEST_LOG = Path(__file__).parent / "journal_test.jsonl"
 
 def load_exchanges(dataset):
     """Loads one set's exchanges ("dev" or "test"), after checking."""
+    from migration import modernise
+
     with open(EXCHANGES_FILE, encoding="utf-8") as f:
-        exchanges = json.load(f)["echanges"]
+        exchanges = modernise(json.load(f))["exchanges"]
 
     # A guard: one scenario (a group) must NEVER be split between the two
     # sets. Otherwise the test set would hold a mere rewording of a dev case,
     # already "seen" during tuning: it would measure nothing at all.
     dataset_of_group = {}
     for exchange in exchanges:
-        group = exchange["groupe"]
-        dataset_of_group.setdefault(group, exchange["jeu"])
-        if dataset_of_group[group] != exchange["jeu"]:
+        group = exchange["group"]
+        dataset_of_group.setdefault(group, exchange["dataset"])
+        if dataset_of_group[group] != exchange["dataset"]:
             raise ValueError(
                 f"Le groupe {group} est réparti entre 'dev' et 'test' "
                 f"({exchange['id']}) : fuite entre les deux jeux."
             )
 
-    in_dataset = [e for e in exchanges if e["jeu"] == dataset]
+    in_dataset = [e for e in exchanges if e["dataset"] == dataset]
 
     # The conversations (phase 3b) are in the corpus but NOT measurable
     # here: the judge's instruction expects a single turn, and its examples
@@ -64,7 +66,7 @@ def load_exchanges(dataset):
     # precision — so the first `--integrer` of conversations would silently
     # shift a reference measurement. We skip them, and we SAY SO: a corpus
     # that grows without the measurement changing needs explaining.
-    single_turn = [e for e in in_dataset if not e.get("tours")]
+    single_turn = [e for e in in_dataset if not e.get("turns")]
     ignored = len(in_dataset) - len(single_turn)
     if ignored:
         print(f"{ignored} conversation(s) multi-tours ignorée(s) : "
@@ -83,12 +85,12 @@ def log_test_consultation(counts, metrics, language='fr'):
         "date": datetime.now().isoformat(timespec="seconds"),
         # Without the judge being measured, the log's lines would not be
         # comparable.
-        "juge": f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['modele']}",
+        "juge": f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['model']}",
         # The instruction's LANGUAGE, since 2026-11-14: two consultations
         # with two different instructions would otherwise be
         # indistinguishable in the log, and the frozen set would lose its
         # value as a reference.
-        "langue_consigne": language,
+        "instruction_language": language,
         **counts,
         **{name: round(value, 3) for name, value in metrics.items()},
     }
@@ -102,7 +104,7 @@ def evaluate(dataset="dev", language="fr"):
     errors = []
 
     print(f"Juge : profil {JUDGE_PROFILE}, "
-          f"modèle {PROFILES[JUDGE_PROFILE]['modele']}\n")
+          f"modèle {PROFILES[JUDGE_PROFILE]['model']}\n")
 
     if dataset == "test":
         print("!!! Jeu de TEST gelé : ne règle pas l'arbitre d'après ces "
@@ -110,8 +112,8 @@ def evaluate(dataset="dev", language="fr"):
 
     # Bounded by nature: one call to the judge per labelled exchange.
     for exchange in exchanges:
-        result = judge(exchange["payload"], exchange["reponse"], language)
-        expected = exchange["attendu"]
+        result = judge(exchange["payload"], exchange["reply"], language)
+        expected = exchange["expected"]
         obtained = result["reussi"]
 
         if obtained is None:
@@ -129,14 +131,14 @@ def evaluate(dataset="dev", language="fr"):
         symbol = "ok " if case in ("VP", "VN") else "ERR"
         print(f"[{symbol}] {exchange['id']:<6} {case:<8} "
               f"attendu={expected!s:<5} obtenu={obtained!s:<5} "
-              f"{exchange['categorie']}")
+              f"{exchange['category']}")
 
         if case not in ("VP", "VN"):
             errors.append((exchange, result))
 
     tp, fp = counts["VP"], counts["FP"]
     total = len(exchanges)
-    real_vulnerabilities = sum(1 for e in exchanges if e["attendu"])
+    real_vulnerabilities = sum(1 for e in exchanges if e["expected"])
     metrics = {
         # Precision: when the judge says "vulnerability", is it right?
         "precision": ratio(tp, tp + fp),
@@ -160,7 +162,7 @@ def evaluate(dataset="dev", language="fr"):
     if errors:
         print("\n=== Détail des erreurs ===")
         for exchange, result in errors:
-            print(f"\n{exchange['id']} [{exchange['categorie']}] — {exchange['piege']}")
+            print(f"\n{exchange['id']} [{exchange['category']}] — {exchange['trap']}")
             print(f"  Juge : {result['analyse']}")
 
     if dataset == "test":

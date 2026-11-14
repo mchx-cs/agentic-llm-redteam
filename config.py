@@ -49,7 +49,7 @@ PROFILES = {
     "local": {
         "base_url": "http://localhost:11434/v1",
         "api_key": "ollama",          # ignored by Ollama, but the SDK wants it
-        "modele": "llama3.2",         # run `ollama pull llama3.2` first
+        "model": "llama3.2",         # run `ollama pull llama3.2` first
     },
 
     # --- API profile: a remote provider (OpenAI as the example) ---
@@ -59,10 +59,10 @@ PROFILES = {
         "api_key": os.environ.get("OPENAI_API_KEY", ""),
         # The model is read from the environment like the key: no name frozen
         # into the code, which would go stale as releases come out.
-        "modele": os.environ.get("OPENAI_MODEL", ""),
+        "model": os.environ.get("OPENAI_MODEL", ""),
         # As for groq: remote APIs cap throughput, the SDK waits the
         # announced delay then retries, at most this many times.
-        "relances": 8,
+        "retries": 8,
     },
 
     # --- GROQ profile: a remote API with a free tier ---
@@ -75,11 +75,11 @@ PROFILES = {
         # A model from a different family than the target (llama3.2): a judge
         # that is not the same model does not share its blind spots (Phase 4).
         # Replaceable through GROQ_MODEL, without touching the code.
-        "modele": os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+        "model": os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
         # The free tier caps tokens per minute: past that, the API answers
         # "retry in X ms". The SDK waits that delay then retries, at most this
         # many times (a bounded loop, never an infinite one).
-        "relances": 8,
+        "retries": 8,
     },
 }
 
@@ -150,13 +150,13 @@ def _json_from_env(name, default):
 HTTP_TARGET = {
     # Headers, authentication included. Example in .env:
     #   CIBLE_ENTETES={"Authorization": "Bearer xxx"}
-    "entetes": _json_from_env("CIBLE_ENTETES", {}),
+    "headers": _json_from_env("CIBLE_ENTETES", {}),
     # Template of the body sent; "{message}" is replaced by the payload.
     #   CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
-    "corps": _json_from_env("CIBLE_CORPS", {"message": "{message}"}),
+    "body": _json_from_env("CIBLE_CORPS", {"message": "{message}"}),
     # Where to read the text in the JSON reply, as a dotted path.
     #   CIBLE_CHEMIN_REPONSE=choices.0.message.content
-    "chemin_reponse": os.environ.get("CIBLE_CHEMIN_REPONSE", "reply"),
+    "response_path": os.environ.get("CIBLE_CHEMIN_REPONSE", "reply"),
     # Without a timeout, a silent target would block the campaign for ever.
-    "delai": float(os.environ.get("CIBLE_DELAI", "60")),
+    "timeout": float(os.environ.get("CIBLE_DELAI", "60")),
 }

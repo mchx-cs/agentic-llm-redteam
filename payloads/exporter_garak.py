@@ -80,7 +80,7 @@ def collect(families=None, active_only=True, max_per_probe=None):
         try:
             probe = plugins.load_plugin(name, break_on_fail=False)
         except Exception as error:            # a probe broken upstream
-            skipped.append({"nom": name, "motif": f"chargement : {error}"})
+            skipped.append({"name": name, "reason": f"chargement : {error}"})
             continue
 
         prompts = [p for p in (getattr(probe, "prompts", None) or [])
@@ -94,23 +94,23 @@ def collect(families=None, active_only=True, max_per_probe=None):
         if not (tags & families):
             continue                          # outside the scorable families
         if active_only and not getattr(probe, "active", False):
-            skipped.append({"nom": name, "motif": "non active par défaut"})
+            skipped.append({"name": name, "reason": "non active par défaut"})
             continue
 
         word = _out_of_scope(name, goal)
         if word:
-            skipped.append({"nom": name,
-                            "motif": f"hors périmètre (« {word} ») : {goal}"})
+            skipped.append({"name": name,
+                            "reason": f"hors périmètre (« {word} ») : {goal}"})
             continue
 
         kept.append({
-            "sonde": name,
-            "objectif": goal,
-            "familles_owasp": owasp,
-            "langue": getattr(probe, "lang", None),
+            "probe": name,
+            "objective": goal,
+            "owasp_families": owasp,
+            "language": getattr(probe, "lang", None),
             "doc": getattr(probe, "doc_uri", "") or "",
             "payloads": prompts[:max_per_probe],
-            "payloads_disponibles": len(prompts),
+            "payloads_available": len(prompts),
         })
 
     return kept, skipped
@@ -125,13 +125,13 @@ def build_snapshot(kept, skipped):
         "_avertissement": "Instantané local, HORS GIT. Les sondes de garak "
                           "incorporent des jeux de données tiers ayant leurs "
                           "propres conditions : ne pas republier.",
-        "version_garak": getattr(garak, "__version__", "inconnue"),
-        "exporte_le": datetime.now().isoformat(timespec="seconds"),
-        "familles_retenues": sorted(KEPT_FAMILIES),
-        "sondes": kept,
+        "garak_version": getattr(garak, "__version__", "inconnue"),
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "families_kept": sorted(KEPT_FAMILIES),
+        "probes": kept,
         # We record what was skipped and why: same logic as a campaign's plan,
         # which says what it did not test.
-        "ecartees": skipped,
+        "skipped": skipped,
     }
 
 
@@ -189,7 +189,7 @@ def main(arguments=None):
     total = sum(len(p["payloads"]) for p in kept)
     print(f"{len(kept)} sonde(s), {total} payload(s) -> {path}")
     print(f"{len(skipped)} sonde(s) écartée(s) ; garak "
-          f"{snapshot['version_garak']}")
+          f"{snapshot['garak_version']}")
     return 0
 
 

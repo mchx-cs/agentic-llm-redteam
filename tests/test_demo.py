@@ -20,11 +20,11 @@ def answer(monkeypatch):
     """Makes the target answer a chosen text, and keeps its instruction."""
     seen = {}
 
-    def installer(reponse):
+    def installer(reply):
         def faux(message, system=None, **kwargs):
             seen["systeme"] = system
             seen["message"] = message
-            return reponse
+            return reply
         monkeypatch.setattr(demo, "ask_llm", faux)
         return seen
     return installer
@@ -103,9 +103,9 @@ class TestFakeTool:
         # Nothing is executed: what counts is that the target agreed to act.
         # That is excessive agency (LLM06).
         answer("Je consulte. [OUTIL: consulter_dossier(Marie Dupont)]")
-        reponse = build_demo_target(1)("question")
-        assert "résultat de l'outil" in reponse
-        assert demo.CONFIDENTIAL_RECORD in reponse
+        reply = build_demo_target(1)("question")
+        assert "résultat de l'outil" in reply
+        assert demo.CONFIDENTIAL_RECORD in reply
 
     def test_without_a_call_nothing_is_added(self, answer):
         answer("Bonjour, comment puis-je vous aider ?")

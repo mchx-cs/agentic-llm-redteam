@@ -72,19 +72,19 @@ def _measures(result):
     """What we keep from a campaign: findings AND coverage."""
     import statistiques
 
-    states = result.get("etats") or []
+    states = result.get("states") or []
     rate = statistiques.success_rate(states)
     return {
-        "constats": len(result.get("constats") or []),
-        "essais": len(result.get("lances") or []),
-        "scorables": rate["scorables"],
-        "non_scorables": rate["non_scorables"],
+        "findings": len(result.get("findings") or []),
+        "attempts": len(result.get("launched") or []),
+        "scorable": rate["scorable"],
+        "non_scorable": rate["non_scorable"],
         # Coverage counts as much as findings: an arm that finds more while
         # touching one family only is not necessarily better.
-        "modules": len({e.get("groupe") or e["technique"]
-                        for e in result.get("lances") or []}),
-        "familles": len({e["famille_owasp"] for e in
-                         result.get("lances") or [] if e["famille_owasp"]}),
+        "modules": len({e.get("group") or e["technique"]
+                        for e in result.get("launched") or []}),
+        "familles": len({e["owasp_family"] for e in
+                         result.get("launched") or [] if e["owasp_family"]}),
     }
 
 
@@ -95,11 +95,11 @@ def one_pair(budget, show=print):
         start = time.monotonic()
         result = _campaign(adaptive, budget)
         pair[arm] = {**_measures(result),
-                       "secondes": round(time.monotonic() - start, 1)}
+                       "seconds": round(time.monotonic() - start, 1)}
         m = pair[arm]
-        show(f"    {arm:10s} {m['constats']} constat(s), "
+        show(f"    {arm:10s} {m['findings']} constat(s), "
                  f"{m['modules']} module(s), "
-                 f"{m['non_scorables']} non scorable(s), {m['secondes']} s")
+                 f"{m['non_scorable']} non scorable(s), {m['seconds']} s")
     return pair
 
 
@@ -144,14 +144,14 @@ def _summary(pairs, budget):
     if not pairs:
         return
     print(f"\n=== Bilan sur {len(pairs)} paire(s), budget {budget} ===\n")
-    print(f"{'':12s} {'constats':>10s} {'modules':>9s} {'non scor.':>10s}")
+    print(f"{'':12s} {'findings':>10s} {'modules':>9s} {'non scor.':>10s}")
     for arm in ("adaptatif", "statique"):
         average = {key: sum(p[arm][key] for p in pairs) / len(pairs)
-                   for key in ("constats", "modules", "non_scorables")}
-        print(f"  {arm:10s} {average['constats']:>10.2f} "
-              f"{average['modules']:>9.2f} {average['non_scorables']:>10.2f}")
+                   for key in ("findings", "modules", "non_scorable")}
+        print(f"  {arm:10s} {average['findings']:>10.2f} "
+              f"{average['modules']:>9.2f} {average['non_scorable']:>10.2f}")
 
-    gaps = [p["adaptatif"]["constats"] - p["statique"]["constats"]
+    gaps = [p["adaptatif"]["findings"] - p["statique"]["findings"]
               for p in pairs]
     wins = sum(1 for e in gaps if e > 0)
     losses = sum(1 for e in gaps if e < 0)

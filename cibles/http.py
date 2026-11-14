@@ -42,40 +42,40 @@ MESSAGE_MARKER = "{message}"
 # precisely why the project never guesses: it offers.
 TARGET_PROFILES = {
     "openai": {
-        "corps": {"messages": [{"role": "user", "content": MESSAGE_MARKER}]},
-        "chemin_reponse": "choices.0.message.content",
+        "body": {"messages": [{"role": "user", "content": MESSAGE_MARKER}]},
+        "response_path": "choices.0.message.content",
         "description": "OpenAI-style API (OpenAI, Groq, Together, vLLM, "
                        "LM Studio, most gateways)",
     },
     "ollama": {
-        "corps": {"model": "llama3.2", "prompt": MESSAGE_MARKER,
+        "body": {"model": "llama3.2", "prompt": MESSAGE_MARKER,
                   "stream": False},
-        "chemin_reponse": "response",
+        "response_path": "response",
         "description": "Ollama directly (/api/generate), no OpenAI layer",
     },
     "anthropic": {
-        "corps": {"messages": [{"role": "user", "content": MESSAGE_MARKER}],
+        "body": {"messages": [{"role": "user", "content": MESSAGE_MARKER}],
                   "max_tokens": 1024},
-        "chemin_reponse": "content.0.text",
+        "response_path": "content.0.text",
         "description": "Anthropic's Messages API",
     },
     "simple": {
-        "corps": {"message": MESSAGE_MARKER},
-        "chemin_reponse": "reply",
+        "body": {"message": MESSAGE_MARKER},
+        "response_path": "reply",
         "description": "bespoke app: {\"message\": …} → {\"reply\": …}",
     },
     # For an application whose request body we do not control, and which
     # streams without any way to stop it — the case of a client application
     # tested under mandate.
     "openai-flux": {
-        "corps": {"messages": [{"role": "user", "content": MESSAGE_MARKER}],
+        "body": {"messages": [{"role": "user", "content": MESSAGE_MARKER}],
                   "stream": True},
-        "chemin_reponse": "@flux:choices.0.delta.content",
+        "response_path": "@flux:choices.0.delta.content",
         "description": "OpenAI-style API replying as a stream (SSE)",
     },
-    "texte": {
-        "corps": {"message": MESSAGE_MARKER},
-        "chemin_reponse": "@brut",
+    "text": {
+        "body": {"message": MESSAGE_MARKER},
+        "response_path": "@brut",
         "description": "plain-text reply, no JSON around it",
     },
 }
@@ -223,7 +223,7 @@ def read_reply(brut, response_path):
 # the reader decides.
 PROFILE_BY_DECLARED_TYPE = {
     "text/event-stream": "openai-flux",
-    "text/plain": "texte",
+    "text/plain": "text",
     "text/html": None,          # pas un profil : une error d'adresse
 }
 
@@ -259,7 +259,7 @@ def _diagnose(brut, declared_type=""):
                 f"ce n'est pas un objet JSON.\n"
                 f"  Le profil correspondant existe —\n"
                 f"    --profil-cible {advised}\n"
-                f"    ou CIBLE_CHEMIN_REPONSE={settings['chemin_reponse']}\n"
+                f"    ou CIBLE_CHEMIN_REPONSE={settings['response_path']}\n"
                 f"  ({settings['description']})")
 
     declares_html = (declared_type or "").split(";")[0].strip().lower() \
@@ -364,12 +364,12 @@ def build_http_target(url, headers=None, body=None, response_path=None,
         )
     settings = TARGET_PROFILES.get(profile, {})
 
-    headers = {**HTTP_TARGET["entetes"], **(headers or {})}
-    body = _first_defined(body, settings.get("corps"), HTTP_TARGET["corps"])
+    headers = {**HTTP_TARGET["headers"], **(headers or {})}
+    body = _first_defined(body, settings.get("body"), HTTP_TARGET["body"])
     response_path = _first_defined(
-        response_path, settings.get("chemin_reponse"),
-        HTTP_TARGET["chemin_reponse"])
-    timeout = timeout or HTTP_TARGET["delai"]
+        response_path, settings.get("response_path"),
+        HTTP_TARGET["response_path"])
+    timeout = timeout or HTTP_TARGET["timeout"]
 
     # BEFORE the first call: a whole campaign on a mute template would
     # conclude "no finding" without having sent any of what we believed.
@@ -487,18 +487,18 @@ def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
     from config import HTTP_TARGET
 
     settings = TARGET_PROFILES.get(profile, {})
-    corps_final = _first_defined(body, settings.get("corps"),
-                                  HTTP_TARGET["corps"])
+    corps_final = _first_defined(body, settings.get("body"),
+                                  HTTP_TARGET["body"])
     chemin_final = _first_defined(response_path,
-                                   settings.get("chemin_reponse"),
-                                   HTTP_TARGET["chemin_reponse"])
+                                   settings.get("response_path"),
+                                   HTTP_TARGET["response_path"])
 
     show(f"Cible    : {url}")
     if profile:
         show(f"Profil   : {profile} — {settings['description']}")
     show(f"Corps    : {json.dumps(corps_final, ensure_ascii=False)}")
     show(f"Chemin   : {chemin_final}")
-    entetes_finaux = {**HTTP_TARGET["entetes"], **(headers or {})}
+    entetes_finaux = {**HTTP_TARGET["headers"], **(headers or {})}
     # On nomme les en-têtes sans montrer leur valeur : un jeton n'a rien à
     # faire dans une sortie de terminal qu'on colle dans un rapport ou un chat.
     show(f"En-têtes : {', '.join(entetes_finaux) or 'aucun'}"

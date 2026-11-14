@@ -17,21 +17,21 @@ from payloads.source_garak import OUT_OF_SCOPE
 from payloads.valider import valider
 
 
-def _probe(nom="probes.dan.DanInTheWild", familles=("owasp:llm01",),
+def _probe(name="probes.dan.DanInTheWild", owasp_families=("owasp:llm01",),
            payloads=("prompt un", "prompt deux")):
-    return {"sonde": nom, "objectif": "disregard the system prompt",
-            "familles_owasp": list(familles), "langue": "en", "doc": "",
-            "payloads": list(payloads), "payloads_disponibles": len(payloads)}
+    return {"probe": name, "objective": "disregard the system prompt",
+            "owasp_families": list(owasp_families), "language": "en", "doc": "",
+            "payloads": list(payloads), "payloads_available": len(payloads)}
 
 
 @pytest.fixture
 def snapshot(monkeypatch, tmp_path):
     """Installs a garak snapshot built for the test."""
-    def installer(sondes):
+    def installer(probes):
         path = tmp_path / "garak.json"
         path.write_text(json.dumps({
-            "version_garak": "0.17.1", "exporte_le": "2026-11-10T00:00:00",
-            "sondes": sondes, "ecartees": []}), encoding="utf-8")
+            "garak_version": "0.17.1", "exported_at": "2026-11-10T00:00:00",
+            "probes": probes, "skipped": []}), encoding="utf-8")
         monkeypatch.setattr(agents.attaquant, "GARAK_FILE", path)
         return path
     return installer
@@ -60,9 +60,9 @@ class TestTranslatingAProbe:
         # A probe from a module with NO prerequisite of its own, to isolate
         # this source from the other (see TestRelevancePerModule).
         technique = _technique_from_probe(
-            _probe(nom="probes.encoding.InjectBase64", familles=[tag]))
-        assert technique["famille_owasp"] == family
-        assert technique["prerequis"] == prerequisite
+            _probe(name="probes.encoding.InjectBase64", owasp_families=[tag]))
+        assert technique["owasp_family"] == family
+        assert technique["prerequisites"] == prerequisite
 
 
 class TestRelevancePerModule:
@@ -78,41 +78,41 @@ class TestRelevancePerModule:
     """
 
     @pytest.mark.parametrize("module, prerequisite", [
-        ("dan", "consignes"),
-        ("phrasing", "consignes"),
-        ("sata", "consignes"),
-        ("packagehallucination", "produit-du-code"),
-        ("latentinjection", "traite-des-documents"),
+        ("dan", "instructions"),
+        ("phrasing", "instructions"),
+        ("sata", "instructions"),
+        ("packagehallucination", "writes-code"),
+        ("latentinjection", "handles-documents"),
         ("ansiescape", "terminal"),
-        ("web_injection", "rendu-riche"),
-        ("exploitation", "base-donnees"),
+        ("web_injection", "rich-rendering"),
+        ("exploitation", "database"),
     ])
     def test_the_module_imposes_its_prerequisite(self, module, prerequisite):
-        technique = _technique_from_probe(_probe(nom=f"probes.{module}.X"))
-        assert prerequisite in technique["prerequis"]
+        technique = _technique_from_probe(_probe(name=f"probes.{module}.X"))
+        assert prerequisite in technique["prerequisites"]
 
     @pytest.mark.parametrize("module", ["encoding", "goodside", "promptinject"])
     def test_a_universal_module_demands_nothing(self, module):
         # The right default: these probes apply to any model. Adding a
         # prerequisite "as a precaution" would cost an undiscovered
         # vulnerability, which is worse than a wasted attempt.
-        technique = _technique_from_probe(_probe(nom=f"probes.{module}.X"))
-        assert technique["prerequis"] == []
+        technique = _technique_from_probe(_probe(name=f"probes.{module}.X"))
+        assert technique["prerequisites"] == []
 
     def test_the_two_sources_add_up(self):
         # `dan` exige des consignes, `owasp:llm02` un secret : les deux.
         technique = _technique_from_probe(
-            _probe(nom="probes.dan.DanInTheWild", familles=["owasp:llm02"]))
-        assert technique["prerequis"] == ["consignes", "secret"]
+            _probe(name="probes.dan.DanInTheWild", owasp_families=["owasp:llm02"]))
+        assert technique["prerequisites"] == ["instructions", "secret"]
 
     def test_the_group_and_the_prerequisite_read_the_same_module(self):
         # One place only knows how to extract a module from a probe name:
         # if the two drifted apart, the round-robin and the relevance rules
         # would no longer be talking about the same thing.
         technique = _technique_from_probe(
-            _probe(nom="probes.web_injection.MarkdownXSS"))
-        assert technique["groupe"] == "web_injection"
-        assert "rendu-riche" in technique["prerequis"]
+            _probe(name="probes.web_injection.MarkdownXSS"))
+        assert technique["group"] == "web_injection"
+        assert "rich-rendering" in technique["prerequisites"]
 
     @pytest.mark.parametrize("tag, family", [
         ("owasp:llm05", "LLM05:2025 Improper Output Handling"),
@@ -127,9 +127,9 @@ class TestRelevancePerModule:
         # judge has no criterion for those families. Neither tested nor
         # ignored: touched.
         technique = _technique_from_probe(
-            _probe(familles=["owasp:llm01", tag]))
-        assert technique["famille_owasp"] == "LLM01:2025 Prompt Injection"
-        assert technique["familles_non_jugeables"] == [family]
+            _probe(owasp_families=["owasp:llm01", tag]))
+        assert technique["owasp_family"] == "LLM01:2025 Prompt Injection"
+        assert technique["families_not_scorable"] == [family]
 
     def test_owasp_llm07_is_no_longer_promised(self):
         # A dead entry removed on 2026-11-11: no probe in the snapshot
@@ -137,15 +137,15 @@ class TestRelevancePerModule:
         # supply suggests a coverage that does not exist.
         from agents.attaquant import GARAK_FAMILIES
         assert "owasp:llm07" not in GARAK_FAMILIES
-        technique = _technique_from_probe(_probe(familles=["owasp:llm07"]))
-        assert technique["famille_owasp"] is None
+        technique = _technique_from_probe(_probe(owasp_families=["owasp:llm07"]))
+        assert technique["owasp_family"] is None
 
     def test_the_prompts_go_in_payloads_complets_not_in_modeles(self):
         # These are whole prompts: without `{objectif}` they would fail
         # validation if they landed in `modeles`.
         technique = _technique_from_probe(_probe())
-        assert technique["modeles"] == []
-        assert technique["payloads_complets"] == ["prompt un", "prompt deux"]
+        assert technique["templates"] == []
+        assert technique["complete_payloads"] == ["prompt un", "prompt deux"]
 
     def test_the_provenance_is_kept(self):
         # Pour que le rapport puisse citer la sonde d'origine.
@@ -154,7 +154,7 @@ class TestRelevancePerModule:
 
     def test_a_translated_probe_passes_the_validator(self):
         library = {"techniques": [_technique_from_probe(_probe())],
-                        "objectifs": [{"id": "o", "formulation": "f"}]}
+                        "objectives": [{"id": "o", "wording": "f"}]}
         assert valider(library)[0] == []
 
 
@@ -165,7 +165,7 @@ class TestMerging:
         assert "_garak" not in load_library()
 
     def test_with_a_snapshot_the_probes_are_added(self, snapshot):
-        snapshot([_probe(), _probe(nom="probes.encoding.InjectBase64")])
+        snapshot([_probe(), _probe(name="probes.encoding.InjectBase64")])
         library = load_library()
         identifiants = {t["id"] for t in library["techniques"]}
         assert "garak-dan-daninthewild" in identifiants
@@ -183,8 +183,8 @@ class TestMerging:
         assert "_garak" not in load_library(with_garak=False)
 
     def test_the_merged_library_stays_valid(self, snapshot):
-        snapshot([_probe(), _probe(nom="probes.leakreplay.Guardrail",
-                                     familles=["owasp:llm02"])])
+        snapshot([_probe(), _probe(name="probes.leakreplay.Guardrail",
+                                     owasp_families=["owasp:llm02"])])
         assert valider(load_library())[0] == []
 
 
@@ -200,13 +200,13 @@ class TestFreshness:
         import json as _json
         path = snapshot([_probe()])
         contenu = _json.loads(path.read_text(encoding="utf-8"))
-        contenu["exporte_le"] = (
+        contenu["exported_at"] = (
             datetime.now() - timedelta(days=jours)).isoformat(timespec="seconds")
         path.write_text(_json.dumps(contenu), encoding="utf-8")
 
     def test_the_age_is_computed(self, snapshot):
         self._snapshot_dated(snapshot, 42)
-        assert load_library()["_garak"]["age_jours"] == 42
+        assert load_library()["_garak"]["age_days"] == 42
 
     def test_a_recent_snapshot_triggers_nothing(self, snapshot):
         self._snapshot_dated(snapshot, 3)
@@ -223,9 +223,9 @@ class TestFreshness:
         import json as _json
         path = snapshot([_probe()])
         contenu = _json.loads(path.read_text(encoding="utf-8"))
-        contenu["exporte_le"] = "pas une date"
+        contenu["exported_at"] = "pas une date"
         path.write_text(_json.dumps(contenu), encoding="utf-8")
-        assert load_library()["_garak"]["age_jours"] is None
+        assert load_library()["_garak"]["age_days"] is None
 
 
 class TestEmptyExport:
@@ -245,7 +245,7 @@ class TestEmptyExport:
         faux.__version__ = "0.17.1"
         monkeypatch.setitem(sys.modules, "garak", faux)
         monkeypatch.setattr(module, "collect",
-                            lambda **k: ([], [{"nom": "x", "motif": "y"}]))
+                            lambda **k: ([], [{"name": "x", "reason": "y"}]))
 
         output = tmp_path / "garak.json"
         assert exporter(["--sortie", str(output)]) == 1
@@ -298,7 +298,7 @@ class TestRedundancyWithGarak:
 
     def _library(self, familles_garak=(), maison=()):
         techniques = [{"id": f"garak-{i}", "source": "garak",
-                       "famille_owasp": family, "payloads_complets": ["x"]}
+                       "owasp_family": family, "complete_payloads": ["x"]}
                       for i, family in enumerate(familles_garak)]
         techniques += list(maison)
         return {"techniques": techniques}
@@ -313,9 +313,9 @@ class TestRedundancyWithGarak:
         # test reading the local snapshot would pass or not depending on
         # whether the exporter had been run.
         from payloads.source_garak import redundant_techniques
-        snapshot([_probe(familles=("owasp:llm01",)),
-                    _probe(nom="probes.leakreplay.Fake",
-                           familles=("owasp:llm02",))])
+        snapshot([_probe(owasp_families=("owasp:llm01",)),
+                    _probe(name="probes.leakreplay.Fake",
+                           owasp_families=("owasp:llm02",))])
         assert redundant_techniques(load_library()) == []
 
     def test_a_probe_that_fills_the_hole_is_reported(self):
@@ -323,12 +323,12 @@ class TestRedundancyWithGarak:
         library = self._library(
             familles_garak=["LLM06:2025 Excessive Agency"],
             maison=[{"id": "abus-outils",
-                     "famille_owasp": "LLM06:2025 Excessive Agency",
-                     "modeles": ["a", "b"]}])
+                     "owasp_family": "LLM06:2025 Excessive Agency",
+                     "templates": ["a", "b"]}])
         reported = redundant_techniques(library)
         assert [t["id"] for t in reported] == ["abus-outils"]
         assert reported[0]["payloads"] == 2
-        assert reported[0]["sondes"] == 1
+        assert reported[0]["probes"] == 1
 
     def test_the_owasp_vintage_does_not_come_into_it(self):
         # The match is on `LLM06`, not on the full label: making the rule
@@ -338,8 +338,8 @@ class TestRedundancyWithGarak:
         library = self._library(
             familles_garak=["LLM06:2027 Excessive Agency"],
             maison=[{"id": "abus-outils",
-                     "famille_owasp": "LLM06:2025 Excessive Agency",
-                     "modeles": ["a"]}])
+                     "owasp_family": "LLM06:2025 Excessive Agency",
+                     "templates": ["a"]}])
         assert len(redundant_techniques(library)) == 1
 
     def test_another_family_triggers_nothing(self):
@@ -347,8 +347,8 @@ class TestRedundancyWithGarak:
         library = self._library(
             familles_garak=["LLM01:2025 Prompt Injection"],
             maison=[{"id": "abus-outils",
-                     "famille_owasp": "LLM06:2025 Excessive Agency",
-                     "modeles": ["a"]}])
+                     "owasp_family": "LLM06:2025 Excessive Agency",
+                     "templates": ["a"]}])
         assert redundant_techniques(library) == []
 
     def test_a_secondary_family_fills_no_hole(self):
@@ -360,12 +360,12 @@ class TestRedundancyWithGarak:
         from payloads.source_garak import redundant_techniques
         library = {"techniques": [
             {"id": "garak-web", "source": "garak",
-             "famille_owasp": "LLM02:2025 Sensitive Information Disclosure",
-             "familles_non_jugeables": ["LLM06:2025 Excessive Agency"],
-             "payloads_complets": ["x"]},
+             "owasp_family": "LLM02:2025 Sensitive Information Disclosure",
+             "families_not_scorable": ["LLM06:2025 Excessive Agency"],
+             "complete_payloads": ["x"]},
             {"id": "abus-outils",
-             "famille_owasp": "LLM06:2025 Excessive Agency",
-             "modeles": ["a"]}]}
+             "owasp_family": "LLM06:2025 Excessive Agency",
+             "templates": ["a"]}]}
         assert redundant_techniques(library) == []
 
     def test_an_empty_hand_written_technique_is_not_reported(self):
@@ -376,9 +376,9 @@ class TestRedundancyWithGarak:
         library = self._library(
             familles_garak=["LLM02:2025 Sensitive Information Disclosure"],
             maison=[{"id": "divulgation-information",
-                     "famille_owasp": "LLM02:2025 Sensitive Information "
+                     "owasp_family": "LLM02:2025 Sensitive Information "
                                       "Disclosure",
-                     "modeles": []}])
+                     "templates": []}])
         assert redundant_techniques(library) == []
 
     def test_the_harmless_control_is_never_redundant(self):
@@ -387,8 +387,8 @@ class TestRedundancyWithGarak:
         from payloads.source_garak import redundant_techniques
         library = self._library(
             familles_garak=["LLM01:2025 Prompt Injection"],
-            maison=[{"id": "controle", "famille_owasp": None,
-                     "modeles": ["bonjour"]}])
+            maison=[{"id": "controle", "owasp_family": None,
+                     "templates": ["bonjour"]}])
         assert redundant_techniques(library) == []
 
     def test_a_garak_probe_is_not_a_hand_written_debt(self):
@@ -403,22 +403,22 @@ class TestProvenanceInTheReport:
     def _report(self, payloads):
         from rapport import build_report, render_markdown
         return render_markdown(build_report({
-            "statut": "aucun_constat", "fiche": None,
-            "plan": {"essais": [], "ecartees": []}, "constats": [],
-            "journal": {}, "ecourtee": None, "payloads": payloads},
-            target="essai"))
+            "status": "no_finding", "profile": None,
+            "plan": {"attempts": [], "skipped": []}, "findings": [],
+            "call_log": {}, "cut_short": None, "payloads": payloads},
+            target="attempt"))
 
     def test_the_report_says_what_it_tested_with(self):
-        texte = self._report({"version": "0.17.1", "sondes": 52,
-                               "age_jours": 3, "perime": False})
-        assert "garak 0.17.1" in texte and "52 sonde(s)" in texte
+        text = self._report({"version": "0.17.1", "probes": 52,
+                               "age_days": 3, "stale": False})
+        assert "garak 0.17.1" in text and "52 sonde(s)" in text
 
     def test_an_ageing_library_is_reported(self):
         # A "no finding" obtained with three-month-old payloads does not say
         # not the same thing as with payloads from today.
-        texte = self._report({"version": "0.14.0", "sondes": 48,
-                               "age_jours": 94, "perime": True})
-        assert "vieillissante" in texte
+        text = self._report({"version": "0.14.0", "probes": 48,
+                               "age_days": 94, "stale": True})
+        assert "vieillissante" in text
 
     def test_without_a_snapshot_no_stray_line(self):
         assert "Payloads :" not in self._report(None)

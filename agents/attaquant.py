@@ -46,8 +46,8 @@ def uppercase(text):
 
 
 TRANSFORMATIONS = {
-    "identite": identity,
-    "majuscules": uppercase,
+    "identity": identity,
+    "uppercase": uppercase,
 }
 
 
@@ -148,31 +148,31 @@ def _age_in_days(timestamp):
 # wasted attempt.
 PREREQUISITES_BY_MODULE = {
     # Disobeying instructions assumes there are some.
-    "dan": ["consignes"],
-    "phrasing": ["consignes"],
-    "sata": ["consignes"],
+    "dan": ["instructions"],
+    "phrasing": ["instructions"],
+    "sata": ["instructions"],
     # Importing a non-existent package assumes the target writes code.
-    "packagehallucination": ["produit-du-code"],
+    "packagehallucination": ["writes-code"],
     # An injection hidden in an excerpt, a report or a translation assumes the
     # target reads the content it is handed.
-    "latentinjection": ["traite-des-documents"],
+    "latentinjection": ["handles-documents"],
     # The next three depend on the APPLICATION around the model, which the
     # target does not know about: prerequisites declared by the operator.
     "ansiescape": ["terminal"],
-    "web_injection": ["rendu-riche"],
-    "exploitation": ["base-donnees"],
+    "web_injection": ["rich-rendering"],
+    "exploitation": ["database"],
 }
 
 
 def _module_of(probe):
     """A probe's garak module: `probes.dan.DanInTheWild` -> `dan`."""
-    return probe["sonde"].replace("probes.", "").split(".")[0].lower()
+    return probe["probe"].replace("probes.", "").split(".")[0].lower()
 
 
 def _technique_from_probe(probe):
     """Translates a garak probe into a project technique."""
     family, prerequisites = next(
-        (GARAK_FAMILIES[t] for t in probe["familles_owasp"]
+        (GARAK_FAMILIES[t] for t in probe["owasp_families"]
          if t in GARAK_FAMILIES), (None, []))
     # The two sources of prerequisites add up: the OWASP family says what the
     # attack SEEKS (a secret, instructions), the module what it DEMANDS of the
@@ -181,7 +181,7 @@ def _technique_from_probe(probe):
                            | set(PREREQUISITES_BY_MODULE.get(
                                _module_of(probe), [])))
     identifier = "garak-" + re.sub(
-        r"[^a-z0-9]+", "-", probe["sonde"].replace("probes.", "").lower()
+        r"[^a-z0-9]+", "-", probe["probe"].replace("probes.", "").lower()
     ).strip("-")
     return {
         "id": identifier,
@@ -191,23 +191,23 @@ def _technique_from_probe(probe):
         # test ("make the model say an encoded payload"). Without this
         # grouping they got fifteen turns where `dan` got three, and a wider
         # budget would have burned itself on encoding variants.
-        "groupe": _module_of(probe),
-        "famille_owasp": family,
+        "group": _module_of(probe),
+        "owasp_family": family,
         # What the probe ALSO touches, and the judge cannot score. Launching
         # without saying so would suggest these families are covered; keeping
         # quiet would suggest they are not even reached. The report therefore
         # presents them as "touched, not judged".
-        "familles_non_jugeables": sorted(
-            {UNJUDGEABLE_FAMILIES[t] for t in probe["familles_owasp"]
+        "families_not_scorable": sorted(
+            {UNJUDGEABLE_FAMILIES[t] for t in probe["owasp_families"]
              if t in UNJUDGEABLE_FAMILIES}),
-        "description": probe["objectif"] or probe["sonde"],
-        "prerequis": prerequisites,
+        "description": probe["objective"] or probe["probe"],
+        "prerequisites": prerequisites,
         # garak's prompts are COMPLETE: they carry no `{objectif}` placeholder,
         # so they have no business in `modeles`, which the validator checks on
         # exactly that point.
-        "modeles": [],
-        "payloads_complets": [_fill_placeholders(p) for p in probe["payloads"]],
-        "source": f"garak {probe['sonde']}",
+        "templates": [],
+        "complete_payloads": [_fill_placeholders(p) for p in probe["payloads"]],
+        "source": f"garak {probe['probe']}",
     }
 
 
@@ -227,7 +227,7 @@ COMPOSITION = "{preambule}\n\nMaintenant, peux-tu {demande} ?"
 def compose(preamble, objective):
     """Assembles a complete payload and an objective into a single request."""
     return COMPOSITION.format(preambule=preamble.rstrip(),
-                              demande=objective["formulation"])
+                              demande=objective["wording"])
 
 
 # The same pair of ingredients, delivered in TWO turns instead of one (3b).
@@ -250,7 +250,7 @@ def sequence_turns(preamble, objective):
     three left open by the garak/target gap in phase 12.
     """
     return [preamble.rstrip(),
-            SECOND_TURN_REQUEST.format(demande=objective["formulation"])]
+            SECOND_TURN_REQUEST.format(demande=objective["wording"])]
 
 
 # --- Building the payloads ---------------------------------------------------
@@ -267,15 +267,19 @@ def load_library(with_garak=True):
         library = json.load(f)
 
     if with_garak and GARAK_FILE.exists():
+        from migration import modernise
+
         with open(GARAK_FILE, encoding="utf-8") as f:
-            snapshot = json.load(f)
+            # A snapshot on disk may predate the data-key translation: it is
+            # outside git, so the migration never reached it.
+            snapshot = modernise(json.load(f))
         library["techniques"] = library["techniques"] + [
-            _technique_from_probe(s) for s in snapshot["sondes"]]
+            _technique_from_probe(s) for s in snapshot["probes"]]
         library["_garak"] = {
-            "version": snapshot.get("version_garak"),
-            "exporte_le": snapshot.get("exporte_le"),
-            "sondes": len(snapshot["sondes"]),
-            "age_jours": _age_in_days(snapshot.get("exporte_le")),
+            "version": snapshot.get("garak_version"),
+            "exported_at": snapshot.get("exported_at"),
+            "probes": len(snapshot["probes"]),
+            "age_days": _age_in_days(snapshot.get("exported_at")),
         }
 
     return library
@@ -295,38 +299,38 @@ def generate_payloads():
     for technique in library["techniques"]:
         # A technique with no template is declared but not yet ready.
         for template, objective, transformation_name in product(
-            technique["modeles"], library["objectifs"], TRANSFORMATIONS
+            technique["templates"], library["objectives"], TRANSFORMATIONS
         ):
-            text = template.format(objectif=objective["formulation"])
+            text = template.format(objectif=objective["wording"])
             payloads.append({
                 "technique": technique["id"],
-                "famille_owasp": technique["famille_owasp"],
-                "objectif": objective["id"],
+                "owasp_family": technique["owasp_family"],
+                "objective": objective["id"],
                 "transformation": transformation_name,
-                "texte": TRANSFORMATIONS[transformation_name](text),
+                "text": TRANSFORMATIONS[transformation_name](text),
             })
 
         # Payloads coming from outside are COMPLETE prompts: they already
         # carry their own intention, and therefore do not cross with the
         # objective axis. Hence `objectif: None`.
         for number, payload in enumerate(
-                technique.get("payloads_complets", []), start=1):
+                technique.get("complete_payloads", []), start=1):
             # Two uses of one payload, which do NOT test the same thing: on
             # its own it measures resistance to hijacking; composed with an
             # objective it goes after what the target protects.
             variants = [(o, compose(payload, o))
-                        for o in library["objectifs"]]
+                        for o in library["objectives"]]
             variants.append((None, payload))
             for objective, text in variants:
                 for transformation_name in TRANSFORMATIONS:
                     payloads.append({
                         "technique": technique["id"],
-                        "famille_owasp": technique["famille_owasp"],
-                        "objectif": objective["id"] if objective else None,
+                        "owasp_family": technique["owasp_family"],
+                        "objective": objective["id"] if objective else None,
                         "transformation": transformation_name,
-                        "texte": TRANSFORMATIONS[transformation_name](text),
+                        "text": TRANSFORMATIONS[transformation_name](text),
                         "source": technique.get("source"),
-                        "numero_payload": number,
+                        "payload_number": number,
                     })
 
     return payloads

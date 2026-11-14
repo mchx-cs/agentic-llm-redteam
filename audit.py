@@ -28,7 +28,7 @@ from pathlib import Path
 
 AUTHORISATION_FILE = "autorisation.json"
 
-REQUIRED_FIELDS = ("cible", "autorise_par", "reference", "debut", "fin")
+REQUIRED_FIELDS = ("target", "authorised_by", "reference", "start", "end")
 
 # A local target is yours by construction: no mandate to produce.
 _LOCAL_MARKERS = ("localhost", "127.0.0.1", "[::1]")
@@ -97,7 +97,7 @@ def check_scope(authorisation, target_name, today=None):
     """
     today = today or date.today()
 
-    scope = authorisation["cible"]
+    scope = authorisation["target"]
     if scope not in target_name:
         raise MissingAuthorisation(
             f"L'autorisation couvre '{scope}', or la campagne vise "
@@ -105,8 +105,8 @@ def check_scope(authorisation, target_name, today=None):
             f"  Un mandat pour une cible ne vaut pas pour une autre."
         )
 
-    start = _date(authorisation["debut"], "debut")
-    end = _date(authorisation["fin"], "fin")
+    start = _date(authorisation["start"], "start")
+    end = _date(authorisation["end"], "end")
     if not start <= today <= end:
         raise MissingAuthorisation(
             f"L'autorisation court du {start} au {end}, or nous sommes le "
@@ -155,7 +155,7 @@ def _case_id(target):
     would be unique but mute.
     """
     clean = re.sub(r"[^a-zA-Z0-9]+", "-", str(target)).strip("-").lower()[:40]
-    return f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{clean or 'cible'}"
+    return f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{clean or 'target'}"
 
 
 def verify_seal(path):
@@ -171,18 +171,23 @@ def verify_seal(path):
         return (False, "Piste vide.")
 
     try:
-        last = json.loads(lines[-1])
+        # The seal hashes the trail's raw BYTES, so modernising the parsed
+        # dict to find `digest` changes nothing about the hash: an older
+        # sealed trail still verifies.
+        from migration import modernise
+
+        last = modernise(json.loads(lines[-1]))
     except json.JSONDecodeError:
         return (False, "Dernière ligne illisible : piste tronquée ou altérée.")
 
-    if last.get("type") != "sceau":
+    if last.get("type") != "seal":
         return (False, "Piste non scellée : la campagne ne s'est pas "
                        "terminée proprement, ou le sceau a été retiré.")
 
     # The seal covers everything that precedes it, line breaks included.
     before_seal = "".join(line + "\n" for line in lines[:-1])
     computed = digest(before_seal)
-    if computed == last.get("empreinte"):
+    if computed == last.get("digest"):
         return (True, f"Piste intacte ({last.get('case_id', 'sans ID')}).")
     return (False, "Empreinte NON concordante : la piste a été modifiée "
                    "après sa clôture.")
@@ -211,19 +216,19 @@ class AuditTrail:
         self._exchanges = 0
         self._file = self.path.open("a", encoding="utf-8")
         self._write({
-            "type": "debut_campagne",
+            "type": "campaign_start",
             "case_id": self.case_id,
-            "cible": target,
+            "target": target,
             # None for a local target: we say so explicitly, rather than
             # letting it look like a mandate missing by oversight.
-            "autorisation": authorisation or "cible locale, aucun mandat requis",
+            "authorisation": authorisation or "cible locale, aucun mandat requis",
             # What we DO control of the test environment, and what we do not.
             # See `telemetry()`.
-            "environnement": context or {},
+            "environment": context or {},
         })
 
     def _write(self, entry):
-        entry = {"horodatage": datetime.now().isoformat(timespec="seconds"),
+        entry = {"timestamp": datetime.now().isoformat(timespec="seconds"),
                  **entry}
         self._file.write(json.dumps(entry, ensure_ascii=False) + "\n")
         # Flushed at once: a campaign that falls over must leave its trace.
@@ -241,13 +246,13 @@ class AuditTrail:
         the client, without copying a verbatim reply.
         """
         self._exchanges += 1
-        self._write({"type": "echange", "phase": phase, "envoye": sent,
-                     "recu": received, "tronquee": truncated,
-                     "empreinte_envoye": digest(sent),
-                     "empreinte_recu": digest(received)})
+        self._write({"type": "exchange", "phase": phase, "sent": sent,
+                     "received": received, "truncated": truncated,
+                     "sent_digest": digest(sent),
+                     "received_digest": digest(received)})
 
     def record_verdict(self, attempt, verdict):
-        self._write({"type": "verdict", "essai": attempt,
+        self._write({"type": "verdict", "attempt": attempt,
                      "enfreint": verdict["reussi"],
                      "critere": verdict["critere"],
                      "votes": verdict.get("votes")})
@@ -261,14 +266,14 @@ class AuditTrail:
         It is computed before being written, so it does not include itself —
         otherwise the seal would be impossible to verify.
         """
-        self._write({"type": "fin_campagne", "statut": status,
-                     "appels": log.get("appels"),
+        self._write({"type": "campaign_end", "status": status,
+                     "calls": log.get("calls"),
                      "tokens": log.get("tokens"),
-                     "echanges_consignes": self._exchanges})
+                     "exchanges_logged": self._exchanges})
         self._file.flush()
         seal = digest(self.path.read_text(encoding="utf-8"))
-        self._write({"type": "sceau", "case_id": self.case_id,
-                     "algorithme": "sha256", "empreinte": seal})
+        self._write({"type": "seal", "case_id": self.case_id,
+                     "algorithm": "sha256", "digest": seal})
         self._file.close()
         return seal
 
@@ -311,25 +316,25 @@ def telemetry(target_name, target_profile=None):
     judge = PROFILES.get(JUDGE_PROFILE, {})
     return {
         # What WE run: entirely known, hence entirely recorded.
-        "nos_modeles": {
-            "arbitre": {
-                "profil": JUDGE_PROFILE,
-                "modele": judge.get("modele"),
+        "our_models": {
+            "judge": {
+                "profile": JUDGE_PROFILE,
+                "model": judge.get("model"),
                 "base_url": judge.get("base_url"),
                 "temperature": 0,
-                "votes_par_verdict": VOTE_COUNT,
+                "votes_per_verdict": VOTE_COUNT,
             },
-            "profil_actif": ACTIVE_PROFILE,
+            "active_profile": ACTIVE_PROFILE,
         },
-        "cible": {
-            "nom": target_name,
-            "profil_http": target_profile,
+        "target": {
+            "name": target_name,
+            "http_profile": target_profile,
             # The target's generation parameters are OUT of our reach in a
             # black-box test. Saying so is information; omitting it would
             # suggest we had pinned them.
-            "parametres_de_generation": "inconnus (test en boîte noire)",
+            "generation_parameters": "inconnus (test en boîte noire)",
         },
-        "non_determinisme_residuel": [
+        "residual_non_determinism": [
             "La cible choisit ses propres paramètres d'échantillonnage : deux "
             "campagnes identiques peuvent donner des verdicts différents.",
             "L'arbitre lui-même n'est pas déterministe à température 0 "

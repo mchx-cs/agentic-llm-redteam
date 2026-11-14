@@ -69,15 +69,15 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
                               if trail else ask_target)
     except BudgetExceeded as stop:
         print(f"\n>>> {stop}")
-        return _finish({"statut": "budget_epuise", "fiche": None,
-                        "plan": {"essais": [], "candidats": [],
-                                 "ecartees": []},
-                        "constats": [], "ecourtee": str(stop)})
+        return _finish({"status": "budget_exhausted", "profile": None,
+                        "plan": {"attempts": [], "candidates": [],
+                                 "skipped": []},
+                        "findings": [], "cut_short": str(stop)})
     # The context comes from the OPERATOR, not from a probe: a target does not
     # know what its output is rendered in, and asking it would invite
     # hallucination. So we add it afterwards, without touching the observed
     # facts.
-    profile["contexte"] = list(context)
+    profile["context"] = list(context)
     print(summarise_profile(profile))
 
     # --- 2. Planning: what to launch, and in what order? -------------------
@@ -85,10 +85,10 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     plan = plan_campaign(profile, MAX_ESSAIS, only, excluding)
     print(summarise_plan(plan))
 
-    if not plan["essais"]:
+    if not plan["attempts"]:
         print("\n>>> Aucun essai applicable à cette cible. Campagne terminée.")
-        return _finish({"statut": "aucun_essai", "fiche": profile,
-                        "plan": plan, "constats": []})
+        return _finish({"status": "no_attempt", "profile": profile,
+                        "plan": plan, "findings": []})
 
     # --- 3. Attack ---------------------------------------------------------
     # We go to the END of the budget instead of stopping at the first
@@ -111,7 +111,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
         # order, but learning nothing from the replies. That is the CONTROL
         # the gain measurement needs — without it, adaptation can only be
         # compared against simulated campaigns.
-        payload = next_attempt(plan["candidats"],
+        payload = next_attempt(plan["candidates"],
                                observations if adaptive else (), launched)
         if payload is None:
             print(">>> Vivier épuisé : plus aucun essai applicable.")
@@ -120,26 +120,26 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
 
         print(f"--- Essai {number}/{MAX_ESSAIS} ---")
         print(f"  [Attaquant] {payload['technique']} / "
-              f"{payload['objectif'] or 'payload complet'} "
+              f"{payload['objective'] or 'payload complet'} "
               f"/ {payload['transformation']}")
-        if payload.get("raisons_adaptation"):
+        if payload.get("adaptation_reasons"):
             # The net first: an attempt can carry both a bonus and a penalty,
             # and without it the reasons look contradictory.
-            print(f"  [Adaptation] solde {payload['score_adaptation']:+d} "
+            print(f"  [Adaptation] solde {payload['adaptation_score']:+d} "
                   f"sur sa priorité de départ "
-                  f"({payload['priorite']}) :")
-            for reason in payload["raisons_adaptation"]:
+                  f"({payload['priority']}) :")
+            for reason in payload["adaptation_reasons"]:
                 print(f"               - {reason}")
-        print(f"              envoie : {payload['texte']}")
+        print(f"              envoie : {payload['text']}")
 
         try:
             # A reply cut off by the target's output cap reads like a complete
             # one: the verdict would then be worth nothing.
-            truncated_before = len(call_log()["tronquees"])
-            reply = ask_target(payload["texte"])
-            truncated = len(call_log()["tronquees"]) > truncated_before
+            truncated_before = len(call_log()["truncated_replies"])
+            reply = ask_target(payload["text"])
+            truncated = len(call_log()["truncated_replies"]) > truncated_before
             if trail:
-                trail.record_exchange("attaque", payload["texte"], reply,
+                trail.record_exchange("attaque", payload["text"], reply,
                                       truncated)
             print(f"  [Cible]     répond : {reply}")
             if truncated:
@@ -149,7 +149,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             # Voting: the judge is not deterministic on borderline cases, and
             # a vulnerability that appears with the draw has no business in a
             # report.
-            verdict = judge_by_vote(payload["texte"], reply)
+            verdict = judge_by_vote(payload["text"], reply)
             if trail:
                 trail.record_verdict(number, verdict)
             print(f"  [Arbitre]   enfreint={verdict['reussi']} "
@@ -168,13 +168,13 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             # measurement, not a refusal. The attempt is therefore excluded
             # from the ASR denominator (OWASP manual §7.5), and counted apart.
             if truncated:
-                states.append("reponse_tronquee")
+                states.append("reply_truncated")
                 continue
             if verdict["reussi"] is None:
-                states.append("juge_indecis")
+                states.append("judge_undecided")
                 continue
             if verdict["reussi"] is False:
-                states.append("resiste")
+                states.append("resisted")
                 continue
 
             # --- 4. Replay check, if a value was disclosed -----------------
@@ -184,15 +184,15 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
                 # the target several times, which smooths the noise. Voting on
                 # top would cost nine calls where three are enough.
                 replay_check = verify_by_replay(
-                    payload["texte"], verdict["valeur"],
+                    payload["text"], verdict["valeur"],
                     trail.trace("rejeu", ask_target) if trail
                     else ask_target,
                     judge,
                 )
-                print(f"  [Rejeu]     {replay_check['statut']} : "
-                      f"{replay_check['explication']}")
+                print(f"  [Rejeu]     {replay_check['status']} : "
+                      f"{replay_check['explanation']}")
 
-                if replay_check["statut"] == "hallucination_probable":
+                if replay_check["status"] == "likely_hallucination":
                     # The target made it up: nothing leaked, no finding.
                     # Scorable all the same — the attack did fail, and the
                     # replay established it instead of assuming it.
@@ -210,16 +210,16 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             break
 
         print("  >>> Constat retenu.\n")
-        states.append("faille")
+        states.append("vulnerability")
         findings.append({
-            "essai": number,
+            "attempt": number,
             "payload": payload,
-            "reponse": reply,
+            "reply": reply,
             "verdict": verdict,
             # None (compliance, no value), or the replay's result:
             # "confirmee", "contradictoire", "inconcluant"…
-            "verification": replay_check,
-            "tronquee": truncated,
+            "replay_check": replay_check,
+            "truncated": truncated,
         })
 
     if not cut_short:
@@ -228,51 +228,51 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     return _finish({
         # A plan cut short must NEVER present itself as a finished plan:
         # "no finding" does not mean the same thing in the two cases.
-        "statut": ("budget_epuise" if cut_short
-                   else "constats" if findings else "aucun_constat"),
-        "fiche": profile,
+        "status": ("budget_exhausted" if cut_short
+                   else "findings" if findings else "no_finding"),
+        "profile": profile,
         "plan": plan,
-        "constats": findings,
+        "findings": findings,
         # The attempts REALLY sent, and what we learned along the way. It is
         # from these that the report draws its coverage: since adaptation, the
         # initial plan is no longer what was launched, and announcing the
         # plan's coverage would be a lie by omission.
-        "lances": launched,
+        "launched": launched,
         "observations": observations,
         # Each attempt's outcome, so the report computes an ASR over a DEFINED
         # denominator rather than over the number of sends.
-        "etats": states,
+        "states": states,
         # The scope asked for: the report MUST say it, otherwise a campaign
         # restricted to one family would present its coverage as complete.
-        "perimetre": {"seulement": list(only), "sauf": list(excluding)},
+        "scope": {"only": list(only), "excluding": list(excluding)},
         # Are the attempts i.i.d.? Two conditions, both necessary: no
         # adaptation (otherwise the next one depends on the previous replies)
         # and a single technique launched (otherwise payloads from different
         # families do not share the same probability of success). When both
         # hold — typically `--seulement X --sans-adaptation` — the report can
         # finally bound its "no finding", which is precisely what pass@k asks.
-        "essais_independants": (
+        "independent_attempts": (
             not adaptive
             and len({a["technique"] for a in launched}) <= 1
             and len(launched) > 0),
-        "ecourtee": cut_short,
+        "cut_short": cut_short,
     })
 
 
 def _finish(result):
     """Attaches the call log and warns if any reply was cut off."""
-    result.setdefault("ecourtee", None)
-    result.setdefault("lances", [])
-    result.setdefault("etats", [])
-    result.setdefault("perimetre", {"seulement": [], "sauf": []})
-    result.setdefault("essais_independants", False)
+    result.setdefault("cut_short", None)
+    result.setdefault("launched", [])
+    result.setdefault("states", [])
+    result.setdefault("scope", {"only": [], "excluding": []})
+    result.setdefault("independent_attempts", False)
     result.setdefault("observations", [])
     result.setdefault("payloads", _payload_provenance())
-    result["journal"] = call_log()
-    truncated_count = len(result["journal"]["tronquees"])
+    result["call_log"] = call_log()
+    truncated_count = len(result["call_log"]["truncated_replies"])
 
-    print(f"\n{result['journal']['appels']} appel(s) au LLM, "
-          f"{result['journal']['tokens']} tokens.")
+    print(f"\n{result['call_log']['calls']} appel(s) au LLM, "
+          f"{result['call_log']['tokens']} tokens.")
     if truncated_count:
         # A "no vulnerability" obtained on cut-off replies is worth nothing:
         # say so plainly rather than letting it look like coverage.
@@ -289,9 +289,9 @@ def _payload_provenance():
     garak = load_library().get("_garak")
     if not garak:
         return None
-    age = garak.get("age_jours")
+    age = garak.get("age_days")
     return {**garak,
-            "perime": age is not None and age > SNAPSHOT_AGE_SUSPECT}
+            "stale": age is not None and age > SNAPSHOT_AGE_SUSPECT}
 
 
 def scope_patterns(value):
@@ -417,8 +417,8 @@ def cli(arguments=None):
 
     if authorisation:
         print(f"Mandat : {authorisation['reference']} — "
-              f"autorisé par {authorisation['autorise_par']}, "
-              f"du {authorisation['debut']} au {authorisation['fin']}.\n")
+              f"autorisé par {authorisation['authorised_by']}, "
+              f"du {authorisation['start']} au {authorisation['end']}.\n")
 
     folder = arguments.rapport or "rapports"
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -451,20 +451,20 @@ def cli(arguments=None):
     finally:
         # Even if the campaign raises, the trail must close cleanly.
         seal = trail.close(
-            locals().get("result", {}).get("statut", "interrompue"),
+            locals().get("result", {}).get("status", "interrupted"),
             call_log())
 
-    result["autorisation"] = authorisation
+    result["authorisation"] = authorisation
     # The chain of custody passes from the trail to the REPORT. `build_report`
     # already read these three fields, but nothing filled them: a report came
     # out with no case identifier while the trail had one. The report's reader
     # could not get back to the trace that justifies it — which is exactly
     # what a case identifier is for.
     result["case_id"] = trail.case_id
-    result["piste"] = str(trail.path)
-    result["sceau_piste"] = seal
-    result["telemetrie"] = telemetry(target_name, arguments.profil_cible)
-    print(f"\nRésultat final : {result['statut']}")
+    result["trail"] = str(trail.path)
+    result["trail_seal"] = seal
+    result["telemetry"] = telemetry(target_name, arguments.profil_cible)
+    print(f"\nRésultat final : {result['status']}")
     print(f"Piste d'audit : {trail.path}")
 
     if arguments.rapport:

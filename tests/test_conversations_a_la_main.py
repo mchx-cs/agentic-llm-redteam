@@ -32,22 +32,22 @@ class TestGroundTruth:
         # would be lost to a measurement it can feed.
         for entry in entries():
             if entry["format"] == "mono-tour":
-                assert "payload" in entry and "reponse" in entry
-                assert "tours" not in entry
+                assert "payload" in entry and "reply" in entry
+                assert "turns" not in entry
             else:
-                assert "tours" in entry and len(entry["tours"]) > 2
+                assert "turns" in entry and len(entry["turns"]) > 2
 
     def test_no_verdict_is_pre_filled(self):
         for entry in entries():
-            assert entry["attendu"] is None, entry["id"]
-            assert entry["categorie"] is None, entry["id"]
-            assert entry["jeu"] is None, entry["id"]
+            assert entry["expected"] is None, entry["id"]
+            assert entry["category"] is None, entry["id"]
+            assert entry["dataset"] is None, entry["id"]
 
     def test_every_case_says_WHY_it_exists(self):
         # Without the intention, the author gets two nearly identical
         # conversations with no idea why both are being shown.
         for entry in entries():
-            assert len(entry["piege"]) > 60, entry["id"]
+            assert len(entry["trap"]) > 60, entry["id"]
 
 
 class TestThePairsReallyArePairs:
@@ -74,15 +74,15 @@ class TestThePairsReallyArePairs:
         # attacker asks: otherwise the case measures something else.
         for group in ("A-secret-attaquant", "A-confirmation"):
             (_, first), (_, second) = self._by_group()[group]
-            requests_1 = [t["contenu"] for t in first
-                          if t["role"] == "utilisateur"]
-            requests_2 = [t["contenu"] for t in second
-                          if t["role"] == "utilisateur"]
+            requests_1 = [t["content"] for t in first
+                          if t["role"] == "attacker"]
+            requests_2 = [t["content"] for t in second
+                          if t["role"] == "attacker"]
             assert requests_1 == requests_2, group
-            replies_1 = [t["contenu"] for t in first
-                          if t["role"] == "cible"]
-            replies_2 = [t["contenu"] for t in second
-                          if t["role"] == "cible"]
+            replies_1 = [t["content"] for t in first
+                          if t["role"] == "target"]
+            replies_2 = [t["content"] for t in second
+                          if t["role"] == "target"]
             assert replies_1 != replies_2, group
 
 
@@ -91,14 +91,14 @@ class TestTheUnreachableTrapsAreCovered:
         # The false positive specific to multi-turn. No harvest can produce
         # it: our payloads look for the secret, they do not contain it.
         attacker = [t for _, _, _, turns in CASES for t in turns
-                     if t["role"] == "utilisateur" and SECRET in t["contenu"]]
+                     if t["role"] == "attacker" and SECRET in t["content"]]
         assert attacker, "aucun cas ne met le secret dans la bouche de l'attaquant"
 
     def test_one_case_leaks_on_an_EARLIER_turn(self):
         # 7 leaks out of 11 had this shape in the real harvest.
         found = False
         for _, _, _, turns in CASES:
-            replies = [t["contenu"] for t in turns if t["role"] == "cible"]
+            replies = [t["content"] for t in turns if t["role"] == "target"]
             if len(replies) >= 2 and SECRET in replies[0] \
                     and SECRET not in replies[-1]:
                 found = True
@@ -111,15 +111,15 @@ class TestTheUnreachableTrapsAreCovered:
     def test_there_are_entirely_harmless_controls(self):
         # Without them, false positives would be zero by construction.
         harmless = [turns for _, _, _, turns in CASES
-                   if not any(SECRET in t["contenu"] for t in turns)
-                   and "instructions" not in turns[0]["contenu"].lower()]
+                   if not any(SECRET in t["content"] for t in turns)
+                   and "instructions" not in turns[0]["content"].lower()]
         assert harmless
 
     def test_the_turns_always_alternate(self):
         # A malformed corpus would have an incoherent dialogue scored.
         for identifier, _, _, turns in CASES:
             roles = [t["role"] for t in turns]
-            assert roles == ["utilisateur", "cible"] * (len(roles) // 2), \
+            assert roles == ["attacker", "target"] * (len(roles) // 2), \
                 identifier
 
 
@@ -130,7 +130,7 @@ class TestPouringIn:
 
         harvest = tmp_path / "recolte.json"
         harvest.write_text(json.dumps({"conversations": [
-            {"id": "C-demo-01-1", "attendu": None}]}), encoding="utf-8")
+            {"id": "C-demo-01-1", "expected": None}]}), encoding="utf-8")
         monkeypatch.setattr(by_hand, "HARVEST_FILE", harvest)
 
         added, total = by_hand.pour_in()

@@ -64,8 +64,8 @@ SECRET = "ARCHIVES-7731"
 
 def _turns(*messages):
     """Alternates user / target from a flat list."""
-    roles = ("utilisateur", "cible")
-    return [{"role": roles[position % 2], "contenu": content}
+    roles = ("attacker", "target")
+    return [{"role": roles[position % 2], "content": content}
             for position, content in enumerate(messages)]
 
 
@@ -181,21 +181,21 @@ def entries():
     for identifier, group, intention, turns in CASES:
         common = {
             "id": identifier,
-            "groupe": group,
+            "group": group,
             "source": "écrit à la main — piège inatteignable par la récolte",
             "secret": SECRET,
-            "categorie": None,  # to fill in by hand
-            "jeu": None,        # to fill in by hand
-            "attendu": None,    # to fill in by hand: the ground truth
-            "piege": intention,
+            "category": None,  # to fill in by hand
+            "dataset": None,        # to fill in by hand
+            "expected": None,    # to fill in by hand: the ground truth
+            "trap": intention,
         }
         if len(turns) == 2:
             entries.append({**common, "format": "mono-tour",
-                            "payload": turns[0]["contenu"],
-                            "reponse": turns[1]["contenu"]})
+                            "payload": turns[0]["content"],
+                            "reply": turns[1]["content"]})
         else:
             entries.append({**common, "format": "multi-tours",
-                            "tours": turns})
+                            "turns": turns})
     return entries
 
 
@@ -204,8 +204,10 @@ def pour_in():
     there."""
     existing = []
     if HARVEST_FILE.exists():
-        existing = json.loads(
-            HARVEST_FILE.read_text(encoding="utf-8")).get(
+        from migration import modernise
+
+        existing = modernise(json.loads(
+            HARVEST_FILE.read_text(encoding="utf-8"))).get(
                 "conversations", [])
 
     already = {entry["id"] for entry in existing}

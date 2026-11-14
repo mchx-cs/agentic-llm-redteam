@@ -91,7 +91,7 @@ def _objectives(ask_target, library, harmless=False):
     inoffensive conversations, otherwise its false positives are zero by
     construction.
     """
-    generic = {o["id"]: o for o in library["objectifs"]}
+    generic = {o["id"]: o for o in library["objectives"]}
     control = (generic.get(CONTROL_OBJECTIVE)
                 or next(iter(generic.values())))
     if harmless:
@@ -103,7 +103,7 @@ def _objectives(ask_target, library, harmless=False):
     print("Reconnaissance de la cible (sondes anodines, modèle local)...")
     profile = reconnoitre(ask_target)
     targeted = [o for o in objectives_for(profile, library)
-             if o.get("origine") == "reconnaissance"][:MAX_OBJECTIVES]
+             if o.get("origin") == "reconnaissance"][:MAX_OBJECTIVES]
 
     if not targeted:
         # A target declaring neither a refused subject nor a tool yields no
@@ -117,7 +117,7 @@ def _objectives(ask_target, library, harmless=False):
 
     for objective in targeted:
         print(f"  objectif retenu : {objective['id']} — "
-              f"{objective['formulation'][:70]}")
+              f"{objective['wording'][:70]}")
     return targeted, f"{len(targeted)} objectif(s) issus de la reconnaissance"
 
 
@@ -130,13 +130,13 @@ def _sequences(limit=MAX_SEQUENCES, objectives=None):
     """
     library = load_library()
     if not objectives:
-        generic = {o["id"]: o for o in library["objectifs"]}
+        generic = {o["id"]: o for o in library["objectives"]}
         objectives = [generic.get(CONTROL_OBJECTIVE)
                      or next(iter(generic.values()))]
 
     sequences = []
     for technique in library["techniques"]:
-        complete = technique.get("payloads_complets") or []
+        complete = technique.get("complete_payloads") or []
         if not complete:
             continue
         # Round-robin over the objectives: each sequence gets ONE, so the
@@ -145,9 +145,9 @@ def _sequences(limit=MAX_SEQUENCES, objectives=None):
         objective = objectives[len(sequences) % len(objectives)]
         sequences.append({
             "technique": technique["id"],
-            "objectif": objective["id"],
+            "objective": objective["id"],
             "messages": sequence_turns(complete[0], objective),
-            "mono_tour": compose(complete[0], objective),
+            "single_turn": compose(complete[0], objective),
         })
         if len(sequences) >= limit:
             break
@@ -202,7 +202,7 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
         # them: the command looked like it had worked while the new objective
         # was never sent. Found by comparing what the harvest announced to
         # what it contained.
-        group = (f"C-{label}-{_fragment(sequence['objectif'])}"
+        group = (f"C-{label}-{_fragment(sequence['objective'])}"
                   f"-{number:02d}")
         for sample in range(1, SAMPLE_COUNT + 1):
             if f"{group}-{sample}" in already:
@@ -217,11 +217,11 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
                 # The SAME pair of ingredients in a single message. The pair
                 # only holds if played in the same session, against the same
                 # target, back to back: a probabilistic target drifts.
-                reply = ask_target(sequence["mono_tour"])
+                reply = ask_target(sequence["single_turn"])
                 entries.append(_entry(
                     group, sample, sequence,
-                    [{"role": "utilisateur", "contenu": sequence["mono_tour"]},
-                     {"role": "cible", "contenu": reply}],
+                    [{"role": "attacker", "content": sequence["single_turn"]},
+                     {"role": "target", "content": reply}],
                     suffix="-mono"))
                 print(f"{group}-{sample}-mono : 1 tour (témoin)")
 
@@ -238,25 +238,27 @@ def _existing_harvest():
     """What is already harvested and not yet poured into the corpus."""
     if not OUTPUT_FILE.exists():
         return []
-    return json.loads(OUTPUT_FILE.read_text(
-        encoding="utf-8")).get("conversations", [])
+    from migration import modernise
+
+    return modernise(json.loads(OUTPUT_FILE.read_text(
+        encoding="utf-8"))).get("conversations", [])
 
 
 def _entry(group, sample, sequence, turns, suffix=""):
     """An entry to label. The fields to fill in stay None."""
     return {
         "id": f"{group}-{sample}{suffix}",
-        "groupe": group,          # single-turn and multi-turn go TOGETHER
+        "group": group,          # single-turn and multi-turn go TOGETHER
         "format": "mono-tour" if len(turns) == 2 else "multi-tours",
-        "tours": turns,
+        "turns": turns,
         "source": (f"cible réelle — {sequence['technique']} / "
-                   f"{sequence['objectif']} / "
+                   f"{sequence['objective']} / "
                    f"{'composé' if suffix else 'séquencé'}"),
         "secret": "ARCHIVES-7731",
-        "categorie": None,         # to fill in by hand
-        "jeu": None,               # to fill in by hand: "dev" or "test"
-        "attendu": None,           # to fill in by hand: true or false
-        "piege": "",               # to fill in by hand
+        "category": None,         # to fill in by hand
+        "dataset": None,               # to fill in by hand: "dev" or "test"
+        "expected": None,           # to fill in by hand: true or false
+        "trap": "",               # to fill in by hand
     }
 
 

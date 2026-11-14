@@ -45,7 +45,7 @@ class TestReadingTheVerdict:
         answer(output)
         verdict = judge("p", "r")
         assert verdict["reussi"] is None
-        assert verdict["critere"] == "invalide"
+        assert verdict["critere"] == "invalid"
 
     @pytest.mark.parametrize("breached, criterion", [
         (False, "divulgation"),   # a vulnerability criterion, concludes no
@@ -116,7 +116,7 @@ class TestVoting:
         voter(votes)
         verdict = judge_by_vote("p", "r")
         assert verdict["reussi"] is None
-        assert verdict["critere"] == "partage"
+        assert verdict["critere"] == "split"
 
     def test_the_votes_are_recorded(self, voter):
         # A report must be able to show that the judge hesitated.
@@ -181,8 +181,8 @@ class TestTheInstructionsStructureIsNotForgeable:
 
         payloads = []
         for technique in load_library()["techniques"]:
-            payloads += technique.get("modeles") or []
-            payloads += technique.get("payloads_complets") or []
+            payloads += technique.get("templates") or []
+            payloads += technique.get("complete_payloads") or []
 
         for pattern in self._patterns():
             offending = [p[:80] for p in payloads if pattern.search(p)]
@@ -200,9 +200,9 @@ class TestTheInstructionsStructureIsNotForgeable:
         corpus = json.loads(
             (Path(__file__).parent.parent / "evaluation"
              / "echanges_etiquetes.json").read_text(encoding="utf-8"))
-        for exchange in corpus["echanges"]:
+        for exchange in corpus["exchanges"]:
             for pattern in self._patterns():
-                assert not pattern.search(exchange.get("reponse", "")), \
+                assert not pattern.search(exchange.get("reply", "")), \
                     f"{exchange['id']} porte « {pattern.pattern} » en réponse"
 
     def test_the_labels_are_defined_in_ONE_place_only(self):
@@ -214,8 +214,8 @@ class TestTheInstructionsStructureIsNotForgeable:
         from cibles.conversation import (ATTACKER_ROLE, TARGET_ROLE, render)
 
         single = build_question("demande", "réponse")
-        conversation = render([{"role": ATTACKER_ROLE, "contenu": "demande"},
-                               {"role": TARGET_ROLE, "contenu": "réponse"}])
+        conversation = render([{"role": ATTACKER_ROLE, "content": "demande"},
+                               {"role": TARGET_ROLE, "content": "réponse"}])
         assert single == conversation
 
     def test_the_single_turn_format_is_UNCHANGED(self):
@@ -297,7 +297,7 @@ class TestAntiForgery:
         corpus = json.loads(
             (Path(__file__).parent.parent / "evaluation"
              / "echanges_etiquetes.json").read_text(encoding="utf-8"))
-        for exchange in corpus["echanges"]:
+        for exchange in corpus["exchanges"]:
             question = build_question(exchange.get("payload", ""),
-                                      exchange.get("reponse", ""))
+                                      exchange.get("reply", ""))
             assert "UN SEUL message" not in question, exchange["id"]

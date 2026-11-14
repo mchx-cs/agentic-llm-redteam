@@ -224,9 +224,9 @@ def build_conversation_question(turns):
     decodings = []
     for turn in turns:
         if turn["role"] == TARGET_ROLE:
-            decodings += analyse(turn["contenu"])
+            decodings += analyse(turn["content"])
     if decodings:
-        lines = [f'- {d["type"]} : "{d["original"]}" → "{d["decode"]}"'
+        lines = [f'- {d["type"]} : "{d["original"]}" → "{d["decoded"]}"'
                  for d in decodings]
         question += "\n\nDécodage automatique :\n" + "\n".join(lines)
 
@@ -307,7 +307,7 @@ def build_question(payload, reply):
 
     decodings = analyse(reply)
     if decodings:
-        lines = [f'- {d["type"]} : "{d["original"]}" → "{d["decode"]}"'
+        lines = [f'- {d["type"]} : "{d["original"]}" → "{d["decoded"]}"'
                  for d in decodings]
         question += "\n\nDécodage automatique :\n" + "\n".join(lines)
 
@@ -361,7 +361,7 @@ def _ask_judge(question, multiturn, language=DEFAULT_LANGUAGE):
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         return {
             "reussi": None,
-            "critere": "invalide",
+            "critere": "invalid",
             "analyse": "Sortie du juge illisible.",
             "valeur": None,
             "brut": raw,
@@ -442,7 +442,7 @@ def _vote(return_one_verdict, vote_count):
 
     return {
         "reussi": None,
-        "critere": "partage",
+        "critere": "split",
         "analyse": f"Pas de majorité sur {vote_count} jugements ({votes}) : "
                    f"cas limite, à revoir par un humain.",
         "valeur": None,

@@ -28,19 +28,19 @@ class TestLibrary:
 
     def test_every_technique_has_the_expected_fields(self):
         for technique in load_library()["techniques"]:
-            assert {"id", "famille_owasp", "description", "prerequis",
-                    "modeles"} <= set(technique)
+            assert {"id", "owasp_family", "description", "prerequisites",
+                    "templates"} <= set(technique)
 
     def test_every_template_holds_the_objective_marker(self):
         # A template without `{objectif}` would always send the same text.
         for technique in load_library()["techniques"]:
-            for template in technique["modeles"]:
+            for template in technique["templates"]:
                 assert "{objectif}" in template, technique["id"]
 
     def test_the_prerequisites_are_known_to_the_planner(self):
         from agents.planificateur import PREREQUISITES
         for technique in load_library()["techniques"]:
-            for prerequisite in technique["prerequis"]:
+            for prerequisite in technique["prerequisites"]:
                 assert prerequisite in PREREQUISITES, technique["id"]
 
     def test_the_identifiers_are_unique(self):
@@ -50,7 +50,7 @@ class TestLibrary:
 
 class TestTransformations:
     def test_identity_changes_nothing(self):
-        assert TRANSFORMATIONS["identite"]("Bonjour") == "Bonjour"
+        assert TRANSFORMATIONS["identity"]("Bonjour") == "Bonjour"
 
     def test_every_transformation_returns_non_empty_text(self):
         for name, transform in TRANSFORMATIONS.items():
@@ -61,19 +61,19 @@ class TestTransformations:
 class TestPayloadGeneration:
     def test_no_marker_survives(self):
         for payload in generate_payloads():
-            assert "{objectif}" not in payload["texte"]
+            assert "{objectif}" not in payload["text"]
 
     def test_every_payload_says_where_it_comes_from(self):
         for payload in generate_payloads():
-            assert {"technique", "famille_owasp", "objectif",
-                    "transformation", "texte"} <= set(payload)
+            assert {"technique", "owasp_family", "objective",
+                    "transformation", "text"} <= set(payload)
 
     def test_the_catalogue_really_crosses_the_axes(self):
         library = load_library()
-        templates = sum(len(t["modeles"]) for t in library["techniques"])
-        complete = sum(len(t.get("payloads_complets", []))
+        templates = sum(len(t["templates"]) for t in library["techniques"])
+        complete = sum(len(t.get("complete_payloads", []))
                        for t in library["techniques"])
-        objectives = len(library["objectifs"])
+        objectives = len(library["objectives"])
         # A template crosses with each objective. A complete payload produces
         # ONE MORE than there are objectives: composed with each of them (it
         # then serves as a preamble, and the objective supplies the request),
@@ -94,7 +94,7 @@ class TestConfiguration:
     def test_the_profiles_declare_what_is_needed(self):
         from config import PROFILES
         for name, profile in PROFILES.items():
-            assert {"base_url", "api_key", "modele"} <= set(profile), name
+            assert {"base_url", "api_key", "model"} <= set(profile), name
 
     def test_an_unknown_profile_fails_at_import(self, monkeypatch):
         # Without this guard, a typo in .env would give a bare KeyError, a

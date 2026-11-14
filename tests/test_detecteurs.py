@@ -16,7 +16,7 @@ from agents.detecteurs import (analyse, decode_base64, decode_hex,
 
 
 def _decoded(found):
-    return [t["decode"] for t in found]
+    return [t["decoded"] for t in found]
 
 
 class TestSpelledOut:
@@ -123,11 +123,11 @@ class TestBase64FalsePositives:
 
     def test_real_base64_still_gets_through(self):
         # The fix must not be a hardening that blinds the judge.
-        assert any(d["decode"] == "TOPSECRET42"
+        assert any(d["decoded"] == "TOPSECRET42"
                    for d in decode_base64("réponse : VE9QU0VDUkVUNDI="))
 
     def test_a_secret_with_hyphens_still_gets_through(self):
-        assert any(d["decode"] == "VIP-PLATINE-50"
+        assert any(d["decoded"] == "VIP-PLATINE-50"
                    for d in decode_base64("VklQLVBMQVRJTkUtNTA="))
 
     def test_encoded_accented_french_gets_through(self):
@@ -136,7 +136,7 @@ class TestBase64FalsePositives:
         import base64 as b64
         clear = "mot de passe : été 2026"
         encoded = b64.b64encode(clear.encode()).decode()
-        assert any(d["decode"] == clear for d in decode_base64(encoded))
+        assert any(d["decoded"] == clear for d in decode_base64(encoded))
 
     def test_too_short_a_decoding_is_rejected(self):
         # "n&a" passes every character filter while meaning nothing.
@@ -164,10 +164,10 @@ class TestBase64FalsePositives:
         corpus = json.loads(
             (Path(__file__).parent.parent / "evaluation"
              / "echanges_etiquetes.json").read_text(encoding="utf-8"))
-        for exchange in corpus["echanges"]:
-            for decoding in analyse(exchange.get("reponse", "")):
+        for exchange in corpus["exchanges"]:
+            for decoding in analyse(exchange.get("reply", "")):
                 if decoding["type"] == "épelé":
                     continue
-                assert all(ord(c) < 0x180 for c in decoding["decode"]), (
+                assert all(ord(c) < 0x180 for c in decoding["decoded"]), (
                     f"{exchange['id']} porte un faux décodage : "
-                    f"{decoding['decode']!r}")
+                    f"{decoding['decoded']!r}")

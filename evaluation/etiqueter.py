@@ -33,7 +33,7 @@ CORPUS_FILE = FOLDER / "echanges_etiquetes.json"
 # and the errors could no longer be grouped by kind of trap ACROSS formats —
 # which is exactly the comparison that matters.
 SOURCES = (
-    (TO_LABEL_FILE, "echanges"),
+    (TO_LABEL_FILE, "exchanges"),
     (CONVERSATIONS_FILE, "conversations"),
 )
 
@@ -81,8 +81,13 @@ CATEGORIES = [
 
 
 def load(path):
+    # The harvest files live outside git, so the data-key translation never
+    # reached them — and a harvest can be an evening of labelling. Read with
+    # the compatibility layer; the next save writes the current names.
+    from migration import modernise
+
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        return modernise(json.load(f))
 
 
 def save(path, data):
@@ -112,7 +117,7 @@ def ask_choice(question, options):
 def show_exchange(exchange, position, total):
     print("\n" + "=" * 70)
     print(f"[{position}/{total}]  {exchange['id']}   "
-          f"(groupe {exchange['groupe']})")
+          f"(groupe {exchange['group']})")
     print(f"Secret du chatbot : {exchange['secret']}")
     print(f"Provenance        : {exchange.get('source', '—')}")
     print("-" * 70)
@@ -129,15 +134,15 @@ def _exchange_lines(exchange):
     means hunting for the moment the target gave way, which is exactly the
     information the author is being asked to supply.
     """
-    if not exchange.get("tours"):
+    if not exchange.get("turns"):
         return [f"Utilisateur : {exchange['payload']}",
-                f"Chatbot     : {exchange['reponse']}"]
+                f"Chatbot     : {exchange['reply']}"]
 
     lines = []
-    for position, turn in enumerate(exchange["tours"]):
+    for position, turn in enumerate(exchange["turns"]):
         number = position // 2 + 1
-        who = "Utilisateur" if turn["role"] == "utilisateur" else "Chatbot    "
-        lines.append(f"[tour {number}] {who} : {turn['contenu']}")
+        who = "Utilisateur" if turn["role"] == "attacker" else "Chatbot    "
+        lines.append(f"[tour {number}] {who} : {turn['content']}")
     return lines
 
 
@@ -162,7 +167,7 @@ def _harvests():
 def _left_to_label(harvests):
     """How many entries still have no label, across both harvests."""
     return sum(1 for harvest in harvests for e in harvest["entrees"]
-               if e["attendu"] is None)
+               if e["expected"] is None)
 
 
 def label():
@@ -177,7 +182,7 @@ def label():
         return
 
     exchanges = [e for harvest in harvests for e in harvest["entrees"]]
-    remaining = [e for e in exchanges if e["attendu"] is None]
+    remaining = [e for e in exchanges if e["expected"] is None]
 
     if not remaining:
         print("Tous les échanges sont déjà étiquetés. "
@@ -193,7 +198,7 @@ def label():
     # single-turn counterpart carry the SAME group, and must therefore go into
     # the same set — otherwise the frozen set would hold the control of a case
     # the judge was tuned on.
-    set_of_group = {e["groupe"]: e["jeu"] for e in exchanges if e["jeu"]}
+    set_of_group = {e["group"]: e["dataset"] for e in exchanges if e["dataset"]}
     file_of = {id(e): harvest["fichier"] for harvest in harvests
                for e in harvest["entrees"]}
     data_of = {id(e): harvest["donnees"] for harvest in harvests
@@ -215,7 +220,7 @@ def label():
             if category is None:
                 continue
 
-            group = exchange["groupe"]
+            group = exchange["group"]
             if group in set_of_group:
                 dataset = set_of_group[group]
                 print(f"\nJeu : {dataset} (imposé par le groupe {group}).")
@@ -232,10 +237,10 @@ def label():
             print("\nEn une phrase, ce que ce cas teste (vide = la provenance) :")
             trap = input("> ").strip() or exchange.get("source", "")
 
-            exchange["attendu"] = verdict.startswith("oui")
-            exchange["categorie"] = category
-            exchange["jeu"] = dataset
-            exchange["piege"] = trap
+            exchange["expected"] = verdict.startswith("oui")
+            exchange["category"] = category
+            exchange["dataset"] = dataset
+            exchange["trap"] = trap
 
             # Saved after EVERY exchange: an interruption never loses the work
             # already done.
@@ -245,7 +250,7 @@ def label():
     except KeyboardInterrupt:
         print("\n\nInterrompu. Le travail déjà fait est enregistré.")
 
-    labelled = sum(1 for e in exchanges if e["attendu"] is not None)
+    labelled = sum(1 for e in exchanges if e["expected"] is not None)
     print(f"\n{labelled}/{len(exchanges)} échange(s) étiqueté(s).")
     if labelled == len(exchanges):
         print("Terminé : lance --integrer pour les verser dans le corpus.")
@@ -257,28 +262,28 @@ def integrate():
     corpus = load(CORPUS_FILE)
 
     ready = [e for harvest in harvests for e in harvest["entrees"]
-             if e["attendu"] is not None]
+             if e["expected"] is not None]
     if not ready:
         print("Aucun échange étiqueté à intégrer.")
         return
 
-    already = {e["id"] for e in corpus["echanges"]}
+    already = {e["id"] for e in corpus["exchanges"]}
     # A group already present in the corpus imposes its set: we refuse rather
     # than silently create a leak between the dev and test sets.
-    set_of_group = {e["groupe"]: e["jeu"] for e in corpus["echanges"]}
+    set_of_group = {e["group"]: e["dataset"] for e in corpus["exchanges"]}
 
     added = 0
     for exchange in ready:
         if exchange["id"] in already:
             print(f"{exchange['id']} : déjà dans le corpus, ignoré.")
             continue
-        expected = set_of_group.get(exchange["groupe"])
-        if expected and expected != exchange["jeu"]:
-            print(f"{exchange['id']} : le groupe {exchange['groupe']} est "
-                  f"déjà en '{expected}', pas en '{exchange['jeu']}'. Ignoré.")
+        expected = set_of_group.get(exchange["group"])
+        if expected and expected != exchange["dataset"]:
+            print(f"{exchange['id']} : le groupe {exchange['group']} est "
+                  f"déjà en '{expected}', pas en '{exchange['dataset']}'. Ignoré.")
             continue
-        corpus["echanges"].append(exchange)
-        set_of_group[exchange["groupe"]] = exchange["jeu"]
+        corpus["exchanges"].append(exchange)
+        set_of_group[exchange["group"]] = exchange["dataset"]
         added += 1
 
     save(CORPUS_FILE, corpus)
@@ -288,12 +293,12 @@ def integrate():
         if harvest is None:
             continue
         harvest["donnees"][key] = [e for e in harvest["entrees"]
-                                   if e["attendu"] is None]
+                                   if e["expected"] is None]
         save(path, harvest["donnees"])
 
-    multiturn = sum(1 for e in corpus["echanges"] if e.get("tours"))
+    multiturn = sum(1 for e in corpus["exchanges"] if e.get("turns"))
     print(f"{added} échange(s) ajouté(s) au corpus "
-          f"({len(corpus['echanges'])} au total, dont {multiturn} "
+          f"({len(corpus['exchanges'])} au total, dont {multiturn} "
           f"conversation(s)).")
     if multiturn:
         # The judge cannot read a conversation yet: saying so here avoids

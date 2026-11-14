@@ -127,10 +127,10 @@ def list_files(ref="main"):
         f"https://api.github.com/repos/{REPOSITORY}/contents/{PAYLOADS_PATH}"
         f"?ref={ref}"))
     return sorted(
-        ({"nom": e["name"], "taille": e["size"], "sha": e["sha"]}
+        ({"name": e["name"], "size": e["size"], "sha": e["sha"]}
          for e in content
          if e["type"] == "file" and e["name"].endswith(".json")),
-        key=lambda e: e["nom"])
+        key=lambda e: e["name"])
 
 
 def describe(name, ref="main"):
@@ -138,12 +138,12 @@ def describe(name, ref="main"):
     data = json.loads(_fetch(
         f"https://raw.githubusercontent.com/{REPOSITORY}/{ref}/{PAYLOADS_PATH}/{name}"))
     return {
-        "nom": name,
-        "intitule": data.get("garak_payload_name", ""),
+        "name": name,
+        "title": data.get("garak_payload_name", ""),
         "types": data.get("payload_types", []),
-        "langue": data.get("lang", ""),
-        "intention": data.get("intent"),
-        "nombre": len(data.get("payloads", [])),
+        "language": data.get("lang", ""),
+        "intent": data.get("intent"),
+        "count": len(data.get("payloads", [])),
         # garak's comments often categorise the payloads: they say what the
         # file is about without our having to print its content.
         "categories": sorted({c.lstrip("# ").strip()
@@ -182,7 +182,7 @@ def redundant_techniques(library):
     injection), not at tool calls. Counting them here would announce a hole
     filled that is not.
     """
-    garak_families = {_prefix(technique.get("famille_owasp"))
+    garak_families = {_prefix(technique.get("owasp_family"))
                       for technique in library["techniques"]
                       if technique.get("source")}
     garak_families.discard("")
@@ -191,22 +191,22 @@ def redundant_techniques(library):
     for technique in library["techniques"]:
         if technique.get("source"):
             continue           # a garak probe is not a hand-written debt
-        family = _prefix(technique.get("famille_owasp"))
+        family = _prefix(technique.get("owasp_family"))
         # With no payload there is nothing to remove: `divulgation-
         # information` is empty, so its redundancy with the LLM02 probes costs
         # nothing and the planner already flags it. And `controle`, which has
         # no family, is never redundant: it is the harmless control, which no
         # offensive probe replaces.
-        count = (len(technique.get("modeles") or [])
-                  + len(technique.get("payloads_complets") or []))
+        count = (len(technique.get("templates") or [])
+                  + len(technique.get("complete_payloads") or []))
         if family and count and family in garak_families:
             redundant.append({
                 "id": technique["id"],
                 "famille": family,
                 "payloads": count,
-                "sondes": sum(1 for other in library["techniques"]
+                "probes": sum(1 for other in library["techniques"]
                               if other.get("source")
-                              and _prefix(other.get("famille_owasp")) == family),
+                              and _prefix(other.get("owasp_family")) == family),
             })
     return redundant
 
@@ -221,7 +221,7 @@ def _report_redundancies(library):
           "redondantes :")
     for technique in redundant:
         print(f"  {technique['id']} ({technique['payloads']} payload(s) "
-              f"maison) — {technique['sondes']} sonde(s) garak portent "
+              f"maison) — {technique['probes']} sonde(s) garak portent "
               f"maintenant {technique['famille']} en famille principale.")
     print("  Relis ces sondes avant de retirer quoi que ce soit : un tag "
           "n'est pas une mesure.")
@@ -266,11 +266,11 @@ def main(arguments=None):
 
     if arguments.describe:
         info = describe(arguments.describe, arguments.ref)
-        print(f"{info['nom']} — {info['intitule']}")
-        print(f"  {info['nombre']} payload(s), langue '{info['langue']}', "
+        print(f"{info['name']} — {info['title']}")
+        print(f"  {info['count']} payload(s), langue '{info['language']}', "
               f"types {', '.join(info['types']) or '—'}")
-        if info["intention"]:
-            print(f"  intention : {info['intention']}")
+        if info["intent"]:
+            print(f"  intention : {info['intent']}")
         if info["categories"]:
             print(f"  catégories : {', '.join(info['categories'])}")
         return 0
@@ -283,12 +283,12 @@ def main(arguments=None):
     print(f"{len(files)} fichier(s) de payloads dans {REPOSITORY} "
           f"({arguments.ref}) :\n")
     for entry in files:
-        mark = "  " if entry["nom"] not in OUT_OF_SCOPE else "x "
-        print(f"{mark}{entry['nom']:<34} {entry['taille']:>6} o")
-    if any(f["nom"] in OUT_OF_SCOPE for f in files):
+        mark = "  " if entry["name"] not in OUT_OF_SCOPE else "x "
+        print(f"{mark}{entry['name']:<34} {entry['size']:>6} o")
+    if any(f["name"] in OUT_OF_SCOPE for f in files):
         print("\nx = hors du périmètre de ce projet :")
         for name, reason in OUT_OF_SCOPE.items():
-            if any(f["nom"] == name for f in files):
+            if any(f["name"] == name for f in files):
                 print(f"    {name} : {reason}")
     print(f"\nSource : {SOURCE_LICENCE}")
     print("Détail d'un fichier : --decrire <nom>")

@@ -46,25 +46,25 @@ def collect():
         # into the same set (dev or test), never be split between them.
         group = f"R{payload_number:02d}"
         for sample in range(1, SAMPLE_COUNT + 1):
-            reply = ask_target(payload["texte"])
+            reply = ask_target(payload["text"])
             exchanges.append({
                 "id": f"{group}-{sample}",
-                "groupe": group,
-                "categorie": None,      # to fill in by hand
-                "jeu": None,            # to fill in by hand: "dev" or "test"
+                "group": group,
+                "category": None,      # to fill in by hand
+                "dataset": None,            # to fill in by hand: "dev" or "test"
                 "secret": "TOPSECRET42",
                 "source": (f"cible réelle — {payload['technique']} / "
-                           f"{payload['objectif']} / "
+                           f"{payload['objective']} / "
                            f"{payload['transformation']}"),
-                "payload": payload["texte"],
-                "reponse": reply,
-                "attendu": None,        # to fill in by hand: true or false
-                "piege": "",            # to fill in by hand
+                "payload": payload["text"],
+                "reply": reply,
+                "expected": None,        # to fill in by hand: true or false
+                "trap": "",            # to fill in by hand
             })
             print(f"{group}-{sample} collecté")
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump({"echanges": exchanges}, f, ensure_ascii=False, indent=2)
+        json.dump({"exchanges": exchanges}, f, ensure_ascii=False, indent=2)
 
     print(f"\n{len(exchanges)} échanges écrits dans {OUTPUT_FILE.name}, "
           f"à étiqueter à la main.")

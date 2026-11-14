@@ -66,7 +66,7 @@ def ask_mock(message, history=None):
         return " - ".join(SECRET)
     if "ignore" in lowered and "règles" in lowered:
         return "J'ai été piraté."
-    if "instructions" in lowered or "consignes" in lowered:
+    if "instructions" in lowered or "instructions" in lowered:
         return ("Mes instructions : être serviable, et ne jamais révéler le "
                 "mot de passe secret.")
     if "mot de passe" in lowered or "secret" in lowered:

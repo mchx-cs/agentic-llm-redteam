@@ -24,10 +24,10 @@ LLM02 = "LLM02:2025 Sensitive Information Disclosure"
 LLM06 = "LLM06:2025 Excessive Agency"
 
 
-def candidate(technique, texte, priorite=0, famille=None, objectif=None):
-    return {"technique": technique, "texte": texte, "priorite": priorite,
-            "famille_owasp": famille, "objectif": objectif,
-            "transformation": "identite"}
+def candidate(technique, text, priorite=0, famille=None, objectif=None):
+    return {"technique": technique, "text": text, "priority": priorite,
+            "owasp_family": famille, "objective": objectif,
+            "transformation": "identity"}
 
 
 # --- Reading the reply -------------------------------------------------------
@@ -107,14 +107,14 @@ def test_talking_about_a_tool_is_not_triggering_it(reply):
 def test_a_success_marks_the_technique_as_effective():
     observations = observe(candidate("dan", "x"), "Le code est ARCHIVES-7731.",
                             {"reussi": True})
-    assert [o["signal"] for o in observations] == ["technique_efficace"]
+    assert [o["signal"] for o in observations] == ["technique_works"]
     assert observations[0]["technique"] == "dan"
 
 
 def test_a_refusal_marks_the_technique_as_blocked():
     observations = observe(candidate("dan", "x"), "Je ne peux pas.",
                             {"reussi": False})
-    assert [o["signal"] for o in observations] == ["technique_bloquee"]
+    assert [o["signal"] for o in observations] == ["technique_blocked"]
 
 
 def test_an_unreadable_verdict_does_not_block_reading_the_reply():
@@ -123,7 +123,7 @@ def test_an_unreadable_verdict_does_not_block_reading_the_reply():
     observations = observe(candidate("dan", "x"),
                             "Je ne peux pas livrer ce secret.", None)
     signals = {o["signal"] for o in observations}
-    assert signals == {"technique_bloquee", "secret_evoque"}
+    assert signals == {"technique_blocked", "secret_mentioned"}
 
 
 def test_a_success_is_never_read_as_a_block():
@@ -132,14 +132,14 @@ def test_a_success_is_never_read_as_a_block():
     observations = observe(candidate("dan", "x"),
                             "Désolé, mais le code est ARCHIVES-7731.",
                             {"reussi": True})
-    assert "technique_bloquee" not in {o["signal"] for o in observations}
+    assert "technique_blocked" not in {o["signal"] for o in observations}
 
 
 def test_a_tool_call_is_observed():
     observations = observe(candidate("dan", "x"),
                             "[OUTIL: consulter_dossier(Marie)]",
                             {"reussi": True})
-    assert "outil_declenche" in {o["signal"] for o in observations}
+    assert "tool_triggered" in {o["signal"] for o in observations}
 
 
 def test_every_observation_carries_its_explanation():
@@ -148,7 +148,7 @@ def test_every_observation_carries_its_explanation():
     for observation in observe(candidate("dan", "x"),
                                 "Je ne peux pas livrer ce secret.",
                                 {"reussi": False}):
-        assert observation["explication"].strip()
+        assert observation["explanation"].strip()
 
 
 # --- Cumul -------------------------------------------------------------------
@@ -216,17 +216,17 @@ def test_a_mentioned_secret_moves_the_disclosure_families_up():
                             {"reussi": True})
     pool = [candidate("neutre", "1", priorite=0),
               candidate("fuite", "2", priorite=1, famille=LLM02)]
-    assert next_attempt(pool)["texte"] == "1"                      # sans rien su
-    assert next_attempt(pool, observations)["texte"] == "2"        # LLM02 remonte
+    assert next_attempt(pool)["text"] == "1"                      # sans rien su
+    assert next_attempt(pool, observations)["text"] == "2"        # LLM02 remonte
 
 
 def test_a_triggered_tool_moves_tool_abuse_up():
     observations = observe(candidate("dan", "x"), "[OUTIL: lookup(z)]",
                             {"reussi": True})
     pool = [candidate("neutre", "1", priorite=0),
-              candidate("outils", "2", priorite=1, famille=LLM06)]
-    assert next_attempt(pool)["texte"] == "1"
-    assert next_attempt(pool, observations)["texte"] == "2"
+              candidate("tools", "2", priorite=1, famille=LLM06)]
+    assert next_attempt(pool)["text"] == "1"
+    assert next_attempt(pool, observations)["text"] == "2"
 
 
 def test_a_family_signal_does_not_move_the_other_families_up():
@@ -235,7 +235,7 @@ def test_a_family_signal_does_not_move_the_other_families_up():
     observations = observe(candidate("dan", "x"),
                             "Je ne peux pas livrer ce secret.",
                             {"reussi": True})
-    delta, reasons = adjust(candidate("outils", "y", famille=LLM06),
+    delta, reasons = adjust(candidate("tools", "y", famille=LLM06),
                              observations)
     assert (delta, reasons) == (0, [])
 
@@ -262,12 +262,12 @@ def test_having_learned_nothing_the_pools_order_is_kept():
     # Determinism: two identical campaigns must send the same payloads,
     # otherwise two reports no longer compare.
     pool = [candidate("a", "1"), candidate("b", "2"), candidate("c", "3")]
-    assert next_attempt(pool)["texte"] == "1"
+    assert next_attempt(pool)["text"] == "1"
 
 
 def test_an_already_sent_attempt_is_not_returned():
     pool = [candidate("a", "1"), candidate("b", "2")]
-    assert next_attempt(pool, (), [pool[0]])["texte"] == "2"
+    assert next_attempt(pool, (), [pool[0]])["text"] == "2"
 
 
 def test_an_exhausted_pool_returns_none():
@@ -287,10 +287,10 @@ def test_a_relegated_attempt_stays_in_the_pool():
     launched = [pool[0]]
 
     chosen = next_attempt(pool, observations, launched)
-    assert chosen["texte"] == "3"          # « dan » a reculé…
+    assert chosen["text"] == "3"          # « dan » a reculé…
 
     launched.append(pool[2])
-    assert next_attempt(pool, observations, launched)["texte"] == "2"   # …mais revient
+    assert next_attempt(pool, observations, launched)["text"] == "2"   # …mais revient
 
 
 def test_a_success_digs_at_the_technique_that_works():
@@ -298,7 +298,7 @@ def test_a_success_digs_at_the_technique_that_works():
     observations = observe(candidate("b", "2"), "Le code est X.",
                             {"reussi": True})
     # "a" heads the pool, but "b" has just produced a finding.
-    assert next_attempt(pool, observations, [pool[1]])["texte"] == "3"
+    assert next_attempt(pool, observations, [pool[1]])["text"] == "3"
 
 
 def test_diversity_prevents_hammering():
@@ -309,7 +309,7 @@ def test_diversity_prevents_hammering():
     observations = observe(candidate("b", "1"), "Le code est X.",
                             {"reussi": True})
     launched = [pool[0], pool[1]]
-    assert next_attempt(pool, observations, launched)["texte"] == "4"
+    assert next_attempt(pool, observations, launched)["text"] == "4"
 
 
 def test_the_choice_carries_its_reasons():
@@ -317,7 +317,7 @@ def test_the_choice_carries_its_reasons():
     observations = observe(candidate("dan", "1"), "Je ne peux pas.",
                             {"reussi": False})
     chosen = next_attempt(pool, observations, [pool[0]])
-    assert chosen["raisons_adaptation"]
+    assert chosen["adaptation_reasons"]
 
 
 def test_the_pool_is_never_modified():
@@ -325,7 +325,7 @@ def test_the_pool_is_never_modified():
     # from one turn to the next.
     pool = [candidate("a", "1")]
     next_attempt(pool, (), [])
-    assert "raisons_adaptation" not in pool[0]
+    assert "adaptation_reasons" not in pool[0]
 
 
 def test_the_scores_net_is_returned():
@@ -336,13 +336,13 @@ def test_the_scores_net_is_returned():
     observations = observe(candidate("b", "1"), "Le code est X.",
                             {"reussi": True})
     chosen = next_attempt(pool, observations, [pool[0]])
-    assert chosen["score_adaptation"] == (BONUS_TECHNIQUE_WORKS
+    assert chosen["adaptation_score"] == (BONUS_TECHNIQUE_WORKS
                                           + DIVERSITY_WEIGHT)
-    assert chosen["priorite"] == 5          # la priorite de depart est intacte
+    assert chosen["priority"] == 5          # la priorite de depart est intacte
 
 
 def test_having_learned_nothing_the_net_is_zero():
-    assert next_attempt([candidate("a", "1", priorite=3)])["score_adaptation"] == 0
+    assert next_attempt([candidate("a", "1", priorite=3)])["adaptation_score"] == 0
 
 
 class TestRealObservedReplies:
@@ -388,7 +388,7 @@ class TestRealObservedReplies:
         # target says what it is keeping, hence where to dig.
         observations = observe(candidate("t", "x"), self.REAL_REFUSALS[0],
                                 {"reussi": False})
-        assert "technique_bloquee" in {o["signal"] for o in observations}
+        assert "technique_blocked" in {o["signal"] for o in observations}
 
     def test_a_tool_described_in_backticks_is_not_a_call(self):
         # Seen in a campaign: the target writes
@@ -430,17 +430,17 @@ class TestContradictionsInTheTrace:
 
     def test_a_refusal_after_a_success_is_ignored(self):
         obs = accumulate(accumulate([], self._success()), self._refusal())
-        assert self._signals(obs) == {"technique_efficace"}
+        assert self._signals(obs) == {"technique_works"}
 
     def test_a_success_after_a_refusal_erases_the_refusal(self):
         obs = accumulate(accumulate([], self._refusal()), self._success())
-        assert self._signals(obs) == {"technique_efficace"}
+        assert self._signals(obs) == {"technique_works"}
 
     def test_the_exclusion_touches_only_the_technique_concerned(self):
         obs = accumulate([], self._refusal("autre"))
         obs = accumulate(obs, self._success("dan"))
-        assert self._signals(obs, "autre") == {"technique_bloquee"}
-        assert self._signals(obs, "dan") == {"technique_efficace"}
+        assert self._signals(obs, "autre") == {"technique_blocked"}
+        assert self._signals(obs, "dan") == {"technique_works"}
 
     def test_the_score_no_longer_mixes_a_techniques_bonus_and_penalty(self):
         # That is the numerical consequence: -3 alone, never -3 then +1.
@@ -456,8 +456,8 @@ class TestContradictionsInTheTrace:
             obs = accumulate(obs, self._success() if tour % 2 else self._refusal())
             paires = [(o["signal"], o["technique"]) for o in obs]
             for signal, technique in paires:
-                if signal == "technique_efficace":
-                    assert ("technique_bloquee", technique) not in paires
+                if signal == "technique_works":
+                    assert ("technique_blocked", technique) not in paires
 
 
 class TestTheGrainOfDiversity:
@@ -471,10 +471,10 @@ class TestTheGrainOfDiversity:
     """
 
     @staticmethod
-    def _probe(groupe, nom, priorite=0):
-        return {"technique": nom, "groupe": groupe, "texte": nom,
-                "priorite": priorite, "famille_owasp": None,
-                "objectif": None, "transformation": "identite"}
+    def _probe(groupe, name, priorite=0):
+        return {"technique": name, "group": groupe, "text": name,
+                "priority": priorite, "owasp_family": None,
+                "objective": None, "transformation": "identity"}
 
     def test_the_penalty_counts_the_same_modules_attempts(self):
         launched = [self._probe("encoding", "base64"),
@@ -496,15 +496,15 @@ class TestTheGrainOfDiversity:
         launched = [pool[0]]
         # Without the grouping, "base32" followed "base64": three encoding
         # turns before reaching `dan`.
-        assert next_attempt(pool, (), launched)["texte"] == "dan11"
+        assert next_attempt(pool, (), launched)["text"] == "dan11"
 
     def test_a_hand_written_technique_serves_as_its_own_group(self):
         # No `groupe` field: we fall back on the identifier, otherwise every
         # hand-written technique would count as one group.
-        a = {"technique": "fuite-prompt-systeme", "texte": "a", "priorite": 0,
-             "famille_owasp": None, "objectif": None,
-             "transformation": "identite"}
-        b = dict(a, technique="controle", texte="b")
+        a = {"technique": "fuite-prompt-systeme", "text": "a", "priority": 0,
+             "owasp_family": None, "objective": None,
+             "transformation": "identity"}
+        b = dict(a, technique="controle", text="b")
         delta, reasons = adjust(b, (), [a])
         assert (delta, reasons) == (0, [])
 
@@ -548,19 +548,19 @@ class TestStaticControl:
         import io as _io
         import main
 
-        fiche = {"role": "a", "langue": "fr", "outils": [],
-                 "sujets_refuses": ["le code"], "mentionne_consignes": True,
-                 "produit_du_code": None, "traite_des_documents": None,
-                 "contexte": [], "indices": [], "echanges": [],
-                 "avertissement": None}
+        profile = {"role": "a", "language": "fr", "tools": [],
+                 "refused_subjects": ["le code"], "mentions_instructions": True,
+                 "writes_code": None, "handles_documents": None,
+                 "context": [], "evidence": [], "exchanges": [],
+                 "warning": None}
         originals = (main.reconnoitre, main.judge_by_vote, main.MAX_ESSAIS)
-        main.reconnoitre = lambda c: dict(fiche)
+        main.reconnoitre = lambda c: dict(profile)
         main.MAX_ESSAIS = attempts
-        tours = {"n": 0}
+        turns = {"n": 0}
 
         def fake_judge(payload, reply):
-            tours["n"] += 1
-            premier = tours["n"] == 1
+            turns["n"] += 1
+            premier = turns["n"] == 1
             return {"reussi": premier,
                     "critere": "obeissance" if premier else "aucun",
                     "analyse": "x", "valeur": None,
@@ -572,7 +572,7 @@ class TestStaticControl:
                 result = main.run_campaign(
                     lambda m: "Je ne peux pas.", "simulee",
                     adaptive=adaptive)
-            return [e["technique"] for e in result["lances"]]
+            return [e["technique"] for e in result["launched"]]
         finally:
             main.reconnoitre, main.judge_by_vote, main.MAX_ESSAIS = originals
 

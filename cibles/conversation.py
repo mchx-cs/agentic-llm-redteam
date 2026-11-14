@@ -59,8 +59,8 @@ pass with the package itself. See `GLOSSAIRE.md`.
 # are enough for the published attacks (Crescendo uses five to ten).
 MAX_TURNS = 5
 
-ATTACKER_ROLE = "utilisateur"
-TARGET_ROLE = "cible"
+ATTACKER_ROLE = "attacker"
+TARGET_ROLE = "target"
 
 # Mapping to the roles `ask_llm` expects: our vocabulary is ours, the
 # API's is not.
@@ -113,7 +113,7 @@ def to_api(turns):
     TARGET turns become `assistant` messages, because that is what they are
     from the attacked model's point of view: its own replies.
     """
-    return [{"role": _API_ROLES[turn["role"]], "content": turn["contenu"]}
+    return [{"role": _API_ROLES[turn["role"]], "content": turn["content"]}
             for turn in turns if turn["role"] in _API_ROLES]
 
 
@@ -127,7 +127,7 @@ def render(turns):
     side to what actually matters: its criteria and its corpus. The shape does
     not move.
     """
-    return "\n".join(f'{LABELS[turn["role"]]} : "{turn["contenu"]}"'
+    return "\n".join(f'{LABELS[turn["role"]]} : "{turn["content"]}"'
                      for turn in turns if turn["role"] in LABELS)
 
 
@@ -155,6 +155,6 @@ def play(ask, messages, target_name="cette cible"):
     turns = []
     for message in messages:
         reply = ask(message, history=to_api(turns))
-        turns.append({"role": ATTACKER_ROLE, "contenu": message})
-        turns.append({"role": TARGET_ROLE, "contenu": reply})
+        turns.append({"role": ATTACKER_ROLE, "content": message})
+        turns.append({"role": TARGET_ROLE, "content": reply})
     return turns
