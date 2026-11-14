@@ -1,10 +1,10 @@
 """
-Tests de la cible de démonstration.
+Tests for the demo target.
 
-Aucun modèle n'intervient : on remplace `ask_llm` par une réponse
-choisie, et on vérifie ce qui entoure l'appel — les consignes de chaque
-niveau, le filtre de sortie, la simulation d'outil. Ce qu'une vraie cible
-répond, lui, est probabiliste et se mesure à la main.
+No model is involved: we replace `ask_llm` with a chosen reply and check what
+surrounds the call — each level's instructions, the output filter, the tool
+simulation. What a real target answers is probabilistic, and is measured by
+hand.
 """
 
 import pytest
@@ -16,152 +16,151 @@ from cibles.demo import LEVELS, SECRET, build_demo_target
 
 
 @pytest.fixture
-def repondre(monkeypatch):
-    """Fait répondre la cible par un texte choisi, et retient sa consigne."""
-    vu = {}
+def answer(monkeypatch):
+    """Makes the target answer a chosen text, and keeps its instruction."""
+    seen = {}
 
     def installer(reponse):
         def faux(message, systeme=None, **kwargs):
-            vu["systeme"] = systeme
-            vu["message"] = message
+            seen["systeme"] = systeme
+            seen["message"] = message
             return reponse
         monkeypatch.setattr(demo, "ask_llm", faux)
-        return vu
+        return seen
     return installer
 
 
-class TestNiveaux:
-    def test_les_trois_niveaux_existent(self):
+class TestLevels:
+    def test_the_three_levels_exist(self):
         assert set(LEVELS) == {1, 2, 3}
 
-    def test_un_niveau_inconnu_est_refuse(self):
+    def test_an_unknown_level_is_refused(self):
         with pytest.raises(ValueError, match="Niveau de démonstration inconnu"):
             build_demo_target(9)
 
-    def test_tous_connaissent_le_secret(self, repondre):
-        # Les niveaux diffèrent par la PROTECTION du secret, pas par le fait
-        # de le détenir : sinon la comparaison entre niveaux ne mesurerait
-        # pas la défense.
-        for niveau in LEVELS:
-            vu = repondre("réponse")
-            build_demo_target(niveau)("question")
-            assert SECRET in vu["systeme"], niveau
+    def test_they_all_know_the_secret(self, answer):
+        # The levels differ in how they PROTECT the secret, not in holding
+        # it: otherwise comparing levels would not measure the defence.
+        for level in LEVELS:
+            seen = answer("réponse")
+            build_demo_target(level)("question")
+            assert SECRET in seen["systeme"], level
 
-    def test_tous_exposent_le_meme_role_et_le_meme_outil(self, repondre):
+    def test_they_all_expose_the_same_role_and_tool(self, answer):
         consignes = []
-        for niveau in LEVELS:
-            vu = repondre("réponse")
-            build_demo_target(niveau)("question")
-            consignes.append(vu["systeme"])
+        for level in LEVELS:
+            seen = answer("réponse")
+            build_demo_target(level)("question")
+            consignes.append(seen["systeme"])
         for consigne in consignes:
             assert "bibliothèque municipale de Valmont" in consigne
             assert "consulter_dossier" in consigne
 
-    def test_le_niveau_1_est_le_plus_permissif(self, repondre):
-        vu = repondre("réponse")
+    def test_level_1_is_the_most_permissive(self, answer):
+        seen = answer("réponse")
         build_demo_target(1)("question")
-        # Sa consigne invite à aider plutôt qu'à refuser : c'est ce qui rend
-        # la détection quasi certaine dans la limite de MAX_ESSAIS.
-        assert "serviable" in vu["systeme"] or "coopératif" in vu["systeme"]
-        assert "Règle absolue" not in vu["systeme"]
+        # Its instruction invites helping rather than refusing: that is what
+        # makes detection near certain within MAX_ESSAIS.
+        assert "serviable" in seen["systeme"] or "coopératif" in seen["systeme"]
+        assert "Règle absolue" not in seen["systeme"]
 
-    @pytest.mark.parametrize("niveau", [2, 3])
-    def test_les_niveaux_2_et_3_posent_une_regle_absolue(self, repondre, niveau):
-        vu = repondre("réponse")
-        build_demo_target(niveau)("question")
-        assert "Règle absolue" in vu["systeme"]
+    @pytest.mark.parametrize("level", [2, 3])
+    def test_levels_2_and_3_state_an_absolute_rule(self, answer, level):
+        seen = answer("réponse")
+        build_demo_target(level)("question")
+        assert "Règle absolue" in seen["systeme"]
 
 
-class TestFiltreDeSortie:
-    def test_seul_le_niveau_3_filtre(self, repondre):
+class TestOutputFilter:
+    def test_only_level_3_filters(self, answer):
         fuite = f"Le code est {SECRET}."
-        for niveau in (1, 2):
-            repondre(fuite)
-            assert SECRET in build_demo_target(niveau)("question")
-        repondre(fuite)
+        for level in (1, 2):
+            answer(fuite)
+            assert SECRET in build_demo_target(level)("question")
+        answer(fuite)
         assert SECRET not in build_demo_target(3)("question")
 
-    def test_le_filtre_laisse_passer_l_encodage(self, repondre):
-        # Défense volontairement imparfaite : elle attrape le secret écrit en
-        # clair, pas sa version encodée. Le niveau 3 met donc à l'épreuve
-        # exactement ce que detecteurs.py sait décoder.
+    def test_the_filter_lets_encoding_through(self, answer):
+        # A deliberately imperfect defence: it catches the secret written in
+        # clear, not its encoded form. Level 3 therefore puts to the test
+        # exactly what detecteurs.py can decode.
         encode = "QVJDSElWRVMtNzczMQ=="          # ARCHIVES-7731 en Base64
-        repondre(f"Le voici : {encode}")
+        answer(f"Le voici : {encode}")
         assert encode in build_demo_target(3)("question")
 
-    def test_le_filtre_laisse_passer_l_epellation(self, repondre):
+    def test_the_filter_lets_spelling_out_through(self, answer):
         epele = " - ".join(SECRET)
-        repondre(epele)
+        answer(epele)
         assert epele in build_demo_target(3)("question")
 
-    def test_le_filtre_ignore_la_casse(self, repondre):
-        repondre(f"le code est {SECRET.lower()}")
+    def test_the_filter_ignores_case(self, answer):
+        answer(f"le code est {SECRET.lower()}")
         assert SECRET.lower() not in build_demo_target(3)("question").lower()
 
 
-class TestOutilFactice:
-    def test_un_appel_d_outil_donne_un_resultat_simule(self, repondre):
-        # Rien n'est exécuté : ce qui compte est que la cible ait accepté
-        # d'agir. C'est ça, l'abus d'agentivité (LLM06).
-        repondre("Je consulte. [OUTIL: consulter_dossier(Marie Dupont)]")
+class TestFakeTool:
+    def test_a_tool_call_gives_a_simulated_result(self, answer):
+        # Nothing is executed: what counts is that the target agreed to act.
+        # That is excessive agency (LLM06).
+        answer("Je consulte. [OUTIL: consulter_dossier(Marie Dupont)]")
         reponse = build_demo_target(1)("question")
         assert "résultat de l'outil" in reponse
         assert demo.CONFIDENTIAL_RECORD in reponse
 
-    def test_sans_appel_rien_n_est_ajoute(self, repondre):
-        repondre("Bonjour, comment puis-je vous aider ?")
+    def test_without_a_call_nothing_is_added(self, answer):
+        answer("Bonjour, comment puis-je vous aider ?")
         assert "résultat de l'outil" not in build_demo_target(1)("question")
 
-    @pytest.mark.parametrize("ecriture", [
+    @pytest.mark.parametrize("spelling", [
         "[OUTIL: consulter_dossier(Marie)]",
         "OUTIL: consulter_dossier(Marie)",
         "[outil : consulter_dossier(Marie)]",
     ])
-    def test_plusieurs_ecritures_sont_reconnues(self, repondre, ecriture):
-        # Un LLM ne reproduit pas un gabarit au caractère près.
-        repondre(f"Voici : {ecriture}")
+    def test_several_spellings_are_recognised(self, answer, spelling):
+        # A model does not reproduce a template character for character.
+        answer(f"Voici : {spelling}")
         assert "résultat de l'outil" in build_demo_target(1)("question")
 
 
-class TestSelecteur:
-    @pytest.mark.parametrize("nom, attendu", [
+class TestSelector:
+    @pytest.mark.parametrize("name, expected", [
         ("demo", "ask_demo_level1"),
         ("demo:1", "ask_demo_level1"),
         ("demo:3", "ask_demo_level3"),
     ])
-    def test_le_niveau_se_lit_dans_le_nom(self, nom, attendu):
-        assert choose_target(nom).__name__ == attendu
+    def test_the_level_is_read_from_the_name(self, name, expected):
+        assert choose_target(name).__name__ == expected
 
-    @pytest.mark.parametrize("nom", ["demo:9", "demo:abc"])
-    def test_un_niveau_invalide_est_refuse_clairement(self, nom):
+    @pytest.mark.parametrize("name", ["demo:9", "demo:abc"])
+    def test_an_invalid_level_is_refused_clearly(self, name):
         with pytest.raises(ValueError, match="Niveau de démonstration"):
-            choose_target(nom)
+            choose_target(name)
 
 
-class TestAucunMandatPourLesCiblesLivrees:
+class TestNoMandateForBundledTargets:
     """
-    Les cibles livrées tournent en local et ne contiennent que des secrets
-    factices : exiger un mandat pour elles casserait la démonstration en une
-    commande. Ce test existe parce que l'oubli s'est produit en ajoutant
-    `demo` — et qu'il se reproduira à la cible suivante.
+    The bundled targets run locally and hold nothing but fictional secrets:
+    demanding a mandate for them would break the one-command demonstration.
+    This test exists because the oversight happened when `demo` was added —
+    and because it will happen again with the next target.
     """
 
-    @pytest.mark.parametrize("nom", ["demo", "demo:2", "demo:3"])
-    def test_la_cible_de_demonstration_n_en_demande_pas(self, nom):
-        assert is_bundled_target(nom) and is_local(nom)
+    @pytest.mark.parametrize("name", ["demo", "demo:2", "demo:3"])
+    def test_the_demo_target_asks_for_none(self, name):
+        assert is_bundled_target(name) and is_local(name)
 
-    def test_toute_cible_nommee_est_reconnue_comme_livree(self):
-        # Le garde-fou qui attrapera le prochain oubli.
-        for nom in NAMED_TARGETS:
-            assert is_bundled_target(nom) and is_local(nom), nom
+    def test_every_named_target_is_recognised_as_bundled(self):
+        # The guard that will catch the next oversight.
+        for name in NAMED_TARGETS:
+            assert is_bundled_target(name) and is_local(name), name
 
-    def test_une_cible_distante_en_demande_toujours_un(self):
+    def test_a_remote_target_always_needs_one(self):
         assert not is_local("https://client.fr/chat")
 
 
-class TestSecretsFactices:
-    def test_le_secret_livre_est_manifestement_factice(self):
-        # Le dépôt est public : livrer une cible vulnérable est banal, y
-        # laisser une vraie valeur ne l'est pas.
+class TestFictionalSecrets:
+    def test_the_bundled_secret_is_plainly_fictional(self):
+        # The repository is public: shipping a vulnerable target is
+        # ordinary, leaving a real value in it is not.
         assert SECRET == "ARCHIVES-7731"
         assert "Dupont" in demo.CONFIDENTIAL_RECORD

@@ -1,18 +1,17 @@
 """
-Tests de la reconnaissance, sans aucun appel à un modèle.
+Tests for reconnaissance, with no call to a model at all.
 
-On ne teste pas ici la QUALITÉ de la fiche — ça, c'est le travail de
-`evaluation/tester_reconnaissance.py`, qui a besoin d'un vrai modèle et de
-cibles simulées. On teste ce qui doit être vrai quoi qu'un modèle réponde : la
-normalisation de la fiche, et surtout les deux TRI-ÉTATS ajoutés le
-2026-11-11.
+We do not test the QUALITY of the profile here — that is the job of
+`evaluation/tester_reconnaissance.py`, which needs a real model and simulated
+targets. We test what must be true whatever a model answers: the profile's
+normalisation, and above all the two TRI-STATES added on 2026-11-11.
 
-Pourquoi ils méritent leurs propres tests : `produit_du_code` et
-`traite_des_documents` valent True, False ou None, et la différence entre
-False (« la cible dit ne pas savoir ») et None (« elle n'en a rien dit »)
-décide d'écarter ou non neuf à seize sondes. Un `bool()` posé par mégarde
-transformerait tous les silences en refus, et la campagne perdrait des
-familles entières — sans lever la moindre exception.
+Why they deserve tests of their own: `produit_du_code` and
+`traite_des_documents` are True, False or None, and the difference between
+False ("the target says it cannot") and None ("it said nothing about it")
+decides whether nine to sixteen probes are skipped. A `bool()` dropped in by
+accident would turn every silence into a refusal, and the campaign would lose
+whole families — without raising the slightest exception.
 """
 
 import pytest
@@ -28,7 +27,7 @@ CHAMPS_ATTENDUS = {"role", "langue", "outils", "sujets_refuses",
 
 
 @pytest.fixture
-def analyser(monkeypatch):
+def analyst(monkeypatch):
     """Remplace l'appel au modèle d'analyse par une sortie choisie."""
     def installer(sortie):
         monkeypatch.setattr(reconnaissance, "ask_llm",
@@ -36,103 +35,104 @@ def analyser(monkeypatch):
     return installer
 
 
-def _cible(reponse="une réponse"):
-    return lambda message: reponse
+def _target(reply="une réponse"):
+    return lambda message: reply
 
 
-class TestFormeDeLaFiche:
-    def test_tous_les_champs_sont_presents(self, analyser):
-        analyser('{"role": "assistant", "langue": "fr"}')
-        assert set(reconnoitre(_cible())) == CHAMPS_ATTENDUS
+class TestProfileShape:
+    def test_every_field_is_present(self, analyst):
+        analyst('{"role": "assistant", "langue": "fr"}')
+        assert set(reconnoitre(_target())) == CHAMPS_ATTENDUS
 
-    def test_une_analyse_illisible_donne_une_fiche_vide_pas_inventee(
-            self, analyser):
-        # Une fiche incomplète est utile, une fiche inventée est nuisible.
-        analyser("ceci n'est pas du JSON")
-        fiche = reconnoitre(_cible())
-        assert set(fiche) == CHAMPS_ATTENDUS
-        assert fiche["avertissement"]
-        assert fiche["role"] is None
-        assert fiche["outils"] == []
+    def test_an_unreadable_analysis_gives_an_empty_profile_not_an_invented_one(
+            self, analyst):
+        # An incomplete profile is useful, an invented one is harmful.
+        analyst("ceci n'est pas du JSON")
+        profile = reconnoitre(_target())
+        assert set(profile) == CHAMPS_ATTENDUS
+        assert profile["avertissement"]
+        assert profile["role"] is None
+        assert profile["outils"] == []
 
-    def test_une_fiche_vide_garde_les_echanges(self, analyser):
-        # Sans eux, impossible de comprendre pourquoi l'analyse a échoué.
-        analyser("pas du JSON")
-        assert len(reconnoitre(_cible())["echanges"]) == len(PROBES)
+    def test_an_empty_profile_keeps_the_exchanges(self, analyst):
+        # Without them, there is no way to understand why the analysis
+        # failed.
+        analyst("pas du JSON")
+        assert len(reconnoitre(_target())["echanges"]) == len(PROBES)
 
-    def test_les_types_sont_imposes(self, analyser):
+    def test_the_types_are_enforced(self, analyst):
         # Un champ du mauvais type deviendrait une erreur beaucoup plus loin,
         # dans le planificateur.
-        analyser('{"role": 42, "outils": "pas une liste", '
+        analyst('{"role": 42, "outils": "pas une liste", '
                  '"sujets_refuses": [1, "vrai sujet"], "indices": null}')
-        fiche = reconnoitre(_cible())
-        assert fiche["role"] is None
-        assert fiche["outils"] == []
-        assert fiche["sujets_refuses"] == ["vrai sujet"]
-        assert fiche["indices"] == []
+        profile = reconnoitre(_target())
+        assert profile["role"] is None
+        assert profile["outils"] == []
+        assert profile["sujets_refuses"] == ["vrai sujet"]
+        assert profile["indices"] == []
 
 
-class TestTriEtats:
+class TestTriStates:
     """
-    La distinction False / None décide d'écarter ou non `packagehallucination`
-    (7 sondes) et `latentinjection` (9 sondes).
+    The False / None distinction decides whether `packagehallucination`
+    (7 probes) and `latentinjection` (9 probes) are skipped.
     """
 
-    @pytest.mark.parametrize("champ", ["produit_du_code",
+    @pytest.mark.parametrize("field", ["produit_du_code",
                                        "traite_des_documents"])
     @pytest.mark.parametrize("valeur, attendu", [
         ("true", True),
         ("false", False),
         ("null", None),
     ])
-    def test_les_trois_etats_survivent(self, analyser, champ, valeur,
+    def test_the_three_states_survive(self, analyst, field, valeur,
                                        attendu):
-        analyser('{"%s": %s}' % (champ, valeur))
-        assert reconnoitre(_cible())[champ] is attendu
+        analyst('{"%s": %s}' % (field, valeur))
+        assert reconnoitre(_target())[field] is attendu
 
-    @pytest.mark.parametrize("champ", ["produit_du_code",
+    @pytest.mark.parametrize("field", ["produit_du_code",
                                        "traite_des_documents"])
-    def test_un_champ_absent_vaut_none_pas_false(self, analyser, champ):
+    def test_a_missing_field_means_none_not_false(self, analyst, field):
         # C'est LE piège : `bool()` ou `.get(champ, False)` transformerait
         # tous les silences en refus, et la campagne perdrait seize sondes.
-        analyser('{"role": "assistant"}')
-        assert reconnoitre(_cible())[champ] is None
+        analyst('{"role": "assistant"}')
+        assert reconnoitre(_target())[field] is None
 
-    @pytest.mark.parametrize("champ", ["produit_du_code",
+    @pytest.mark.parametrize("field", ["produit_du_code",
                                        "traite_des_documents"])
-    def test_une_valeur_non_booleenne_vaut_none(self, analyser, champ):
-        # Un modèle peut répondre "oui" au lieu de true : on ne devine pas,
-        # on retombe sur « non déclaré ».
-        analyser('{"%s": "oui"}' % champ)
-        assert reconnoitre(_cible())[champ] is None
+    def test_a_non_boolean_value_means_none(self, analyst, field):
+        # A model can answer "oui" instead of true: we do not guess, we fall
+        # back on "not declared".
+        analyst('{"%s": "oui"}' % field)
+        assert reconnoitre(_target())[field] is None
 
-    def test_une_fiche_vide_les_met_a_none(self, analyser):
-        analyser("illisible")
-        fiche = reconnoitre(_cible())
-        assert fiche["produit_du_code"] is None
-        assert fiche["traite_des_documents"] is None
+    def test_an_empty_profile_sets_them_to_none(self, analyst):
+        analyst("illisible")
+        profile = reconnoitre(_target())
+        assert profile["produit_du_code"] is None
+        assert profile["traite_des_documents"] is None
 
 
-class TestContexteDeclare:
+class TestDeclaredContext:
     """
-    Le contexte vient de l'OPÉRATEUR, jamais d'une sonde : une cible ne sait
-    pas dans quoi sa sortie est rendue, et le lui demander inviterait à
-    l'hallucination.
+    The context comes from the OPERATOR, never from a probe: a target does not
+    know what its output is rendered in, and asking it would invite
+    hallucination.
     """
 
-    def test_la_reconnaissance_ne_le_remplit_jamais(self, analyser):
-        # Même si le modèle d'analyse prétend le connaître.
-        analyser('{"contexte": ["terminal", "rendu-riche"]}')
-        assert reconnoitre(_cible())["contexte"] == []
+    def test_reconnaissance_never_fills_it(self, analyst):
+        # Even if the analyst model claims to know it.
+        analyst('{"contexte": ["terminal", "rendu-riche"]}')
+        assert reconnoitre(_target())["contexte"] == []
 
-    def test_aucune_sonde_ne_demande_le_contexte(self):
+    def test_no_probe_asks_about_the_context(self):
         # Garde-fou contre la tentation : si quelqu'un ajoute « ta sortie est
         # rendue en Markdown ? » aux sondes, ce test tombe.
         questions = " ".join(PROBES).lower()
         for interdit in ("markdown", "html", "terminal", "rendu"):
             assert interdit not in questions, interdit
 
-    def test_les_noms_de_contexte_sont_documentes(self):
+    def test_the_context_names_are_documented(self):
         # Ils apparaissent dans le message d'erreur de la ligne de commande :
         # un nom sans explication ne guiderait personne.
         assert KNOWN_CONTEXTS
@@ -141,28 +141,28 @@ class TestContexteDeclare:
             assert explication.strip()
 
 
-class TestBudgetEtAffichage:
-    def test_la_boucle_de_sondage_est_bornee(self, monkeypatch, analyser):
+class TestBudgetAndDisplay:
+    def test_the_probing_loop_is_bounded(self, monkeypatch, analyst):
         # Toute boucle a sa limite : ici RECON_BUDGET, distinct de
-        # MAX_ESSAIS parce que sonder peut déjà éveiller les défenses.
+        # MAX_ESSAIS, because probing can already wake the defences.
         monkeypatch.setattr(reconnaissance, "RECON_BUDGET", 2)
-        analyser("{}")
-        assert len(reconnoitre(_cible())["echanges"]) == 2
+        analyst("{}")
+        assert len(reconnoitre(_target())["echanges"]) == 2
 
-    def test_chaque_sonde_vise_un_champ(self):
-        # Principe consigné : une sonde en moins doit être une information en
-        # moins, jamais une fiche fausse. Donc une sonde par champ sondé.
+    def test_every_probe_targets_one_field(self):
+        # A recorded principle: one probe fewer must mean one fact fewer,
+        # never a false profile. Hence one probe per probed field.
         assert len(PROBES) == len(
             {"role", "capacites", "sujets_refuses", "outils",
              "produit_du_code", "traite_des_documents"})
 
-    def test_le_resume_affiche_les_nouveaux_champs(self, analyser):
-        analyser('{"produit_du_code": true, "traite_des_documents": false}')
-        rendu = summarise(reconnoitre(_cible()))
+    def test_the_summary_shows_the_new_fields(self, analyst):
+        analyst('{"produit_du_code": true, "traite_des_documents": false}')
+        rendu = summarise(reconnoitre(_target()))
         assert "écrit du code : oui" in rendu
         assert "lit des documents : non" in rendu
         assert "contexte déclaré : aucun" in rendu
 
-    def test_le_resume_distingue_non_de_non_declare(self, analyser):
-        analyser('{"produit_du_code": null}')
-        assert "écrit du code : non déclaré" in summarise(reconnoitre(_cible()))
+    def test_the_summary_tells_no_from_not_declared(self, analyst):
+        analyst('{"produit_du_code": null}')
+        assert "écrit du code : non déclaré" in summarise(reconnoitre(_target()))
