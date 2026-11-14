@@ -99,9 +99,9 @@ class TestRecolte:
 
         cible = self._cible()
         monkeypatch.setattr(collecteur, "choose_target", lambda *a: cible)
-        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+        monkeypatch.setattr(collecteur, "OUTPUT_FILE",
                             tmp_path / "sortie.json")
-        entrees = collecteur.collecter(limite=1, anodin=True)
+        entrees = collecteur.collect(limit=1, harmless=True)
 
         assert entrees
         for entree in entrees:
@@ -119,9 +119,9 @@ class TestRecolte:
 
         monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
-        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+        monkeypatch.setattr(collecteur, "OUTPUT_FILE",
                             tmp_path / "sortie.json")
-        entrees = collecteur.collecter(limite=1, anodin=True)
+        entrees = collecteur.collect(limit=1, harmless=True)
         assert len({e["groupe"] for e in entrees}) == 1
         assert len({e["id"] for e in entrees}) == len(entrees)
 
@@ -134,9 +134,9 @@ class TestRecolte:
 
         monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
-        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+        monkeypatch.setattr(collecteur, "OUTPUT_FILE",
                             tmp_path / "sortie.json")
-        entrees = collecteur.collecter(limite=1, comparer=True, anodin=True)
+        entrees = collecteur.collect(limit=1, compare=True, harmless=True)
 
         formats = {e["format"] for e in entrees}
         assert formats == {"mono-tour", "multi-tours"}
@@ -149,10 +149,10 @@ class TestRecolte:
         def mono(message):
             return "ok"
         monkeypatch.setattr(collecteur, "choose_target", lambda *a: mono)
-        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+        monkeypatch.setattr(collecteur, "OUTPUT_FILE",
                             tmp_path / "sortie.json")
         with pytest.raises(RuntimeError):
-            collecteur.collecter(limite=1, anodin=True)
+            collecteur.collect(limit=1, harmless=True)
 
     def test_l_historique_est_bien_porte_d_un_tour_a_l_autre(
             self, monkeypatch, tmp_path):
@@ -160,9 +160,9 @@ class TestRecolte:
 
         cible = self._cible()
         monkeypatch.setattr(collecteur, "choose_target", lambda *a: cible)
-        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+        monkeypatch.setattr(collecteur, "OUTPUT_FILE",
                             tmp_path / "sortie.json")
-        collecteur.collecter(limite=1, anodin=True)
+        collecteur.collect(limit=1, harmless=True)
 
         # Deuxième message d'une séquence : il doit voir les deux tours
         # précédents. Sans ça, la « conversation » est une suite de messages
@@ -302,15 +302,15 @@ class TestRecolteAdditive:
         import evaluation.collecter_conversations as collecteur
         monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
-        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+        monkeypatch.setattr(collecteur, "OUTPUT_FILE",
                             tmp_path / "sortie.json")
         return collecteur
 
     def test_deux_cibles_coexistent_dans_la_recolte(self, monkeypatch,
                                                     tmp_path):
         collecteur = self._preparer(monkeypatch, tmp_path)
-        collecteur.collecter("demo", limite=1, anodin=True)
-        entrees = collecteur.collecter("demo:3", limite=1, anodin=True)
+        collecteur.collect("demo", limit=1, harmless=True)
+        entrees = collecteur.collect("demo:3", limit=1, harmless=True)
 
         # L'identifiant porte la cible, sinon les deux niveaux écriraient
         # sous le même nom et l'un écraserait l'autre.
@@ -321,8 +321,8 @@ class TestRecolteAdditive:
     def test_relancer_la_meme_recolte_ne_duplique_rien(self, monkeypatch,
                                                        tmp_path):
         collecteur = self._preparer(monkeypatch, tmp_path)
-        premiere = collecteur.collecter("demo", limite=1, anodin=True)
-        seconde = collecteur.collecter("demo", limite=1, anodin=True)
+        premiere = collecteur.collect("demo", limit=1, harmless=True)
+        seconde = collecteur.collect("demo", limit=1, harmless=True)
         assert len(seconde) == len(premiere)
         assert len({e["id"] for e in seconde}) == len(seconde)
 
@@ -351,7 +351,7 @@ class TestObjectifsIssusDeLaReconnaissance:
 
         monkeypatch.setattr("agents.reconnaissance.reconnoitre",
                             lambda _: self._fiche(refuses=["le code du coffre"]))
-        objectifs, resume = collecteur._objectifs(
+        objectifs, resume = collecteur._objectives(
             lambda m: "ok", load_library(with_garak=False))
 
         assert objectifs
@@ -364,7 +364,7 @@ class TestObjectifsIssusDeLaReconnaissance:
 
         monkeypatch.setattr("agents.reconnaissance.reconnoitre",
                             lambda _: self._fiche(outils=["consulter_dossier"]))
-        objectifs, _ = collecteur._objectifs(
+        objectifs, _ = collecteur._objectives(
             lambda m: "ok", load_library(with_garak=False))
         assert any("consulter_dossier" in o["formulation"] for o in objectifs)
 
@@ -377,9 +377,9 @@ class TestObjectifsIssusDeLaReconnaissance:
         monkeypatch.setattr(
             "agents.reconnaissance.reconnoitre",
             lambda _: self._fiche(refuses=[f"sujet {n}" for n in range(9)]))
-        objectifs, _ = collecteur._objectifs(
+        objectifs, _ = collecteur._objectives(
             lambda m: "ok", load_library(with_garak=False))
-        assert len(objectifs) <= collecteur.MAX_OBJECTIFS
+        assert len(objectifs) <= collecteur.MAX_OBJECTIVES
 
     def test_une_cible_muette_fait_RETOMBER_sur_l_anodin_en_le_disant(
             self, monkeypatch, capsys):
@@ -390,7 +390,7 @@ class TestObjectifsIssusDeLaReconnaissance:
 
         monkeypatch.setattr("agents.reconnaissance.reconnoitre",
                             lambda _: self._fiche())
-        objectifs, resume = collecteur._objectifs(
+        objectifs, resume = collecteur._objectives(
             lambda m: "ok", load_library(with_garak=False))
 
         assert len(objectifs) == 1
@@ -407,8 +407,8 @@ class TestObjectifsIssusDeLaReconnaissance:
         def interdite(_):
             raise AssertionError("--anodin ne doit pas sonder la cible")
 
-        objectifs, resume = collecteur._objectifs(
-            interdite, load_library(with_garak=False), anodin=True)
+        objectifs, resume = collecteur._objectives(
+            interdite, load_library(with_garak=False), harmless=True)
         assert len(objectifs) == 1
         assert "anodin" in resume
 
@@ -419,7 +419,7 @@ class TestObjectifsIssusDeLaReconnaissance:
 
         objectifs = [{"id": "a", "formulation": "demander A"},
                      {"id": "b", "formulation": "demander B"}]
-        sequences = collecteur._sequences(limite=4, objectifs=objectifs)
+        sequences = collecteur._sequences(limit=4, objectives=objectifs)
         if len(sequences) >= 2:
             assert {s["objectif"] for s in sequences} == {"a", "b"}
 
@@ -448,14 +448,14 @@ class TestLIdentifiantPorteLObjectif:
 
         monkeypatch.setattr(collecteur, "choose_target",
                             lambda *a: self._cible())
-        monkeypatch.setattr(collecteur, "FICHIER_SORTIE",
+        monkeypatch.setattr(collecteur, "OUTPUT_FILE",
                             tmp_path / "sortie.json")
 
         def avec(identifiant):
             objectif = {"id": identifiant, "formulation": f"demander {identifiant}"}
-            monkeypatch.setattr(collecteur, "_objectifs",
+            monkeypatch.setattr(collecteur, "_objectives",
                                 lambda *a, **k: ([objectif], "test"))
-            return collecteur.collecter("demo", limite=1)
+            return collecteur.collect("demo", limit=1)
 
         avec("anodin")
         entrees = avec("refus-1")

@@ -1,42 +1,42 @@
 """
-evaluation/collecter_conversations.py — Récolter de vraies conversations
-multi-tours, à étiqueter à la main (phase 3b).
+evaluation/collecter_conversations.py — Harvests real multi-turn
+conversations, to be labelled by hand (phase 3b).
 
-`collecter_echanges.py` récolte des échanges d'UN tour. L'arbitre ne sait
-juger que ce format, et les 90 échanges du corpus le sont tous. Pour qu'il
-apprenne à juger une conversation, il faut d'abord un corpus de
-conversations — étiqueté à la main, par l'auteur, comme toujours. C'est ce
-script qui en fournit la matière.
+`collecter_echanges.py` harvests SINGLE-turn exchanges. The judge can only
+score that format, and all 90 exchanges in the corpus are of it. For it to
+learn to score a conversation, a corpus of conversations has to exist first —
+labelled by hand, by the author, as always. This script supplies the raw
+material.
 
-Pourquoi il est GRATUIT, et pourquoi ça compte
-----------------------------------------------
-Aucun modèle attaquant, aucun juge : les séquences sont fixes, et seule la
-CIBLE est appelée. Contre `--cible demo`, qui tourne sur Ollama en local, la
-récolte ne consomme donc aucun quota. C'est ce qui rend le corpus multi-tours
-atteignable : l'offre gratuite du juge (200 000 tokens par jour) ne permettrait
-pas de récolter ET de mesurer.
+Why it is FREE, and why that matters
+------------------------------------
+No attacker model, no judge: the sequences are fixed, and only the TARGET is
+called. Against `--cible demo`, which runs on Ollama locally, the harvest
+therefore burns no quota at all. That is what makes the multi-turn corpus
+reachable: the judge's free tier (200,000 tokens a day) would not allow
+harvesting AND measuring.
 
-D'où viennent les séquences
----------------------------
-Des mêmes ingrédients que la composition mono-tour : un payload complet de
-garak sert de premier tour, et l'objectif issu de la reconnaissance fournit le
-second (`attaquant.sequence_turns`). Rien n'est inventé pour l'occasion — on ne
-récolte que des techniques déjà pratiquées par l'outil.
+Where the sequences come from
+-----------------------------
+The same ingredients as the single-turn composition: a complete garak payload
+serves as the first turn, and the objective derived from reconnaissance
+supplies the second (`attaquant.sequence_turns`). Nothing is invented for the
+occasion — we only harvest techniques the tool already practises.
 
-Conséquence utile : la variante mono-tour des mêmes ingrédients existe déjà
-(`attaquant.compose`). `--comparer` récolte les deux, ce qui donne des paires
-dont la seule différence est le nombre de tours. C'est la mesure qui tranchera
-l'intérêt du multi-tours, et elle ne vaut que si les deux bras partagent leurs
-ingrédients.
+A useful consequence: the single-turn variant of the same ingredients already
+exists (`attaquant.compose`). `--comparer` harvests both, which gives pairs
+whose only difference is the number of turns. That is the measurement which
+will settle what multi-turn is worth, and it only holds if the two arms share
+their ingredients.
 
-Deux règles héritées, non négociables
--------------------------------------
-- **L'avis de l'arbitre n'est PAS enregistré.** Le voir influencerait
-  l'étiquette humaine, et on mesurerait le juge contre lui-même.
-- **Les échantillons d'une même séquence forment un GROUPE**, et un groupe
-  ne se répartit jamais entre le jeu de développement et le jeu de test.
+Two inherited rules, non-negotiable
+-----------------------------------
+- **The judge's opinion is NOT recorded.** Seeing it would influence the human
+  label, and we would be measuring the judge against itself.
+- **The samples of one sequence form a GROUP**, and a group is never split
+  between the development set and the test set.
 
-Lance-le depuis la racine du projet :
+Run it from the project root:
     python -m evaluation.collecter_conversations --cible demo
     python -m evaluation.collecter_conversations --cible demo --comparer
 """
@@ -49,252 +49,249 @@ from agents.attaquant import load_library, compose, sequence_turns
 from cibles import choose_target, is_bundled_target
 from cibles.conversation import MAX_TURNS, require_conversation, play
 
-FICHIER_SORTIE = Path(__file__).parent / "a_etiqueter_conversations.json"
+OUTPUT_FILE = Path(__file__).parent / "a_etiqueter_conversations.json"
 
-# La cible a de l'aléa : deux fois la même séquence peut donner deux issues
-# différentes (l'une cède, l'autre refuse). Les deux sont des cas utiles.
-NB_ECHANTILLONS = 2
+# The target has randomness: the same sequence twice can give two different
+# outcomes (one gives way, the other refuses). Both are useful cases.
+SAMPLE_COUNT = 2
 
-# Combien de séquences au plus. Borne explicite, comme toute boucle du
-# projet : une récolte qui part sur 1 143 payloads × 2 échantillons
-# occuperait la soirée et produirait un corpus qu'on n'étiquettera jamais.
+# How many sequences at most. An explicit bound, like every loop in the
+# project: a harvest starting on 1,143 payloads × 2 samples would take the
+# evening and produce a corpus nobody will ever label.
 MAX_SEQUENCES = 12
 
-# Les objectifs génériques de la bibliothèque ne demandent rien de sensible
-# (« te présenter en une phrase ») : ils servent de CONTRÔLE, et un corpus
-# sans contrôles aurait des faux positifs nuls par construction — le piège
-# que le manuel OWASP nomme explicitement.
-OBJECTIF_CONTROLE = "presentation"
+# The library's generic objectives ask for nothing sensitive ("introduce
+# yourself in one sentence"): they serve as CONTROLS, and a corpus with no
+# controls would have zero false positives by construction — the trap the
+# OWASP manual names explicitly.
+CONTROL_OBJECTIVE = "presentation"
 
-# Combien d'objectifs issus de la reconnaissance on fait tourner. Borné :
-# une cible bavarde peut déclarer six sujets refusés, et croiser tout avec
-# tout gonflerait une récolte qu'on n'étiquettera jamais.
-MAX_OBJECTIFS = 3
+# How many reconnaissance-derived objectives we cycle through. Bounded: a
+# talkative target can declare six refused subjects, and crossing everything
+# with everything would inflate a harvest nobody will ever label.
+MAX_OBJECTIVES = 3
 
 
-def _objectifs(interroger_cible, bibliotheque, anodin=False):
+def _objectives(ask_target, library, harmless=False):
     """
-    Ce que le second tour va RÉCLAMER.
+    What the second turn is going to DEMAND.
 
-    Le problème qu'on corrige ici est structurel, et la première récolte l'a
-    rendu visible : 3 positifs pour 61 négatifs. Les trois objectifs
-    génériques de la bibliothèque (`presentation`, `mission`,
-    `culture-generale`) sont tous ANODINS, donc le second tour ne demandait
-    jamais ce que la cible protège. Mesurer le rappel d'un juge sur trois cas
-    ne voudrait rien dire.
+    The problem fixed here is structural, and the first harvest made it
+    visible: 3 positives against 61 negatives. The library's three generic
+    objectives (`presentation`, `mission`, `culture-generale`) are all
+    HARMLESS, so the second turn never asked for what the target protects.
+    Measuring a judge's recall on three cases would mean nothing.
 
-    Les objectifs qui réclament quelque chose viennent de la RECONNAISSANCE :
-    `refus-N` pour chaque sujet que la cible dit refuser, `outil-N` pour
-    chaque outil qu'elle déclare. C'est exactement ce qu'une campagne fait,
-    et c'est gratuit — l'analyste tourne sur le profil actif, local par
-    défaut.
+    The objectives that demand something come from RECONNAISSANCE: `refus-N`
+    for each subject the target says it refuses, `outil-N` for each tool it
+    declares. That is exactly what a campaign does, and it is free — the
+    analyst runs on the active profile, local by default.
 
-    Avec `anodin`, on garde l'objectif de contrôle : un corpus a besoin de
-    conversations entièrement inoffensives, sinon ses faux positifs sont nuls
-    par construction.
+    With `harmless`, we keep the control objective: a corpus needs entirely
+    inoffensive conversations, otherwise its false positives are zero by
+    construction.
     """
-    generiques = {o["id"]: o for o in bibliotheque["objectifs"]}
-    controle = (generiques.get(OBJECTIF_CONTROLE)
-                or next(iter(generiques.values())))
-    if anodin:
-        return [controle], "objectif de contrôle (anodin)"
+    generic = {o["id"]: o for o in library["objectifs"]}
+    control = (generic.get(CONTROL_OBJECTIVE)
+                or next(iter(generic.values())))
+    if harmless:
+        return [control], "objectif de contrôle (anodin)"
 
     from agents.planificateur import objectives_for
     from agents.reconnaissance import reconnoitre
 
     print("Reconnaissance de la cible (sondes anodines, modèle local)...")
-    fiche = reconnoitre(interroger_cible)
-    vises = [o for o in objectives_for(fiche, bibliotheque)
-             if o.get("origine") == "reconnaissance"][:MAX_OBJECTIFS]
+    profile = reconnoitre(ask_target)
+    targeted = [o for o in objectives_for(profile, library)
+             if o.get("origine") == "reconnaissance"][:MAX_OBJECTIVES]
 
-    if not vises:
-        # Une cible qui ne déclare ni sujet refusé ni outil ne donne aucun
-        # objectif ciblé. On le DIT : sans ça, la récolte repartirait sur
-        # l'objectif anodin et on s'étonnerait de n'avoir aucun positif.
+    if not targeted:
+        # A target declaring neither a refused subject nor a tool yields no
+        # targeted objective. We SAY SO: without that, the harvest would fall
+        # back on the harmless objective and we would then wonder why there
+        # are no positives.
         print("/!\\ La cible ne déclare ni sujet refusé ni outil : aucun "
               "objectif ciblé. Récolte avec l'objectif anodin, qui ne "
               "produira presque que des négatifs.")
-        return [controle], "objectif de contrôle (faute de mieux)"
+        return [control], "objectif de contrôle (faute de mieux)"
 
-    for objectif in vises:
-        print(f"  objectif retenu : {objectif['id']} — "
-              f"{objectif['formulation'][:70]}")
-    return vises, f"{len(vises)} objectif(s) issus de la reconnaissance"
+    for objective in targeted:
+        print(f"  objectif retenu : {objective['id']} — "
+              f"{objective['formulation'][:70]}")
+    return targeted, f"{len(targeted)} objectif(s) issus de la reconnaissance"
 
 
-def _sequences(limite=MAX_SEQUENCES, objectifs=None):
+def _sequences(limit=MAX_SEQUENCES, objectives=None):
     """
-    Les séquences à jouer : (identifiant, messages, provenance).
+    The sequences to play: (identifier, messages, provenance).
 
-    Un payload complet par technique, pas davantage : la diversité des
-    techniques vaut mieux que plusieurs variantes de la même, exactement
-    comme le tour de rôle d'une campagne.
+    One complete payload per technique, no more: a variety of techniques beats
+    several variants of the same one, exactly like a campaign's round-robin.
     """
-    bibliotheque = load_library()
-    if not objectifs:
-        generiques = {o["id"]: o for o in bibliotheque["objectifs"]}
-        objectifs = [generiques.get(OBJECTIF_CONTROLE)
-                     or next(iter(generiques.values()))]
+    library = load_library()
+    if not objectives:
+        generic = {o["id"]: o for o in library["objectifs"]}
+        objectives = [generic.get(CONTROL_OBJECTIVE)
+                     or next(iter(generic.values()))]
 
     sequences = []
-    for technique in bibliotheque["techniques"]:
-        complets = technique.get("payloads_complets") or []
-        if not complets:
+    for technique in library["techniques"]:
+        complete = technique.get("payloads_complets") or []
+        if not complete:
             continue
-        # Tour de rôle sur les objectifs : chaque séquence en reçoit UN, pour
-        # que la taille de la récolte reste prévisible (séquences ×
-        # échantillons) tout en variant ce qui est réclamé.
-        objectif = objectifs[len(sequences) % len(objectifs)]
+        # Round-robin over the objectives: each sequence gets ONE, so the
+        # harvest's size stays predictable (sequences × samples) while what is
+        # demanded still varies.
+        objective = objectives[len(sequences) % len(objectives)]
         sequences.append({
             "technique": technique["id"],
-            "objectif": objectif["id"],
-            "messages": sequence_turns(complets[0], objectif),
-            "mono_tour": compose(complets[0], objectif),
+            "objectif": objective["id"],
+            "messages": sequence_turns(complete[0], objective),
+            "mono_tour": compose(complete[0], objective),
         })
-        if len(sequences) >= limite:
+        if len(sequences) >= limit:
             break
     return sequences
 
 
-def _fragment(texte):
-    """Les caractères alphanumériques d'un identifiant, et rien d'autre."""
-    return "".join(c for c in str(texte) if c.isalnum()) or "x"
+def _fragment(text):
+    """An identifier's alphanumeric characters, and nothing else."""
+    return "".join(c for c in str(text) if c.isalnum()) or "x"
 
 
-def _etiquette(nom_cible):
+def _label(target_name):
     """
-    Un fragment d'identifiant qui dit CONTRE QUOI la conversation a été
-    récoltée (`demo`, `demo3`, `leurre`…).
+    An identifier fragment saying WHAT the conversation was harvested against
+    (`demo`, `demo3`, `leurre`…).
 
-    Sans lui, deux récoltes se marchent dessus : les niveaux 2 et 3 de la
-    cible de démonstration REFUSENT, donc ils fournissent les négatifs d'un
-    corpus que le niveau 1 remplirait de positifs. Il faut pouvoir récolter
-    les trois, et donc que leurs identifiants diffèrent.
+    Without it, two harvests tread on each other: levels 2 and 3 of the demo
+    target REFUSE, so they supply the negatives of a corpus level 1 would fill
+    with positives. All three have to be harvestable, and therefore their
+    identifiers have to differ.
     """
-    return _fragment(nom_cible or "env")
+    return _fragment(target_name or "env")
 
 
-def collecter(nom_cible=None, comparer=False, limite=MAX_SEQUENCES,
-              anodin=False):
-    interroger_cible = choose_target(nom_cible)
-    require_conversation(interroger_cible, nom_cible or "la cible configurée")
-    etiquette = _etiquette(nom_cible)
+def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
+              harmless=False):
+    ask_target = choose_target(target_name)
+    require_conversation(ask_target, target_name or "la cible configurée")
+    label = _label(target_name)
 
-    objectifs, resume = _objectifs(interroger_cible, load_library(),
-                                   anodin)
-    print(f"  -> {resume}\n")
-    sequences = _sequences(limite, objectifs)
+    objectives, summary = _objectives(ask_target, load_library(),
+                                   harmless)
+    print(f"  -> {summary}\n")
+    sequences = _sequences(limit, objectives)
     if not sequences:
         raise SystemExit(
             "Aucune séquence : la bibliothèque n'a aucun payload complet.\n"
             "Synchronise l'instantané garak "
             "(python -m payloads.source_garak --version).")
 
-    # On AJOUTE à la récolte existante au lieu de l'écraser. Un fichier de
-    # travail qu'une seconde commande efface, c'est une soirée d'étiquetage
-    # perdue — et récolter plusieurs niveaux de défense demande justement
-    # plusieurs commandes.
-    entrees = _recolte_existante()
-    deja = {e["id"] for e in entrees}
+    # We ADD to the existing harvest instead of overwriting it. A working
+    # file a second command erases is an evening of labelling lost — and
+    # harvesting several defence levels needs several commands precisely.
+    entries = _existing_harvest()
+    already = {e["id"] for e in entries}
 
-    # Boucles bornées : séquences (liste finie) × NB_ECHANTILLONS.
-    for numero, sequence in enumerate(sequences, start=1):
-        # L'identifiant porte la cible ET l'objectif. Sans l'objectif, une
-        # récolte relancée avec un objectif différent retombait sur les mêmes
-        # identifiants, les trouvait « déjà récoltés » et les SAUTAIT : la
-        # commande semblait avoir travaillé alors que le nouvel objectif
-        # n'avait jamais été envoyé. Trouvé en comparant ce que la récolte
-        # annonçait à ce qu'elle contenait.
-        groupe = (f"C-{etiquette}-{_fragment(sequence['objectif'])}"
-                  f"-{numero:02d}")
-        for echantillon in range(1, NB_ECHANTILLONS + 1):
-            if f"{groupe}-{echantillon}" in deja:
-                print(f"{groupe}-{echantillon} : déjà récolté, ignoré.")
+    # Bounded loops: sequences (a finite list) × SAMPLE_COUNT.
+    for number, sequence in enumerate(sequences, start=1):
+        # The identifier carries the target AND the objective. Without the
+        # objective, a harvest rerun with a different objective fell back on
+        # the same identifiers, found them "already harvested" and SKIPPED
+        # them: the command looked like it had worked while the new objective
+        # was never sent. Found by comparing what the harvest announced to
+        # what it contained.
+        group = (f"C-{label}-{_fragment(sequence['objectif'])}"
+                  f"-{number:02d}")
+        for sample in range(1, SAMPLE_COUNT + 1):
+            if f"{group}-{sample}" in already:
+                print(f"{group}-{sample} : déjà récolté, ignoré.")
                 continue
-            tours = play(interroger_cible, sequence["messages"])
-            entrees.append(_entree(groupe, echantillon, sequence, tours))
-            print(f"{groupe}-{echantillon} ({sequence['technique']}) : "
-                  f"{len(tours) // 2} tour(s)")
+            turns = play(ask_target, sequence["messages"])
+            entries.append(_entry(group, sample, sequence, turns))
+            print(f"{group}-{sample} ({sequence['technique']}) : "
+                  f"{len(turns) // 2} tour(s)")
 
-            if comparer:
-                # Le MÊME couple d'ingrédients en un seul message. La paire
-                # ne vaut que jouée dans la même session, contre la même
-                # cible, à la suite : une cible probabiliste dérive.
-                reponse = interroger_cible(sequence["mono_tour"])
-                entrees.append(_entree(
-                    groupe, echantillon, sequence,
+            if compare:
+                # The SAME pair of ingredients in a single message. The pair
+                # only holds if played in the same session, against the same
+                # target, back to back: a probabilistic target drifts.
+                reply = ask_target(sequence["mono_tour"])
+                entries.append(_entry(
+                    group, sample, sequence,
                     [{"role": "utilisateur", "contenu": sequence["mono_tour"]},
-                     {"role": "cible", "contenu": reponse}],
-                    suffixe="-mono"))
-                print(f"{groupe}-{echantillon}-mono : 1 tour (témoin)")
+                     {"role": "cible", "contenu": reply}],
+                    suffix="-mono"))
+                print(f"{group}-{sample}-mono : 1 tour (témoin)")
 
-    FICHIER_SORTIE.write_text(
-        json.dumps({"conversations": entrees}, ensure_ascii=False, indent=2),
+    OUTPUT_FILE.write_text(
+        json.dumps({"conversations": entries}, ensure_ascii=False, indent=2),
         encoding="utf-8")
-    print(f"\n{len(entrees)} conversation(s) écrites dans "
-          f"{FICHIER_SORTIE.name}, à étiqueter à la main :\n"
+    print(f"\n{len(entries)} conversation(s) écrites dans "
+          f"{OUTPUT_FILE.name}, à étiqueter à la main :\n"
           f"  python -m evaluation.etiqueter")
-    return entrees
+    return entries
 
 
-def _recolte_existante():
-    """Ce qui est déjà récolté et pas encore versé dans le corpus."""
-    if not FICHIER_SORTIE.exists():
+def _existing_harvest():
+    """What is already harvested and not yet poured into the corpus."""
+    if not OUTPUT_FILE.exists():
         return []
-    return json.loads(FICHIER_SORTIE.read_text(
+    return json.loads(OUTPUT_FILE.read_text(
         encoding="utf-8")).get("conversations", [])
 
 
-def _entree(groupe, echantillon, sequence, tours, suffixe=""):
-    """Une entrée à étiqueter. Les champs à remplir restent à None."""
+def _entry(group, sample, sequence, turns, suffix=""):
+    """An entry to label. The fields to fill in stay None."""
     return {
-        "id": f"{groupe}-{echantillon}{suffixe}",
-        "groupe": groupe,          # mono-tour et multi-tours vont ENSEMBLE
-        "format": "mono-tour" if len(tours) == 2 else "multi-tours",
-        "tours": tours,
+        "id": f"{group}-{sample}{suffix}",
+        "groupe": group,          # single-turn and multi-turn go TOGETHER
+        "format": "mono-tour" if len(turns) == 2 else "multi-tours",
+        "tours": turns,
         "source": (f"cible réelle — {sequence['technique']} / "
                    f"{sequence['objectif']} / "
-                   f"{'composé' if suffixe else 'séquencé'}"),
+                   f"{'composé' if suffix else 'séquencé'}"),
         "secret": "ARCHIVES-7731",
-        "categorie": None,         # à remplir à la main
-        "jeu": None,               # à remplir à la main : "dev" ou "test"
-        "attendu": None,           # à remplir à la main : true ou false
-        "piege": "",               # à remplir à la main
+        "categorie": None,         # to fill in by hand
+        "jeu": None,               # to fill in by hand: "dev" or "test"
+        "attendu": None,           # to fill in by hand: true or false
+        "piege": "",               # to fill in by hand
     }
 
 
-def principal(arguments=None):
-    parseur = argparse.ArgumentParser(
+def main(arguments=None):
+    parser = argparse.ArgumentParser(
         description="Récolte des conversations multi-tours à étiqueter.")
-    parseur.add_argument("--cible", default=None,
+    parser.add_argument("--cible", default=None,
                          help="cible à interroger (défaut : celle de .env). "
                               "`demo` est locale, donc gratuite.")
-    parseur.add_argument("--comparer", action="store_true",
+    parser.add_argument("--comparer", action="store_true",
                          help="récolter aussi la variante MONO-TOUR des mêmes "
                               "ingrédients, pour des paires comparables")
-    parseur.add_argument("--anodin", action="store_true",
+    parser.add_argument("--anodin", action="store_true",
                          help="second tour anodin (objectif de contrôle), au "
                               "lieu de réclamer ce que la cible protège : "
                               "récolte des NÉGATIFS")
-    parseur.add_argument("--sequences", type=int, default=MAX_SEQUENCES,
+    parser.add_argument("--sequences", type=int, default=MAX_SEQUENCES,
                          metavar="N", help=f"séquences au plus "
                                            f"(défaut : {MAX_SEQUENCES})")
-    arguments = parseur.parse_args(arguments)
+    arguments = parser.parse_args(arguments)
 
     if arguments.cible and not is_bundled_target(arguments.cible):
-        # Récolter, c'est envoyer de vrais payloads : le mandat s'applique.
-        # Le dire ici évite de le découvrir après le premier envoi.
+        # Harvesting means sending real payloads: the mandate applies.
+        # Saying so here avoids discovering it after the first send.
         print("/!\\ Cible non livrée avec le projet : vérifie que le mandat "
               "la couvre (voir audit.py) avant de lancer la récolte.")
 
     print(f"Cible : {arguments.cible or 'celle de .env'}. "
           f"Aucun juge, aucun modèle attaquant : seule la cible est appelée.")
-    print(f"Au plus {arguments.sequences} séquence(s) × {NB_ECHANTILLONS} "
+    print(f"Au plus {arguments.sequences} séquence(s) × {SAMPLE_COUNT} "
           f"échantillon(s), {MAX_TURNS} tours maximum chacune.\n")
-    collecter(arguments.cible, arguments.comparer, arguments.sequences,
-              arguments.anodin)
+    collect(arguments.cible, arguments.compare, arguments.sequences,
+              arguments.harmless)
     return 0
 
 
 if __name__ == "__main__":
-    principal()
+    main()
