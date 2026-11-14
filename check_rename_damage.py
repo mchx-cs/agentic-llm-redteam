@@ -1,14 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Détecte les dégâts d'une passe de renommage : un identifiant ANGLAIS tombé
-dans une phrase FRANÇAISE.
+check_rename_damage.py — Finds an ENGLISH identifier dropped into a FRENCH
+sentence by a rename pass.
 
-C'est le pire des dangers listés au glossaire, parce que la suite de tests
-reste VERTE : renommer `prochain` en `next_attempt` avait réécrit douze
-phrases françaises, dont une réponse de cible épinglée VERBATIM dans un test.
-Un test dont la donnée est falsifiée ne teste plus ce qu'il prétend.
+This is the worst of the hazards the glossary lists, because the test suite
+stays GREEN: renaming `prochain` to `next_attempt` rewrote twelve French
+sentences, including two strings rendered into the client-facing report and a
+target reply pinned VERBATIM in a test. A test whose data is falsified no
+longer tests what it claims.
 
-Usage : python -I degats_renommage.py <identifiant> [<identifiant> ...]
+Run it after every rename pass, naming the identifiers you just introduced:
+
+    python check_rename_damage.py history ask_llm call_log
+
+Exit code 1 when there is something to re-read. It reports lines, never
+rewrites them: deciding whether `ask_llm` legitimately appears inside a
+French comment is a reading job, not a substitution.
+
+TEMPORARY. This script exists for the French-to-English switch and goes away
+with the last French sentence it has to protect.
 """
 import pathlib
 import re
