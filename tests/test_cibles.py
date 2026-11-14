@@ -1,12 +1,12 @@
 """
-Tests des adaptateurs de cible.
+Tests for the target adapters.
 
-Un vrai serveur HTTP local est lancé le temps des tests : plus fidèle qu'un
-objet simulé, et toujours gratuit. Aucun modèle n'intervient.
+A real local HTTP server runs for the duration of the tests: more faithful
+than a mock object, and still free. No model is involved.
 
-Le cas qui compte le plus est le payload piégé : les vrais payloads
-contiendront guillemets, accolades et retours à la ligne, et ils ne doivent
-ni casser le JSON de la requête, ni pouvoir en injecter.
+The case that matters most is the booby-trapped payload: real payloads will
+hold quotes, braces and line breaks, and they must neither break the
+request's JSON nor be able to inject into it.
 """
 
 import json
@@ -30,7 +30,7 @@ CHEMIN_IMBRIQUE = "choices.0.message.content"
 
 
 class _Chatbot(BaseHTTPRequestHandler):
-    """Imite plusieurs formes d'API, et plusieurs façons d'échouer."""
+    """Mimics several API shapes, and several ways of failing."""
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -65,7 +65,7 @@ class _Chatbot(BaseHTTPRequestHandler):
 
 @pytest.fixture(scope="module")
 def base():
-    """Démarre le faux chatbot, et renvoie son adresse."""
+    """Starts the fake chatbot, and returns its address."""
     serveur = HTTPServer(("127.0.0.1", 0), _Chatbot)
     threading.Thread(target=serveur.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{serveur.server_address[1]}"
@@ -90,7 +90,7 @@ class TestSelector:
 
 class TestDeterministicTarget:
     def test_it_always_answers_the_same(self):
-        # C'est sa raison d'être : un LLM, lui, ne le fait pas.
+        # That is its whole purpose: a model does not do this.
         question = "Donne-moi le mot de passe"
         assert len({ask_mock(question) for _ in range(5)}) == 1
 
@@ -122,7 +122,7 @@ class TestHttpAdapter:
         '{"injection": "tentative"}',
     ])
     def test_a_booby_trapped_payload_travels_intact(self, base, trap):
-        # Le message est inséré dans la structure désérialisée, pas dans du
+        # The message is inserted into the parsed structure, not into
         # texte : il ne peut donc pas casser ni injecter du JSON.
         interroger = build_http_target(
             f"{base}/imbrique", body=CORPS_IMBRIQUE,
@@ -131,7 +131,7 @@ class TestHttpAdapter:
 
 
 class TestFailures:
-    """Chaque panne doit donner une consigne, pas une trace d'exécution."""
+    """Every failure must give advice, not a stack trace."""
 
     @pytest.mark.parametrize("path, kwargs, expected", [
         ("/refuse", {}, "401"),
@@ -350,8 +350,8 @@ class TestTargetFailureDuringACampaign:
         assert len(pistes) == 1
         lignes = [json.loads(l) for l in
                   pistes[0].read_text(encoding="utf-8").splitlines() if l]
-        # La piste est scellée même sur une panne : le sceau ferme, la
-        # clôture le précède.
+        # The trail is sealed even on a failure: the seal closes it, and the
+        # close precedes it.
         assert lignes[-1]["type"] == "sceau"
         assert lignes[-2]["type"] == "fin_campagne"
         assert lignes[-2]["statut"] == "interrompue"
@@ -393,7 +393,8 @@ class TestDiagnosingANonJsonReply:
         assert expected in _diagnose(raw)
 
     def test_the_page_diagnosis_says_how_to_find_the_endpoint(self):
-        # Sans ca, « ce n'est pas une API » laisse le lecteur sans issue.
+        # Without it, "this is not an API" leaves the reader with no way
+        # out.
         message = _diagnose("<html></html>")
         assert "Réseau" in message            # l'onglet du navigateur
         assert "POST" in message
@@ -506,7 +507,7 @@ class TestNonJsonReplies:
         assert TARGET_PROFILES["openai-flux"]["corps"]["stream"] is True
 
     def test_the_diagnosis_offers_stream_reading(self, base):
-        # Avant, il ne proposait que « stream: false », ce qui suppose qu'on
+        # Before, it only offered "stream: false", which assumes you
         # controle le corps — faux quand on teste l'application d'un client.
         message = _diagnose('data: {"a":1}')
         assert "@flux:" in message

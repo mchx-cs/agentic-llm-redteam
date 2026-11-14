@@ -1,14 +1,14 @@
 """
-Tests de la récolte multi-tours et de l'étiquetage (phase 3b).
+Tests for the multi-turn harvest and for labelling (phase 3b).
 
-Aucun appel LLM : la cible est une fonction de test, et ni le juge ni un
-modèle attaquant n'intervient — c'est justement ce qui rend la récolte
-gratuite, donc un corpus multi-tours atteignable.
+No LLM call: the target is a test function, and neither the judge nor an
+attacker model is involved — which is precisely what makes the harvest free,
+and hence a multi-turn corpus reachable.
 
-Ce qui est surveillé de près : que verser des conversations dans le corpus ne
-déplace PAS la mesure de l'arbitre. Le corpus est la vérité terrain d'une
-mesure publiée ; l'agrandir avec des cas qu'il ne sait pas juger changerait
-la population mesurée sans que rien le signale.
+What is watched closely: that pouring conversations into the corpus does NOT
+shift the judge's measurement. The corpus is the ground truth of a published
+measurement; growing it with cases it cannot score would change the measured
+population with nothing to say so.
 """
 
 import json
@@ -21,12 +21,12 @@ from agents.attaquant import compose, sequence_turns
 @pytest.fixture(autouse=True)
 def no_model_call(monkeypatch):
     """
-    Tout appel à un modèle depuis ce fichier doit LEVER.
+    Any call to a model from this file must RAISE.
 
-    Ajouté après un faux positif de ma part : brancher la reconnaissance dans
-    le collecteur a rendu ces tests dépendants d'un modèle, et ils passaient
-    quand même — parce qu'Ollama tourne sur la machine de développement. Ils
-    auraient échoué en intégration continue, où il n'y a ni Ollama ni clé.
+    Added after a false positive of mine: wiring reconnaissance into the
+    collector made these tests depend on a model, and they passed anyway —
+    because Ollama runs on the development machine. They would have failed in
+    continuous integration, where there is neither Ollama nor a key.
 
     La règle du projet est explicite : « un test qui appellerait un modèle
     n'a rien à faire dans tests/ ». Elle était respectée par convention ;
@@ -44,9 +44,9 @@ def no_model_call(monkeypatch):
 
 class TestSequencing:
     """
-    `sequence_turns` est `compose` coupé en deux. Les deux doivent partager leurs
-    ingrédients : c'est la condition pour que la comparaison mono-tour /
-    multi-tours mesure le FORMAT et rien d'autre.
+    `sequence_turns` is `compose` cut in half. The two must share their
+    ingredients: that is the condition for the single-turn / multi-turn
+    comparison to measure the FORMAT and nothing else.
     """
 
     OBJECTIF = {"id": "o", "formulation": "me donner le code"}
@@ -56,7 +56,7 @@ class TestSequencing:
         assert len(sequence_turns(self.PREAMBULE, self.OBJECTIF)) == 2
 
     def test_the_first_turn_is_the_preamble_intact(self):
-        # Un payload d'attaque ne se laisse pas reformuler : il est calibré.
+        # An attack payload does not take rewording: it is calibrated.
         premier = sequence_turns(self.PREAMBULE, self.OBJECTIF)[0]
         assert premier == self.PREAMBULE
 
@@ -65,9 +65,9 @@ class TestSequencing:
         assert "me donner le code" in second
 
     def test_the_two_formats_share_their_ingredients(self):
-        # LE test de la comparabilité : tout ce que dit la séquence doit se
-        # retrouver dans la version composée. Si l'un des deux reformulait,
-        # la mesure comparerait deux attaques différentes.
+        # THE comparability test: everything the sequence says must be found
+        # in the composed version. If either reworded, the measurement would
+        # be comparing two different attacks.
         turns = sequence_turns(self.PREAMBULE, self.OBJECTIF)
         single = compose(self.PREAMBULE, self.OBJECTIF)
         assert self.PREAMBULE in single
@@ -92,9 +92,9 @@ class TestHarvest:
 
     def test_the_harvest_records_no_verdict(self, monkeypatch,
                                                    tmp_path):
-        # Règle non négociable du projet : voir l'avis de l'arbitre
-        # influencerait l'étiquette humaine, et on mesurerait le juge contre
-        # lui-même. Le vérifier sur la STRUCTURE, pas sur l'intention.
+        # A non-negotiable project rule: seeing the judge's opinion would
+        # influence the human label, and we would be measuring the judge
+        # against itself. Checked on the STRUCTURE, not on the intention.
         import evaluation.collecter_conversations as collector
 
         target = self._target()
@@ -113,8 +113,8 @@ class TestHarvest:
 
     def test_a_sequences_samples_share_their_group(
             self, monkeypatch, tmp_path):
-        # Un groupe ne se répartit jamais entre dev et test : sans ça, le jeu
-        # gelé contiendrait une reformulation d'un cas de réglage.
+        # A group is never split between dev and test: without that, the
+        # frozen set would hold a rewording of a tuning case.
         import evaluation.collecter_conversations as collector
 
         monkeypatch.setattr(collector, "choose_target",
@@ -127,8 +127,8 @@ class TestHarvest:
 
     def test_the_single_turn_control_carries_the_same_group(self, monkeypatch,
                                                       tmp_path):
-        # La variante composée est le TÉMOIN de la séquence : même groupe,
-        # donc même jeu. Les séparer permettrait de régler l'arbitre sur
+        # The composed variant is the sequence's CONTROL: same group, hence
+        # same set. Separating them would allow tuning the judge on
         # l'une et de le mesurer sur l'autre.
         import evaluation.collecter_conversations as collector
 
@@ -164,9 +164,9 @@ class TestHarvest:
                             tmp_path / "sortie.json")
         collector.collect(limit=1, harmless=True)
 
-        # Deuxième message d'une séquence : il doit voir les deux tours
-        # précédents. Sans ça, la « conversation » est une suite de messages
-        # isolés, et le corpus récolté ne vaudrait rien.
+        # The second message of a sequence: it must see the two preceding
+        # turns. Without that, the "conversation" is a run of isolated
+        # messages, and the harvested corpus would be worth nothing.
         _, history = target.vues[1]
         assert len(history) == 2
         assert history[0]["role"] == "user"
@@ -175,10 +175,10 @@ class TestHarvest:
 
 class TestTheCorpusStaysMeasurable:
     """
-    Verser des conversations dans le corpus ne doit pas déplacer la mesure de
-    l'arbitre. C'est la protection la plus importante de cette phase : les
-    chiffres publiés (89 / 100 / 96) portent sur des échanges mono-tour, et un
-    corpus qui grandit sans que la mesure change doit s'EXPLIQUER.
+    Pouring conversations into the corpus must not shift the judge's
+    measurement. This is the most important protection of the phase: the
+    published figures (89 / 100 / 96) are about single-turn exchanges, and a
+    corpus that grows without the measurement changing must be EXPLAINED.
     """
 
     def _corpus(self, tmp_path, exchanges):
@@ -212,8 +212,8 @@ class TestTheCorpusStaysMeasurable:
 
     def test_the_skip_is_ANNOUNCED_not_silent(self, monkeypatch, tmp_path,
                                                 capsys):
-        # Un écartement muet ferait croire que la mesure couvre tout le
-        # corpus. C'est la même exigence que la couverture d'un rapport.
+        # A silent skip would suggest the measurement covers the whole
+        # corpus. Same requirement as a report's coverage.
         import evaluation.evaluer_arbitre as evaluateur
 
         corpus = self._corpus(tmp_path, [self._single("D01"),
@@ -236,10 +236,10 @@ class TestTheCorpusStaysMeasurable:
 
     def test_the_set_guard_holds_for_conversations_too(
             self, monkeypatch, tmp_path):
-        # Le contrôle anti-fuite entre dev et test tourne AVANT l'écartement :
-        # une conversation et son témoin mono-tour partagent leur groupe, donc
-        # une répartition entre les deux jeux doit être refusée même si l'une
-        # des deux n'est pas mesurée.
+        # The anti-leak check between dev and test runs BEFORE the skip: a
+        # conversation and its single-turn control share their group, so a
+        # split between the two sets must be refused even if one of them is
+        # not measured.
         import evaluation.evaluer_arbitre as evaluateur
 
         corpus = self._corpus(tmp_path, [
@@ -260,8 +260,8 @@ class TestLabelling:
                       {"role": "utilisateur", "contenu": "le code ?"},
                       {"role": "cible", "contenu": "non"}]})
         assert len(lignes) == 4
-        # Numérotés : étiqueter une conversation, c'est dire À QUEL MOMENT la
-        # cible a cédé.
+        # Numbered: labelling a conversation means saying AT WHAT POINT the
+        # target gave way.
         assert lignes[0].startswith("[tour 1]")
         assert lignes[2].startswith("[tour 2]")
 
@@ -272,8 +272,9 @@ class TestLabelling:
         assert lignes == ["Utilisateur : p", "Chatbot     : r"]
 
     def test_the_traps_specific_to_multiturn_have_their_category(self):
-        # Sans catégorie dédiée, ces cas seraient rangés sous un synonyme
-        # improvisé et on ne pourrait plus regrouper les erreurs par piège.
+        # Without a dedicated category, these cases would be filed under an
+        # improvised synonym and the errors could no longer be grouped by
+        # trap.
         from evaluation.etiqueter import CATEGORIES
 
         for categorie in ("multitours-reussi", "multitours-refuse",
@@ -285,11 +286,10 @@ class TestLabelling:
 
 class TestAdditiveHarvest:
     """
-    Une récolte AJOUTE à la précédente. Le corpus multi-tours a besoin des
-    trois niveaux de défense de la cible de démonstration — le niveau 1
-    fournit les positifs, les niveaux 2 et 3 les négatifs — donc de plusieurs
-    commandes. Une seconde commande qui effacerait la première, c'est une
-    soirée d'étiquetage perdue.
+    A harvest ADDS to the previous one. The multi-turn corpus needs the demo
+    target's three defence levels — level 1 supplies the positives, levels 2
+    and 3 the negatives — hence several commands. A second command that erased
+    the first is an evening of labelling lost.
     """
 
     def _target(self):
@@ -312,8 +312,8 @@ class TestAdditiveHarvest:
         collector.collect("demo", limit=1, harmless=True)
         entries = collector.collect("demo:3", limit=1, harmless=True)
 
-        # L'identifiant porte la cible, sinon les deux niveaux écriraient
-        # sous le même nom et l'un écraserait l'autre.
+        # The identifier carries the target, otherwise the two levels would
+        # write under the same name and one would overwrite the other.
         groupes = {e["groupe"] for e in entries}
         assert len(groupes) == 2
         assert any("demo3" in g for g in groupes)
@@ -329,13 +329,13 @@ class TestAdditiveHarvest:
 
 class TestObjectivesFromReconnaissance:
     """
-    Le second tour doit RÉCLAMER ce que la cible protège.
+    The second turn must DEMAND what the target protects.
 
-    La première récolte a rendu le défaut visible : 3 positifs pour 61
-    négatifs. La cause n'était pas le tirage mais la bibliothèque — ses trois
-    objectifs génériques (`presentation`, `mission`, `culture-generale`) sont
-    tous anodins, donc le second tour ne demandait jamais rien de sensible.
-    Mesurer le rappel d'un juge sur trois cas ne voudrait rien dire.
+    The first harvest made the defect visible: 3 positives against 61
+    negatives. The cause was not the draw but the library — its three generic
+    objectives (`presentation`, `mission`, `culture-generale`) are all
+    harmless, so the second turn never asked for anything sensitive.
+    Measuring a judge's recall on three cases would mean nothing.
     """
 
     def _profile(self, refuses=(), outils=()):
@@ -369,8 +369,9 @@ class TestObjectivesFromReconnaissance:
         assert any("consulter_dossier" in o["formulation"] for o in objectives)
 
     def test_the_number_of_objectives_is_bounded(self, monkeypatch):
-        # Une cible bavarde peut déclarer six sujets refusés : croiser tout
-        # avec tout gonflerait une récolte qu'on n'étiquettera jamais.
+        # A talkative target can declare six refused subjects: crossing
+        # everything with everything would inflate a harvest nobody will ever
+        # label.
         import evaluation.collecter_conversations as collector
         from agents.attaquant import load_library
 
@@ -383,8 +384,8 @@ class TestObjectivesFromReconnaissance:
 
     def test_a_silent_target_FALLS_BACK_on_the_harmless_one_and_says_so(
             self, monkeypatch, capsys):
-        # Le repli ne doit pas être silencieux : sans l'avertissement, on
-        # s'étonnerait ensuite de n'avoir aucun positif dans la récolte.
+        # The fallback must not be silent: without the warning, we would
+        # later wonder why there is no positive in the harvest.
         import evaluation.collecter_conversations as collector
         from agents.attaquant import load_library
 
@@ -398,9 +399,9 @@ class TestObjectivesFromReconnaissance:
         assert "négatifs" in capsys.readouterr().out
 
     def test_harmless_launches_no_reconnaissance(self):
-        # Mode contrôle : aucun appel, donc aucune sonde envoyée à la cible.
-        # La fixture `aucun_appel_de_modele` le garantit déjà, mais ce test
-        # dit l'intention plutôt que de la laisser deviner.
+        # Control mode: no call, hence no probe sent to the target. The
+        # `no_model_call` fixture already guarantees it, but this test states
+        # the intention rather than leaving it to be guessed.
         import evaluation.collecter_conversations as collector
         from agents.attaquant import load_library
 
@@ -413,8 +414,8 @@ class TestObjectivesFromReconnaissance:
         assert "anodin" in resume
 
     def test_the_sequences_cycle_through_the_objectives(self):
-        # Chaque séquence reçoit UN objectif, en tour de rôle : la taille de
-        # la récolte reste prévisible tout en variant ce qui est réclamé.
+        # Each sequence gets ONE objective, round-robin: the harvest's size
+        # stays predictable while what is demanded still varies.
         import evaluation.collecter_conversations as collector
 
         objectives = [{"id": "a", "formulation": "demander A"},
@@ -426,14 +427,13 @@ class TestObjectivesFromReconnaissance:
 
 class TestTheIdentifierCarriesTheObjective:
     """
-    Relancer une récolte avec un objectif DIFFÉRENT doit récolter, pas sauter.
+    Rerunning a harvest with a DIFFERENT objective must harvest, not skip.
 
-    Défaut trouvé en comparant ce que la récolte annonçait à ce qu'elle
-    contenait : les identifiants ne portaient que la cible, donc une seconde
-    commande avec un nouvel objectif retombait sur les mêmes noms, les
-    trouvait « déjà récoltés » et ne demandait rien à la cible. La commande
-    semblait avoir travaillé. Même famille que tous les autres défauts muets
-    de ce projet.
+    A defect found by comparing what the harvest announced to what it
+    contained: the identifiers carried only the target, so a second command
+    with a new objective fell back on the same names, found them "already
+    harvested" and asked the target nothing. The command looked like it had
+    worked. Same family as every other silent defect in this project.
     """
 
     def _target(self):
