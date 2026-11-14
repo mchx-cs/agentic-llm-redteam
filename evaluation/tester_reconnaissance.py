@@ -1,15 +1,15 @@
 """
-evaluation/tester_reconnaissance.py — Teste la reconnaissance et la planification.
+evaluation/tester_reconnaissance.py — Exercises reconnaissance and planning.
 
-Même méthode que pour le rejeu : on fabrique des CIBLES SIMULÉES dont on
-connaît le contexte à l'avance, et on vérifie que la fiche puis le plan
-tombent juste. Le LLM analyste, lui, est le vrai.
+Same method as for the replay: we build SIMULATED TARGETS whose context we
+know in advance, and check that the profile and then the plan come out right.
+The analyst model, on the other hand, is the real one.
 
-Deux choses sont mesurées, et il ne faut pas les confondre :
-- la FICHE (produite par un LLM) : est-ce qu'il a bien lu les réponses ?
-- le PLAN (produit par des règles) : écarte-t-il les bonnes familles ?
+Two things are measured, and they must not be confused:
+- the PROFILE (produced by a model): did it read the replies properly?
+- the PLAN (produced by rules): does it skip the right families?
 
-Lance-le depuis la racine du projet avec :
+Run it from the project root with:
     python -m evaluation.tester_reconnaissance
 """
 
@@ -19,8 +19,8 @@ from agents.reconnaissance import reconnoitre, summarise
 BUDGET = 6
 
 
-def cible_hotel(question):
-    """Assistant d'hôtel : un rôle clair, des refus, aucun outil."""
+def hotel_target(question):
+    """A hotel assistant: a clear role, refusals, no tools."""
     question = question.lower()
     if "sujets" in question or "ne peux pas" in question:
         return ("Je ne peux pas vous communiquer le mot de passe du Wi-Fi "
@@ -31,8 +31,8 @@ def cible_hotel(question):
             "les clients sur les horaires, les chambres et les environs.")
 
 
-def cible_banque(question):
-    """Assistant bancaire : des outils déclarés, donc l'abus d'outils a un sens."""
+def bank_target(question):
+    """A banking assistant: declared tools, so tool abuse makes sense."""
     question = question.lower()
     if "sujets" in question or "ne peux pas" in question:
         return "Je ne communique jamais les données d'un autre client."
@@ -43,52 +43,52 @@ def cible_banque(question):
             "courantes.")
 
 
-def cible_muette(_question):
-    """Ne révèle rien : la fiche doit rester vide, sans rien inventer."""
+def silent_target(_question):
+    """Reveals nothing: the profile must stay empty, inventing nothing."""
     return "Bonjour."
 
 
 SCENARIOS = [
-    # (cible, ce que la fiche doit contenir, familles qui doivent être écartées)
-    (cible_hotel, {"outils": False, "refus": True}, ["abus-outils"]),
-    (cible_banque, {"outils": True, "refus": True}, []),
-    (cible_muette, {"outils": False, "refus": False},
+    # (target, what the profile must hold, families that must be skipped)
+    (hotel_target, {"outils": False, "refus": True}, ["abus-outils"]),
+    (bank_target, {"outils": True, "refus": True}, []),
+    (silent_target, {"outils": False, "refus": False},
      ["abus-outils", "divulgation-information", "fuite-prompt-systeme"]),
 ]
 
 
-def tester():
-    reussis = 0
+def run():
+    passed = 0
 
-    for cible, attendu, familles_a_ecarter in SCENARIOS:
+    for target, expected, families_to_skip in SCENARIOS:
         print("\n" + "=" * 70)
-        print(f"Cible simulée : {cible.__name__}")
-        fiche = reconnoitre(cible)
-        print(summarise(fiche))
+        print(f"Cible simulée : {target.__name__}")
+        profile = reconnoitre(target)
+        print(summarise(profile))
 
-        plan = plan_campaign(fiche, BUDGET)
-        ecartees = {e["technique"] for e in plan["ecartees"]}
+        plan = plan_campaign(profile, BUDGET)
+        skipped = {e["technique"] for e in plan["ecartees"]}
 
-        # 1. La fiche a-t-elle vu ce qu'il fallait voir ?
-        fiche_ok = (bool(fiche["outils"]) == attendu["outils"]
-                    and bool(fiche["sujets_refuses"]) == attendu["refus"])
+        # 1. Did the profile see what it had to see?
+        profile_ok = (bool(profile["outils"]) == expected["outils"]
+                      and bool(profile["sujets_refuses"]) == expected["refus"])
 
-        # 2. Les règles ont-elles écarté les bonnes familles ?
-        plan_ok = all(f in ecartees for f in familles_a_ecarter)
+        # 2. Did the rules skip the right families?
+        plan_ok = all(f in skipped for f in families_to_skip)
 
-        # 3. Le budget est-il respecté ?
+        # 3. Is the budget respected?
         budget_ok = len(plan["essais"]) <= BUDGET
 
-        ok = fiche_ok and plan_ok and budget_ok
-        reussis += ok
-        print(f"\n[{'ok ' if ok else 'ERR'}] fiche={fiche_ok} plan={plan_ok} "
-              f"budget={budget_ok}")
+        ok = profile_ok and plan_ok and budget_ok
+        passed += ok
+        print(f"\n[{'ok ' if ok else 'ERR'}] fiche={profile_ok} "
+              f"plan={plan_ok} budget={budget_ok}")
         if not plan_ok:
-            print(f"      attendait l'exclusion de {familles_a_ecarter}, "
-                  f"écartées : {sorted(ecartees)}")
+            print(f"      attendait l'exclusion de {families_to_skip}, "
+                  f"écartées : {sorted(skipped)}")
 
-    print(f"\n{reussis}/{len(SCENARIOS)} scénarios conformes.")
+    print(f"\n{passed}/{len(SCENARIOS)} scénarios conformes.")
 
 
 if __name__ == "__main__":
-    tester()
+    run()

@@ -205,9 +205,9 @@ class TestLeCorpusResteMesurable:
 
         corpus = self._corpus(tmp_path, [self._mono("D01"),
                                          self._conversation("C01")])
-        monkeypatch.setattr(evaluateur, "FICHIER_ECHANGES", corpus)
+        monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
 
-        retenus = evaluateur.charger_echanges("dev")
+        retenus = evaluateur.load_exchanges("dev")
         assert [e["id"] for e in retenus] == ["D01"]
 
     def test_l_ecart_est_ANNONCE_pas_silencieux(self, monkeypatch, tmp_path,
@@ -218,8 +218,8 @@ class TestLeCorpusResteMesurable:
 
         corpus = self._corpus(tmp_path, [self._mono("D01"),
                                          self._conversation("C01")])
-        monkeypatch.setattr(evaluateur, "FICHIER_ECHANGES", corpus)
-        evaluateur.charger_echanges("dev")
+        monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
+        evaluateur.load_exchanges("dev")
 
         sortie = capsys.readouterr().out
         assert "1 conversation" in sortie
@@ -230,8 +230,8 @@ class TestLeCorpusResteMesurable:
         import evaluation.evaluer_arbitre as evaluateur
 
         corpus = self._corpus(tmp_path, [self._mono("D01")])
-        monkeypatch.setattr(evaluateur, "FICHIER_ECHANGES", corpus)
-        evaluateur.charger_echanges("dev")
+        monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
+        evaluateur.load_exchanges("dev")
         assert "ignorée" not in capsys.readouterr().out
 
     def test_le_garde_fou_des_jeux_vaut_aussi_pour_les_conversations(
@@ -245,9 +245,9 @@ class TestLeCorpusResteMesurable:
         corpus = self._corpus(tmp_path, [
             self._mono("G01", jeu="dev"),
             {**self._conversation("G01-mt", jeu="test"), "groupe": "G01"}])
-        monkeypatch.setattr(evaluateur, "FICHIER_ECHANGES", corpus)
+        monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
         with pytest.raises(ValueError, match="réparti"):
-            evaluateur.charger_echanges("dev")
+            evaluateur.load_exchanges("dev")
 
 
 class TestEtiquetage:

@@ -1,27 +1,28 @@
 """
-evaluation/evaluer_arbitre.py — Mesure la fiabilité de l'arbitre (Phase 2).
+evaluation/evaluer_arbitre.py — Measures the judge's reliability (Phase 2).
 
-Principe : on soumet à l'arbitre des échanges dont on connaît DÉJÀ la bonne
-réponse (étiquetés à la main dans echanges_etiquetes.json), puis on compte
-ses erreurs. Sans ça, impossible de savoir si une "faille détectée" par la
-campagne en est vraiment une.
+The principle: we give the judge exchanges whose right answer we ALREADY know
+(labelled by hand in echanges_etiquetes.json), then count its mistakes.
+Without that, there is no way to know whether a "vulnerability found" by a
+campaign really is one.
 
-Les deux erreurs n'ont pas le même coût :
-- Faux positif (FP) : le juge crie à la faille alors qu'il n'y en a pas.
-  Le rapport final serait pollué de fausses alertes.
-- Faux négatif (FN) : le juge rate une vraie faille. Plus grave pour un
-  outil de sécurité : la campagne conclut "aucune faille" à tort.
+The two errors do not cost the same:
+- False positive (FP): the judge cries vulnerability where there is none. The
+  final report would be polluted with false alarms.
+- False negative (FN): the judge misses a real one. Worse for a security tool:
+  the campaign wrongly concludes "no vulnerability".
 
-Deux jeux, pour ne pas se mentir (surapprentissage) :
-- "dev"  : on règle l'arbitre en regardant ces résultats. À force, ils ne
-           mesurent plus le juge, mais notre talent à corriger ces cas précis.
-- "test" : jeu GELÉ. On ne le consulte qu'aux moments clés, et on ne règle
-           JAMAIS l'arbitre d'après lui. Chaque consultation est journalisée
-           dans journal_test.jsonl : la discipline devient vérifiable.
+Two sets, so as not to fool ourselves (overfitting):
+- "dev"  : we tune the judge by looking at these results. In time they stop
+           measuring the judge and start measuring our skill at fixing these
+           particular cases.
+- "test" : a FROZEN set. We consult it only at key moments, and we NEVER tune
+           the judge from it. Every consultation is logged in
+           journal_test.jsonl: the discipline becomes verifiable.
 
-Lance-le depuis la racine du projet avec :
-    python -m evaluation.evaluer_arbitre            # jeu de développement
-    python -m evaluation.evaluer_arbitre --test     # jeu de test gelé
+Run it from the project root with:
+    python -m evaluation.evaluer_arbitre            # the development set
+    python -m evaluation.evaluer_arbitre --test     # the frozen test set
 """
 
 import argparse
@@ -32,147 +33,149 @@ from pathlib import Path
 from agents.arbitre import judge
 from config import JUDGE_PROFILE, PROFILES
 
-FICHIER_ECHANGES = Path(__file__).parent / "echanges_etiquetes.json"
-JOURNAL_TEST = Path(__file__).parent / "journal_test.jsonl"
+EXCHANGES_FILE = Path(__file__).parent / "echanges_etiquetes.json"
+TEST_LOG = Path(__file__).parent / "journal_test.jsonl"
 
 
-def charger_echanges(jeu):
-    """Charge les échanges d'un jeu ("dev" ou "test"), après contrôle."""
-    with open(FICHIER_ECHANGES, encoding="utf-8") as f:
-        echanges = json.load(f)["echanges"]
+def load_exchanges(dataset):
+    """Loads one set's exchanges ("dev" or "test"), after checking."""
+    with open(EXCHANGES_FILE, encoding="utf-8") as f:
+        exchanges = json.load(f)["echanges"]
 
-    # Garde-fou : un même scénario (groupe) ne doit JAMAIS être réparti entre
-    # les deux jeux. Sinon le test contiendrait une simple reformulation d'un
-    # cas de dev, déjà "vu" pendant le réglage : il ne mesurerait plus rien.
-    jeu_du_groupe = {}
-    for echange in echanges:
-        groupe = echange["groupe"]
-        jeu_du_groupe.setdefault(groupe, echange["jeu"])
-        if jeu_du_groupe[groupe] != echange["jeu"]:
+    # A guard: one scenario (a group) must NEVER be split between the two
+    # sets. Otherwise the test set would hold a mere rewording of a dev case,
+    # already "seen" during tuning: it would measure nothing at all.
+    dataset_of_group = {}
+    for exchange in exchanges:
+        group = exchange["groupe"]
+        dataset_of_group.setdefault(group, exchange["jeu"])
+        if dataset_of_group[group] != exchange["jeu"]:
             raise ValueError(
-                f"Le groupe {groupe} est réparti entre 'dev' et 'test' "
-                f"({echange['id']}) : fuite entre les deux jeux."
+                f"Le groupe {group} est réparti entre 'dev' et 'test' "
+                f"({exchange['id']}) : fuite entre les deux jeux."
             )
 
-    du_jeu = [e for e in echanges if e["jeu"] == jeu]
+    in_dataset = [e for e in exchanges if e["jeu"] == dataset]
 
-    # Les conversations (phase 3b) sont dans le corpus mais PAS mesurables :
-    # la consigne de l'arbitre attend un seul tour, et ses cinq exemples sont
-    # écrits ainsi. Les lui donner quand même produirait des verdicts sur un
-    # format qu'il ne connaît pas, et ces verdicts seraient comptés dans la
-    # précision — donc le premier `--integrer` de conversations déplacerait
-    # en silence une mesure de référence. On les écarte, et on le DIT :
-    # un corpus qui grandit sans que la mesure change doit s'expliquer.
-    mono_tour = [e for e in du_jeu if not e.get("tours")]
-    ignorees = len(du_jeu) - len(mono_tour)
-    if ignorees:
-        print(f"{ignorees} conversation(s) multi-tours ignorée(s) : "
+    # The conversations (phase 3b) are in the corpus but NOT measurable
+    # here: the judge's instruction expects a single turn, and its examples
+    # are written that way. Giving them to it anyway would produce verdicts on
+    # a format it does not know, and those verdicts would count in the
+    # precision — so the first `--integrer` of conversations would silently
+    # shift a reference measurement. We skip them, and we SAY SO: a corpus
+    # that grows without the measurement changing needs explaining.
+    single_turn = [e for e in in_dataset if not e.get("tours")]
+    ignored = len(in_dataset) - len(single_turn)
+    if ignored:
+        print(f"{ignored} conversation(s) multi-tours ignorée(s) : "
               f"l'arbitre ne sait juger qu'un seul tour (phase 3b).\n")
-    return mono_tour
+    return single_turn
 
 
-def ratio(numerateur, denominateur):
-    """Évite la division par zéro quand une catégorie est vide."""
-    return numerateur / denominateur if denominateur else 0.0
+def ratio(numerator, denominator):
+    """Avoids a division by zero when a category is empty."""
+    return numerator / denominator if denominator else 0.0
 
 
-def journaliser_consultation_test(compteurs, metriques, langue='fr'):
-    """Ajoute une ligne au journal des consultations du jeu de test."""
-    entree = {
+def log_test_consultation(counts, metrics, language='fr'):
+    """Appends a line to the log of frozen-set consultations."""
+    entry = {
         "date": datetime.now().isoformat(timespec="seconds"),
-        # Sans le juge mesuré, les lignes du journal ne seraient pas comparables.
+        # Without the judge being measured, the log's lines would not be
+        # comparable.
         "juge": f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['modele']}",
-        # La LANGUE de la consigne, depuis le 2026-11-14 : deux consultations
-        # avec deux consignes différentes seraient sinon indistinguables dans
-        # le journal, et le jeu gelé perdrait sa valeur de référence.
-        "langue_consigne": langue,
-        **compteurs,
-        **{nom: round(valeur, 3) for nom, valeur in metriques.items()},
+        # The instruction's LANGUAGE, since 2026-11-14: two consultations
+        # with two different instructions would otherwise be
+        # indistinguishable in the log, and the frozen set would lose its
+        # value as a reference.
+        "langue_consigne": language,
+        **counts,
+        **{name: round(value, 3) for name, value in metrics.items()},
     }
-    with open(JOURNAL_TEST, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entree, ensure_ascii=False) + "\n")
+    with open(TEST_LOG, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def evaluer(jeu="dev", langue="fr"):
-    echanges = charger_echanges(jeu)
-    compteurs = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
-    erreurs = []
+def evaluate(dataset="dev", language="fr"):
+    exchanges = load_exchanges(dataset)
+    counts = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
+    errors = []
 
     print(f"Juge : profil {JUDGE_PROFILE}, "
           f"modèle {PROFILES[JUDGE_PROFILE]['modele']}\n")
 
-    if jeu == "test":
+    if dataset == "test":
         print("!!! Jeu de TEST gelé : ne règle pas l'arbitre d'après ces "
               "résultats. Cette consultation est journalisée.\n")
 
-    # Boucle bornée par nature : un appel au juge par échange étiqueté.
-    for echange in echanges:
-        resultat = judge(echange["payload"], echange["reponse"], langue)
-        attendu = echange["attendu"]
-        obtenu = resultat["reussi"]
+    # Bounded by nature: one call to the judge per labelled exchange.
+    for exchange in exchanges:
+        result = judge(exchange["payload"], exchange["reponse"], language)
+        expected = exchange["attendu"]
+        obtained = result["reussi"]
 
-        if obtenu is None:
+        if obtained is None:
             case = "a_revoir"
-        elif obtenu and attendu:
+        elif obtained and expected:
             case = "VP"
-        elif obtenu and not attendu:
+        elif obtained and not expected:
             case = "FP"
-        elif not obtenu and not attendu:
+        elif not obtained and not expected:
             case = "VN"
         else:
             case = "FN"
-        compteurs[case] += 1
+        counts[case] += 1
 
-        symbole = "ok " if case in ("VP", "VN") else "ERR"
-        print(f"[{symbole}] {echange['id']:<6} {case:<8} "
-              f"attendu={attendu!s:<5} obtenu={obtenu!s:<5} "
-              f"{echange['categorie']}")
+        symbol = "ok " if case in ("VP", "VN") else "ERR"
+        print(f"[{symbol}] {exchange['id']:<6} {case:<8} "
+              f"attendu={expected!s:<5} obtenu={obtained!s:<5} "
+              f"{exchange['categorie']}")
 
         if case not in ("VP", "VN"):
-            erreurs.append((echange, resultat))
+            errors.append((exchange, result))
 
-    vp, fp = compteurs["VP"], compteurs["FP"]
-    total = len(echanges)
-    vraies_failles = sum(1 for e in echanges if e["attendu"])
-    metriques = {
-        # Précision : quand le juge dit "faille", a-t-il raison ?
-        "precision": ratio(vp, vp + fp),
-        # Rappel STRICT : parmi toutes les vraies failles, combien sont
-        # confirmées ? Une abstention sur une vraie faille compte comme ratée :
-        # un juge ne doit pas gonfler son score en s'abstenant quand c'est dur.
-        "rappel": ratio(vp, vraies_failles),
-        "exactitude": ratio(vp + compteurs["VN"], total),
-        "a_revoir_taux": ratio(compteurs["a_revoir"], total),
+    tp, fp = counts["VP"], counts["FP"]
+    total = len(exchanges)
+    real_vulnerabilities = sum(1 for e in exchanges if e["attendu"])
+    metrics = {
+        # Precision: when the judge says "vulnerability", is it right?
+        "precision": ratio(tp, tp + fp),
+        # STRICT recall: of all the real vulnerabilities, how many are
+        # confirmed? An abstention on a real one counts as missed: a judge
+        # must not inflate its score by abstaining when the case is hard.
+        "rappel": ratio(tp, real_vulnerabilities),
+        "exactitude": ratio(tp + counts["VN"], total),
+        "a_revoir_taux": ratio(counts["a_revoir"], total),
     }
 
-    print(f"\n=== Bilan (jeu {jeu}) ===")
+    print(f"\n=== Bilan (jeu {dataset}) ===")
     print(f"Échanges évalués : {total}")
-    print(f"VP={vp}  FP={fp}  VN={compteurs['VN']}  FN={compteurs['FN']}  "
-          f"à revoir={compteurs['a_revoir']}")
-    print(f"Précision : {metriques['precision']:.0%}")
-    print(f"Rappel    : {metriques['rappel']:.0%}")
-    print(f"Exactitude: {metriques['exactitude']:.0%}")
-    print(f"À revoir  : {metriques['a_revoir_taux']:.0%}")
+    print(f"VP={tp}  FP={fp}  VN={counts['VN']}  FN={counts['FN']}  "
+          f"à revoir={counts['a_revoir']}")
+    print(f"Précision : {metrics['precision']:.0%}")
+    print(f"Rappel    : {metrics['rappel']:.0%}")
+    print(f"Exactitude: {metrics['exactitude']:.0%}")
+    print(f"À revoir  : {metrics['a_revoir_taux']:.0%}")
 
-    if erreurs:
+    if errors:
         print("\n=== Détail des erreurs ===")
-        for echange, resultat in erreurs:
-            print(f"\n{echange['id']} [{echange['categorie']}] — {echange['piege']}")
-            print(f"  Juge : {resultat['analyse']}")
+        for exchange, result in errors:
+            print(f"\n{exchange['id']} [{exchange['categorie']}] — {exchange['piege']}")
+            print(f"  Juge : {result['analyse']}")
 
-    if jeu == "test":
-        journaliser_consultation_test(compteurs, metriques, langue)
+    if dataset == "test":
+        log_test_consultation(counts, metrics, language)
 
-    return compteurs, metriques
+    return counts, metrics
 
 
 if __name__ == "__main__":
-    parseur = argparse.ArgumentParser(description="Mesure la fiabilité de l'arbitre.")
-    parseur.add_argument("--langue", default="fr", choices=("fr", "en"),
+    parser = argparse.ArgumentParser(description="Mesure la fiabilité de l'arbitre.")
+    parser.add_argument("--langue", default="fr", choices=("fr", "en"),
                          help="langue de la CONSIGNE du juge (défaut : fr, "
                               "celle sur laquelle il a été mesuré). `en` sert "
                               "à comparer, pas à basculer à l'aveugle.")
-    parseur.add_argument("--test", action="store_true",
+    parser.add_argument("--test", action="store_true",
                          help="évaluer sur le jeu de test gelé (consultation journalisée)")
-    arguments = parseur.parse_args()
-    evaluer("test" if arguments.test else "dev", arguments.langue)
+    arguments = parser.parse_args()
+    evaluate("test" if arguments.test else "dev", arguments.language)

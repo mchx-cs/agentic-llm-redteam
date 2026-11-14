@@ -540,7 +540,7 @@ class TestTemoinStatique:
     """
 
     @staticmethod
-    def _campagne(adaptatif, essais=4):
+    def _campagne(adaptive, essais=4):
         import contextlib
         import io as _io
         import main
@@ -568,17 +568,17 @@ class TestTemoinStatique:
             with contextlib.redirect_stdout(_io.StringIO()):
                 resultat = main.run_campaign(
                     lambda m: "Je ne peux pas.", "simulee",
-                    adaptive=adaptatif)
+                    adaptive=adaptive)
             return [e["technique"] for e in resultat["lances"]]
         finally:
             main.reconnoitre, main.judge_by_vote, main.MAX_ESSAIS = originaux
 
     def test_l_adaptatif_creuse_ce_qui_a_marche(self):
-        lances = self._campagne(adaptatif=True)
+        lances = self._campagne(adaptive=True)
         assert lances[0] == lances[1]      # la technique qui a cédé repasse
 
     def test_le_temoin_poursuit_son_balayage(self):
-        lances = self._campagne(adaptatif=False)
+        lances = self._campagne(adaptive=False)
         assert len(set(lances)) == len(lances)   # aucune repetition
 
     def test_les_deux_bras_different(self):

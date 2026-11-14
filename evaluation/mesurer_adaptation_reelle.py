@@ -1,40 +1,41 @@
 """
-evaluation/mesurer_adaptation_reelle.py — L'adaptation gagne-t-elle contre une
-VRAIE cible ?
+evaluation/mesurer_adaptation_reelle.py — Does adaptation win against a REAL
+target?
 
-`mesurer_adaptation.py` répond déjà à cette question, mais sur des cibles
-SIMULÉES dont on décrète quelles techniques cèdent. Ici la cible est un vrai
-LLM mal protégé (`--cible demo`), avec de vrais payloads et de vraies réponses
-probabilistes.
+`mesurer_adaptation.py` already answers that question, but on SIMULATED
+targets whose giving-way techniques we decree. Here the target is a real
+badly protected model (`--cible demo`), with real payloads and real
+probabilistic replies.
 
-POURQUOI UN JUGE LOCAL. Mesuré le 2026-11-12 : une campagne coûte ~13 000
-tokens par essai avec le juge Groq, soit ~520 000 tokens pour une seule paire
-à budget 20 — 2,6 jours de quota gratuit. Et une paire ne conclurait rien, la
-cible étant probabiliste : il en faudrait cinq à dix, donc des semaines. Avec
-un juge local la mesure est gratuite, donc répétable autant qu'il faut.
+WHY A LOCAL JUDGE. Measured on 2026-11-12: a campaign costs ~13,000 tokens
+per attempt with the Groq judge, i.e. ~520,000 tokens for a single pair at
+budget 20 — 2.6 days of the free quota. And one pair would conclude nothing,
+the target being probabilistic: five to ten would be needed, hence weeks.
+With a local judge the measurement is free, so repeatable as often as needed.
 
-LE BIAIS, ET CE QU'IL FAUT EN LIRE. llama3.2 comme juge plafonne à 50 % de
-rappel : il rate une faille sur deux. Ce biais n'est PAS symétrique entre les
-deux bras, et c'est le point — l'adaptation se nourrit des VERDICTS
-(`technique_efficace` remonte ce qui vient de marcher), alors que le bras
-statique suit son plan sans rien écouter.
+THE BIAS, AND HOW TO READ IT. llama3.2 as a judge caps at 50% recall: it
+misses one vulnerability in two. This bias is NOT symmetric between the two
+arms, and that is the point — adaptation feeds on the VERDICTS
+(`technique_efficace` moves up what has just worked), while the static arm
+follows its plan listening to nothing.
 
-**Correction apportée après les 40 paires du 2026-11-12 :** cette note disait
-qu'un juge médiocre PRIVE l'adaptation de signal, donc que la mesure
-sous-estime son gain. C'est incomplet, et l'erreur compte. Un juge qui rate
-une faille ne reste pas muet : il rend un verdict NÉGATIF, que l'adaptation
-lit comme `technique_bloquee` et qui l'éloigne d'une technique qui marchait.
-Il ne l'affame pas, il la DÉSINFORME. Le biais peut donc rendre l'adaptatif
-activement moins bon que le témoin, et pas seulement moins bon qu'il ne l'est.
+**A correction made after the 40 pairs of 2026-11-12:** this note used to say
+that a poor judge DEPRIVES adaptation of signal, hence that the measurement
+underestimates its gain. That is incomplete, and the error matters. A judge
+that misses a vulnerability does not stay silent: it returns a NEGATIVE
+verdict, which adaptation reads as `technique_bloquee` and which steers it
+away from a technique that was working. It does not starve adaptation, it
+MISINFORMS it. The bias can therefore make the adaptive arm actively worse
+than the control, and not merely worse than it really is.
 
-Conséquence pour lire un résultat :
-- si l'adaptatif gagne malgré ce handicap, c'est une BORNE BASSE du gain réel,
-  et le résultat est solide ;
-- s'il perd ou fait match nul, on ne peut RIEN conclure sur l'adaptation —
-  seulement que l'ensemble {adaptation + ce juge} ne vaut pas le plan statique.
-  Ce qui est utile à savoir, mais ne répond pas à la question posée.
+Consequence for reading a result:
+- if the adaptive arm wins despite that handicap, it is a LOWER BOUND on the
+  real gain, and the result is solid;
+- if it loses or draws, NOTHING can be concluded about adaptation — only that
+  the pair {adaptation + this judge} is not worth the static plan. Which is
+  useful to know, but does not answer the question asked.
 
-Lance-le depuis la racine du projet, avec PROFIL_ARBITRE=local :
+Run it from the project root, with PROFIL_ARBITRE=local:
     python -m evaluation.mesurer_adaptation_reelle --paires 3 --budget 8
 """
 
@@ -47,123 +48,123 @@ import tempfile
 import time
 from pathlib import Path
 
-# Les deux bras doivent voir exactement la même cible et le même vivier : seul
-# `adaptatif` change. Tout le reste est tenu constant par construction.
-CIBLE = "demo"
+# Both arms must see exactly the same target and the same pool: only
+# `adaptive` changes. Everything else is held constant by construction.
+TARGET = "demo"
 
 
-def _campagne(adaptatif, budget):
-    """Une campagne complète, sans bruit sur la sortie standard."""
+def _campaign(adaptive, budget):
+    """A whole campaign, with no noise on standard output."""
     import main
     from cibles import choose_target
 
-    budget_initial = main.MAX_ESSAIS
+    initial_budget = main.MAX_ESSAIS
     main.MAX_ESSAIS = budget
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            return main.run_campaign(choose_target(CIBLE), CIBLE,
-                                        adaptive=adaptatif)
+            return main.run_campaign(choose_target(TARGET), TARGET,
+                                        adaptive=adaptive)
     finally:
-        main.MAX_ESSAIS = budget_initial
+        main.MAX_ESSAIS = initial_budget
 
 
-def _mesures(resultat):
-    """Ce qu'on retient d'une campagne : trouvailles ET couverture."""
+def _measures(result):
+    """What we keep from a campaign: findings AND coverage."""
     import statistiques
 
-    etats = resultat.get("etats") or []
-    taux = statistiques.success_rate(etats)
+    states = result.get("etats") or []
+    rate = statistiques.success_rate(states)
     return {
-        "constats": len(resultat.get("constats") or []),
-        "essais": len(resultat.get("lances") or []),
-        "scorables": taux["scorables"],
-        "non_scorables": taux["non_scorables"],
-        # La couverture compte autant que les trouvailles : un bras qui trouve
-        # plus en ne touchant qu'une famille n'est pas forcément meilleur.
+        "constats": len(result.get("constats") or []),
+        "essais": len(result.get("lances") or []),
+        "scorables": rate["scorables"],
+        "non_scorables": rate["non_scorables"],
+        # Coverage counts as much as findings: an arm that finds more while
+        # touching one family only is not necessarily better.
         "modules": len({e.get("groupe") or e["technique"]
-                        for e in resultat.get("lances") or []}),
+                        for e in result.get("lances") or []}),
         "familles": len({e["famille_owasp"] for e in
-                         resultat.get("lances") or [] if e["famille_owasp"]}),
+                         result.get("lances") or [] if e["famille_owasp"]}),
     }
 
 
-def une_paire(budget, afficher=print):
-    """Les deux bras, dans la foulée, sur la même cible."""
-    paire = {}
-    for bras, adaptatif in (("adaptatif", True), ("statique", False)):
-        depart = time.monotonic()
-        resultat = _campagne(adaptatif, budget)
-        paire[bras] = {**_mesures(resultat),
-                       "secondes": round(time.monotonic() - depart, 1)}
-        m = paire[bras]
-        afficher(f"    {bras:10s} {m['constats']} constat(s), "
+def one_pair(budget, show=print):
+    """Both arms, back to back, on the same target."""
+    pair = {}
+    for arm, adaptive in (("adaptatif", True), ("statique", False)):
+        start = time.monotonic()
+        result = _campaign(adaptive, budget)
+        pair[arm] = {**_measures(result),
+                       "secondes": round(time.monotonic() - start, 1)}
+        m = pair[arm]
+        show(f"    {arm:10s} {m['constats']} constat(s), "
                  f"{m['modules']} module(s), "
                  f"{m['non_scorables']} non scorable(s), {m['secondes']} s")
-    return paire
+    return pair
 
 
-def principal(arguments=None):
-    parseur = argparse.ArgumentParser(
+def main(arguments=None):
+    parser = argparse.ArgumentParser(
         description="Adaptatif contre plan statique, sur la cible de "
                     "démonstration réelle.")
-    parseur.add_argument("--paires", type=int, default=3,
+    parser.add_argument("--paires", type=int, default=3,
                          help="nombre de paires à lancer (défaut : 3)")
-    parseur.add_argument("--budget", type=int, default=8,
+    parser.add_argument("--budget", type=int, default=8,
                          help="essais par campagne (défaut : 8)")
-    parseur.add_argument("--sortie", default=None, metavar="FICHIER",
+    parser.add_argument("--sortie", default=None, metavar="FICHIER",
                          help="où écrire les résultats au fil de l'eau")
-    arguments = parseur.parse_args(arguments)
+    arguments = parser.parse_args(arguments)
 
     from config import JUDGE_PROFILE
-    print(f"Juge : {JUDGE_PROFILE}. Cible : {CIBLE}. "
-          f"{arguments.paires} paire(s) × {arguments.budget} essais.")
+    print(f"Juge : {JUDGE_PROFILE}. Cible : {TARGET}. "
+          f"{arguments.pairs} paire(s) × {arguments.budget} essais.")
     if JUDGE_PROFILE != "local":
         print("/!\\ Juge NON local : cette mesure va consommer du quota. "
               "Lance-la avec PROFIL_ARBITRE=local.")
     print()
 
-    sortie = Path(arguments.sortie) if arguments.sortie else None
-    paires = []
-    # Boucle bornée, comme partout : le nombre de paires est un argument, pas
-    # une condition d'arrêt découverte en route.
-    for numero in range(1, arguments.paires + 1):
-        print(f"  paire {numero}/{arguments.paires}")
-        paires.append(une_paire(arguments.budget))
-        if sortie:
-            # Écrit à chaque paire : une mesure interrompue garde ce qu'elle
-            # a déjà établi, comme la piste d'audit d'une campagne.
-            sortie.write_text(json.dumps(paires, indent=2, ensure_ascii=False),
+    output = Path(arguments.output) if arguments.output else None
+    pairs = []
+    # A bounded loop, as everywhere: the number of pairs is an argument, not
+    # a stopping condition discovered along the way.
+    for number in range(1, arguments.pairs + 1):
+        print(f"  paire {number}/{arguments.pairs}")
+        pairs.append(one_pair(arguments.budget))
+        if output:
+            # Written at every pair: an interrupted measurement keeps what
+            # it has already established, like a campaign's audit trail.
+            output.write_text(json.dumps(pairs, indent=2, ensure_ascii=False),
                               encoding="utf-8")
 
-    _bilan(paires, arguments.budget)
-    return paires
+    _summary(pairs, arguments.budget)
+    return pairs
 
 
-def _bilan(paires, budget):
-    if not paires:
+def _summary(pairs, budget):
+    if not pairs:
         return
-    print(f"\n=== Bilan sur {len(paires)} paire(s), budget {budget} ===\n")
+    print(f"\n=== Bilan sur {len(pairs)} paire(s), budget {budget} ===\n")
     print(f"{'':12s} {'constats':>10s} {'modules':>9s} {'non scor.':>10s}")
-    for bras in ("adaptatif", "statique"):
-        moyenne = {cle: sum(p[bras][cle] for p in paires) / len(paires)
-                   for cle in ("constats", "modules", "non_scorables")}
-        print(f"  {bras:10s} {moyenne['constats']:>10.2f} "
-              f"{moyenne['modules']:>9.2f} {moyenne['non_scorables']:>10.2f}")
+    for arm in ("adaptatif", "statique"):
+        average = {key: sum(p[arm][key] for p in pairs) / len(pairs)
+                   for key in ("constats", "modules", "non_scorables")}
+        print(f"  {arm:10s} {average['constats']:>10.2f} "
+              f"{average['modules']:>9.2f} {average['non_scorables']:>10.2f}")
 
-    ecarts = [p["adaptatif"]["constats"] - p["statique"]["constats"]
-              for p in paires]
-    gagne = sum(1 for e in ecarts if e > 0)
-    perd = sum(1 for e in ecarts if e < 0)
-    print(f"\n  écart par paire : {ecarts}")
-    print(f"  l'adaptatif fait mieux {gagne}×, moins bien {perd}×, "
-          f"à égalité {len(ecarts) - gagne - perd}×")
+    gaps = [p["adaptatif"]["constats"] - p["statique"]["constats"]
+              for p in pairs]
+    wins = sum(1 for e in gaps if e > 0)
+    losses = sum(1 for e in gaps if e < 0)
+    print(f"\n  écart par paire : {gaps}")
+    print(f"  l'adaptatif fait mieux {wins}×, moins bien {losses}×, "
+          f"à égalité {len(gaps) - wins - losses}×")
 
-    # Le rappel du biais, à l'endroit où on lit le résultat : sans lui, un
-    # écart nul se lirait comme « l'adaptation n'apporte rien ».
+    # The bias reminder, where the result is read: without it, a zero gap
+    # would read as "adaptation brings nothing".
     print("\n  Rappel : le juge local rate une faille sur deux, et l'adaptation")
     print("  se nourrit des verdicts. Un gain observé ici est une BORNE BASSE ;")
     print("  une absence de gain ne permet aucune conclusion.")
 
 
 if __name__ == "__main__":
-    principal()
+    main()
