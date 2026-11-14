@@ -1,14 +1,14 @@
 """
-Tests du budget de campagne.
+Tests for the campaign budget.
 
-Le budget est un COUPE-CIRCUIT, pas une économie : à l'échelle actuelle une
-campagne coûte des centimes. Ce qu'il arrête, c'est la boucle qui s'emballe.
+The budget is a CIRCUIT BREAKER, not an economy: at the current scale a
+campaign costs pennies. What it stops is the loop that runs away.
 
-Deux propriétés comptent, et la seconde plus que la première :
-1. le plafond est réellement appliqué ;
-2. l'arrêt est PROPRE — une campagne écourtée ne doit jamais se présenter
-   comme une campagne terminée, sans quoi « aucun constat » laisserait croire
-   à une couverture qui n'a pas eu lieu.
+Two properties matter, and the second more than the first:
+1. the cap really is applied;
+2. the stop is CLEAN — a campaign cut short must never present itself as a
+   finished campaign, otherwise "no finding" would suggest a coverage that
+   never happened.
 """
 
 import pytest
@@ -20,89 +20,89 @@ from rapport import build_report, render_markdown
 
 
 @pytest.fixture(autouse=True)
-def modele_factice(monkeypatch):
-    """Un modèle qui répond instantanément, sans réseau ni quota."""
+def fake_model(monkeypatch):
+    """A model that answers instantly, with no network and no quota."""
     class _Usage:
         total_tokens = 100
 
-    class _Choix:
+    class _Choice:
         finish_reason = "stop"
         message = type("M", (), {"content": "réponse"})()
 
-    class _Reponse:
+    class _Reply:
         usage = _Usage()
-        choices = [_Choix()]
+        choices = [_Choice()]
 
     class _Client:
         chat = type("C", (), {"completions": type("D", (), {
-            "create": staticmethod(lambda **k: _Reponse())})()})()
+            "create": staticmethod(lambda **k: _Reply())})()})()
 
     monkeypatch.setattr(llm_client, "_client_for", lambda profil: _Client())
     yield
-    reset_call_log()  # on ne laisse pas de plafond armé derrière soi
+    reset_call_log()  # we leave no cap armed behind us
 
 
-class TestPlafondAppels:
-    def test_le_plafond_est_applique(self):
+class TestCallCap:
+    def test_the_cap_is_applied(self):
         reset_call_log(max_calls=3)
         for _ in range(3):
             ask_llm("x")
         with pytest.raises(BudgetExceeded, match="3 appel"):
             ask_llm("x")
 
-    def test_le_message_dit_le_compte_et_le_plafond(self):
+    def test_the_message_says_the_count_and_the_cap(self):
         reset_call_log(max_calls=1)
         ask_llm("x")
         with pytest.raises(BudgetExceeded, match="plafond 1"):
             ask_llm("x")
 
 
-class TestPlafondTokens:
-    def test_le_plafond_est_applique(self):
-        # Chaque appel factice coûte 100 tokens.
+class TestTokenCap:
+    def test_the_cap_is_applied(self):
+        # Each fake call costs 100 tokens.
         reset_call_log(max_tokens=250)
-        for _ in range(3):           # 300 tokens consommés
+        for _ in range(3):           # 300 tokens consumed
             ask_llm("x")
         with pytest.raises(BudgetExceeded, match="tokens"):
             ask_llm("x")
 
-    def test_le_depassement_est_borne_a_un_appel(self):
-        # Le coût d'un appel ne se connaît qu'après : on vérifie ce qui a
-        # DÉJÀ été consommé, donc on peut dépasser d'un appel, jamais plus.
+    def test_the_overshoot_is_bounded_to_one_call(self):
+        # A call's cost is only known afterwards: we check what has ALREADY
+        # been consumed, so we can overshoot by one call, never more.
         reset_call_log(max_tokens=250)
         for _ in range(3):
             ask_llm("x")
         assert call_log()["tokens"] == 300
         with pytest.raises(BudgetExceeded):
             ask_llm("x")
-        assert call_log()["tokens"] == 300  # l'appel refusé n'a rien coûté
+        assert call_log()["tokens"] == 300  # the refused call cost nothing
 
 
-class TestSansPlafond:
-    def test_par_defaut_rien_n_est_limite(self):
-        # Les scripts d'évaluation consomment bien plus qu'une campagne et
-        # n'ont aucune raison d'être coupés au milieu d'une mesure.
+class TestWithoutACap:
+    def test_by_default_nothing_is_limited(self):
+        # The evaluation scripts consume far more than a campaign and have no
+        # reason to be cut off in the middle of a measurement.
         reset_call_log()
         for _ in range(50):
             ask_llm("x")
         assert call_log()["appels"] == 50
 
-    def test_la_remise_a_zero_desarme_le_plafond(self):
+    def test_resetting_disarms_the_cap(self):
         reset_call_log(max_calls=1)
         ask_llm("x")
         reset_call_log()
-        ask_llm("x")          # ne doit plus lever
+        ask_llm("x")          # must no longer raise
         assert call_log()["appels"] == 1
 
 
-class TestArretPropre:
-    def test_le_budget_n_est_pas_une_panne(self):
-        # Distinguer les deux permet à l'orchestrateur de conclure
-        # « écourtée » au lieu de « plantée ».
+class TestCleanStop:
+    def test_the_budget_is_not_a_failure(self):
+        # Telling the two apart is what lets the orchestrator conclude "cut
+        # short" instead of "crashed".
         assert issubclass(BudgetExceeded, RuntimeError)
 
-    def test_le_rapport_annonce_une_campagne_ecourtee(self):
-        resultat = {
+    def test_the_report_announces_a_campaign_cut_short(self):
+        result = {
             "statut": "budget_epuise", "fiche": None,
             "plan": {"essais": [{"technique": "t", "famille_owasp": "LLM01",
                                  "objectif": "o", "transformation": "identite",
@@ -110,16 +110,16 @@ class TestArretPropre:
             "constats": [], "ecourtee": "Budget atteint : 6 appel(s).",
             "journal": {"appels": 6, "tokens": 100, "tronquees": []},
         }
-        texte = render_markdown(build_report(resultat, target="essai"))
-        assert "ÉCOURTÉE" in texte
-        # Et surtout : la couverture doit se dénoncer elle-même.
-        assert "incomplète" in texte
+        text = render_markdown(build_report(result, target="essai"))
+        assert "ÉCOURTÉE" in text
+        # And above all: the coverage must denounce itself.
+        assert "incomplète" in text
 
-    def test_une_campagne_complete_ne_porte_aucun_avertissement(self):
-        resultat = {
+    def test_a_complete_campaign_carries_no_warning(self):
+        result = {
             "statut": "aucun_constat", "fiche": None,
             "plan": {"essais": [], "ecartees": []}, "constats": [],
             "ecourtee": None, "journal": {},
         }
-        texte = render_markdown(build_report(resultat, target="essai"))
-        assert "ÉCOURTÉE" not in texte
+        text = render_markdown(build_report(result, target="essai"))
+        assert "ÉCOURTÉE" not in text

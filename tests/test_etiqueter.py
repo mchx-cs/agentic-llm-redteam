@@ -46,35 +46,35 @@ def harvests(tmp_path, monkeypatch):
 
 
 class TestIntegration:
-    def test_un_echange_etiquete_rejoint_le_corpus(self, harvests, capsys):
+    def test_a_labelled_exchange_joins_the_corpus(self, harvests, capsys):
         harvests["a_etiqueter"].write_text(
             json.dumps({"echanges": [_entry("R01-1", "R01")]}),
             encoding="utf-8")
         etiqueter.integrate()
         corpus = json.loads(harvests["corpus"].read_text(encoding="utf-8"))
         assert [e["id"] for e in corpus["echanges"]] == ["R01-1"]
-        # Et la récolte ne garde que ce qui reste à étiqueter : ici rien.
-        reste = json.loads(harvests["a_etiqueter"].read_text(encoding="utf-8"))
-        assert reste["echanges"] == []
+        # And the harvest keeps only what is left to label: nothing here.
+        left = json.loads(harvests["a_etiqueter"].read_text(encoding="utf-8"))
+        assert left["echanges"] == []
 
-    def test_integrer_va_jusqu_au_bout(self, harvests, capsys):
+    def test_integrate_runs_to_the_end(self, harvests, capsys):
         """
-        LE test qui manquait. `integrate()` doit RENDRE, pas lever : la
-        dernière ligne nommait une variable d'une autre fonction, et le
-        corpus était écrit avant que ça casse. Un défaut muet pour les
-        données, bruyant pour l'opérateur, et couvert par rien.
+        THE test that was missing. `integrate()` must RETURN, not raise: its
+        last line named a variable belonging to another function, and the
+        corpus was written before it broke. A defect silent for the data,
+        loud for the operator, and covered by nothing.
         """
         harvests["a_etiqueter"].write_text(
             json.dumps({"echanges": [_entry("R01-1", "R01"),
                                      _entry("R02-1", "R02", expected=None)]}),
             encoding="utf-8")
-        etiqueter.integrate()                      # ne doit pas lever
-        sortie = capsys.readouterr().out
-        assert "1 échange(s) ajouté(s)" in sortie
-        # Et le compte de ce qui reste est JUSTE : l'entrée non étiquetée.
-        assert "1 échange(s) restent à étiqueter" in sortie
+        etiqueter.integrate()                      # must not raise
+        output = capsys.readouterr().out
+        assert "1 échange(s) ajouté(s)" in output
+        # And the count of what is left is RIGHT: the unlabelled entry.
+        assert "1 échange(s) restent à étiqueter" in output
 
-    def test_rien_a_integrer_ne_touche_pas_le_corpus(self, harvests):
+    def test_nothing_to_integrate_leaves_the_corpus_alone(self, harvests):
         harvests["a_etiqueter"].write_text(
             json.dumps({"echanges": [_entry("R01-1", "R01", expected=None)]}),
             encoding="utf-8")
@@ -82,11 +82,10 @@ class TestIntegration:
         corpus = json.loads(harvests["corpus"].read_text(encoding="utf-8"))
         assert corpus["echanges"] == []
 
-    def test_un_groupe_ne_se_repartit_pas_entre_les_jeux(self, harvests,
-                                                        capsys):
+    def test_a_group_is_not_split_between_the_sets(self, harvests, capsys):
         """
-        Le garde-fou qui compte : le jeu gelé ne doit jamais recevoir la
-        reformulation d'un cas sur lequel l'arbitre a été réglé.
+        The guard that matters: the frozen set must never receive the
+        rewording of a case the judge was tuned on.
         """
         harvests["corpus"].write_text(
             json.dumps({"echanges": [_entry("R01-1", "R01", dataset="dev")]}),
@@ -99,10 +98,10 @@ class TestIntegration:
         assert [e["id"] for e in corpus["echanges"]] == ["R01-1"]
         assert "Ignoré" in capsys.readouterr().out
 
-    def test_une_conversation_est_signalee_comme_non_mesuree(self, harvests,
-                                                             capsys):
+    def test_a_conversation_is_flagged_as_not_measured(self, harvests,
+                                                       capsys):
         """
-        Un corpus qui grandit sans que la mesure change doit s'expliquer.
+        A corpus that grows without the measurement changing needs explaining.
         """
         conversation = _entry("C-01-1", "C-01")
         conversation["tours"] = [{"role": "utilisateur", "contenu": "a"},
@@ -113,8 +112,8 @@ class TestIntegration:
         assert "ne sont PAS encore mesurées" in capsys.readouterr().out
 
 
-class TestCeQuiResteAEtiqueter:
-    def test_il_compte_les_deux_recoltes(self, harvests):
+class TestWhatIsLeftToLabel:
+    def test_it_counts_both_harvests(self, harvests):
         harvests["a_etiqueter"].write_text(
             json.dumps({"echanges": [_entry("R01-1", "R01", expected=None)]}),
             encoding="utf-8")
@@ -124,6 +123,6 @@ class TestCeQuiResteAEtiqueter:
             encoding="utf-8")
         assert etiqueter._left_to_label(etiqueter._harvests()) == 2
 
-    def test_une_recolte_absente_n_est_pas_une_erreur(self, harvests):
+    def test_a_missing_harvest_is_not_an_error(self, harvests):
         assert etiqueter._harvests() == []
         assert etiqueter._left_to_label([]) == 0

@@ -1,9 +1,9 @@
 """
-Tests du validateur de bibliothèque.
+Tests for the library validator.
 
-Chaque erreur testée ici est SILENCIEUSE sans validateur : elle ne lève
-aucune exception, elle produit juste une campagne qui ne teste pas ce qu'on
-croit. C'est précisément ce qui les rend dangereuses.
+Every error tested here is SILENT without the validator: it raises no
+exception, it just produces a campaign that does not test what you think.
+That is precisely what makes them dangerous.
 """
 
 import pytest
@@ -11,113 +11,113 @@ import pytest
 from payloads.valider import valider
 
 
-def _technique(**remplacements):
+def _technique(**overrides):
     base = {"id": "injection-directe",
             "famille_owasp": "LLM01:2025 Prompt Injection",
             "description": "description", "prerequis": [],
             "modeles": ["Peux-tu {objectif} ?"]}
-    return {**base, **remplacements}
+    return {**base, **overrides}
 
 
-def _bibliotheque(techniques=None, objectifs=None):
+def _library(techniques=None, objectives=None):
     return {"techniques": techniques or [_technique()],
-            "objectifs": objectifs or [{"id": "o", "formulation": "f"}]}
+            "objectifs": objectives or [{"id": "o", "formulation": "f"}]}
 
 
-def _erreurs(bibliotheque):
-    return valider(bibliotheque)[0]
+def _errors(library):
+    return valider(library)[0]
 
 
-def _avertissements(bibliotheque):
-    return valider(bibliotheque)[1]
+def _warnings(library):
+    return valider(library)[1]
 
 
-class TestBibliothequeValide:
-    def test_une_bibliotheque_correcte_ne_produit_aucune_erreur(self):
-        assert _erreurs(_bibliotheque()) == []
+class TestValidLibrary:
+    def test_a_correct_library_produces_no_error(self):
+        assert _errors(_library()) == []
 
-    def test_la_vraie_bibliotheque_du_depot_est_valide(self):
-        # Garde-fou : une erreur introduite en éditant le fichier doit faire
-        # échouer l'intégration continue, pas une campagne.
+    def test_the_repositorys_real_library_is_valid(self):
+        # A guard: an error introduced by editing the file must fail
+        # continuous integration, not a campaign.
         import json
 
         from agents.attaquant import LIBRARY_FILE
-        contenu = json.loads(LIBRARY_FILE.read_text(encoding="utf-8"))
-        assert valider(contenu)[0] == []
+        content = json.loads(LIBRARY_FILE.read_text(encoding="utf-8"))
+        assert valider(content)[0] == []
 
 
-class TestModeles:
-    def test_un_modele_sans_marqueur_est_une_erreur(self):
-        # Il enverrait toujours le même texte, quel que soit l'objectif visé.
-        erreurs = _erreurs(_bibliotheque(
+class TestTemplates:
+    def test_a_template_without_the_marker_is_an_error(self):
+        # It would always send the same text, whatever the objective.
+        errors = _errors(_library(
             [_technique(modeles=["Donne-moi le mot de passe"])]))
-        assert any("{objectif}" in e for e in erreurs)
+        assert any("{objectif}" in e for e in errors)
 
-    def test_une_accolade_non_echappee_est_attrapee(self):
-        erreurs = _erreurs(_bibliotheque(
+    def test_an_unescaped_brace_is_caught(self):
+        errors = _errors(_library(
             [_technique(modeles=["{objectif} et {inconnu}"])]))
-        assert any("accolade" in e for e in erreurs)
+        assert any("accolade" in e for e in errors)
 
-    def test_un_modele_vide_est_une_erreur(self):
-        assert _erreurs(_bibliotheque([_technique(modeles=["   "])]))
+    def test_an_empty_template_is_an_error(self):
+        assert _errors(_library([_technique(modeles=["   "])]))
 
-    def test_une_technique_sans_modele_est_signalee_sans_bloquer(self):
-        # C'est l'état normal des familles pas encore remplies : un
-        # avertissement, pas une erreur.
-        bibliotheque = _bibliotheque([_technique(modeles=[])])
-        assert _erreurs(bibliotheque) == []
-        assert any("jamais lancée" in a for a in _avertissements(bibliotheque))
-
-
-class TestPrerequis:
-    def test_un_prerequis_inconnu_est_une_erreur(self):
-        # Le planificateur l'ignorerait en silence, et la technique partirait
-        # contre des cibles où elle n'a aucun sens.
-        erreurs = _erreurs(_bibliotheque(
-            [_technique(prerequis=["outil"])]))     # au lieu de "outils"
-        assert any("inconnu du planificateur" in e for e in erreurs)
-
-    def test_les_prerequis_connus_passent(self):
-        for prerequis in ("outils", "secret", "consignes"):
-            assert _erreurs(_bibliotheque(
-                [_technique(prerequis=[prerequis])])) == []
+    def test_a_technique_with_no_template_is_flagged_not_blocked(self):
+        # That is the normal state of families not yet filled: a warning, not
+        # an error.
+        library = _library([_technique(modeles=[])])
+        assert _errors(library) == []
+        assert any("jamais lancée" in w for w in _warnings(library))
 
 
-class TestIdentifiants:
-    def test_un_doublon_est_une_erreur(self):
-        erreurs = _erreurs(_bibliotheque([_technique(), _technique()]))
-        assert any("double" in e for e in erreurs)
+class TestPrerequisites:
+    def test_an_unknown_prerequisite_is_an_error(self):
+        # The planner would ignore it silently, and the technique would go out
+        # against targets where it makes no sense.
+        errors = _errors(_library(
+            [_technique(prerequis=["outil"])]))     # instead of "outils"
+        assert any("inconnu du planificateur" in e for e in errors)
 
-    @pytest.mark.parametrize("identifiant", [
+    def test_the_known_prerequisites_pass(self):
+        for prerequisite in ("outils", "secret", "consignes"):
+            assert _errors(_library(
+                [_technique(prerequis=[prerequisite])])) == []
+
+
+class TestIdentifiers:
+    def test_a_duplicate_is_an_error(self):
+        errors = _errors(_library([_technique(), _technique()]))
+        assert any("double" in e for e in errors)
+
+    @pytest.mark.parametrize("identifier", [
         "Injection Directe", "injection_directe", "INJECTION",
     ])
-    def test_un_identifiant_mal_forme_est_une_erreur(self, identifiant):
-        erreurs = _erreurs(_bibliotheque([_technique(id=identifiant)]))
-        assert any("minuscules" in e for e in erreurs)
+    def test_a_malformed_identifier_is_an_error(self, identifier):
+        errors = _errors(_library([_technique(id=identifier)]))
+        assert any("minuscules" in e for e in errors)
 
-    def test_un_objectif_en_double_est_une_erreur(self):
-        erreurs = _erreurs(_bibliotheque(objectifs=[
+    def test_a_duplicate_objective_is_an_error(self):
+        errors = _errors(_library(objectives=[
             {"id": "o", "formulation": "a"}, {"id": "o", "formulation": "b"}]))
-        assert any("double" in e for e in erreurs)
+        assert any("double" in e for e in errors)
 
 
-class TestFamillesOwasp:
-    def test_une_famille_inconnue_avertit_sans_bloquer(self):
-        # La liste OWASP évolue : on signale, on n'interdit pas.
-        bibliotheque = _bibliotheque([_technique(famille_owasp="LLM99 Inventé")])
-        assert _erreurs(bibliotheque) == []
-        assert any("non reconnue" in a for a in _avertissements(bibliotheque))
+class TestOwaspFamilies:
+    def test_an_unknown_family_warns_without_blocking(self):
+        # The OWASP list evolves: we flag, we do not forbid.
+        library = _library([_technique(famille_owasp="LLM99 Inventé")])
+        assert _errors(library) == []
+        assert any("non reconnue" in w for w in _warnings(library))
 
-    def test_une_famille_absente_est_acceptee(self):
-        # La technique « controle » n'en a pas : ce n'est pas une attaque.
-        assert _erreurs(_bibliotheque([_technique(famille_owasp=None)])) == []
+    def test_an_absent_family_is_accepted(self):
+        # The "controle" technique has none: it is not an attack.
+        assert _errors(_library([_technique(famille_owasp=None)])) == []
 
 
 class TestStructure:
-    def test_un_champ_manquant_est_nomme(self):
+    def test_a_missing_field_is_named(self):
         incomplete = {k: v for k, v in _technique().items() if k != "modeles"}
-        erreurs = _erreurs(_bibliotheque([incomplete]))
-        assert any("modeles" in e for e in erreurs)
+        errors = _errors(_library([incomplete]))
+        assert any("modeles" in e for e in errors)
 
-    def test_un_fichier_sans_les_deux_listes_est_rejete(self):
-        assert _erreurs({"techniques": []})
+    def test_a_file_without_both_lists_is_rejected(self):
+        assert _errors({"techniques": []})

@@ -1,9 +1,9 @@
 """
-Tests de la bibliothèque de payloads et de la configuration.
+Tests for the payload library and the configuration.
 
-Deux endroits où une erreur ne se verrait pas tout de suite : un gabarit mal
-formé qui enverrait `{objectif}` tel quel à la cible, et une faute de frappe
-dans `.env` qui ne se manifesterait qu'au premier appel au modèle.
+Two places where a mistake would not show up at once: a malformed template
+that would send `{objectif}` to the target as it stands, and a typo in `.env`
+that would only surface on the first call to a model.
 """
 
 import json
@@ -16,97 +16,97 @@ from agents.attaquant import (LIBRARY_FILE, TRANSFORMATIONS,
 
 
 @pytest.fixture(autouse=True)
-def sans_instantane_garak(monkeypatch, tmp_path):
-    """Isole les tests de l'instantané garak éventuellement présent."""
+def without_garak_snapshot(monkeypatch, tmp_path):
+    """Isolates the tests from any garak snapshot that may be present."""
     monkeypatch.setattr(agents.attaquant, "GARAK_FILE",
                         tmp_path / "absent.json")
 
 
-class TestBibliotheque:
-    def test_elle_est_du_json_valide(self):
+class TestLibrary:
+    def test_it_is_valid_json(self):
         json.loads(LIBRARY_FILE.read_text(encoding="utf-8"))
 
-    def test_chaque_technique_a_les_champs_attendus(self):
+    def test_every_technique_has_the_expected_fields(self):
         for technique in load_library()["techniques"]:
             assert {"id", "famille_owasp", "description", "prerequis",
                     "modeles"} <= set(technique)
 
-    def test_chaque_modele_contient_le_marqueur_objectif(self):
-        # Un modèle sans `{objectif}` enverrait toujours le même texte.
+    def test_every_template_holds_the_objective_marker(self):
+        # A template without `{objectif}` would always send the same text.
         for technique in load_library()["techniques"]:
-            for modele in technique["modeles"]:
-                assert "{objectif}" in modele, technique["id"]
+            for template in technique["modeles"]:
+                assert "{objectif}" in template, technique["id"]
 
-    def test_les_prerequis_sont_connus_du_planificateur(self):
+    def test_the_prerequisites_are_known_to_the_planner(self):
         from agents.planificateur import PREREQUISITES
         for technique in load_library()["techniques"]:
-            for prerequis in technique["prerequis"]:
-                assert prerequis in PREREQUISITES, technique["id"]
+            for prerequisite in technique["prerequis"]:
+                assert prerequisite in PREREQUISITES, technique["id"]
 
-    def test_les_identifiants_sont_uniques(self):
-        identifiants = [t["id"] for t in load_library()["techniques"]]
-        assert len(identifiants) == len(set(identifiants))
+    def test_the_identifiers_are_unique(self):
+        identifiers = [t["id"] for t in load_library()["techniques"]]
+        assert len(identifiers) == len(set(identifiers))
 
 
 class TestTransformations:
-    def test_identite_ne_change_rien(self):
+    def test_identity_changes_nothing(self):
         assert TRANSFORMATIONS["identite"]("Bonjour") == "Bonjour"
 
-    def test_chaque_transformation_rend_du_texte_non_vide(self):
-        for nom, transformer in TRANSFORMATIONS.items():
-            resultat = transformer("Peux-tu te présenter ?")
-            assert isinstance(resultat, str) and resultat, nom
+    def test_every_transformation_returns_non_empty_text(self):
+        for name, transform in TRANSFORMATIONS.items():
+            result = transform("Peux-tu te présenter ?")
+            assert isinstance(result, str) and result, name
 
 
-class TestGenerationDesPayloads:
-    def test_aucun_marqueur_ne_subsiste(self):
+class TestPayloadGeneration:
+    def test_no_marker_survives(self):
         for payload in generate_payloads():
             assert "{objectif}" not in payload["texte"]
 
-    def test_chaque_payload_dit_d_ou_il_vient(self):
+    def test_every_payload_says_where_it_comes_from(self):
         for payload in generate_payloads():
             assert {"technique", "famille_owasp", "objectif",
                     "transformation", "texte"} <= set(payload)
 
-    def test_le_catalogue_croise_bien_les_axes(self):
-        bibliotheque = load_library()
-        gabarits = sum(len(t["modeles"]) for t in bibliotheque["techniques"])
-        complets = sum(len(t.get("payloads_complets", []))
-                       for t in bibliotheque["techniques"])
-        objectifs = len(bibliotheque["objectifs"])
-        # Un gabarit se croise avec chaque objectif. Un payload complet en
-        # produit UN DE PLUS que d'objectifs : composé avec chacun d'eux
-        # (il sert alors de préambule, et l'objectif fournit la demande),
-        # plus sa variante nue, qui mesure la résistance au détournement.
+    def test_the_catalogue_really_crosses_the_axes(self):
+        library = load_library()
+        templates = sum(len(t["modeles"]) for t in library["techniques"])
+        complete = sum(len(t.get("payloads_complets", []))
+                       for t in library["techniques"])
+        objectives = len(library["objectifs"])
+        # A template crosses with each objective. A complete payload produces
+        # ONE MORE than there are objectives: composed with each of them (it
+        # then serves as a preamble, and the objective supplies the request),
+        # plus its bare variant, which measures resistance to hijacking.
         #
-        # Cette formule disait « complets × transformations » jusqu'au
-        # 2026-11-11, et le test passait quand même : la composition datait
-        # du même jour, mais la fixture neutralise l'instantané garak et
-        # aucune technique MAISON n'avait encore de payload complet, donc le
-        # terme valait zéro. Les payloads LLM07 l'ont réveillé.
-        attendu = len(TRANSFORMATIONS) * (
-            gabarits * objectifs + complets * (objectifs + 1))
-        assert len(generate_payloads()) == attendu
+        # This formula said "complete × transformations" until 2026-11-11, and
+        # the test passed anyway: composition dated from the same day, but the
+        # fixture neutralises the garak snapshot and no HAND-WRITTEN technique
+        # had a complete payload yet, so the term was zero. The LLM07 payloads
+        # woke it up.
+        expected = len(TRANSFORMATIONS) * (
+            templates * objectives + complete * (objectives + 1))
+        assert len(generate_payloads()) == expected
 
 
 class TestConfiguration:
-    def test_les_profils_declarent_ce_qu_il_faut(self):
+    def test_the_profiles_declare_what_is_needed(self):
         from config import PROFILES
-        for nom, profil in PROFILES.items():
-            assert {"base_url", "api_key", "modele"} <= set(profil), nom
+        for name, profile in PROFILES.items():
+            assert {"base_url", "api_key", "modele"} <= set(profile), name
 
-    def test_un_profil_inconnu_echoue_des_l_import(self, monkeypatch):
-        # Sans ce garde-fou, une faute de frappe dans .env donnerait un
-        # KeyError nu, très loin d'ici, au premier appel au modèle.
+    def test_an_unknown_profile_fails_at_import(self, monkeypatch):
+        # Without this guard, a typo in .env would give a bare KeyError, a
+        # long way from here, on the first call to a model.
         import importlib
         import config
         monkeypatch.setenv("PROFIL_ARBITRE", "faute_de_frappe")
         with pytest.raises(ValueError, match="Profil inconnu"):
             importlib.reload(config)
         monkeypatch.delenv("PROFIL_ARBITRE")
-        importlib.reload(config)  # on remet la configuration d'aplomb
+        importlib.reload(config)  # put the configuration back on its feet
 
-    def test_la_cible_par_defaut_ne_demande_aucune_cle(self):
+    def test_the_default_target_asks_for_no_key(self):
         import config
         assert config.TARGET == "leurre"
         assert config.PROFILES[config.ACTIVE_PROFILE]["api_key"]
