@@ -53,8 +53,8 @@ def load_exchanges(dataset):
         dataset_of_group.setdefault(group, exchange["dataset"])
         if dataset_of_group[group] != exchange["dataset"]:
             raise ValueError(
-                f"Le groupe {group} est réparti entre 'dev' et 'test' "
-                f"({exchange['id']}) : fuite entre les deux jeux."
+                f"Group {group} is split between 'dev' and 'test' "
+                f"({exchange['id']}): a leak between the two sets."
             )
 
     in_dataset = [e for e in exchanges if e["dataset"] == dataset]
@@ -69,8 +69,8 @@ def load_exchanges(dataset):
     single_turn = [e for e in in_dataset if not e.get("turns")]
     ignored = len(in_dataset) - len(single_turn)
     if ignored:
-        print(f"{ignored} conversation(s) multi-tours ignorée(s) : "
-              f"l'arbitre ne sait juger qu'un seul tour (phase 3b).\n")
+        print(f"{ignored} multi-turn conversation(s) skipped: the judge can "
+              f"only score a single turn (phase 3b).\n")
     return single_turn
 
 
@@ -103,12 +103,12 @@ def evaluate(dataset="dev", language="fr"):
     counts = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
     errors = []
 
-    print(f"Juge : profil {JUDGE_PROFILE}, "
-          f"modèle {PROFILES[JUDGE_PROFILE]['model']}\n")
+    print(f"Judge: profile {JUDGE_PROFILE}, "
+          f"model {PROFILES[JUDGE_PROFILE]['model']}\n")
 
     if dataset == "test":
-        print("!!! Jeu de TEST gelé : ne règle pas l'arbitre d'après ces "
-              "résultats. Cette consultation est journalisée.\n")
+        print("!!! FROZEN test set: do not tune the judge from these "
+              "results. This consultation is logged.\n")
 
     # Bounded by nature: one call to the judge per labelled exchange.
     for exchange in exchanges:
@@ -150,20 +150,21 @@ def evaluate(dataset="dev", language="fr"):
         "a_revoir_taux": ratio(counts["a_revoir"], total),
     }
 
-    print(f"\n=== Bilan (jeu {dataset}) ===")
-    print(f"Échanges évalués : {total}")
-    print(f"VP={tp}  FP={fp}  VN={counts['VN']}  FN={counts['FN']}  "
-          f"à revoir={counts['a_revoir']}")
-    print(f"Précision : {metrics['precision']:.0%}")
-    print(f"Rappel    : {metrics['rappel']:.0%}")
-    print(f"Exactitude: {metrics['exactitude']:.0%}")
-    print(f"À revoir  : {metrics['a_revoir_taux']:.0%}")
+    print(f"\n=== Summary (set {dataset}) ===")
+    print(f"Exchanges evaluated: {total}")
+    print(f"TP={tp}  FP={fp}  TN={counts['VN']}  FN={counts['FN']}  "
+          f"to review={counts['a_revoir']}")
+    print(f"Precision: {metrics['precision']:.0%}")
+    print(f"Recall   : {metrics['rappel']:.0%}")
+    print(f"Accuracy : {metrics['exactitude']:.0%}")
+    print(f"To review: {metrics['a_revoir_taux']:.0%}")
 
     if errors:
-        print("\n=== Détail des erreurs ===")
+        print("\n=== Error detail ===")
         for exchange, result in errors:
-            print(f"\n{exchange['id']} [{exchange['category']}] — {exchange['trap']}")
-            print(f"  Juge : {result['analyse']}")
+            print(f"\n{exchange['id']} [{exchange['category']}] — "
+                  f"{exchange['trap']}")
+            print(f"  Judge: {result['analyse']}")
 
     if dataset == "test":
         log_test_consultation(counts, metrics, language)
@@ -172,12 +173,15 @@ def evaluate(dataset="dev", language="fr"):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Mesure la fiabilité de l'arbitre.")
-    parser.add_argument("--langue", default="fr", choices=("fr", "en"),
-                         help="langue de la CONSIGNE du juge (défaut : fr, "
-                              "celle sur laquelle il a été mesuré). `en` sert "
-                              "à comparer, pas à basculer à l'aveugle.")
+    parser = argparse.ArgumentParser(
+        description="Measures the judge's reliability.")
+    parser.add_argument("--language", "--langue", default="fr",
+                        choices=("fr", "en"), dest="language",
+                        help="language of the judge's INSTRUCTION (default: "
+                             "fr, the one it was measured on). `en` is for "
+                             "comparing, not for switching blind.")
     parser.add_argument("--test", action="store_true",
-                         help="évaluer sur le jeu de test gelé (consultation journalisée)")
+                        help="evaluate on the frozen test set (the "
+                             "consultation is logged)")
     arguments = parser.parse_args()
     evaluate("test" if arguments.test else "dev", arguments.language)

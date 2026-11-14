@@ -47,7 +47,7 @@ def _skipped(plan):
 class TestPrerequisites:
     def test_without_a_tool_tool_abuse_is_skipped(self):
         plan = plan_campaign(profile(tools=[]), budget=10)
-        assert "aucun outil détecté chez la cible" in \
+        assert "no tool detected on the target" in \
                _skipped(plan)["abus-outils"]
 
     def test_with_a_tool_the_technique_is_kept(self):
@@ -61,9 +61,9 @@ class TestPrerequisites:
     def test_a_silent_target_has_the_leak_families_skipped(self):
         plan = plan_campaign(profile(), budget=10)
         skipped = _skipped(plan)
-        assert any("ne déclare ni sujet interdit" in m
+        assert any("declares neither a forbidden subject" in m
                    for m in skipped["divulgation-information"])
-        assert any("n'évoque aucune consigne" in m
+        assert any("mentions no internal instruction" in m
                    for m in skipped["fuite-prompt-systeme"])
 
     @pytest.mark.parametrize("target", [
@@ -72,14 +72,14 @@ class TestPrerequisites:
     ])
     def test_a_target_protecting_something_keeps_them(self, target):
         skipped = _skipped(plan_campaign(target, budget=10))
-        assert not any("ne déclare ni sujet interdit" in m
+        assert not any("declares neither a forbidden subject" in m
                        for m in skipped["divulgation-information"])
 
     def test_a_technique_with_no_template_is_skipped_and_says_so(self):
         # The OWASP families are declared but empty: they must disappear
         # from the plan WITH their reason, not silently.
         skipped = _skipped(plan_campaign(profile(instructions=True), budget=10))
-        assert "aucun modèle de payload dans la bibliothèque" in \
+        assert "no payload template in the library" in \
                skipped["injection-directe"]
 
 
@@ -225,7 +225,7 @@ class TestSystemPromptLeak:
         plan = plan_campaign(profile(instructions=False), budget=3)
         par_nom = {e["technique"]: e for e in plan["skipped"]}
         assert "fuite-prompt-systeme" in par_nom
-        assert any("consigne" in m
+        assert any("instruction" in m
                    for m in par_nom["fuite-prompt-systeme"]["reasons"])
 
     def test_it_covers_the_LLM07_family(self):
@@ -432,7 +432,7 @@ class TestRelevanceRules:
     def test_the_reason_says_how_to_enable_it(self, prerequisite):
         # Un ecartement muet ferait croire a un trou de couverture definitif.
         _, reason = PREREQUISITES[prerequisite]
-        assert "--contexte" in reason
+        assert "--context" in reason
 
     def test_one_context_does_not_unlock_the_others(self):
         verifier, _ = PREREQUISITES["rich-rendering"]
@@ -500,7 +500,7 @@ class TestGroupingTheSkipped:
     def test_the_summary_does_not_repeat_a_reason(self):
         rendered = summarise(plan_campaign(profile(instructions=True), budget=3))
         for reason in ("aucun client ne rend le Markdown",
-                      "la cible dit ne pas écrire de code"):
+                      "the target says it does not write code"):
             assert rendered.count(reason) <= 1, reason
 
 
@@ -544,12 +544,12 @@ class TestScope:
         # tool detected", which would mask the real reason.
         plan = plan_campaign(profile(instructions=True), 5, only=["controle"])
         reasons = {e["technique"]: " ".join(e["reasons"]) for e in plan["skipped"]}
-        assert "hors du périmètre demandé" in reasons["fuite-prompt-systeme"]
+        assert "outside the scope asked for" in reasons["fuite-prompt-systeme"]
 
     def test_the_exclusion_reason_names_the_option(self):
         plan = plan_campaign(profile(instructions=True), 5, excluding=["fuite-prompt-systeme"])
         reasons = {e["technique"]: " ".join(e["reasons"]) for e in plan["skipped"]}
-        assert "--sauf" in reasons["fuite-prompt-systeme"]
+        assert "--excluding" in reasons["fuite-prompt-systeme"]
 
     def test_an_unknown_pattern_keeps_nothing(self):
         # Mieux vaut un plan vide, visible immediatement, qu'un filtre ignore

@@ -79,7 +79,7 @@ def run():
         print(f"[{'ok ' if ok else 'ERR'}] {target.__name__:<38} "
               f"attendu={expected:<22} obtenu={result['status']:<22} "
               f"1er={first['valeur']!r} rejeux={result['replay_values']}")
-    print(f"\n{passed}/{len(SCENARIOS)} scénarios conformes.")
+    print(f"\n{passed}/{len(SCENARIOS)} scenarios as expected.")
 
 
 if __name__ == "__main__":

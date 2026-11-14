@@ -107,7 +107,7 @@ class TestTriStates:
         assert reconnoitre(_target())[field] is None
 
     def test_an_empty_profile_sets_them_to_none(self, analyst):
-        analyst("illisible")
+        analyst("unreadable")
         profile = reconnoitre(_target())
         assert profile["writes_code"] is None
         assert profile["handles_documents"] is None
@@ -159,10 +159,10 @@ class TestBudgetAndDisplay:
     def test_the_summary_shows_the_new_fields(self, analyst):
         analyst('{"writes_code": true, "handles_documents": false}')
         rendu = summarise(reconnoitre(_target()))
-        assert "écrit du code : oui" in rendu
-        assert "lit des documents : non" in rendu
-        assert "contexte déclaré : aucun" in rendu
+        assert "writes code : yes" in rendu
+        assert "reads documents : no" in rendu
+        assert "context declared : none" in rendu
 
     def test_the_summary_tells_no_from_not_declared(self, analyst):
         analyst('{"produit_du_code": null}')
-        assert "écrit du code : non déclaré" in summarise(reconnoitre(_target()))
+        assert "writes code : not declared" in summarise(reconnoitre(_target()))

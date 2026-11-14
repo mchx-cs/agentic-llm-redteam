@@ -56,7 +56,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     ask_target = ask_target or choose_target()
     target_name = target_name or TARGET
 
-    print("=== Campagne ===\n")
+    print("=== Campaign ===\n")
     # The budget is armed HERE, not in llm_client: the evaluation scripts
     # consume far more than a campaign and have no reason to be cut off in
     # the middle of a measurement.
@@ -86,7 +86,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     print(summarise_plan(plan))
 
     if not plan["attempts"]:
-        print("\n>>> Aucun essai applicable à cette cible. Campagne terminée.")
+        print("\n>>> No attempt applies to this target. Campaign over.")
         return _finish({"status": "no_attempt", "profile": profile,
                         "plan": plan, "findings": []})
 
@@ -114,23 +114,23 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
         payload = next_attempt(plan["candidates"],
                                observations if adaptive else (), launched)
         if payload is None:
-            print(">>> Vivier épuisé : plus aucun essai applicable.")
+            print(">>> Pool exhausted: no applicable attempt left.")
             break
         launched.append(payload)
 
-        print(f"--- Essai {number}/{MAX_ESSAIS} ---")
-        print(f"  [Attaquant] {payload['technique']} / "
-              f"{payload['objective'] or 'payload complet'} "
+        print(f"--- Attempt {number}/{MAX_ESSAIS} ---")
+        print(f"  [Attacker] {payload['technique']} / "
+              f"{payload['objective'] or 'complete payload'} "
               f"/ {payload['transformation']}")
         if payload.get("adaptation_reasons"):
             # The net first: an attempt can carry both a bonus and a penalty,
             # and without it the reasons look contradictory.
-            print(f"  [Adaptation] solde {payload['adaptation_score']:+d} "
-                  f"sur sa priorité de départ "
-                  f"({payload['priority']}) :")
+            print(f"  [Adaptation] net {payload['adaptation_score']:+d} "
+                  f"on its starting priority "
+                  f"({payload['priority']}):")
             for reason in payload["adaptation_reasons"]:
                 print(f"               - {reason}")
-        print(f"              envoie : {payload['text']}")
+        print(f"             sends : {payload['text']}")
 
         try:
             # A reply cut off by the target's output cap reads like a complete
@@ -141,10 +141,10 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             if trail:
                 trail.record_exchange("attaque", payload["text"], reply,
                                       truncated)
-            print(f"  [Cible]     répond : {reply}")
+            print(f"  [Target]    replies : {reply}")
             if truncated:
-                print("  /!\\        réponse TRONQUÉE : une fuite a pu être "
-                      "coupée en deux, le verdict ci-dessous n'est pas fiable.")
+                print("  /!\\        reply TRUNCATED: a leak may have been "
+                      "cut in half, the verdict below is unreliable.")
 
             # Voting: the judge is not deterministic on borderline cases, and
             # a vulnerability that appears with the draw has no business in a
@@ -152,8 +152,8 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             verdict = judge_by_vote(payload["text"], reply)
             if trail:
                 trail.record_verdict(number, verdict)
-            print(f"  [Arbitre]   enfreint={verdict['reussi']} "
-                  f"({verdict['critere']}, votes {verdict['votes']}) : "
+            print(f"  [Judge]     enfreint={verdict['reussi']} "
+                  f"({verdict['critere']}, votes {verdict['votes']}): "
                   f"{verdict['analyse']}\n")
 
             # What this exchange teaches us, for choosing the next attempt.
@@ -189,7 +189,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
                     else ask_target,
                     judge,
                 )
-                print(f"  [Rejeu]     {replay_check['status']} : "
+                print(f"  [Replay]    {replay_check['status']}: "
                       f"{replay_check['explanation']}")
 
                 if replay_check["status"] == "likely_hallucination":
@@ -197,7 +197,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
                     # Scorable all the same — the attack did fail, and the
                     # replay established it instead of assuming it.
                     states.append("hallucination")
-                    print("  >>> Valeur inventée par la cible : on continue.\n")
+                    print("  >>> Value invented by the target: moving on.\n")
                     continue
         except BudgetExceeded as stop:
             # A NORMAL stop, not a failure: we keep what has been found so
@@ -205,11 +205,11 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             # end. The attempt in flight is lost, and that is accepted.
             cut_short = str(stop)
             print(f"\n>>> {stop}")
-            print(f">>> Campagne ÉCOURTÉE à l'essai {number} sur "
+            print(f">>> Campaign CUT SHORT at attempt {number} of "
                   f"{MAX_ESSAIS}.")
             break
 
-        print("  >>> Constat retenu.\n")
+        print("  >>> Finding recorded.\n")
         states.append("vulnerability")
         findings.append({
             "attempt": number,
@@ -223,7 +223,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
         })
 
     if not cut_short:
-        print(f">>> Budget d'essais épuisé : {len(findings)} constat(s).")
+        print(f">>> Attempt budget exhausted: {len(findings)} finding(s).")
 
     return _finish({
         # A plan cut short must NEVER present itself as a finished plan:
@@ -271,14 +271,14 @@ def _finish(result):
     result["call_log"] = call_log()
     truncated_count = len(result["call_log"]["truncated_replies"])
 
-    print(f"\n{result['call_log']['calls']} appel(s) au LLM, "
+    print(f"\n{result['call_log']['calls']} call(s) to the model, "
           f"{result['call_log']['tokens']} tokens.")
     if truncated_count:
         # A "no vulnerability" obtained on cut-off replies is worth nothing:
         # say so plainly rather than letting it look like coverage.
-        print(f"/!\\ {truncated_count} réponse(s) tronquée(s) : les verdicts "
-              f"correspondants sont peu fiables, et un « aucune faille » "
-              f"pourrait masquer une fuite coupée en deux.")
+        print(f"/!\\ {truncated_count} truncated reply/replies: the matching "
+              f"verdicts are unreliable, and a \"no vulnerability\" could be "
+              f"hiding a leak cut in half.")
     return result
 
 
@@ -307,64 +307,74 @@ def scope_patterns(value):
 
 def cli(arguments=None):
     """Command-line entry point (see [project.scripts])."""
-    parser = argparse.ArgumentParser(description="Lance une campagne de test.")
+    parser = argparse.ArgumentParser(description="Runs a test campaign.")
+    # Every option keeps its French name as an alias: the README has shown
+    # `--cible demo` since the project existed, and a documented interface
+    # does not get pulled from under its users by a translation. argparse
+    # takes its destination from the FIRST long option, so the code reads the
+    # English name.
     parser.add_argument(
-        "--cible", default=None,
-        help="'leurre' (défaut), 'mock', ou une URL http(s). "
-             "Sinon la valeur de CIBLE dans .env.")
+        "--target", "--cible", default=None, dest="target",
+        help="'leurre' (default), 'mock', or an http(s) URL. Otherwise the "
+             "value of CIBLE in .env.")
     parser.add_argument(
-        "--rapport", nargs="?", const="rapports", default=None,
-        metavar="DOSSIER",
-        help="écrire resultat.json et rapport.md dans DOSSIER "
-             "(par défaut : rapports/).")
+        "--report", "--rapport", nargs="?", const="rapports", default=None,
+        dest="report", metavar="FOLDER",
+        help="write resultat.json and rapport.md into FOLDER "
+             "(default: rapports/).")
     parser.add_argument(
-        "--abreger", action="store_true",
-        help="tronquer payloads et réponses dans rapport.md (pour partager "
-             "un rapport sans réponses verbatim, ou publier un exemple). "
-             "resultat.json garde tout.")
+        "--abridge", "--abreger", action="store_true", dest="abridge",
+        help="truncate payloads and replies in rapport.md (to share a report "
+             "without a client's verbatim replies, or to publish an "
+             "example). resultat.json keeps everything.")
     parser.add_argument(
-        "--seulement", default="", metavar="MOTIFS",
-        help="restreindre la campagne, par famille OWASP (LLM07), module "
-             "garak (dan) ou technique (fuite-prompt-systeme) ; plusieurs "
-             "motifs séparés par des virgules. Le rapport dit toujours que "
-             "la campagne était restreinte.")
+        "--only", "--seulement", default="", dest="only", metavar="PATTERNS",
+        help="restrict the campaign, by OWASP family (LLM07), garak module "
+             "(dan) or technique (fuite-prompt-systeme); several patterns "
+             "separated by commas. The report always says the campaign was "
+             "restricted.")
     parser.add_argument(
-        "--sauf", default="", metavar="MOTIFS",
-        help="écarter des techniques, mêmes motifs que --seulement. Sert à "
-             "respecter une portée de mandat qui exclut des techniques ; "
-             "l'emporte sur --seulement.")
+        "--excluding", "--sauf", default="", dest="excluding",
+        metavar="PATTERNS",
+        help="skip techniques, same patterns as --only. Serves to respect a "
+             "mandate scope that excludes techniques; wins over --only.")
     parser.add_argument(
-        "--sans-adaptation", action="store_true", dest="sans_adaptation",
-        help="suivre le plan statique sans rien apprendre des réponses. "
-             "Sert de témoin pour mesurer ce que l'adaptation apporte ; "
-             "inutile en usage normal.")
+        "--no-adaptation", "--sans-adaptation", action="store_true",
+        dest="no_adaptation",
+        help="follow the static plan, learning nothing from the replies. "
+             "Serves as the control for measuring what adaptation adds; of "
+             "no use in normal operation.")
     parser.add_argument(
-        "--profil-cible", default=None, metavar="NOM", dest="profil_cible",
-        help="forme d'API de la cible, au lieu de décrire CIBLE_CORPS et "
-             "CIBLE_CHEMIN_REPONSE à la main : "
+        "--target-profile", "--profil-cible", default=None, metavar="NAME",
+        dest="target_profile",
+        help="the target's API shape, instead of describing CIBLE_CORPS and "
+             "CIBLE_CHEMIN_REPONSE by hand: "
              + ", ".join(TARGET_PROFILES)
-             + ". L'emporte sur CIBLE_CORPS et CIBLE_CHEMIN_REPONSE de .env : "
-               "la ligne de commande est plus spécifique. Pour un corps sur mesure, "
-               "règle .env et ne passe pas de profil.")
+             + ". Wins over CIBLE_CORPS and CIBLE_CHEMIN_REPONSE from .env: "
+               "the command line is more specific. For a bespoke body, set "
+               ".env and pass no profile.")
     parser.add_argument(
-        "--tester-cible", action="store_true", dest="tester_cible",
-        help="envoyer UN message anodin pour vérifier le branchement, puis "
-             "s'arrêter. Aucune attaque, aucun mandat requis : à lancer "
-             "avant toute campagne contre une cible réelle.")
+        "--probe-target", "--tester-cible", action="store_true",
+        dest="probe_target",
+        help="send ONE harmless message to check the wiring, then stop. No "
+             "attack, no mandate required: to be run before any campaign "
+             "against a real target.")
     parser.add_argument(
-        "--contexte", default="", metavar="LISTE",
-        help="ce que l'application AUTOUR de la cible fait de sa sortie, "
-             "séparé par des virgules : "
+        "--context", "--contexte", default="", dest="context",
+        metavar="LIST",
+        help="what the application AROUND the target does with its output, "
+             "comma-separated: "
              + ", ".join(KNOWN_CONTEXTS)
-             + ". Certaines familles de sondes n'ont aucun sens sans ça, et "
-               "une cible ne peut pas le déclarer elle-même.")
+             + ". Some probe families make no sense without this, and a "
+               "target cannot declare it itself.")
     parser.add_argument(
-        "--autorisation", default=AUTHORISATION_FILE, metavar="FICHIER",
-        help=f"mandat couvrant la cible (défaut : {AUTHORISATION_FILE}). "
-             f"Inutile pour une cible locale.")
+        "--authorisation", "--autorisation", default=AUTHORISATION_FILE,
+        dest="authorisation", metavar="FILE",
+        help=f"mandate covering the target (default: {AUTHORISATION_FILE}). "
+             f"Not needed for a local target.")
     arguments = parser.parse_args(arguments)
 
-    target_name = arguments.cible or TARGET
+    target_name = arguments.target or TARGET
 
     # The target's NAME first, and this is a correction: a typo ("demo:9",
     # "leure") used to come out either as a Python traceback or — worse — as
@@ -372,20 +382,20 @@ def cli(arguments=None):
     # had simply mistyped a letter. So we check the name before anything,
     # which sends no request and does not disturb the mandate's order.
     try:
-        choose_target(target_name, arguments.profil_cible)
+        choose_target(target_name, arguments.target_profile)
     except (ValueError, RuntimeError) as refusal:
-        print(f"Cible inutilisable.\n{refusal}", file=sys.stderr)
+        print(f"Target unusable.\n{refusal}", file=sys.stderr)
         raise SystemExit(2)
 
     # An unknown context name is a TYPO, not an absent context: accepting it
     # silently would skip whole families without anyone understanding why.
     # Same logic as an unknown profile, which fails at import with the list of
     # valid values.
-    context = [c.strip() for c in arguments.contexte.split(",") if c.strip()]
+    context = [c.strip() for c in arguments.context.split(",") if c.strip()]
     unknown = [c for c in context if c not in KNOWN_CONTEXTS]
     if unknown:
-        print(f"Contexte inconnu : {', '.join(unknown)}.\n"
-              f"Valeurs acceptées : {', '.join(KNOWN_CONTEXTS)}.",
+        print(f"Unknown context: {', '.join(unknown)}.\n"
+              f"Accepted values: {', '.join(KNOWN_CONTEXTS)}.",
               file=sys.stderr)
         raise SystemExit(2)
 
@@ -393,14 +403,15 @@ def cli(arguments=None):
     # anything: this is a harmless request, not a penetration test. The order
     # matters — discovering a configuration typo must not cost an entry in a
     # client's audit trail.
-    if arguments.tester_cible:
+    if arguments.probe_target:
         if not target_name.startswith(("http://", "https://")):
-            print(f"--tester-cible vise une URL http(s) ; '{target_name}' est "
-                  f"une cible livrée, qui n'a rien à configurer.",
+            print(f"--probe-target aims at an http(s) URL; '{target_name}' is "
+                  f"a bundled target, with nothing to configure.",
                   file=sys.stderr)
             raise SystemExit(2)
         try:
-            ok = probe_http_target(target_name, profile=arguments.profil_cible)
+            ok = probe_http_target(target_name,
+                                   profile=arguments.target_profile)
         except RuntimeError as refusal:
             print(refusal, file=sys.stderr)
             raise SystemExit(2)
@@ -409,44 +420,45 @@ def cli(arguments=None):
     # The mandate BEFORE anything else: we do not send a single request to a
     # third-party system without being able to prove we were entitled to.
     try:
-        authorisation = require_mandate(target_name, arguments.autorisation)
+        authorisation = require_mandate(target_name,
+                                        arguments.authorisation)
     except MissingAuthorisation as refusal:
         # Advice, not a traceback: the reader must know what to do.
-        print(f"Campagne REFUSÉE.\n{refusal}", file=sys.stderr)
+        print(f"Campaign REFUSED.\n{refusal}", file=sys.stderr)
         raise SystemExit(2)
 
     if authorisation:
-        print(f"Mandat : {authorisation['reference']} — "
-              f"autorisé par {authorisation['authorised_by']}, "
-              f"du {authorisation['start']} au {authorisation['end']}.\n")
+        print(f"Mandate: {authorisation['reference']} — "
+              f"authorised by {authorisation['authorised_by']}, "
+              f"from {authorisation['start']} to {authorisation['end']}.\n")
 
-    folder = arguments.rapport or "rapports"
+    folder = arguments.report or "rapports"
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     # The audit trail is ALWAYS written, even without --rapport: it is the
     # trace of what we sent, not an optional deliverable.
     trail = AuditTrail(Path(folder) / f"{timestamp}-journal.jsonl",
                        target_name, authorisation,
-                       context=telemetry(target_name, arguments.profil_cible))
+                       context=telemetry(target_name, arguments.target_profile))
 
     try:
         result = run_campaign(
-            choose_target(arguments.cible, arguments.profil_cible),
+            choose_target(arguments.target, arguments.target_profile),
             target_name, trail, context,
-            adaptive=not arguments.sans_adaptation,
-            only=scope_patterns(arguments.seulement),
-            excluding=scope_patterns(arguments.sauf))
+            adaptive=not arguments.no_adaptation,
+            only=scope_patterns(arguments.only),
+            excluding=scope_patterns(arguments.excluding))
     except RuntimeError as failure:
         # The target did not answer as expected: unreachable host, HTTP
         # error, non-JSON reply, wrong response path. `cibles/http.py`'s
         # message already says what to fix — it was only drowning in eight
         # lines of Python traceback, while the project insists on giving
         # advice. We add the shortcut that avoids starting again blind.
-        print(f"\nCampagne INTERROMPUE : la cible n'a pas répondu comme "
-              f"attendu.\n{failure}\n\n"
-              f"Vérifie le branchement sans rien attaquer :\n"
-              f"  python main.py --cible {target_name} --tester-cible",
+        print(f"\nCampaign INTERRUPTED: the target did not answer as "
+              f"expected.\n{failure}\n\n"
+              f"Check the wiring without attacking anything:\n"
+              f"  python main.py --target {target_name} --probe-target",
               file=sys.stderr)
-        print(f"Piste d'audit : {trail.path}", file=sys.stderr)
+        print(f"Audit trail: {trail.path}", file=sys.stderr)
         raise SystemExit(1)
     finally:
         # Even if the campaign raises, the trail must close cleanly.
@@ -463,16 +475,16 @@ def cli(arguments=None):
     result["case_id"] = trail.case_id
     result["trail"] = str(trail.path)
     result["trail_seal"] = seal
-    result["telemetry"] = telemetry(target_name, arguments.profil_cible)
-    print(f"\nRésultat final : {result['status']}")
-    print(f"Piste d'audit : {trail.path}")
+    result["telemetry"] = telemetry(target_name, arguments.target_profile)
+    print(f"\nFinal result: {result['status']}")
+    print(f"Audit trail: {trail.path}")
 
-    if arguments.rapport:
+    if arguments.report:
         json_path, md_path = save_report(
-            result, target=target_name, folder=arguments.rapport,
-            abridge=arguments.abreger)
-        print(f"Rapport écrit : {md_path}\n"
-              f"Source de vérité : {json_path}")
+            result, target=target_name, folder=arguments.report,
+            abridge=arguments.abridge)
+        print(f"Report written: {md_path}\n"
+              f"Source of truth: {json_path}")
 
     return result
 

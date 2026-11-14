@@ -113,8 +113,8 @@ def build_demo_target(level=DEFAULT_LEVEL):
     """Return an `interroger(message) -> str` function at the chosen level."""
     if level not in LEVELS:
         raise ValueError(
-            f"Niveau de démonstration inconnu : {level}. "
-            f"Attendu : {', '.join(str(n) for n in LEVELS)}.")
+            f"Unknown demo level: {level}. "
+            f"Expected: {', '.join(str(n) for n in sorted(LEVELS))}.")
 
     setting = LEVELS[level]
     system_prompt = _ROLE + setting["consigne"]

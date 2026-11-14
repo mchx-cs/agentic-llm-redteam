@@ -82,14 +82,14 @@ def _check_budget():
     maximum = _CALL_LOG["max_calls"]
     if maximum is not None and _CALL_LOG["calls"] >= maximum:
         raise BudgetExceeded(
-            f"Budget atteint : {_CALL_LOG['calls']} appel(s), "
-            f"plafond {maximum}.")
+            f"Budget reached: {_CALL_LOG['calls']} call(s), "
+            f"cap {maximum}.")
 
     maximum = _CALL_LOG["max_tokens"]
     if maximum is not None and _CALL_LOG["tokens"] >= maximum:
         raise BudgetExceeded(
-            f"Budget atteint : {_CALL_LOG['tokens']} tokens, "
-            f"plafond {maximum}.")
+            f"Budget reached: {_CALL_LOG['tokens']} tokens, "
+            f"cap {maximum}.")
 
 
 def _client_for(profile):
@@ -99,8 +99,8 @@ def _client_for(profile):
             # Fail early, with a clear message, rather than letting the API
             # return an obscure authentication error.
             raise RuntimeError(
-                f"Profil '{profile}' : clé d'API absente. Définis-la dans le "
-                f"fichier .env à la racine du projet (voir config.py)."
+                f"Profile '{profile}': API key missing. Set it in the .env "
+                f"file at the project root (see config.py)."
             )
         _clients[profile] = OpenAI(
             base_url=cfg["base_url"],
@@ -129,22 +129,22 @@ def _validated_history(history):
         return []
     if not isinstance(history, list):
         raise ValueError(
-            "`history` doit être une liste de {'role', 'content'}, "
-            f"reçu : {type(history).__name__}.")
+            "`history` must be a list of {'role', 'content'}, "
+            f"got: {type(history).__name__}.")
 
     checked = []
     for position, turn in enumerate(history, start=1):
         if (not isinstance(turn, dict) or "role" not in turn
                 or "content" not in turn):
             raise ValueError(
-                f"`history`, tour {position} : attendu "
-                "{'role': ..., 'content': ...}, reçu " + repr(turn) + ".")
+                f"`history`, turn {position}: expected "
+                "{'role': ..., 'content': ...}, got " + repr(turn) + ".")
         if turn["role"] not in ("user", "assistant"):
             raise ValueError(
-                f"`history`, tour {position} : rôle "
-                f"'{turn['role']}' inconnu. Attendu 'user' ou 'assistant' "
-                "— la consigne système passe par `systeme`, pas par "
-                "l'historique.")
+                f"`history`, turn {position}: role "
+                f"'{turn['role']}' unknown. Expected 'user' or 'assistant' "
+                "— the system instruction goes through `system`, not through "
+                "the history.")
         checked.append({"role": turn["role"], "content": str(turn["content"])})
     return checked
 
@@ -243,32 +243,34 @@ def _error_message(profile, model, error):
     """Turns an SDK error into clear advice for the user."""
     cfg = PROFILES[profile]
     url = cfg["base_url"]
-    header = f"Profil '{profile}' (modèle '{model}', {url}) :"
+    header = f"Profile '{profile}' (model '{model}', {url}):"
     local = any(host in url for host in _LOCAL_HOSTS)
 
     if isinstance(error, APIConnectionError):
         if local:
-            return (f"{header} le serveur ne répond pas.\n"
-                    f"  Ollama est-il lancé ? Vérifie avec : ollama list\n"
-                    f"  S'il est éteint, lance : ollama serve")
-        return (f"{header} impossible de joindre le serveur.\n"
-                f"  Vérifie ta connexion et l'adresse 'base_url' dans config.py.")
+            return (f"{header} the server is not answering.\n"
+                    f"  Is Ollama running? Check with: ollama list\n"
+                    f"  If it is down, start it: ollama serve")
+        return (f"{header} cannot reach the server.\n"
+                f"  Check your connection and the 'base_url' in config.py.")
 
     if isinstance(error, RateLimitError):
         # The SDK retries by itself on per-minute limits (see "relances" in
         # config.py). If it gives up, the DAILY quota is reached: retrying
         # will change nothing, you have to wait or switch.
-        return (f"{header} quota du fournisseur atteint.\n"
-                f"  Attends la fenêtre indiquée, ou repasse l'arbitre en local\n"
-                f"  (PROFIL_ARBITRE=local dans .env).\n"
-                f"  Détail du fournisseur : {error}")
+        return (f"{header} the provider's quota is reached.\n"
+                f"  Wait for the window it states, or put the judge back on "
+                f"local\n"
+                f"  (PROFIL_ARBITRE=local in .env).\n"
+                f"  Provider detail: {error}")
 
     if isinstance(error, NotFoundError):
         if local:
-            return (f"{header} ce modèle n'est pas installé.\n"
-                    f"  Télécharge-le avec : ollama pull {model}")
-        return (f"{header} ce modèle est inconnu du fournisseur.\n"
-                f"  Vérifie son nom exact (variable d'environnement du profil).")
+            return (f"{header} that model is not installed.\n"
+                    f"  Download it with: ollama pull {model}")
+        return (f"{header} the provider does not know that model.\n"
+                f"  Check its exact name (the profile's environment "
+                f"variable).")
 
-    return (f"{header} clé d'API refusée.\n"
-            f"  Vérifie la clé dans le fichier .env à la racine du projet.")
+    return (f"{header} API key refused.\n"
+            f"  Check the key in the .env file at the project root.")

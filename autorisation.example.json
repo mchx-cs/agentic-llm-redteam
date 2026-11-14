@@ -7,6 +7,6 @@
   "start": "2026-01-01",
   "end": "2026-12-31",
   "_fenetre": "Tester hors de cette fenêtre n'est pas couvert : la campagne refusera de démarrer.",
-  "bounds": "Endpoints autorisés, comptes de test fournis, techniques exclues, débit maximal convenu.",
+  "scope": "Endpoints autorisés, comptes de test fournis, techniques exclues, débit maximal convenu.",
   "emergency_contact": "Nom et téléphone de la personne à prévenir en cas d'incident."
 }

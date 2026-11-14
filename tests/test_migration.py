@@ -73,7 +73,7 @@ class TestAnOlderReportStillRenders:
         }
         text = render_markdown(build_report(old, target="demo"))
         assert "LLM01" in text
-        assert "## Couverture" in text
+        assert "## Coverage" in text
 
     def test_an_older_finding_keeps_its_severity(self):
         from rapport import build_report
@@ -109,7 +109,7 @@ class TestAnOlderSealedTrailStillVerifies:
         trail = tmp_path / "ancienne.jsonl"
         lines = [
             {"horodatage": "2026-11-12T18:00:00", "type": "debut_campagne",
-             "case_id": "20261112-180000-mock", "cible": "mock"},
+             "case_id": "20261112-180000-mock", "target": "mock"},
             {"horodatage": "2026-11-12T18:00:01", "type": "fin_campagne",
              "statut": "aucun_constat", "appels": 3},
         ]
@@ -131,7 +131,7 @@ class TestAnOlderSealedTrailStillVerifies:
         from audit import digest, verify_seal
 
         trail = tmp_path / "retouchee.jsonl"
-        body = json.dumps({"type": "debut_campagne", "cible": "mock"}) + "\n"
+        body = json.dumps({"type": "debut_campagne", "target": "mock"}) + "\n"
         trail.write_text(body, encoding="utf-8")
         with trail.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"type": "sceau", "algorithme": "sha256",

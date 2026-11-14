@@ -56,11 +56,11 @@ SOURCE_LICENCE = "garak (NVIDIA), Apache-2.0 — https://github.com/NVIDIA/garak
 # resistance to injection, and the judge has no criterion to score them
 # anyway.
 OUT_OF_SCOPE = {
-    "harmful_behaviors.json": "contenu nuisible — mesure la modération, "
-                              "pas l'injection ; aucun critère chez l'arbitre",
-    "slur_terms_en.json": "insultes — hors du périmètre du projet",
-    "rude_french.json": "insultes — hors du périmètre du projet",
-    "rude_chinese.json": "insultes — hors du périmètre du projet",
+    "harmful_behaviors.json": "harmful content — measures moderation, "
+                              "not injection; the judge has no criterion for it",
+    "slur_terms_en.json": "slurs — outside the project's scope",
+    "rude_french.json": "slurs — outside the project's scope",
+    "rude_chinese.json": "slurs — outside the project's scope",
 }
 
 
@@ -72,11 +72,11 @@ def _fetch(url, timeout=30):
             return reply.read().decode("utf-8")
     except urllib.error.HTTPError as error:
         raise RuntimeError(
-            f"{url} : erreur HTTP {error.code}. Le dépôt garak a-t-il changé "
-            f"de structure ?") from error
+            f"{url}: HTTP error {error.code}. Has the garak repository "
+            f"changed structure?") from error
     except urllib.error.URLError as error:
         raise RuntimeError(
-            f"{url} : injoignable ({error.reason}). Vérifie ta connexion."
+            f"{url}: unreachable ({error.reason}). Check your connection."
         ) from error
 
 
@@ -202,7 +202,7 @@ def redundant_techniques(library):
         if family and count and family in garak_families:
             redundant.append({
                 "id": technique["id"],
-                "famille": family,
+                "family": family,
                 "payloads": count,
                 "probes": sum(1 for other in library["techniques"]
                               if other.get("source")
@@ -217,28 +217,29 @@ def _report_redundancies(library):
     redundant = redundant_techniques(library)
     if not redundant:
         return
-    print("\nDes techniques écrites à la main sont peut-être devenues "
-          "redondantes :")
+    print("\nSome hand-written techniques may have become redundant:")
     for technique in redundant:
-        print(f"  {technique['id']} ({technique['payloads']} payload(s) "
-              f"maison) — {technique['probes']} sonde(s) garak portent "
-              f"maintenant {technique['famille']} en famille principale.")
-    print("  Relis ces sondes avant de retirer quoi que ce soit : un tag "
-          "n'est pas une mesure.")
+        print(f"  {technique['id']} ({technique['payloads']} hand-written "
+              f"payload(s)) — {technique['probes']} garak probe(s) now carry "
+              f"{technique['family']} as their primary family.")
+    print("  Re-read those probes before removing anything: a tag is not a "
+          "measurement.")
 
 
 def main(arguments=None):
     parser = argparse.ArgumentParser(
-        description="Inventorie les payloads de garak, sans installer garak.")
-    parser.add_argument("--lister", action="store_true",
-                         help="inventorier les fichiers disponibles")
-    parser.add_argument("--decrire", metavar="FICHIER",
-                         help="métadonnées d'un fichier (sans son contenu)")
+        description="Lists garak's payloads, without installing garak.")
+    parser.add_argument("--list", "--lister", action="store_true",
+                        dest="list_files",
+                        help="list the files available")
+    parser.add_argument("--describe", "--decrire", metavar="FILE",
+                        dest="describe",
+                        help="a file's metadata (without its content)")
     parser.add_argument("--ref", default="main",
-                         help="branche ou tag de garak (défaut : main)")
+                        help="garak branch or tag (default: main)")
     parser.add_argument("--version", action="store_true",
-                         help="comparer la version de l'instantané local à la "
-                              "dernière publiée (aucun téléchargement)")
+                        help="compare the local snapshot's version with the "
+                             "latest published one (no download)")
     arguments = parser.parse_args(arguments)
 
     if arguments.version:
@@ -246,18 +247,17 @@ def main(arguments=None):
 
         local = (load_library().get("_garak") or {}).get("version")
         remote, behind = compare_to_snapshot(local)
-        print(f"instantané local : garak {local or 'aucun'}")
-        print(f"dernière publiée : garak {remote or 'inconnue (hors ligne ?)'}")
+        print(f"local snapshot  : garak {local or 'none'}")
+        print(f"latest published: garak {remote or 'unknown (offline?)'}")
         if behind:
-            print("\nUne version plus récente existe. Pour resynchroniser :\n"
+            print("\nA newer version exists. To resynchronise:\n"
                   "  python -m venv venv-garak\n"
                   "  venv-garak/Scripts/pip install -U garak\n"
                   "  venv-garak/Scripts/python payloads/exporter_garak.py\n"
-                  "\nRelis ce que l'export retient avant de lancer une "
-                  "campagne : une nouvelle version peut ajouter des sondes "
-                  "hors périmètre.")
+                  "\nRe-read what the export keeps before launching a "
+                  "campaign: a new version can add out-of-scope probes.")
         elif remote and local:
-            print("\nL'instantané est à jour.")
+            print("\nThe snapshot is up to date.")
         # Reported in both cases: redundancy is about the snapshot we have,
         # not about how far behind we are. An up-to-date version may very well
         # have just filled the LLM06 or LLM07 hole.
@@ -267,12 +267,13 @@ def main(arguments=None):
     if arguments.describe:
         info = describe(arguments.describe, arguments.ref)
         print(f"{info['name']} — {info['title']}")
-        print(f"  {info['count']} payload(s), langue '{info['language']}', "
-              f"types {', '.join(info['types']) or '—'}")
+        print(f"  {info['count']} payload(s), language "
+              f"'{info['language']}', types "
+              f"{', '.join(info['types']) or '—'}")
         if info["intent"]:
-            print(f"  intention : {info['intent']}")
+            print(f"  intent: {info['intent']}")
         if info["categories"]:
-            print(f"  catégories : {', '.join(info['categories'])}")
+            print(f"  categories: {', '.join(info['categories'])}")
         return 0
 
     if not arguments.list_files:
@@ -280,13 +281,13 @@ def main(arguments=None):
         return 1
 
     files = list_files(arguments.ref)
-    print(f"{len(files)} fichier(s) de payloads dans {REPOSITORY} "
-          f"({arguments.ref}) :\n")
+    print(f"{len(files)} payload file(s) in {REPOSITORY} "
+          f"({arguments.ref}):\n")
     for entry in files:
         mark = "  " if entry["name"] not in OUT_OF_SCOPE else "x "
         print(f"{mark}{entry['name']:<34} {entry['size']:>6} o")
     if any(f["name"] in OUT_OF_SCOPE for f in files):
-        print("\nx = hors du périmètre de ce projet :")
+        print("\nx = outside this project's scope:")
         for name, reason in OUT_OF_SCOPE.items():
             if any(f["name"] == name for f in files):
                 print(f"    {name} : {reason}")

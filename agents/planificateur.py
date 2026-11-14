@@ -25,20 +25,20 @@ PREREQUISITES = {
     # Abusing a tool assumes the target has at least one.
     "tools": (
         lambda profile: bool(profile["tools"]),
-        "aucun outil détecté chez la cible",
+        "no tool detected on the target",
     ),
     # Leaking confidential data assumes there is some: a target that refuses
     # nothing and mentions no rule probably has nothing to protect.
     "secret": (
         lambda profile: bool(profile["refused_subjects"])
         or profile["mentions_instructions"],
-        "la cible ne déclare ni sujet interdit ni consigne",
+        "the target declares neither a forbidden subject nor a rule",
     ),
     # Extracting internal instructions assumes it has mentioned some.
     "instructions": (
         lambda profile: profile["mentions_instructions"]
         or bool(profile["refused_subjects"]),
-        "la cible n'évoque aucune consigne interne",
+        "the target mentions no internal instruction",
     ),
 
     # --- Target capabilities, probed during reconnaissance ------------------
@@ -48,11 +48,11 @@ PREREQUISITES = {
     # does not necessarily spell out everything it can do.
     "writes-code": (
         lambda profile: profile.get("writes_code") is not False,
-        "la cible dit ne pas écrire de code",
+        "the target says it does not write code",
     ),
     "handles-documents": (
         lambda profile: profile.get("handles_documents") is not False,
-        "la cible dit ne pas traiter de document fourni",
+        "the target says it does not handle supplied documents",
     ),
 
     # --- Execution context, DECLARED by the operator ------------------------
@@ -64,23 +64,23 @@ PREREQUISITES = {
     # overstated coverage. The reason says how to enable it.
     "terminal": (
         lambda profile: "terminal" in (profile.get("context") or []),
-        "sortie non rendue dans un terminal (--contexte terminal pour l'activer)",
+        "output not rendered in a terminal (--context terminal to enable)",
     ),
     "rich-rendering": (
         lambda profile: "rich-rendering" in (profile.get("context") or []),
-        "aucun client ne rend le Markdown de la sortie "
-        "(--contexte rendu-riche pour l'activer)",
+        "no client renders the output's Markdown "
+        "(--context rich-rendering to enable)",
     ),
     "database": (
         lambda profile: "database" in (profile.get("context") or []),
-        "aucune base ni moteur de gabarits déclaré derrière la cible "
-        "(--contexte base-donnees pour l'activer)",
+        "no database or template engine declared behind the target "
+        "(--context database to enable)",
     ),
 }
 
 # A technique with no text template can produce nothing: we say so explicitly
 # rather than letting it vanish without explanation.
-REASON_NO_TEMPLATE = "aucun modèle de payload dans la bibliothèque"
+REASON_NO_TEMPLATE = "no payload template in the library"
 
 
 def objectives_for(profile, library):
@@ -160,12 +160,13 @@ def filter_techniques(techniques, only=(), excluding=()):
     for technique in techniques:
         exclusion = next((p for p in excluding if _matches(technique, p)), None)
         if exclusion:
-            skipped.append((technique, f"exclue par --sauf {exclusion}"))
+            skipped.append(
+                (technique, f"excluded by --excluding {exclusion}"))
             continue
         if only and not any(_matches(technique, p) for p in only):
             skipped.append(
                 (technique,
-                 f"hors du périmètre demandé (--seulement "
+                 f"outside the scope asked for (--only "
                  f"{', '.join(only)})"))
             continue
         kept.append(technique)
@@ -381,22 +382,22 @@ def _priority(technique, objective, transformation_name):
 
 def summarise(plan):
     """The plan in a few lines, for a campaign's display."""
-    lines = [f"  {len(plan['attempts'])} essai(s) retenu(s) :"]
+    lines = [f"  {len(plan['attempts'])} attempt(s) kept:"]
     for attempt in plan["attempts"]:
         lines.append(f"    - {attempt['technique']} / "
-                     f"{attempt['objective'] or 'payload complet'} "
+                     f"{attempt['objective'] or 'complete payload'} "
                      f"/ {attempt['transformation']}")
     if plan["skipped"]:
         # Grouped by REASON, not by technique: since the relevance rules it is
         # whole modules that get skipped, and eight `web_injection` probes
         # printed "no client renders Markdown" eight times. Repeated
         # information drowns the information that is not repeated.
-        lines.append("  écartées :")
+        lines.append("  skipped:")
         for reason, techniques in group_by_reason(plan["skipped"]):
-            lines.append(f"    - {len(techniques)} technique(s) : {reason}")
+            lines.append(f"    - {len(techniques)} technique(s): {reason}")
             preview = ", ".join(techniques[:3])
             if len(techniques) > 3:
-                preview += f", +{len(techniques) - 3} autre(s)"
+                preview += f", +{len(techniques) - 3} more"
             lines.append(f"      ({preview})")
     return "\n".join(lines)
 

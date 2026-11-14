@@ -70,9 +70,9 @@ class TestIntegration:
             encoding="utf-8")
         etiqueter.integrate()                      # must not raise
         output = capsys.readouterr().out
-        assert "1 échange(s) ajouté(s)" in output
+        assert "1 exchange(s) added" in output
         # And the count of what is left is RIGHT: the unlabelled entry.
-        assert "1 échange(s) restent à étiqueter" in output
+        assert "1 exchange(s) left to label" in output
 
     def test_nothing_to_integrate_leaves_the_corpus_alone(self, harvests):
         harvests["a_etiqueter"].write_text(
@@ -96,7 +96,7 @@ class TestIntegration:
         etiqueter.integrate()
         corpus = json.loads(harvests["corpus"].read_text(encoding="utf-8"))
         assert [e["id"] for e in corpus["exchanges"]] == ["R01-1"]
-        assert "Ignoré" in capsys.readouterr().out
+        assert "Skipped" in capsys.readouterr().out
 
     def test_a_conversation_is_flagged_as_not_measured(self, harvests,
                                                        capsys):
@@ -109,7 +109,7 @@ class TestIntegration:
         harvests["conversations"].write_text(
             json.dumps({"conversations": [conversation]}), encoding="utf-8")
         etiqueter.integrate()
-        assert "ne sont PAS encore mesurées" in capsys.readouterr().out
+        assert "are NOT measured yet" in capsys.readouterr().out
 
 
 class TestWhatIsLeftToLabel:

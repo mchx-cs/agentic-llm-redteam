@@ -56,7 +56,7 @@ class TestTemplates:
     def test_an_unescaped_brace_is_caught(self):
         errors = _errors(_library(
             [_technique(templates=["{objectif} et {inconnu}"])]))
-        assert any("accolade" in e for e in errors)
+        assert any("brace" in e for e in errors)
 
     def test_an_empty_template_is_an_error(self):
         assert _errors(_library([_technique(templates=["   "])]))
@@ -66,7 +66,7 @@ class TestTemplates:
         # an error.
         library = _library([_technique(templates=[])])
         assert _errors(library) == []
-        assert any("jamais lancée" in w for w in _warnings(library))
+        assert any("never be launched" in w for w in _warnings(library))
 
 
 class TestPrerequisites:
@@ -75,7 +75,7 @@ class TestPrerequisites:
         # against targets where it makes no sense.
         errors = _errors(_library(
             [_technique(prerequisites=["outil"])]))     # instead of "outils"
-        assert any("inconnu du planificateur" in e for e in errors)
+        assert any("unknown to the planner" in e for e in errors)
 
     def test_the_known_prerequisites_pass(self):
         for prerequisite in ("tools", "secret", "instructions"):
@@ -86,19 +86,19 @@ class TestPrerequisites:
 class TestIdentifiers:
     def test_a_duplicate_is_an_error(self):
         errors = _errors(_library([_technique(), _technique()]))
-        assert any("double" in e for e in errors)
+        assert any("duplicate" in e for e in errors)
 
     @pytest.mark.parametrize("identifier", [
         "Injection Directe", "injection_directe", "INJECTION",
     ])
     def test_a_malformed_identifier_is_an_error(self, identifier):
         errors = _errors(_library([_technique(id=identifier)]))
-        assert any("minuscules" in e for e in errors)
+        assert any("lowercase" in e for e in errors)
 
     def test_a_duplicate_objective_is_an_error(self):
         errors = _errors(_library(objectives=[
             {"id": "o", "wording": "a"}, {"id": "o", "wording": "b"}]))
-        assert any("double" in e for e in errors)
+        assert any("duplicate" in e for e in errors)
 
 
 class TestOwaspFamilies:
@@ -106,7 +106,7 @@ class TestOwaspFamilies:
         # The OWASP list evolves: we flag, we do not forbid.
         library = _library([_technique(owasp_family="LLM99 Inventé")])
         assert _errors(library) == []
-        assert any("non reconnue" in w for w in _warnings(library))
+        assert any("not recognised" in w for w in _warnings(library))
 
     def test_an_absent_family_is_accepted(self):
         # The "controle" technique has none: it is not an attack.

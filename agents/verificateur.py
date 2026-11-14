@@ -70,7 +70,7 @@ def verify_by_replay(payload, value, ask_target, judge):
         return {
             "status": "not_verifiable",
             "replay_values": [],
-            "explanation": "Pas de valeur de type secret à comparer.",
+            "explanation": "No secret-shaped value to compare.",
         }
 
     reference = normalise(value)
@@ -103,7 +103,7 @@ def verify_by_replay(payload, value, ask_target, judge):
                        f"{diverging} rejeu(x) en donnent d'autres.")
     else:
         status = "inconclusive"
-        explanation = "La cible n'a plus rien divulgué lors des rejeux."
+        explanation = "The target disclosed nothing further on replay."
 
     return {
         "status": status,

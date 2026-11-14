@@ -91,7 +91,7 @@ def _measures(result):
 def one_pair(budget, show=print):
     """Both arms, back to back, on the same target."""
     pair = {}
-    for arm, adaptive in (("adaptatif", True), ("statique", False)):
+    for arm, adaptive in (("adaptive", True), ("static", False)):
         start = time.monotonic()
         result = _campaign(adaptive, budget)
         pair[arm] = {**_measures(result),
@@ -105,14 +105,16 @@ def one_pair(budget, show=print):
 
 def main(arguments=None):
     parser = argparse.ArgumentParser(
-        description="Adaptatif contre plan statique, sur la cible de "
-                    "démonstration réelle.")
-    parser.add_argument("--paires", type=int, default=3,
-                         help="nombre de paires à lancer (défaut : 3)")
+        description="Adaptive against static plan, on the real demo "
+                    "target.")
+    parser.add_argument("--pairs", "--paires", type=int, default=3,
+                        dest="pairs",
+                        help="number of pairs to run (default: 3)")
     parser.add_argument("--budget", type=int, default=8,
-                         help="essais par campagne (défaut : 8)")
-    parser.add_argument("--sortie", default=None, metavar="FICHIER",
-                         help="où écrire les résultats au fil de l'eau")
+                        help="attempts per campaign (default: 8)")
+    parser.add_argument("--output", "--sortie", default=None, dest="output",
+                        metavar="FILE",
+                        help="where to write the results as they come")
     arguments = parser.parse_args(arguments)
 
     from config import JUDGE_PROFILE
@@ -145,25 +147,26 @@ def _summary(pairs, budget):
         return
     print(f"\n=== Bilan sur {len(pairs)} paire(s), budget {budget} ===\n")
     print(f"{'':12s} {'findings':>10s} {'modules':>9s} {'non scor.':>10s}")
-    for arm in ("adaptatif", "statique"):
+    for arm in ("adaptive", "static"):
         average = {key: sum(p[arm][key] for p in pairs) / len(pairs)
                    for key in ("findings", "modules", "non_scorable")}
         print(f"  {arm:10s} {average['findings']:>10.2f} "
               f"{average['modules']:>9.2f} {average['non_scorable']:>10.2f}")
 
-    gaps = [p["adaptatif"]["findings"] - p["statique"]["findings"]
+    gaps = [p["adaptive"]["findings"] - p["static"]["findings"]
               for p in pairs]
     wins = sum(1 for e in gaps if e > 0)
     losses = sum(1 for e in gaps if e < 0)
-    print(f"\n  écart par paire : {gaps}")
-    print(f"  l'adaptatif fait mieux {wins}×, moins bien {losses}×, "
-          f"à égalité {len(gaps) - wins - losses}×")
+    print(f"\n  gap per pair: {gaps}")
+    print(f"  the adaptive arm does better {wins}×, worse {losses}×, "
+          f"level {len(gaps) - wins - losses}×")
 
     # The bias reminder, where the result is read: without it, a zero gap
     # would read as "adaptation brings nothing".
-    print("\n  Rappel : le juge local rate une faille sur deux, et l'adaptation")
-    print("  se nourrit des verdicts. Un gain observé ici est une BORNE BASSE ;")
-    print("  une absence de gain ne permet aucune conclusion.")
+    print("\n  Reminder: the local judge misses one vulnerability in two, "
+          "and adaptation")
+    print("  feeds on the verdicts. A gain observed here is a LOWER BOUND;")
+    print("  an absence of gain supports no conclusion at all.")
 
 
 if __name__ == "__main__":

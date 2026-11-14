@@ -216,7 +216,7 @@ class TestFreshness:
     def test_an_old_snapshot_is_reported(self, snapshot):
         self._snapshot_dated(snapshot, 95)
         avertissements = valider(load_library())[1]
-        assert any("vieux de 95 jours" in a for a in avertissements)
+        assert any("95 days old" in a for a in avertissements)
 
     def test_an_unreadable_date_does_not_bring_the_load_down(
             self, snapshot, monkeypatch):
@@ -411,14 +411,14 @@ class TestProvenanceInTheReport:
     def test_the_report_says_what_it_tested_with(self):
         text = self._report({"version": "0.17.1", "probes": 52,
                                "age_days": 3, "stale": False})
-        assert "garak 0.17.1" in text and "52 sonde(s)" in text
+        assert "garak 0.17.1" in text and "52 probe(s)" in text
 
     def test_an_ageing_library_is_reported(self):
         # A "no finding" obtained with three-month-old payloads does not say
         # not the same thing as with payloads from today.
         text = self._report({"version": "0.14.0", "probes": 48,
                                "age_days": 94, "stale": True})
-        assert "vieillissante" in text
+        assert "Ageing library" in text
 
     def test_without_a_snapshot_no_stray_line(self):
         assert "Payloads :" not in self._report(None)

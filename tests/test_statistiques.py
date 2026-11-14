@@ -129,7 +129,7 @@ class TestRefusalToBound:
     def test_the_refusal_says_WHY(self):
         # A silent refusal would look like an oversight.
         resume = summarise(0, 3, independent=False)
-        for mot in ("adaptatifs", "hétérogènes", "binomial"):
+        for mot in ("adaptive", "heterogeneous", "binomial"):
             assert mot in resume["explanation"]
         assert resume["explanation"] == DEPENDENCE_REASON
 
@@ -148,14 +148,14 @@ class TestRefusalToBound:
 class TestSummary:
     def test_zero_successes_announces_it_proves_nothing(self):
         resume = summarise(0, 30, independent=True, what="rejeux")
-        assert "ne démontre rien" in resume["explanation"]
+        assert "demonstrates nothing" in resume["explanation"]
         assert "10%" in resume["explanation"]
-        assert resume["bound"]["method"] == "règle de trois"
+        assert resume["bound"]["method"] == "rule of three"
 
     def test_a_non_zero_success_gives_a_range_not_a_point(self):
         resume = summarise(2, 3, independent=True, what="rejeux")
         assert resume["bound"]["method"] == "Wilson"
-        assert "pas exactement" in resume["explanation"]
+        assert "not exactly" in resume["explanation"]
 
     def test_the_observed_rate_is_kept_as_is(self):
         # The JSON stays the source of truth: we keep the raw figure beside

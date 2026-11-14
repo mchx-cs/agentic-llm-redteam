@@ -222,8 +222,8 @@ class TestTheCorpusStaysMeasurable:
         evaluateur.load_exchanges("dev")
 
         output = capsys.readouterr().out
-        assert "1 conversation" in output
-        assert "un seul tour" in output
+        assert "1 multi-turn conversation" in output
+        assert "a single turn" in output
 
     def test_without_a_conversation_nothing_is_announced(self, monkeypatch,
                                                   tmp_path, capsys):
@@ -232,7 +232,7 @@ class TestTheCorpusStaysMeasurable:
         corpus = self._corpus(tmp_path, [self._single("D01")])
         monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
         evaluateur.load_exchanges("dev")
-        assert "ignorée" not in capsys.readouterr().out
+        assert "skipped" not in capsys.readouterr().out
 
     def test_the_set_guard_holds_for_conversations_too(
             self, monkeypatch, tmp_path):
@@ -246,7 +246,7 @@ class TestTheCorpusStaysMeasurable:
             self._single("G01", jeu="dev"),
             {**self._conversation("G01-mt", jeu="test"), "group": "G01"}])
         monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
-        with pytest.raises(ValueError, match="réparti"):
+        with pytest.raises(ValueError, match="split"):
             evaluateur.load_exchanges("dev")
 
 
@@ -395,8 +395,8 @@ class TestObjectivesFromReconnaissance:
             lambda m: "ok", load_library(with_garak=False))
 
         assert len(objectives) == 1
-        assert "faute de mieux" in resume
-        assert "négatifs" in capsys.readouterr().out
+        assert "for want of better" in resume
+        assert "negatives" in capsys.readouterr().out
 
     def test_harmless_launches_no_reconnaissance(self):
         # Control mode: no call, hence no probe sent to the target. The
@@ -411,7 +411,7 @@ class TestObjectivesFromReconnaissance:
         objectives, resume = collector._objectives(
             interdite, load_library(with_garak=False), harmless=True)
         assert len(objectives) == 1
-        assert "anodin" in resume
+        assert "harmless" in resume
 
     def test_the_sequences_cycle_through_the_objectives(self):
         # Each sequence gets ONE objective, round-robin: the harvest's size
@@ -457,9 +457,9 @@ class TestTheIdentifierCarriesTheObjective:
                                 lambda *a, **k: ([objective], "test"))
             return collector.collect("demo", limit=1)
 
-        avec("anodin")
+        avec("harmless")
         entries = avec("refus-1")
 
         objectives = {e["source"].split("/")[1].strip() for e in entries}
-        assert objectives == {"anodin", "refus-1"}, (
+        assert objectives == {"harmless", "refus-1"}, (
             "le second objectif a été sauté : la récolte n'a rien demandé")

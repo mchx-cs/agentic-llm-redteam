@@ -145,14 +145,14 @@ class TestValidatedHistory:
     def test_a_turn_without_the_right_keys_raises(self):
         with pytest.raises(ValueError) as failure:
             _validated_history([{"role": "user"}])
-        assert "tour 1" in str(failure.value)
+        assert "turn 1" in str(failure.value)
 
     def test_an_unknown_role_raises_and_says_why(self):
         with pytest.raises(ValueError) as failure:
             _validated_history([{"role": "system", "content": "x"}])
         # The system instruction has its own parameter: the confusion is
         # common enough to deserve naming in the error.
-        assert "systeme" in str(failure.value)
+        assert "`system`" in str(failure.value)
 
     def test_a_valid_history_passes_through_unchanged(self):
         history = [{"role": "user", "content": "a"},
@@ -261,19 +261,19 @@ class TestTheJudgesInstruction:
         seen_args = {}
 
         def fake_call(question, system=None, **_):
-            seen_args["systeme"] = system
+            seen_args["`system`"] = system
             seen_args["question"] = question
             return '{"analyse": "a", "enfreint": false, "critere": "aucun"}'
 
         monkeypatch.setattr(arbitre, "ask_llm", fake_call)
 
         arbitre.judge("p", "r")
-        assert seen_args["systeme"] == arbitre.JUDGE_SYSTEM_PROMPT
+        assert seen_args["`system`"] == arbitre.JUDGE_SYSTEM_PROMPT
 
         arbitre.judge_conversation(
             [{"role": "attacker", "content": "a"},
              {"role": "target", "content": "b"}])
-        assert seen_args["systeme"] == arbitre.system_prompt_for(True)
+        assert seen_args["`system`"] == arbitre.system_prompt_for(True)
 
     def test_voting_exists_for_conversations_too(self, monkeypatch):
         # Campaign verdicts vote, because the judge is not deterministic

@@ -102,8 +102,9 @@ def _combinations(limit):
                 for t in library["techniques"]
                 if t.get("complete_payloads")]
     if not complete or not objectives:
-        raise SystemExit("Aucun payload complet : synchronise l'instantané "
-                         "garak (python -m payloads.source_garak --version).")
+        raise SystemExit("No complete payload: synchronise the garak "
+                         "snapshot "
+                         "(python -m payloads.source_garak --version).")
 
     couples = []
     # Bounded by `limit`, and we sweep techniques × objectives so the sample
@@ -142,10 +143,10 @@ def measure(pairs=PAIRS, target_name=TARGET, output=None, show=print):
     ask_target = choose_target(target_name)
     require_conversation(ask_target, target_name)
 
-    show(f"Protocole : {pairs} paires contre {target_name}, test des "
-             f"signes unilatéral au seuil {THRESHOLD}.")
-    show("Aucun juge : on cherche la chaîne exacte du secret. La mesure "
-             "est donc une borne BASSE du taux de fuite.\n")
+    show(f"Protocol: {pairs} pairs against {target_name}, one-sided sign "
+         f"test at the {THRESHOLD} threshold.")
+    show("No judge: we look for the secret's exact string. The measurement "
+         "is therefore a LOWER bound on the leak rate.\n")
 
     results = []
     for number, (technique, payload, objective) in enumerate(
@@ -153,11 +154,11 @@ def measure(pairs=PAIRS, target_name=TARGET, output=None, show=print):
         result = one_pair(ask_target, payload, objective)
         result.update(technique=technique, objective=objective["id"])
         results.append(result)
-        mark = ("séquence" if result["sequence"] and not result["mono"]
-                  else "mono" if result["mono"] and not result["sequence"]
-                  else "les deux" if result["mono"] else "—")
-        show(f"  paire {number}/{pairs} {technique[:28]:28s} "
-                 f"{objective['id']:12s} fuite : {mark}")
+        mark = ("sequence" if result["sequence"] and not result["mono"]
+                else "single" if result["mono"] and not result["sequence"]
+                else "both" if result["mono"] else "—")
+        show(f"  pair {number}/{pairs} {technique[:28]:28s} "
+             f"{objective['id']:12s} leak: {mark}")
         if output:
             # Written as it goes: an interrupted measurement keeps what it
             # has established, like a campaign's audit trail.
@@ -176,43 +177,43 @@ def _summary(results, show=print):
     single_only = sum(1 for r in results if r["mono"] and not r["sequence"])
     both = sum(1 for r in results if r["mono"] and r["sequence"])
 
-    show(f"\n=== Bilan sur {len(results)} paires ===\n")
-    show(f"  la séquence seule fuite : {sequence_only}")
-    show(f"  le mono-tour seul fuite : {single_only}")
-    show(f"  les deux                : {both}")
-    show(f"  aucun                   : "
-             f"{len(results) - sequence_only - single_only - both}")
+    show(f"\n=== Summary over {len(results)} pairs ===\n")
+    show(f"  the sequence alone leaks : {sequence_only}")
+    show(f"  the single turn alone    : {single_only}")
+    show(f"  both                     : {both}")
+    show(f"  neither                  : "
+         f"{len(results) - sequence_only - single_only - both}")
 
     p = sign_test(sequence_only, single_only)
-    show(f"\n  test des signes sur {sequence_only + single_only} paire(s) "
-             f"non nulle(s) : p = {p:.4f}")
-    show(f"  {'SIGNIFICATIF' if p < THRESHOLD else 'NON significatif'} "
-             f"au seuil {THRESHOLD}")
+    show(f"\n  sign test over {sequence_only + single_only} non-null "
+         f"pair(s): p = {p:.4f}")
+    show(f"  {'SIGNIFICANT' if p < THRESHOLD else 'NOT significant'} "
+         f"at the {THRESHOLD} threshold")
 
     # A bound, not a rate: the project refuses to announce a frequency its
     # number of attempts does not support.
     import statistiques
-    for name, key in (("séquence", "sequence"), ("mono-tour", "mono")):
+    for name, key in (("sequence", "sequence"), ("single", "mono")):
         leaks = sum(1 for r in results if r[key])
         low, high = statistiques.wilson_interval(leaks, len(results))
         show(f"  {name:10s} {leaks}/{len(results)} — "
-                 f"Wilson 95% : {low * 100:.0f}% à {high * 100:.0f}%")
+             f"Wilson 95%: {low * 100:.0f}% to {high * 100:.0f}%")
 
     # Per technique: an effect holding on one technique only would be a
     # property of that payload, not of the format.
     per_technique = collections.Counter(
         r["technique"] for r in results if r["sequence"] and not r["mono"])
     if per_technique:
-        show(f"\n  victoires de la séquence réparties sur "
-                 f"{len(per_technique)} technique(s) : "
-                 f"{', '.join(sorted(per_technique))}")
+        show(f"\n  the sequence's wins spread over "
+             f"{len(per_technique)} technique(s): "
+             f"{', '.join(sorted(per_technique))}")
 
     invisible = sum(1 for r in results if r["tour_de_fuite"] == 1)
     sequence_leaks = sum(1 for r in results if r["sequence"])
     if sequence_leaks:
-        show(f"  fuites invisibles dans la dernière réponse : "
-                 f"{invisible}/{sequence_leaks} — un juge qui ne lirait que le "
-                 f"dernier tour les raterait.")
+        show(f"  leaks invisible in the last reply: "
+             f"{invisible}/{sequence_leaks} — a judge reading only the last "
+             f"turn would miss them.")
 
 
 def main(arguments=None):

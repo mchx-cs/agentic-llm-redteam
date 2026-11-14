@@ -96,21 +96,21 @@ def _extract(data, path):
         if isinstance(current, list):
             if not piece.isdigit():
                 raise ValueError(
-                    f"Chemin '{path}' : '{piece}' n'est pas un indice, "
-                    f"alors que la réponse contient une liste à cet endroit."
+                    f"Path '{path}': '{piece}' is not an index, while the "
+                    f"reply holds a list at that point."
                 )
             current = current[int(piece)]
         elif isinstance(current, dict):
             if piece not in current:
                 raise ValueError(
-                    f"Chemin '{path}' : clé '{piece}' absente. "
-                    f"Clés disponibles : {', '.join(current) or 'aucune'}."
+                    f"Path '{path}': key '{piece}' missing. "
+                    f"Keys available: {', '.join(current) or 'none'}."
                 )
             current = current[piece]
         else:
             raise ValueError(
-                f"Chemin '{path}' : impossible de descendre dans "
-                f"'{piece}', la valeur est un {type(current).__name__}."
+                f"Path '{path}': cannot descend into '{piece}', the value "
+                f"is a {type(current).__name__}."
             )
     return current
 
@@ -183,11 +183,11 @@ def _text_from_stream(brut, inner_path):
 
     if not pieces:
         raise ValueError(
-            f"Flux reçu, mais aucun fragment lisible en "
+            f"Stream received, but no readable fragment at "
             f"'{inner_path}'.\n"
-            f"  Vérifie le path INTERNE après « {STREAM_PATH} » : pour une "
-            f"API de type OpenAI,\n"
-            f"  c'est choices.0.delta.content."
+            f'  Check the INNER path after "{STREAM_PATH}": for an '
+            f"OpenAI-shaped API,\n"
+            f"  it is choices.0.delta.content."
         )
     return "".join(pieces)
 
@@ -255,11 +255,12 @@ def _diagnose(brut, declared_type=""):
     advised = _advised_profile(declared_type)
     if advised:
         settings = TARGET_PROFILES[advised]
-        return (f"  La cible ANNONCE « {declared_type.split(';')[0].strip()} » : "
-                f"ce n'est pas un objet JSON.\n"
-                f"  Le profil correspondant existe —\n"
-                f"    --profil-cible {advised}\n"
-                f"    ou CIBLE_CHEMIN_REPONSE={settings['response_path']}\n"
+        return (f'  The target DECLARES '
+                f'"{declared_type.split(";")[0].strip()}": that is not a '
+                f"JSON object.\n"
+                f"  The matching profile exists —\n"
+                f"    --target-profile {advised}\n"
+                f"    or CIBLE_CHEMIN_REPONSE={settings['response_path']}\n"
                 f"  ({settings['description']})")
 
     declares_html = (declared_type or "").split(";")[0].strip().lower() \
@@ -267,33 +268,33 @@ def _diagnose(brut, declared_type=""):
     if (declares_html
             or start.startswith(("<!doctype", "<html", "<?xml"))
             or "<body" in start):
-        return ("  C'est une PAGE WEB, pas un endpoint d'API : cet outil "
-                "envoie un POST JSON.\n"
-                "  Il faut l'adresse que la page appelle elle-même. Pour la "
-                "trouver : ouvre le\n"
-                "  chatbot dans un navigateur, outils de développement "
-                "(F12), onglet Réseau,\n"
-                "  envoie un message, et relève l'URL de la requête POST.")
+        return ("  This is a WEB PAGE, not an API endpoint: this tool sends "
+                "a JSON POST.\n"
+                "  You need the address the page calls itself. To find it: "
+                "open the chatbot\n"
+                "  in a browser, developer tools (F12), Network tab, send a "
+                "message, and\n"
+                "  read off the URL of the POST request.")
 
     if start.startswith("data:") or "\ndata:" in start:
-        return ("  Cette API répond en FLUX (server-sent events).\n"
-                "  Deux issues : désactiver le flux si le corps te le permet "
-                '("stream": false dans\n'
-                "  CIBLE_CORPS), ou lire le flux tel quel —\n"
+        return ("  This API answers as a STREAM (server-sent events).\n"
+                "  Two ways out: switch the stream off if the body lets you "
+                '("stream": false in\n'
+                "  CIBLE_CORPS), or read the stream as it is —\n"
                 f"    CIBLE_CHEMIN_REPONSE={STREAM_PATH}"
                 "choices.0.delta.content\n"
-                "    ou --profil-cible openai-flux\n"
-                "  La seconde est la bonne quand tu testes l'application d'un "
-                "client, qui ne\n"
-                "  propose pas toujours de désactiver le flux.")
+                "    or --target-profile openai-flux\n"
+                "  The second is the right one when you are testing a "
+                "client's application,\n"
+                "  which does not always offer to switch the stream off.")
 
     if not start:
-        return ("  La réponse est VIDE. Vérifie que l'URL est bien celle de "
-                "l'endpoint, et que\n"
-                "  la méthode attendue est un POST.")
+        return ("  The reply is EMPTY. Check that the URL really is the "
+                "endpoint's, and that\n"
+                "  the expected method is a POST.")
 
-    return ("  Vérifie que cette URL est l'endpoint de l'API, et non une "
-            "page ou un proxy.")
+    return ("  Check that this URL is the API's endpoint, and not a page or "
+            "a proxy.")
 
 
 def _first_defined(*values):
@@ -328,13 +329,13 @@ def check_template(body):
     if _contains_marker(body):
         return
     raise RuntimeError(
-        f"Le template du corps ne contient pas le marqueur "
-        f"« {MESSAGE_MARKER} » : le payload n'aurait nulle part où aller, "
-        f"et la cible recevrait le même texte fixe à chaque essai.\n"
-        f"  Gabarit lu : {json.dumps(body, ensure_ascii=False)}\n"
-        f"  Attendu, par exemple : "
+        f'The body template does not hold the marker "{MESSAGE_MARKER}": '
+        f"the payload would have nowhere to go, and the target would receive "
+        f"the same fixed text on every attempt.\n"
+        f"  Template read: {json.dumps(body, ensure_ascii=False)}\n"
+        f"  Expected, for instance: "
         f'{{"message": "{MESSAGE_MARKER}"}}\n'
-        f"  Vérifie CIBLE_CORPS dans .env (voir .env.example)."
+        f"  Check CIBLE_CORPS in .env (see .env.example)."
     )
 
 
@@ -394,31 +395,31 @@ def build_http_target(url, headers=None, body=None, response_path=None,
             # (rejected key, invalid format, quota): we surface it.
             detail = error.read().decode("utf-8", "replace")[:300]
             raise RuntimeError(
-                f"Cible {url} : error HTTP {error.code}.\n  {detail}"
+                f"Target {url}: HTTP error {error.code}.\n  {detail}"
             ) from error
         except urllib.error.URLError as error:
             raise RuntimeError(
-                f"Cible {url} : injoignable ({error.reason}).\n"
-                f"  Vérifie l'URL, le réseau, et que la cible est démarrée."
+                f"Target {url}: unreachable ({error.reason}).\n"
+                f"  Check the URL, the network, and that the target is up."
             ) from error
 
         try:
             texte = read_reply(brut, response_path)
         except json.JSONDecodeError as error:
             raise RuntimeError(
-                f"Cible {url} : réponse illisible (JSON attendu).\n"
-                f"  Annoncé par la cible : {declared_type or 'rien'}\n"
-                f"  Reçu : {brut[:200]}\n"
+                f"Target {url}: unreadable reply (JSON expected).\n"
+                f"  Declared by the target: {declared_type or 'nothing'}\n"
+                f"  Received: {brut[:200]}\n"
                 f"{_diagnose(brut, declared_type)}"
             ) from error
         except ValueError as error:
             # Chemin de réponse mal décrit : l'error dit déjà quoi corriger.
-            raise RuntimeError(f"Cible {url} : {error}") from error
+            raise RuntimeError(f"Target {url}: {error}") from error
 
         if not isinstance(texte, str):
             raise RuntimeError(
-                f"Cible {url} : '{response_path}' donne un "
-                f"{type(texte).__name__}, pas du texte."
+                f"Target {url}: '{response_path}' gives a "
+                f"{type(texte).__name__}, not text."
             )
         return texte
 
@@ -493,37 +494,37 @@ def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
                                    settings.get("response_path"),
                                    HTTP_TARGET["response_path"])
 
-    show(f"Cible    : {url}")
+    show(f"Target   : {url}")
     if profile:
-        show(f"Profil   : {profile} — {settings['description']}")
-    show(f"Corps    : {json.dumps(corps_final, ensure_ascii=False)}")
-    show(f"Chemin   : {chemin_final}")
+        show(f"Profile  : {profile} — {settings['description']}")
+    show(f"Body     : {json.dumps(corps_final, ensure_ascii=False)}")
+    show(f"Path     : {chemin_final}")
     entetes_finaux = {**HTTP_TARGET["headers"], **(headers or {})}
     # On nomme les en-têtes sans montrer leur valeur : un jeton n'a rien à
     # faire dans une sortie de terminal qu'on colle dans un rapport ou un chat.
-    show(f"En-têtes : {', '.join(entetes_finaux) or 'aucun'}"
-             + (" (values masquées)" if entetes_finaux else ""))
+    show(f"Headers  : {', '.join(entetes_finaux) or 'none'}"
+         + (" (values hidden)" if entetes_finaux else ""))
     show("")
 
     try:
         check_template(corps_final)
     except RuntimeError as error:
-        show(f"ÉCHEC — {error}")
+        show(f"FAILED — {error}")
         return False
 
     interroger = build_http_target(url, headers, corps_final,
                                        chemin_final, timeout, profile=None)
-    show(f"Envoi    : {PROBE_MESSAGE}")
+    show(f"Sending  : {PROBE_MESSAGE}")
     try:
         reponse = interroger(PROBE_MESSAGE)
     except RuntimeError as error:
-        show(f"\nÉCHEC — {error}")
+        show(f"\nFAILED — {error}")
         _suggest(url, entetes_finaux, corps_final, timeout, show)
         return False
 
-    show(f"Réponse  : {reponse[:300]}"
-             + (" […]" if len(reponse) > 300 else ""))
-    show("\nBranchement VALIDE : la cible répond et le texte se lit bien.")
+    show(f"Reply    : {reponse[:300]}"
+         + (" […]" if len(reponse) > 300 else ""))
+    show("\nWiring VALID: the target answers and the text reads correctly.")
     return True
 
 
@@ -544,7 +545,7 @@ def _suggest(url, headers, body, timeout, show):
     chemins = _plausible_paths(data)
     if not chemins:
         return
-    show("\nChemins qui mènent à du texte dans la réponse reçue :")
+    show("\nPaths that lead to text in the reply received:")
     for path, valeur in chemins[:6]:
         extrait = valeur.replace("\n", " ")[:60]
         show(f"  CIBLE_CHEMIN_REPONSE={path}")
@@ -557,8 +558,8 @@ def _suggest(url, headers, body, timeout, show):
     # côté — en consommant du débit à chaque essai.
     extrait_envoye = PROBE_MESSAGE[:20]
     if not any(extrait_envoye in valeur for _, valeur in chemins):
-        show("\nAttention : aucun de ces textes ne reprend le message "
-                 "envoyé.\n  La cible ne l'a donc pas reçu là où elle "
-                 "l'attendait : CIBLE_CORPS est à corriger aussi, pas "
-                 "seulement le path.\n  Essaie --profil-cible "
-                 f"{', '.join(TARGET_PROFILES)} pour partir d'une forme connue.")
+        show("\nWarning: none of these texts echoes the message that was "
+             "sent.\n  The target therefore did not receive it where it "
+             "expected: CIBLE_CORPS needs fixing too, not just the path."
+             "\n  Try --target-profile "
+             f"{', '.join(TARGET_PROFILES)} to start from a known shape.")

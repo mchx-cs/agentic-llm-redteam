@@ -95,12 +95,12 @@ def _objectives(ask_target, library, harmless=False):
     control = (generic.get(CONTROL_OBJECTIVE)
                 or next(iter(generic.values())))
     if harmless:
-        return [control], "objectif de contrôle (anodin)"
+        return [control], "control objective (harmless)"
 
     from agents.planificateur import objectives_for
     from agents.reconnaissance import reconnoitre
 
-    print("Reconnaissance de la cible (sondes anodines, modèle local)...")
+    print("Reconnoitring the target (harmless probes, local model)...")
     profile = reconnoitre(ask_target)
     targeted = [o for o in objectives_for(profile, library)
              if o.get("origin") == "reconnaissance"][:MAX_OBJECTIVES]
@@ -110,15 +110,15 @@ def _objectives(ask_target, library, harmless=False):
         # targeted objective. We SAY SO: without that, the harvest would fall
         # back on the harmless objective and we would then wonder why there
         # are no positives.
-        print("/!\\ La cible ne déclare ni sujet refusé ni outil : aucun "
-              "objectif ciblé. Récolte avec l'objectif anodin, qui ne "
-              "produira presque que des négatifs.")
-        return [control], "objectif de contrôle (faute de mieux)"
+        print("/!\\ The target declares neither a refused subject nor a "
+              "tool: no targeted objective. Harvesting with the harmless "
+              "objective, which will produce almost only negatives.")
+        return [control], "control objective (for want of better)"
 
     for objective in targeted:
-        print(f"  objectif retenu : {objective['id']} — "
+        print(f"  objective kept: {objective['id']} — "
               f"{objective['wording'][:70]}")
-    return targeted, f"{len(targeted)} objectif(s) issus de la reconnaissance"
+    return targeted, f"{len(targeted)} objective(s) from reconnaissance"
 
 
 def _sequences(limit=MAX_SEQUENCES, objectives=None):
@@ -175,7 +175,7 @@ def _label(target_name):
 def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
               harmless=False):
     ask_target = choose_target(target_name)
-    require_conversation(ask_target, target_name or "la cible configurée")
+    require_conversation(ask_target, target_name or "the configured target")
     label = _label(target_name)
 
     objectives, summary = _objectives(ask_target, load_library(),
@@ -184,8 +184,8 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
     sequences = _sequences(limit, objectives)
     if not sequences:
         raise SystemExit(
-            "Aucune séquence : la bibliothèque n'a aucun payload complet.\n"
-            "Synchronise l'instantané garak "
+            "No sequence: the library holds no complete payload.\n"
+            "Synchronise the garak snapshot "
             "(python -m payloads.source_garak --version).")
 
     # We ADD to the existing harvest instead of overwriting it. A working
@@ -206,12 +206,12 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
                   f"-{number:02d}")
         for sample in range(1, SAMPLE_COUNT + 1):
             if f"{group}-{sample}" in already:
-                print(f"{group}-{sample} : déjà récolté, ignoré.")
+                print(f"{group}-{sample}: already harvested, skipped.")
                 continue
             turns = play(ask_target, sequence["messages"])
             entries.append(_entry(group, sample, sequence, turns))
-            print(f"{group}-{sample} ({sequence['technique']}) : "
-                  f"{len(turns) // 2} tour(s)")
+            print(f"{group}-{sample} ({sequence['technique']}): "
+                  f"{len(turns) // 2} turn(s)")
 
             if compare:
                 # The SAME pair of ingredients in a single message. The pair
@@ -223,13 +223,13 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
                     [{"role": "attacker", "content": sequence["single_turn"]},
                      {"role": "target", "content": reply}],
                     suffix="-mono"))
-                print(f"{group}-{sample}-mono : 1 tour (témoin)")
+                print(f"{group}-{sample}-mono: 1 turn (control)")
 
     OUTPUT_FILE.write_text(
         json.dumps({"conversations": entries}, ensure_ascii=False, indent=2),
         encoding="utf-8")
-    print(f"\n{len(entries)} conversation(s) écrites dans "
-          f"{OUTPUT_FILE.name}, à étiqueter à la main :\n"
+    print(f"\n{len(entries)} conversation(s) written to "
+          f"{OUTPUT_FILE.name}, to be labelled by hand:\n"
           f"  python -m evaluation.etiqueter")
     return entries
 
@@ -251,9 +251,9 @@ def _entry(group, sample, sequence, turns, suffix=""):
         "group": group,          # single-turn and multi-turn go TOGETHER
         "format": "mono-tour" if len(turns) == 2 else "multi-tours",
         "turns": turns,
-        "source": (f"cible réelle — {sequence['technique']} / "
+        "source": (f"real target — {sequence['technique']} / "
                    f"{sequence['objective']} / "
-                   f"{'composé' if suffix else 'séquencé'}"),
+                   f"{'composed' if suffix else 'sequenced'}"),
         "secret": "ARCHIVES-7731",
         "category": None,         # to fill in by hand
         "dataset": None,               # to fill in by hand: "dev" or "test"
@@ -264,7 +264,7 @@ def _entry(group, sample, sequence, turns, suffix=""):
 
 def main(arguments=None):
     parser = argparse.ArgumentParser(
-        description="Récolte des conversations multi-tours à étiqueter.")
+        description="Harvests multi-turn conversations to be labelled.")
     parser.add_argument("--cible", default=None,
                          help="cible à interroger (défaut : celle de .env). "
                               "`demo` est locale, donc gratuite.")

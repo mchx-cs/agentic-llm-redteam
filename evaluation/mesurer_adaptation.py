@@ -127,47 +127,51 @@ def measure(pool, techniques, budget, signals=None, draws=NB_TIRAGES):
                     - campaign(pool, budget, False, giving_way))
     return {
         "medium": mean(gaps),
-        "mieux": sum(g > 0 for g in gaps),
-        "pire": sum(g < 0 for g in gaps),
-        "egal": sum(g == 0 for g in gaps),
+        "better": sum(g > 0 for g in gaps),
+        "worse": sum(g < 0 for g in gaps),
+        "level": sum(g == 0 for g in gaps),
     }
 
 
 def measure_overall(pool, techniques):
-    print("Adaptatif contre plan statique, à budget égal.")
-    print(f"Techniques vulnérables tirées AU HASARD "
-          f"({int(VULNERABLE_SHARE * 100)} % des {len(techniques)}), "
-          f"{NB_TIRAGES} tirages.")
-    print("Hypothèse PESSIMISTE : la correspondance OWASP de garak ne prédit")
-    print("rien du comportement de la cible.\n")
+    print("Adaptive against static plan, at an equal budget.")
+    print(f"Vulnerable techniques drawn AT RANDOM "
+          f"({int(VULNERABLE_SHARE * 100)}% of {len(techniques)}), "
+          f"{NB_TIRAGES} draws.")
+    print("PESSIMISTIC hypothesis: garak's OWASP mapping predicts nothing")
+    print("about the target's behaviour.\n")
 
-    print(f"{'budget':>6} | {'écart moyen':>11} | {'mieux':>5} {'pire':>5} "
-          f"{'égal':>5}")
+    print(f"{'budget':>6} | {'mean gap':>11} | {'better':>6} {'worse':>6} "
+          f"{'level':>6}")
     print("-" * 46)
     for budget in BUDGETS:
         r = measure(pool, techniques, budget)
         print(f"{budget:>6} | {r['medium']:>+11.2f} | {r['mieux']:>5} "
               f"{r['pire']:>5} {r['egal']:>5}")
 
-    print("\nÀ lire ainsi : le gain CROÎT avec le budget. À trois essais il "
-          "est\nmarginal et un tirage sur cinq est perdant ; à quarante il "
-          "est net et\npresque systématique. L'adaptation a besoin de budget "
-          "pour payer —\nlogique, puisqu'il faut pouvoir revenir sur une "
-          "piste pour l'exploiter.")
+    print("
+Read it like this: the gain GROWS with the budget. At three "
+          "attempts it is
+marginal and one draw in five loses; at forty it "
+          "is clear and almost
+systematic. Adaptation needs budget to pay "
+          "off — which makes sense, since
+you have to be able to come back "
+          "to a lead in order to exploit it.")
 
 
 def measure_per_signal(pool, techniques):
     """Which signal carries the gain? We neutralise them one by one."""
-    cases = [("tous les signaux", set(SIGNALS))]
-    cases += [(f"sans {signal}", set(SIGNALS) - {signal})
+    cases = [("every signal", set(SIGNALS))]
+    cases += [(f"without {signal}", set(SIGNALS) - {signal})
               for signal in SIGNALS]
-    cases += [(f"{signal} SEUL", {signal}) for signal in SIGNALS]
+    cases += [(f"{signal} ALONE", {signal}) for signal in SIGNALS]
 
     budgets = (3, 10, 40)
-    print("\nContribution de chaque signal (même protocole)\n")
+    print("\nEach signal's contribution (same protocol)\n")
     header = "  ".join(f"{'b' + str(b):>13}" for b in budgets)
-    print(f"{'variante':30s} {header}")
-    print(f"{'':30s} " + "  ".join(f"{'moy (pire)':>13}" for _ in budgets))
+    print(f"{'variant':30s} {header}")
+    print(f"{'':30s} " + "  ".join(f"{'mean (worse)':>13}" for _ in budgets))
     print("-" * (32 + 15 * len(budgets)))
     for name, signals in cases:
         columns = []
@@ -179,21 +183,22 @@ def measure_per_signal(pool, techniques):
 
 def main(arguments=None):
     parser = argparse.ArgumentParser(
-        description="Mesure le gain de l'adaptation du plan (sans LLM).")
-    parser.add_argument("--signaux", action="store_true",
-                        help="détailler la contribution de chaque signal")
+        description="Measures what plan adaptation gains (no model).")
+    parser.add_argument("--signals", "--signaux", action="store_true",
+                        dest="signals",
+                        help="break down each signal's contribution")
     arguments = parser.parse_args(arguments)
 
     pool, techniques = build_pool()
-    print(f"Vivier : {len(pool)} candidats, {len(techniques)} techniques, "
-          f"{PAYLOADS_PER_TECHNIQUE} payloads par technique.\n")
+    print(f"Pool: {len(pool)} candidates, {len(techniques)} techniques, "
+          f"{PAYLOADS_PER_TECHNIQUE} payloads per technique.\n")
     if not techniques:
-        print("Vivier vide : synchronise l'instantané garak "
+        print("Empty pool: synchronise the garak snapshot "
               "(python -m payloads.source_garak --version).")
         return
 
     measure_overall(pool, techniques)
-    if arguments.signaux:
+    if arguments.signals:
         measure_per_signal(pool, techniques)
 
 

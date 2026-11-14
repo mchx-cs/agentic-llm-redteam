@@ -60,8 +60,8 @@ def _date(value, field):
         return date.fromisoformat(value)
     except (TypeError, ValueError):
         raise MissingAuthorisation(
-            f"Autorisation : '{field}' doit être une date AAAA-MM-JJ, "
-            f"reçu {value!r}."
+            f"Authorisation: '{field}' must be a YYYY-MM-DD date, "
+            f"got {value!r}."
         ) from None
 
 
@@ -70,20 +70,21 @@ def load_authorisation(path=AUTHORISATION_FILE):
     path = Path(path)
     if not path.exists():
         raise MissingAuthorisation(
-            f"Aucune autorisation trouvée ({path}).\n"
-            f"  Copie autorisation.example.json, remplis-la, et relance.\n"
-            f"  Tester un système tiers sans mandat écrit est un délit."
+            f"No authorisation found ({path}).\n"
+            f"  Copy autorisation.example.json, fill it in, and run again.\n"
+            f"  Testing a third-party system without a written mandate is an "
+            f"offence."
         )
     try:
         authorisation = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         raise MissingAuthorisation(
-            f"{path} n'est pas du JSON valide : {error}") from error
+            f"{path} is not valid JSON: {error}") from error
 
     missing = [f for f in REQUIRED_FIELDS if not authorisation.get(f)]
     if missing:
         raise MissingAuthorisation(
-            f"{path} : champ(s) manquant(s) — {', '.join(missing)}.")
+            f"{path}: missing field(s) — {', '.join(missing)}.")
     return authorisation
 
 
@@ -100,18 +101,18 @@ def check_scope(authorisation, target_name, today=None):
     scope = authorisation["target"]
     if scope not in target_name:
         raise MissingAuthorisation(
-            f"L'autorisation couvre '{scope}', or la campagne vise "
+            f"The authorisation covers '{scope}', but the campaign aims at "
             f"'{target_name}'.\n"
-            f"  Un mandat pour une cible ne vaut pas pour une autre."
+            f"  A mandate for one target is not valid for another."
         )
 
     start = _date(authorisation["start"], "start")
     end = _date(authorisation["end"], "end")
     if not start <= today <= end:
         raise MissingAuthorisation(
-            f"L'autorisation court du {start} au {end}, or nous sommes le "
+            f"The authorisation runs from {start} to {end}, but today is "
             f"{today}.\n"
-            f"  Tester hors de la fenêtre convenue n'est pas couvert."
+            f"  Testing outside the agreed window is not covered."
         )
     return authorisation
 
@@ -168,7 +169,7 @@ def verify_seal(path):
     path = Path(path)
     lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l]
     if not lines:
-        return (False, "Piste vide.")
+        return (False, "Empty trail.")
 
     try:
         # The seal hashes the trail's raw BYTES, so modernising the parsed
@@ -178,19 +179,19 @@ def verify_seal(path):
 
         last = modernise(json.loads(lines[-1]))
     except json.JSONDecodeError:
-        return (False, "Dernière ligne illisible : piste tronquée ou altérée.")
+        return (False, "Last line unreadable: trail truncated or altered.")
 
     if last.get("type") != "seal":
-        return (False, "Piste non scellée : la campagne ne s'est pas "
-                       "terminée proprement, ou le sceau a été retiré.")
+        return (False, "Trail not sealed: the campaign did not end cleanly, "
+                       "or the seal was removed.")
 
     # The seal covers everything that precedes it, line breaks included.
     before_seal = "".join(line + "\n" for line in lines[:-1])
     computed = digest(before_seal)
     if computed == last.get("digest"):
-        return (True, f"Piste intacte ({last.get('case_id', 'sans ID')}).")
-    return (False, "Empreinte NON concordante : la piste a été modifiée "
-                   "après sa clôture.")
+        return (True, f"Trail intact ({last.get('case_id', 'no ID')}).")
+    return (False, "Digest DOES NOT match: the trail was modified after it "
+                   "was closed.")
 
 
 class AuditTrail:
@@ -221,7 +222,8 @@ class AuditTrail:
             "target": target,
             # None for a local target: we say so explicitly, rather than
             # letting it look like a mandate missing by oversight.
-            "authorisation": authorisation or "cible locale, aucun mandat requis",
+            "authorisation": authorisation
+            or "local target, no mandate required",
             # What we DO control of the test environment, and what we do not.
             # See `telemetry()`.
             "environment": context or {},
@@ -332,14 +334,14 @@ def telemetry(target_name, target_profile=None):
             # The target's generation parameters are OUT of our reach in a
             # black-box test. Saying so is information; omitting it would
             # suggest we had pinned them.
-            "generation_parameters": "inconnus (test en boîte noire)",
+            "generation_parameters": "unknown (black-box test)",
         },
         "residual_non_determinism": [
-            "La cible choisit ses propres paramètres d'échantillonnage : deux "
-            "campagnes identiques peuvent donner des verdicts différents.",
-            "L'arbitre lui-même n'est pas déterministe à température 0 "
-            f"(mesuré) : d'où {VOTE_COUNT} votes par verdict.",
-            f"Une divulgation est rejouée {REPLAY_COUNT} fois, ce qui mesure la "
-            "reproductibilité sans l'éliminer.",
+            "The target picks its own sampling parameters: two identical "
+            "campaigns can give different verdicts.",
+            "The judge itself is not deterministic at temperature 0 "
+            f"(measured): hence {VOTE_COUNT} votes per verdict.",
+            f"A disclosure is replayed {REPLAY_COUNT} times, which measures "
+            "reproducibility without removing it.",
         ],
     }

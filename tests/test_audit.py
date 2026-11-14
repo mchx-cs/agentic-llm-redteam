@@ -24,7 +24,7 @@ MANDATE = {
     "reference": "Convention 2026-042",
     "start": "2026-01-01",
     "end": "2026-12-31",
-    "bounds": "Endpoint public uniquement.",
+    "scope": "Endpoint public uniquement.",
 }
 
 
@@ -86,12 +86,12 @@ class TestScopeCheck:
 
     def test_a_mandate_for_another_target_is_refused(self):
         # The check that stops a mandate being reused elsewhere.
-        with pytest.raises(MissingAuthorisation, match="ne vaut pas"):
+        with pytest.raises(MissingAuthorisation, match="is not valid for another"):
             check_scope(MANDATE, "https://autre-client.fr/chat", date(2026, 6, 1))
 
     @pytest.mark.parametrize("day", [date(2025, 12, 31), date(2027, 1, 1)])
     def test_outside_the_window_is_refused(self, day):
-        with pytest.raises(MissingAuthorisation, match="fenêtre|court du"):
+        with pytest.raises(MissingAuthorisation, match="window|runs from"):
             check_scope(MANDATE, "chatbot.client.fr", day)
 
     @pytest.mark.parametrize("day", [date(2026, 1, 1), date(2026, 12, 31)])
@@ -100,7 +100,7 @@ class TestScopeCheck:
 
     def test_a_malformed_date_is_reported(self):
         casse = {**MANDATE, "start": "01/01/2026"}
-        with pytest.raises(MissingAuthorisation, match="AAAA-MM-JJ"):
+        with pytest.raises(MissingAuthorisation, match="YYYY-MM-DD"):
             check_scope(casse, "chatbot.client.fr", date(2026, 6, 1))
 
 
@@ -121,7 +121,7 @@ class TestAuditTrail:
         # oversight.
         trail = AuditTrail(tmp_path / "j.jsonl", "mock", None)
         trail.close("fini", {})
-        assert "aucun mandat requis" in self._lines(trail.path)[0]["authorisation"]
+        assert "no mandate required" in self._lines(trail.path)[0]["authorisation"]
 
     def test_every_exchange_is_logged_with_its_phase(self, tmp_path):
         trail = AuditTrail(tmp_path / "j.jsonl", "mock")
@@ -249,7 +249,7 @@ class TestChainOfCustody:
         trail.path.write_text(altere, encoding="utf-8")
         intacte, explication = verify_seal(trail.path)
         assert intacte is False
-        assert "modifiée" in explication
+        assert "modified" in explication
 
     def test_an_unsealed_trail_is_reported(self, tmp_path):
         # A campaign killed before the close: the trace stays useful, but we
@@ -258,7 +258,7 @@ class TestChainOfCustody:
         trail.record_exchange("attaque", "a", "b")
         intacte, explication = verify_seal(trail.path)
         assert intacte is False
-        assert "non scellée" in explication
+        assert "not sealed" in explication
 
     def test_an_empty_trail_does_not_raise(self, tmp_path):
         vide = tmp_path / "vide.jsonl"
@@ -295,8 +295,8 @@ class TestTelemetry:
     def test_what_we_do_not_know_is_DECLARED_not_omitted(self):
         # L'omettre laisserait croire qu'on a fige les parametres de la cible.
         t = telemetry("demo")
-        assert "inconnus" in t["target"]["generation_parameters"]
-        assert "boîte noire" in t["target"]["generation_parameters"]
+        assert "unknown" in t["target"]["generation_parameters"]
+        assert "black-box" in t["target"]["generation_parameters"]
 
     def test_the_residual_non_determinism_is_named(self):
         # Sans ca, une variance au rejeu se lirait comme un defaut de mesure.
@@ -304,8 +304,8 @@ class TestTelemetry:
         assert len(points) >= 3
         # Les trois points sont encore en francais : ils partent au lecteur
         # d'un rapport, donc a la passe des messages operateur.
-        assert any("cible" in p for p in points)
-        assert any("arbitre" in p for p in points)
+        assert any("target" in p for p in points)
+        assert any("judge" in p for p in points)
 
     def test_the_http_profile_is_kept(self):
         assert telemetry("https://x/y", "openai")["target"]["http_profile"] == \

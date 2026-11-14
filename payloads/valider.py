@@ -56,8 +56,8 @@ def valider(library):
     techniques = library.get("techniques")
     objectives = library.get("objectives")
     if not isinstance(techniques, list) or not isinstance(objectives, list):
-        return ["La bibliothèque doit contenir les listes 'techniques' et "
-                "'objectifs'."], []
+        return ["The library must hold the lists 'techniques' and "
+                "'objectives'."], []
 
     # --- Techniques ---------------------------------------------------------
     seen = set()
@@ -67,15 +67,15 @@ def valider(library):
         missing = [f for f in ("id", "owasp_family", "description",
                                "prerequisites", "templates") if f not in technique]
         if missing:
-            errors.append(f"{name} : champ(s) manquant(s) — "
+            errors.append(f"{name}: missing field(s) — "
                           f"{', '.join(missing)}.")
             continue
 
         if not IDENTIFIER_PATTERN.match(technique["id"]):
-            errors.append(f"{name} : l'identifiant doit être en minuscules, "
-                          f"chiffres et tirets.")
+            errors.append(f"{name}: the identifier must be lowercase, "
+                          f"digits and hyphens.")
         if technique["id"] in seen:
-            errors.append(f"{name} : identifiant en double.")
+            errors.append(f"{name}: duplicate identifier.")
         seen.add(technique["id"])
 
         for prerequisite in technique["prerequisites"]:
@@ -84,63 +84,62 @@ def valider(library):
                 # technique would be launched against targets where it makes
                 # no sense at all.
                 errors.append(
-                    f"{name} : prérequis '{prerequisite}' inconnu du "
-                    f"planificateur. Connus : "
+                    f"{name}: prerequisite '{prerequisite}' unknown to the "
+                    f"planner. Known: "
                     f"{', '.join(sorted(known_prerequisites))}.")
 
         family = technique["owasp_family"]
         if family is not None and family not in KNOWN_FAMILIES:
             warnings.append(
-                f"{name} : famille OWASP '{family}' non reconnue. "
-                f"Faute de frappe, ou liste à mettre à jour ?")
+                f"{name}: OWASP family '{family}' not recognised. A typo, "
+                f"or a list to update?")
 
         for template in technique["templates"]:
             if not isinstance(template, str) or not template.strip():
-                errors.append(f"{name} : un modèle est vide.")
+                errors.append(f"{name}: a template is empty.")
             elif "{objectif}" not in template:
                 # Without the marker, the technique would always send the same
                 # text, whatever we are trying to obtain.
                 errors.append(
-                    f"{name} : le modèle {template[:40]!r} ne contient pas "
-                    f"'{{objectif}}' — il ignorerait l'objectif visé.")
+                    f"{name}: the template {template[:40]!r} does not hold "
+                    f"'{{objectif}}' — it would ignore the objective.")
             else:
                 try:
                     template.format(objectif="X")
                 except (KeyError, IndexError) as error:
                     errors.append(
-                        f"{name} : accolade non échappée dans "
-                        f"{template[:40]!r} ({error}). Doubler les accolades "
-                        f"littérales.")
+                        f"{name}: unescaped brace in {template[:40]!r} "
+                        f"({error}). Double any literal braces.")
 
         # Complete payloads (from garak) carry NO `{objectif}`: they are whole
         # prompts. They therefore have no business in `modeles`, and we only
         # check that they are text.
         for payload in technique.get("complete_payloads", []):
             if not isinstance(payload, str) or not payload.strip():
-                errors.append(f"{name} : un payload complet est vide.")
+                errors.append(f"{name}: a complete payload is empty.")
 
         if (not technique["templates"] and not technique.get("complete_payloads")
                 and technique["owasp_family"]):
             warnings.append(
-                f"{name} : aucun modèle ni payload, la technique ne sera "
-                f"jamais lancée (le planificateur le signalera dans le "
-                f"rapport).")
+                f"{name}: no template and no payload, the technique will "
+                f"never be launched (the planner will say so in the "
+                f"report).")
 
     # --- Objectives ---------------------------------------------------------
     seen = set()
     for number, objective in enumerate(objectives, start=1):
         name = objective.get("id") or f"objectif n°{number}"
         if not objective.get("wording"):
-            errors.append(f"{name} : formulation vide.")
+            errors.append(f"{name}: empty wording.")
         if objective.get("id") in seen:
-            errors.append(f"{name} : identifiant en double.")
+            errors.append(f"{name}: duplicate identifier.")
         seen.add(objective.get("id"))
 
     if not any(t.get("templates") or t.get("complete_payloads")
                for t in techniques):
         warnings.append(
-            "Aucune technique n'a de modèle ni de payload : une campagne "
-            "n'enverra rien.")
+            "No technique has a template or a payload: a campaign will "
+            "send nothing.")
 
     # Freshness of the garak snapshot: it releases roughly every 37 days
     # (median measured on 2026-11-10 over its last twelve versions), so past
@@ -148,8 +147,8 @@ def valider(library):
     age = (library.get("_garak") or {}).get("age_days")
     if age is not None and age > SNAPSHOT_AGE_SUSPECT:
         warnings.append(
-            f"instantané garak vieux de {age} jours : une resynchronisation "
-            f"vaut sans doute le coup (voir payloads/exporter_garak.py).")
+            f"garak snapshot {age} days old: a resynchronisation is "
+            f"probably worth it (see payloads/exporter_garak.py).")
 
     return errors, warnings
 
@@ -175,13 +174,13 @@ def main():
     if library.get("_garak"):
         garak = library["_garak"]
         age = garak.get("age_days")
-        source = (f"\n  dont {garak['probes']} sonde(s) garak "
-                  f"{garak['version']}, exportées le {garak['exported_at']}"
-                  + (f" (il y a {age} jour(s))" if age is not None else ""))
+        source = (f"\n  of which {garak['probes']} garak probe(s) "
+                  f"{garak['version']}, exported on {garak['exported_at']}"
+                  + (f" ({age} day(s) ago)" if age is not None else ""))
 
-    print(f"{LIBRARY_FILE.name} : {len(techniques)} technique(s), "
-          f"dont {len(usable)} utilisable(s) — {combinations} payload(s) "
-          f"au catalogue.{source}")
+    print(f"{LIBRARY_FILE.name}: {len(techniques)} technique(s), "
+          f"{len(usable)} of them usable — {combinations} payload(s) in the "
+          f"catalogue.{source}")
 
     for message in warnings:
         print(f"  [!]  {message}")
@@ -189,9 +188,9 @@ def main():
         print(f"  [X]  {message}")
 
     if errors:
-        print(f"\n{len(errors)} erreur(s) : la bibliothèque n'est pas prête.")
+        print(f"\n{len(errors)} error(s): the library is not ready.")
         return 1
-    print("\nBibliothèque valide.")
+    print("\nLibrary valid.")
     return 0
 
 

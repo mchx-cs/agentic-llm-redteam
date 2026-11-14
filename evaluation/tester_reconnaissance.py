@@ -62,7 +62,7 @@ def run():
 
     for target, expected, families_to_skip in SCENARIOS:
         print("\n" + "=" * 70)
-        print(f"Cible simulée : {target.__name__}")
+        print(f"Simulated target: {target.__name__}")
         profile = reconnoitre(target)
         print(summarise(profile))
 
@@ -84,10 +84,10 @@ def run():
         print(f"\n[{'ok ' if ok else 'ERR'}] fiche={profile_ok} "
               f"plan={plan_ok} budget={budget_ok}")
         if not plan_ok:
-            print(f"      attendait l'exclusion de {families_to_skip}, "
-                  f"écartées : {sorted(skipped)}")
+            print(f"      expected {families_to_skip} to be skipped, "
+                  f"skipped: {sorted(skipped)}")
 
-    print(f"\n{passed}/{len(SCENARIOS)} scénarios conformes.")
+    print(f"\n{passed}/{len(SCENARIOS)} scenarios as expected.")
 
 
 if __name__ == "__main__":

@@ -121,33 +121,33 @@ def observe(payload, reply, verdict):
             # The module the probe came from: a module that has already given
             # way must not be penalised by diversity (measured 2026-11-11).
             "group": group,
-            "explanation": f"« {technique} » a produit un constat sur cette "
-                           f"cible : ses autres variantes passent devant.",
+            "explanation": f'"{technique}" produced a finding on this '
+                           f'target: its other variants move ahead.',
         })
     elif refuse(reply):
         observations.append({
             "signal": "technique_blocked",
             "technique": technique,
-            "explanation": f"« {technique} » s'est fait refuser : ses autres "
-                           f"variantes passent derrière, sans être écartées "
-                           f"(une attaque probabiliste peut réussir plus tard).",
+            "explanation": f'"{technique}" was refused: its other variants '
+                           f'move behind, without being skipped (a '
+                           f'probabilistic attack can succeed later).',
         })
 
     if names_what_it_protects(reply):
         observations.append({
             "signal": "secret_mentioned",
             "technique": None,
-            "explanation": "La cible a refusé en nommant ce qu'elle protège : "
-                           "les essais qui visent une divulgation passent "
-                           "devant.",
+            "explanation": "The target refused while naming what it "
+                           "protects: the attempts aimed at a disclosure "
+                           "move ahead.",
         })
 
     if triggered_a_tool(reply):
         observations.append({
             "signal": "tool_triggered",
             "technique": None,
-            "explanation": "La cible a montré un appel d'outil : les essais "
-                           "d'abus d'outil deviennent pertinents ici.",
+            "explanation": "The target showed a tool call: the tool-abuse "
+                           "attempts become relevant here.",
         })
 
     return observations
@@ -285,9 +285,8 @@ def adjust(candidate, observations, already_sent=()):
     # insistence, at the grain of the technique.
     if repeats:
         delta += repeats * DIVERSITY_WEIGHT
-        reasons.append(f"{repeats} essai(s) déjà lancé(s) sur "
-                       f"« {group} » : les familles de sondes encore "
-                       f"inexplorées passent devant.")
+        reasons.append(f'{repeats} attempt(s) already sent on "{group}": '
+                       f'the probe families still unexplored move ahead.')
 
     return delta, reasons
 

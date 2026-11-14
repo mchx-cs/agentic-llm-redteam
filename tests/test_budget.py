@@ -47,13 +47,13 @@ class TestCallCap:
         reset_call_log(max_calls=3)
         for _ in range(3):
             ask_llm("x")
-        with pytest.raises(BudgetExceeded, match="3 appel"):
+        with pytest.raises(BudgetExceeded, match="3 call"):
             ask_llm("x")
 
     def test_the_message_says_the_count_and_the_cap(self):
         reset_call_log(max_calls=1)
         ask_llm("x")
-        with pytest.raises(BudgetExceeded, match="plafond 1"):
+        with pytest.raises(BudgetExceeded, match="cap 1"):
             ask_llm("x")
 
 
@@ -111,9 +111,9 @@ class TestCleanStop:
             "call_log": {"calls": 6, "tokens": 100, "truncated_replies": []},
         }
         text = render_markdown(build_report(result, target="attempt"))
-        assert "ÉCOURTÉE" in text
+        assert "CUT SHORT" in text
         # And above all: the coverage must denounce itself.
-        assert "incomplète" in text
+        assert "incomplete" in text
 
     def test_a_complete_campaign_carries_no_warning(self):
         result = {
@@ -122,4 +122,4 @@ class TestCleanStop:
             "cut_short": None, "call_log": {},
         }
         text = render_markdown(build_report(result, target="attempt"))
-        assert "ÉCOURTÉE" not in text
+        assert "CUT SHORT" not in text

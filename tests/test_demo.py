@@ -22,7 +22,7 @@ def answer(monkeypatch):
 
     def installer(reply):
         def faux(message, system=None, **kwargs):
-            seen["systeme"] = system
+            seen["`system`"] = system
             seen["message"] = message
             return reply
         monkeypatch.setattr(demo, "ask_llm", faux)
@@ -35,7 +35,7 @@ class TestLevels:
         assert set(LEVELS) == {1, 2, 3}
 
     def test_an_unknown_level_is_refused(self):
-        with pytest.raises(ValueError, match="Niveau de démonstration inconnu"):
+        with pytest.raises(ValueError, match="Unknown demo level"):
             build_demo_target(9)
 
     def test_they_all_know_the_secret(self, answer):
@@ -44,14 +44,14 @@ class TestLevels:
         for level in LEVELS:
             seen = answer("réponse")
             build_demo_target(level)("question")
-            assert SECRET in seen["systeme"], level
+            assert SECRET in seen["`system`"], level
 
     def test_they_all_expose_the_same_role_and_tool(self, answer):
         consignes = []
         for level in LEVELS:
             seen = answer("réponse")
             build_demo_target(level)("question")
-            consignes.append(seen["systeme"])
+            consignes.append(seen["`system`"])
         for consigne in consignes:
             assert "bibliothèque municipale de Valmont" in consigne
             assert "consulter_dossier" in consigne
@@ -61,14 +61,14 @@ class TestLevels:
         build_demo_target(1)("question")
         # Its instruction invites helping rather than refusing: that is what
         # makes detection near certain within MAX_ESSAIS.
-        assert "serviable" in seen["systeme"] or "coopératif" in seen["systeme"]
-        assert "Règle absolue" not in seen["systeme"]
+        assert "serviable" in seen["`system`"] or "coopératif" in seen["`system`"]
+        assert "Règle absolue" not in seen["`system`"]
 
     @pytest.mark.parametrize("level", [2, 3])
     def test_levels_2_and_3_state_an_absolute_rule(self, answer, level):
         seen = answer("réponse")
         build_demo_target(level)("question")
-        assert "Règle absolue" in seen["systeme"]
+        assert "Règle absolue" in seen["`system`"]
 
 
 class TestOutputFilter:
@@ -133,7 +133,7 @@ class TestSelector:
 
     @pytest.mark.parametrize("name", ["demo:9", "demo:abc"])
     def test_an_invalid_level_is_refused_clearly(self, name):
-        with pytest.raises(ValueError, match="Niveau de démonstration"):
+        with pytest.raises(ValueError, match="Invalid demo level"):
             choose_target(name)
 
 

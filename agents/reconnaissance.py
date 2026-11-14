@@ -90,9 +90,9 @@ Les deux champs booléens valent null par défaut : « il n'en a pas parlé » n
 # unknown: the families concerned are skipped, with a reason that says how to
 # enable them.
 KNOWN_CONTEXTS = {
-    "terminal": "la sortie est affichée dans un terminal",
-    "rich-rendering": "un client rend le Markdown ou le HTML de la sortie",
-    "database": "une base de données ou un moteur de gabarits est derrière",
+    "terminal": "the output is displayed in a terminal",
+    "rich-rendering": "a client renders the output's Markdown or HTML",
+    "database": "a database or a template engine sits behind",
 }
 
 
@@ -119,7 +119,7 @@ def _list_of_strings(value):
 
 
 def _show(tri_state):
-    return {True: "oui", False: "non", None: "non déclaré"}[tri_state]
+    return {True: "yes", False: "no", None: "not declared"}[tri_state]
 
 
 def _empty_profile(reason):
@@ -203,14 +203,17 @@ def reconnoitre(ask_target):
 def summarise(profile):
     """One line per field, for a campaign's display."""
     lines = [
-        f"  rôle     : {profile['role'] or '—'}",
-        f"  langue   : {profile['language'] or '—'}",
-        f"  outils   : {', '.join(profile['tools']) or 'aucun détecté'}",
-        f"  refuse   : {', '.join(profile['refused_subjects']) or 'rien de déclaré'}",
-        f"  consignes évoquées : {'oui' if profile['mentions_instructions'] else 'non'}",
-        f"  écrit du code : {_show(profile.get('writes_code'))}",
-        f"  lit des documents : {_show(profile.get('handles_documents'))}",
-        f"  contexte déclaré : {', '.join(profile.get('context') or []) or 'aucun'}",
+        f"  role      : {profile['role'] or '—'}",
+        f"  language  : {profile['language'] or '—'}",
+        f"  tools     : {', '.join(profile['tools']) or 'none detected'}",
+        f"  refuses   : "
+        f"{', '.join(profile['refused_subjects']) or 'nothing declared'}",
+        f"  rules mentioned : "
+        f"{'yes' if profile['mentions_instructions'] else 'no'}",
+        f"  writes code : {_show(profile.get('writes_code'))}",
+        f"  reads documents : {_show(profile.get('handles_documents'))}",
+        f"  context declared : "
+        f"{', '.join(profile.get('context') or []) or 'none'}",
     ]
     if profile["warning"]:
         lines.append(f"  /!\\ {profile['warning']}")

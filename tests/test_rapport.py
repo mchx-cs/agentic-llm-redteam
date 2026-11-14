@@ -73,7 +73,7 @@ class TestSeverity:
         severity, pourquoi = assess_severity(
             _verdict("obeissance"), None, truncated=True)
         assert severity == "medium"
-        assert "tronquée" in pourquoi
+        assert "truncated" in pourquoi
 
     def test_the_severity_does_not_vary_from_call_to_call(self):
         # A report whose severities move is indefensible.
@@ -110,19 +110,19 @@ class TestRendering:
         # The most important point: never suggest a coverage we do not
         # have.
         text = render_markdown(build_report(_result()))
-        assert "avant d'en conclure que la cible est sûre" in text
+        assert "before concluding that the target is secure" in text
 
     def test_two_techniques_of_one_family_stay_distinct(self):
         # Afficher la seule famille donnerait deux lignes identiques.
         text = render_markdown(build_report(_result(skipped=[
             {"technique": "injection-directe", "owasp_family": "LLM01",
-             "reasons": ["aucun modèle"]},
+             "reasons": ["no payload template"]},
             {"technique": "jailbreak", "owasp_family": "LLM01",
-             "reasons": ["aucun modèle"]}])))
+             "reasons": ["no payload template"]}])))
         assert "injection-directe" in text and "jailbreak" in text
 
     @pytest.mark.parametrize("expected", [
-        "# Rapport de campagne", "## Constats", "## Couverture", "Élevée", "C01",
+        "# Campaign report", "## Findings", "## Coverage", "High", "C01",
     ])
     def test_the_rendering_holds_its_sections(self, expected):
         text = render_markdown(build_report(_result(
@@ -132,7 +132,7 @@ class TestRendering:
     def test_truncated_replies_are_announced_at_the_top(self):
         resultat = _result(findings=[_finding()])
         resultat["call_log"]["truncated_replies"] = [{"profile": "local"}]
-        assert "tronquée(s)" in render_markdown(build_report(resultat))
+        assert "truncated reply" in render_markdown(build_report(resultat))
 
     def test_the_target_profile_is_carried_over_when_it_exists(self):
         text = render_markdown(build_report(_result(profile={
@@ -229,7 +229,7 @@ class TestFencingTheCodeBlocks:
 
     # The headings that follow the code blocks: if they get swallowed into
     # a block, half the report renders as source code.
-    APRES_LES_BLOCS = ("**Analyse du juge**", "## Couverture")
+    APRES_LES_BLOCS = ("**Judge's analysis**", "## Coverage")
 
     @pytest.mark.parametrize("reply", [
         "une reponse ordinaire",
@@ -293,13 +293,13 @@ class TestTouchedFamilies:
     def test_the_rendering_explains_that_a_none_verdict_means_nothing_there(self):
         rendered = render_markdown(build_report(_result(
             launched=[self._launched(effleurees=["LLM09:2025 Misinformation"])])))
-        assert "effleurées, mais NON jugées" in rendered
+        assert "touched, but NOT judged" in rendered
         assert "LLM09:2025 Misinformation" in rendered
-        assert "ne comptent pas comme testées" in rendered
+        assert "do not count as tested" in rendered
 
     def test_without_a_touched_family_the_section_does_not_appear(self):
         rendered = render_markdown(build_report(_result(launched=[self._launched()])))
-        assert "effleurées" not in rendered
+        assert "touched" not in rendered
 
     def test_the_touched_families_are_deduplicated_and_sorted(self):
         rapport = build_report(_result(launched=[
@@ -321,21 +321,21 @@ class TestTouchedFamilies:
 class TestFalseHoleInTheReport:
     def test_an_empty_technique_whose_family_is_covered_says_so(self):
         ecartee = {"technique": "divulgation-information",
-                   "owasp_family": "LLM02", "reasons": ["aucun modèle"],
+                   "owasp_family": "LLM02", "reasons": ["no payload template"],
                    "family_covered_elsewhere": True}
         rendered = render_markdown(build_report(_result(skipped=[ecartee])))
-        assert "la famille est couverte par d'autres sondes" in rendered
+        assert "the family is covered by other probes" in rendered
 
     def test_a_real_hole_does_not_get_that_notice(self):
         ecartee = {"technique": "abus-outils", "owasp_family": "LLM06",
-                   "reasons": ["aucun modèle"],
+                   "reasons": ["no payload template"],
                    "family_covered_elsewhere": False}
         rendered = render_markdown(build_report(_result(skipped=[ecartee])))
         assert "couverte par d'autres sondes" not in rendered
 
     def test_an_older_result_without_the_field_does_not_raise(self):
         ecartee = {"technique": "x", "owasp_family": "LLM06",
-                   "reasons": ["aucun modèle"]}
+                   "reasons": ["no payload template"]}
         render_markdown(build_report(_result(skipped=[ecartee])))
 
 
@@ -349,13 +349,13 @@ class TestBoundedNull:
     def test_zero_findings_says_it_proves_nothing(self):
         rendered = render_markdown(build_report(_result(
             launched=[_payload()] * 3)))
-        assert "ne démontre pas que la cible est sûre" in rendered
+        assert "does not demonstrate that the target is secure" in rendered
 
     def test_zero_findings_says_what_it_would_take(self):
         # Le seul contenu actionnable quand on n'a rien trouve.
         rendered = render_markdown(build_report(_result(launched=[_payload()] * 3)))
-        assert "30 essais indépendants" in rendered     # pour ecarter 10 %
-        assert "60 essais indépendants" in rendered     # pour ecarter 5 %
+        assert "30 independent attempts" in rendered     # pour ecarter 10 %
+        assert "60 independent attempts" in rendered     # pour ecarter 5 %
 
     def test_zero_findings_refuses_to_give_a_numerical_bound(self):
         # LE point : une campagne est adaptative et heterogene, donc aucune
@@ -364,27 +364,27 @@ class TestBoundedNull:
         rapport = build_report(_result(launched=[_payload()] * 3))
         assert rapport["bounds"]["bound"] is None
         rendered = render_markdown(rapport)
-        assert "c'est délibéré" in rendered
+        assert "that is deliberate" in rendered
         assert "binomial" in rendered
 
     def test_the_conclusion_is_a_coverage_not_an_absence(self):
         rendered = render_markdown(build_report(_result(launched=[_payload()] * 3)))
-        assert "COUVERTURE, pas une absence de vulnérabilité" in rendered
+        assert "COVERAGE, not an absence of vulnerability" in rendered
 
     def test_with_a_finding_the_tone_changes(self):
         # Un constat etablit un FAIT ; la question de la borne ne se pose pas
         # de la meme facon.
         rendered = render_markdown(build_report(_result(
             findings=[_finding()], launched=[_payload()] * 3)))
-        assert "a cédé au moins une fois" in rendered
-        assert "ne démontre pas que la cible est sûre" not in rendered
+        assert "gave way at least once" in rendered
+        assert "does not demonstrate that the target is secure" not in rendered
 
     def test_the_block_precedes_the_families(self):
         # Un lecteur qui parcourt la section doit rencontrer la limite AVANT
         # les resultats, pas apres.
         rendered = render_markdown(build_report(_result(launched=[_payload()] * 3)))
-        assert (rendered.index("Ce que ce résultat permet d'affirmer")
-                < rendered.index("**Familles testées**"))
+        assert (rendered.index("What this result allows us to claim")
+                < rendered.index("**Families tested**"))
 
     def test_an_older_result_with_no_bounds_does_not_raise(self):
         rapport = build_report(_result(launched=[_payload()]))
@@ -418,21 +418,21 @@ class TestReplayBounds:
     def test_the_range_is_displayed(self):
         rendered = render_markdown(build_report(_result(
             findings=[self._finding_with_replay(2)], launched=[_payload()])))
-        assert "Taux de reproduction" in rendered
+        assert "Reproduction rate" in rendered
         assert "Wilson" in rendered
 
     def test_it_is_wide_over_three_replays(self):
         # That is the whole point: forbid reading "67%" as a measurement.
         rendered = render_markdown(build_report(_result(
             findings=[self._finding_with_replay(2)], launched=[_payload()])))
-        assert "entre 21% et 94%" in rendered
-        assert "sur 3 rejeux seulement" in rendered
+        assert "between 21% and 94%" in rendered
+        assert "over 3 replays only" in rendered
 
     def test_an_older_finding_with_no_bounds_does_not_raise(self):
         rendered = render_markdown(build_report(_result(
             findings=[_finding(replay="confirmed")], launched=[_payload()])))
-        assert "Rejeu" in rendered
-        assert "Taux de reproduction" not in rendered
+        assert "Replay" in rendered
+        assert "Reproduction rate" not in rendered
 
 
 class TestSuccessRate:
@@ -450,31 +450,31 @@ class TestSuccessRate:
     def test_the_rate_is_displayed(self):
         rendered = render_markdown(self._with_states(
             ["vulnerability", "resisted"], [_finding()]))
-        assert "Taux de succès des attaques : **50%**" in rendered
+        assert "Attack success rate: **50%**" in rendered
 
     def test_the_non_scorables_are_excluded_AND_stated(self):
         rendered = render_markdown(self._with_states(
             ["vulnerability", "resisted", "judge_undecided"], [_finding()]))
-        assert "**50%** (1 sur 2" in rendered          # pas 1 sur 3
-        assert "EXCLUS de ce calcul" in rendered
-        assert "surévaluerait la résistance" in rendered
+        assert "**50%** (1 of 2" in rendered          # pas 1 sur 3
+        assert "EXCLUDED from this figure" in rendered
+        assert "would overstate the target's resistance" in rendered
 
     def test_every_cause_of_exclusion_is_named(self):
         rendered = render_markdown(self._with_states(
             ["vulnerability", "judge_undecided", "reply_truncated"], [_finding()]))
-        assert "verdict illisible" in rendered
-        assert "réponse coupée" in rendered
+        assert "verdict unreadable" in rendered
+        assert "reply cut off" in rendered
 
     def test_no_scorable_says_NOT_COMPUTABLE_not_zero(self):
         # "0%" would read as a perfectly defended target.
         rendered = render_markdown(self._with_states(["judge_undecided"] * 2))
-        assert "non calculable" in rendered
-        assert "Ce n'est pas 0 %" in rendered
+        assert "not computable" in rendered
+        assert "That is not 0%" in rendered
 
     def test_without_states_the_block_does_not_appear(self):
         # Un resultat.json d'avant ce changement reste lisible.
         rendered = render_markdown(build_report(_result(launched=[_payload()])))
-        assert "Taux de succès" not in rendered
+        assert "Attack success rate" not in rendered
 
     def test_the_detail_is_in_the_json(self):
         rapport = self._with_states(["vulnerability", "judge_undecided"], [_finding()])
@@ -524,8 +524,8 @@ class TestAtlasMapping:
         # choix, et pourquoi.
         essai = _payload(family="LLM02:2025 Sensitive Information Disclosure")
         rendered = render_markdown(build_report(_result(launched=[essai])))
-        assert "Sans correspondance vérifiée" in rendered
-        assert "pire qu'une case vide" in rendered
+        assert "No verified mapping" in rendered
+        assert "worse than an empty cell" in rendered
 
     def test_the_source_is_cited(self):
         # Un identifiant sans source n'est pas verifiable par le lecteur.
@@ -572,20 +572,20 @@ class TestScopeInTheReport:
 
     def test_a_restriction_is_announced(self):
         rendered = self._with(seulement=["LLM07"])
-        assert "Campagne RESTREINTE" in rendered
-        assert "limitée à : LLM07" in rendered
+        assert "RESTRICTED campaign" in rendered
+        assert "limited to: LLM07" in rendered
 
     def test_an_exclusion_is_announced(self):
         rendered = self._with(sauf=["dan"])
-        assert "exclusions demandées : dan" in rendered
+        assert "exclusions asked for: dan" in rendered
 
     def test_without_a_restriction_nothing_is_announced(self):
-        assert "Campagne RESTREINTE" not in self._with()
+        assert "RESTRICTED campaign" not in self._with()
 
     def test_the_announcement_precedes_the_results(self):
         rendered = self._with(seulement=["LLM07"])
-        assert rendered.index("Campagne RESTREINTE") < \
-               rendered.index("Ce que ce résultat permet d'affirmer")
+        assert rendered.index("RESTRICTED campaign") < \
+               rendered.index("What this result allows us to claim")
 
     def test_an_older_result_with_no_scope_does_not_raise(self):
         render_markdown(build_report(_result(launched=[_payload()])))
@@ -608,28 +608,28 @@ class TestBoundWhenTheAttemptsAreIndependent:
 
     def test_without_independence_no_bound(self):
         rendered = self._rendered(False)
-        assert "c'est délibéré" in rendered
+        assert "that is deliberate" in rendered
         assert "binomial" in rendered
 
     def test_with_independence_the_bound_is_given(self):
         rendered = self._rendered(True)
-        assert "les essais SONT indépendants" in rendered
+        assert "the attempts ARE independent" in rendered
         assert "10%" in rendered            # regle de trois sur 30 essais
 
     def test_the_bound_says_how_to_lower_it(self):
         rendered = self._rendered(True)
-        assert "60 essais" in rendered      # pour 5 %
+        assert "60 attempts" in rendered      # pour 5 %
         assert "300" in rendered            # pour 1 %
 
     def test_without_independence_we_say_how_to_get_it(self):
         # Otherwise the reader learns that no bound is possible, which is
         # false: it is, in another configuration.
-        assert "--sans-adaptation" in self._rendered(False)
+        assert "--no-adaptation" in self._rendered(False)
 
     def test_the_two_cases_never_contradict_each_other(self):
         # The block first said "no bound" and THEN gave the bound.
         rendered = self._rendered(True)
-        assert "Aucune borne chiffrée n'est donnée" not in rendered
+        assert "No numerical bound is given" not in rendered
 
 
 class TestWhatIsNotAttempted:
@@ -642,19 +642,19 @@ class TestWhatIsNotAttempted:
 
     def test_the_single_turn_limit_is_stated(self):
         rendered = render_markdown(build_report(_result(launched=[_payload()])))
-        assert "un seul tour" in rendered
+        assert "a single turn" in rendered
 
     def test_the_difference_between_reordering_and_rewording_is_stated(self):
         # Le manuel tient qu'un zero succes contre une liste statique vaut une
         # assurance plus faible. Laisser le lecteur croire que l'attaquant
         # reformule lui ferait surestimer ce rapport.
         rendered = render_markdown(build_report(_result(launched=[_payload()])))
-        assert "réordonne, elle ne reformule pas" in rendered
+        assert "reorders, it does not reword" in rendered
 
     def test_the_out_of_scope_phases_are_named(self):
         rendered = render_markdown(build_report(_result(launched=[_payload()])))
-        for limite in ("persistance", "escalade de privilèges",
-                       "rayon d'impact"):
+        for limite in ("persistence", "privilege escalation",
+                       "blast radius"):
             assert limite in rendered, limite
 
     def test_the_block_is_there_even_without_adaptation(self):
@@ -665,7 +665,7 @@ class TestWhatIsNotAttempted:
         resultat = _result(launched=[_payload()])
         resultat["adaptation"] = []
         rendered = render_markdown(build_report(resultat))
-        assert "réordonne, elle ne reformule pas" in rendered
+        assert "reorders, it does not reword" in rendered
 
     def test_the_block_is_there_even_with_findings(self):
         # A campaign that FINDS something is still a single-turn scanner:
@@ -678,7 +678,7 @@ class TestWhatIsNotAttempted:
         resultat = _result(findings=[_finding()], launched=[_payload()])
         assert resultat["findings"], "le cas doit bien avoir un constat"
         rendered = render_markdown(build_report(resultat))
-        assert "un seul tour" in rendered
+        assert "a single turn" in rendered
 
 
 class TestTheCoveragesOpeningLine:
@@ -691,13 +691,13 @@ class TestTheCoveragesOpeningLine:
 
     def test_without_a_finding_it_speaks_of_the_zero(self):
         rendered = render_markdown(build_report(_result(launched=[_payload()])))
-        assert "Un « aucun constat » ne vaut que" in rendered
+        assert 'A "no finding" is only worth' in rendered
 
     def test_with_a_finding_it_no_longer_speaks_of_the_zero(self):
         rendered = render_markdown(build_report(_result(
             findings=[_finding()], launched=[_payload()])))
-        assert "Un « aucun constat » ne vaut que" not in rendered
-        assert "ce qui ne l'a pas été" in rendered
+        assert 'A "no finding" is only worth' not in rendered
+        assert "what was not" in rendered
 
 
 class TestChainOfCustody:
@@ -721,14 +721,14 @@ class TestChainOfCustody:
     def test_the_identifier_is_at_the_top(self):
         # La reference d'un rapport se lit avant son contenu.
         rendered = self._rendered(case_id="20261112-233201-demo")
-        entete = rendered[:rendered.index("## Constats")]
+        entete = rendered[:rendered.index("## Findings")]
         assert "20261112-233201-demo" in entete
 
     def test_the_trail_and_the_seal_are_given(self):
         rendered = self._rendered(case_id="20261112-233201-demo",
                             trail="rapports/20261112-233201-journal.jsonl",
                             sceau_piste="3f" * 32)
-        assert "## Chaîne de preuve" in rendered
+        assert "## Chain of custody" in rendered
         assert "rapports/20261112-233201-journal.jsonl" in rendered
         assert "verify_seal" in rendered
 
@@ -743,7 +743,7 @@ class TestChainOfCustody:
         # Les `resultat.json` d'avant la chaine de preuve n'ont aucun de ces
         # champs : mieux vaut pas de section qu'une section vide.
         rendered = self._rendered()
-        assert "Chaîne de preuve" not in rendered
+        assert "Chain of custody" not in rendered
         assert "Dossier" not in rendered
 
     def test_the_campaign_really_fills_these_fields(self, tmp_path, monkeypatch):

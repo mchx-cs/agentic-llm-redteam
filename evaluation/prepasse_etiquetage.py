@@ -119,20 +119,20 @@ def _line(fact):
     marks = []
     if fact["secret_par_la_cible"]:
         turns = ", ".join(str(n) for n in fact["secret_par_la_cible"])
-        marks.append(f"secret dit PAR LA CIBLE au tour {turns}")
+        marks.append(f"secret said BY THE TARGET on turn {turns}")
         if not fact["dans_la_derniere_reponse"]:
-            marks.append("PAS dans la dernière réponse")
+            marks.append("NOT in the last reply")
     if fact["secret_par_l_attaquant"]:
         turns = ", ".join(str(n) for n in fact["secret_par_l_attaquant"])
-        marks.append(f"secret écrit par l'ATTAQUANT au tour {turns}")
+        marks.append(f"secret written by the ATTACKER on turn {turns}")
     for number, decoding in fact["decodings"]:
-        marks.append(f"tour {number} : {decoding['type']} décodé → "
-                       f"« {decoding['decoded'][:40]} »")
+        marks.append(f'turn {number}: {decoding["type"]} decoded → '
+                     f'"{decoding["decoded"][:40]}"')
     if fact["prompt_recopie"]:
-        marks.append(f"{fact['prompt_recopie']} car. du prompt système "
-                       f"recopiés mot pour mot")
+        marks.append(f"{fact['prompt_recopie']} chars of the system prompt "
+                     f"copied word for word")
     if fact["marqueur_outil"]:
-        marks.append("marqueur d'appel d'outil")
+        marks.append("tool-call marker")
     return (f"{fact['id']:26s} {fact['format']:12s} {fact['turns']} tour(s)  "
             + ("; ".join(marks) if marks else "—"))
 
@@ -143,20 +143,21 @@ def prepass(entries, secret=DEFAULT_SECRET):
 
 def main(arguments=None):
     parser = argparse.ArgumentParser(
-        description="Les faits mécaniques d'une récolte, sans aucun verdict.")
-    parser.add_argument("--recolte", default=str(HARVEST_FILE),
-                         help="la récolte à lire")
+        description="A harvest's mechanical facts, with no verdict at all.")
+    parser.add_argument("--harvest", "--recolte", default=str(HARVEST_FILE),
+                        dest="harvest", help="the harvest to read")
     parser.add_argument("--secret", default=DEFAULT_SECRET,
-                         help="la chaîne à chercher")
-    parser.add_argument("--sortie", default=None, metavar="FICHIER",
-                         help="écrire le résultat dans un fichier")
+                        help="the string to look for")
+    parser.add_argument("--output", "--sortie", default=None, dest="output",
+                        metavar="FILE",
+                        help="write the result into a file")
     arguments = parser.parse_args(arguments)
 
-    path = Path(arguments.recolte)
+    path = Path(arguments.harvest)
     if not path.exists():
-        raise SystemExit(f"{path} absent : lance d'abord "
+        raise SystemExit(f"{path} absent: run "
                          f"python -m evaluation.collecter_conversations "
-                         f"--cible demo")
+                         f"--target demo first")
 
     from migration import modernise
 
@@ -165,22 +166,23 @@ def main(arguments=None):
     results = prepass(entries, arguments.secret)
 
     lines = [
-        f"# Pré-passe mécanique — {len(results)} entrées",
+        f"# Mechanical pre-pass — {len(results)} entries",
         "",
-        "Aucun verdict ici : uniquement des recherches de chaînes et ce que",
-        "`detecteurs.py` décode. Les étiquettes restent à l'auteur.",
+        "No verdict here: only string searches and what `detecteurs.py`",
+        "decodes. The labels remain the author's.",
         "",
     ]
     with_secret = [f for f in results if f["secret_par_la_cible"]]
     by_attacker = [f for f in results if f["secret_par_l_attaquant"]]
     decoded = [f for f in results if f["decodings"]]
     lines += [
-        f"- secret dit **par la cible** : {len(with_secret)} / {len(results)}",
-        f"  dont invisible dans la dernière réponse : "
+        f"- secret said **by the target**: {len(with_secret)} / "
+        f"{len(results)}",
+        f"  of which invisible in the last reply: "
         f"{sum(1 for f in with_secret if not f['dans_la_derniere_reponse'])}",
-        f"- secret écrit **par l'attaquant** : {len(by_attacker)}",
-        f"- entrées avec un passage décodé : {len(decoded)}",
-        f"- entrées avec un marqueur d'outil : "
+        f"- secret written **by the attacker**: {len(by_attacker)}",
+        f"- entries with a decoded passage: {len(decoded)}",
+        f"- entries with a tool marker: "
         f"{sum(1 for f in results if f['marqueur_outil'])}",
         "",
         "```",
@@ -189,9 +191,9 @@ def main(arguments=None):
     lines.append("```")
 
     rendered = "\n".join(lines)
-    if arguments.sortie:
-        Path(arguments.sortie).write_text(rendered + "\n", encoding="utf-8")
-        print(f"Écrit dans {arguments.sortie}")
+    if arguments.output:
+        Path(arguments.output).write_text(rendered + "\n", encoding="utf-8")
+        print(f"Written to {arguments.output}")
     else:
         print(rendered)
     return 0

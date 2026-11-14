@@ -100,18 +100,18 @@ def ask_choice(question, options):
     print(f"\n{question}")
     for number, option in enumerate(options, start=1):
         print(f"  {number}. {option}")
-    print("  p. passer cet échange    q. quitter (le travail est enregistré)")
+    print("  s. skip this exchange    q. quit (the work is saved)")
 
     # Bounded by its exits: 'p' skips, 'q' quits. No hidden infinity.
     while True:
         entered = input("> ").strip().lower()
         if entered == "q":
             raise KeyboardInterrupt
-        if entered == "p":
+        if entered in ("s", "p"):      # "p" kept: muscle memory
             return None
         if entered.isdigit() and 1 <= int(entered) <= len(options):
             return options[int(entered) - 1]
-        print(f"Réponds par un nombre entre 1 et {len(options)}, ou p / q.")
+        print(f"Answer with a number between 1 and {len(options)}, or s / q.")
 
 
 def show_exchange(exchange, position, total):
@@ -174,8 +174,8 @@ def label():
     harvests = _harvests()
     if not harvests:
         names = ", ".join(p.name for p, _ in SOURCES)
-        print(f"Aucune récolte à étiqueter ({names} absents).",
-              "Récolte d'abord :",
+        print(f"No harvest to label ({names} absent).",
+              "Harvest first:",
               "  python -m evaluation.collecter_echanges",
               "  python -m evaluation.collecter_conversations --cible demo",
               sep="\n")
@@ -185,12 +185,12 @@ def label():
     remaining = [e for e in exchanges if e["expected"] is None]
 
     if not remaining:
-        print("Tous les échanges sont déjà étiquetés. "
-              "Lance --integrer pour les verser dans le corpus.")
+        print("Every exchange is already labelled. "
+              "Run --integrate to pour them into the corpus.")
         return
 
-    print(f"{len(remaining)} échange(s) à étiqueter sur {len(exchanges)}.")
-    print("L'avis de l'arbitre n'est pas affiché : c'est voulu.")
+    print(f"{len(remaining)} exchange(s) to label out of {len(exchanges)}.")
+    print("The judge's opinion is not shown: that is deliberate.")
 
     # A group already labelled imposes its set on the following exchanges of
     # the same group: the evaluation script refuses a group split between dev
@@ -210,34 +210,35 @@ def label():
             show_exchange(exchange, position, len(exchanges))
 
             verdict = ask_choice(
-                "Le chatbot a-t-il enfreint ses règles ?",
-                ["non — pas de faille", "oui — faille"],
+                "Did the chatbot break its rules?",
+                ["no — no vulnerability", "yes — vulnerability"],
             )
             if verdict is None:
                 continue
 
-            category = ask_choice("Catégorie de piège ?", CATEGORIES)
+            category = ask_choice("Category of trap?", CATEGORIES)
             if category is None:
                 continue
 
             group = exchange["group"]
             if group in set_of_group:
                 dataset = set_of_group[group]
-                print(f"\nJeu : {dataset} (imposé par le groupe {group}).")
+                print(f"\nSet: {dataset} (imposed by group {group}).")
             else:
                 dataset = ask_choice(
-                    "Quel jeu ? (dev = pour régler l'arbitre, "
-                    "test = gelé, pour mesurer)",
+                    "Which set? (dev = to tune the judge, "
+                    "test = frozen, to measure)",
                     ["dev", "test"],
                 )
                 if dataset is None:
                     continue
                 set_of_group[group] = dataset
 
-            print("\nEn une phrase, ce que ce cas teste (vide = la provenance) :")
+            print("\nIn one sentence, what this case tests "
+                  "(empty = the provenance):")
             trap = input("> ").strip() or exchange.get("source", "")
 
-            exchange["expected"] = verdict.startswith("oui")
+            exchange["expected"] = verdict.startswith("yes")
             exchange["category"] = category
             exchange["dataset"] = dataset
             exchange["trap"] = trap
@@ -245,15 +246,15 @@ def label():
             # Saved after EVERY exchange: an interruption never loses the work
             # already done.
             save(file_of[id(exchange)], data_of[id(exchange)])
-            print(f"-> {exchange['id']} enregistré.")
+            print(f"-> {exchange['id']} saved.")
 
     except KeyboardInterrupt:
-        print("\n\nInterrompu. Le travail déjà fait est enregistré.")
+        print("\n\nInterrupted. The work already done is saved.")
 
     labelled = sum(1 for e in exchanges if e["expected"] is not None)
-    print(f"\n{labelled}/{len(exchanges)} échange(s) étiqueté(s).")
+    print(f"\n{labelled}/{len(exchanges)} exchange(s) labelled.")
     if labelled == len(exchanges):
-        print("Terminé : lance --integrer pour les verser dans le corpus.")
+        print("Done: run --integrate to pour them into the corpus.")
 
 
 def integrate():
@@ -264,7 +265,7 @@ def integrate():
     ready = [e for harvest in harvests for e in harvest["entrees"]
              if e["expected"] is not None]
     if not ready:
-        print("Aucun échange étiqueté à intégrer.")
+        print("No labelled exchange to integrate.")
         return
 
     already = {e["id"] for e in corpus["exchanges"]}
@@ -275,12 +276,13 @@ def integrate():
     added = 0
     for exchange in ready:
         if exchange["id"] in already:
-            print(f"{exchange['id']} : déjà dans le corpus, ignoré.")
+            print(f"{exchange['id']}: already in the corpus, skipped.")
             continue
         expected = set_of_group.get(exchange["group"])
         if expected and expected != exchange["dataset"]:
-            print(f"{exchange['id']} : le groupe {exchange['group']} est "
-                  f"déjà en '{expected}', pas en '{exchange['dataset']}'. Ignoré.")
+            print(f"{exchange['id']}: group {exchange['group']} is already "
+                  f"in '{expected}', not in '{exchange['dataset']}'. "
+                  f"Skipped.")
             continue
         corpus["exchanges"].append(exchange)
         set_of_group[exchange["group"]] = exchange["dataset"]
@@ -297,15 +299,15 @@ def integrate():
         save(path, harvest["donnees"])
 
     multiturn = sum(1 for e in corpus["exchanges"] if e.get("turns"))
-    print(f"{added} échange(s) ajouté(s) au corpus "
-          f"({len(corpus['exchanges'])} au total, dont {multiturn} "
+    print(f"{added} exchange(s) added to the corpus "
+          f"({len(corpus['exchanges'])} in all, {multiturn} of them "
           f"conversation(s)).")
     if multiturn:
         # The judge cannot read a conversation yet: saying so here avoids
         # believing the evaluation took them into account.
-        print("Les conversations ne sont PAS encore mesurées : la consigne "
-              "de l'arbitre attend un seul tour. `evaluer_arbitre` les "
-              "ignore et le signale.")
+        print("The conversations are NOT measured yet: the judge's "
+              "instruction expects a single turn. `evaluer_arbitre` skips "
+              "them and says so.")
 
     # Counted AFTER the harvests were rewritten, so it reflects what is left.
     # This line used to read `restants`, a local of `label()`: `--integrer`
@@ -315,13 +317,14 @@ def integrate():
     # covered this file; it was found by reading it.
     left = _left_to_label(_harvests())
     if left:
-        print(f"{left} échange(s) restent à étiqueter.")
+        print(f"{left} exchange(s) left to label.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Étiqueter à la main les échanges collectés.")
-    parser.add_argument("--integrer", action="store_true",
-                        help="verser les échanges étiquetés dans le corpus")
+        description="Label the collected exchanges by hand.")
+    parser.add_argument("--integrate", "--integrer", action="store_true",
+                        dest="integrate",
+                        help="pour the labelled exchanges into the corpus")
     arguments = parser.parse_args()
-    integrate() if arguments.integrer else label()
+    integrate() if arguments.integrate else label()

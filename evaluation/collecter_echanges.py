@@ -53,7 +53,7 @@ def collect():
                 "category": None,      # to fill in by hand
                 "dataset": None,            # to fill in by hand: "dev" or "test"
                 "secret": "TOPSECRET42",
-                "source": (f"cible réelle — {payload['technique']} / "
+                "source": (f"real target — {payload['technique']} / "
                            f"{payload['objective']} / "
                            f"{payload['transformation']}"),
                 "payload": payload["text"],
@@ -61,13 +61,13 @@ def collect():
                 "expected": None,        # to fill in by hand: true or false
                 "trap": "",            # to fill in by hand
             })
-            print(f"{group}-{sample} collecté")
+            print(f"{group}-{sample} collected")
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump({"exchanges": exchanges}, f, ensure_ascii=False, indent=2)
 
-    print(f"\n{len(exchanges)} échanges écrits dans {OUTPUT_FILE.name}, "
-          f"à étiqueter à la main.")
+    print(f"\n{len(exchanges)} exchanges written to {OUTPUT_FILE.name}, "
+          f"to be labelled by hand.")
 
 
 if __name__ == "__main__":

@@ -80,7 +80,7 @@ def collect(families=None, active_only=True, max_per_probe=None):
         try:
             probe = plugins.load_plugin(name, break_on_fail=False)
         except Exception as error:            # a probe broken upstream
-            skipped.append({"name": name, "reason": f"chargement : {error}"})
+            skipped.append({"name": name, "reason": f"loading: {error}"})
             continue
 
         prompts = [p for p in (getattr(probe, "prompts", None) or [])
@@ -94,13 +94,13 @@ def collect(families=None, active_only=True, max_per_probe=None):
         if not (tags & families):
             continue                          # outside the scorable families
         if active_only and not getattr(probe, "active", False):
-            skipped.append({"name": name, "reason": "non active par défaut"})
+            skipped.append({"name": name, "reason": "not active by default"})
             continue
 
         word = _out_of_scope(name, goal)
         if word:
             skipped.append({"name": name,
-                            "reason": f"hors périmètre (« {word} ») : {goal}"})
+                            "reason": f'out of scope ("{word}"): {goal}'})
             continue
 
         kept.append({
@@ -122,10 +122,10 @@ def build_snapshot(kept, skipped):
     return {
         "_source": "garak (NVIDIA), Apache-2.0 — "
                    "https://github.com/NVIDIA/garak",
-        "_avertissement": "Instantané local, HORS GIT. Les sondes de garak "
-                          "incorporent des jeux de données tiers ayant leurs "
-                          "propres conditions : ne pas republier.",
-        "garak_version": getattr(garak, "__version__", "inconnue"),
+        "_avertissement": "Local snapshot, OUTSIDE GIT. garak's probes "
+                          "embed third-party datasets with their own "
+                          "terms: do not republish.",
+        "garak_version": getattr(garak, "__version__", "unknown"),
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "families_kept": sorted(KEPT_FAMILIES),
         "probes": kept,
@@ -137,22 +137,24 @@ def build_snapshot(kept, skipped):
 
 def main(arguments=None):
     parser = argparse.ArgumentParser(
-        description="Exporte les sondes de garak (à lancer dans le venv garak).")
-    parser.add_argument("--sortie", default="payloads/garak.json",
-                        help="fichier d'instantané (défaut : payloads/garak.json)")
-    parser.add_argument("--toutes", action="store_true",
-                        help="inclure les sondes non actives par défaut "
-                             "(variantes exhaustives, bien plus volumineuses)")
-    parser.add_argument("--max-par-sonde", type=int, default=None,
-                        metavar="N",
-                        help="ne garder que les N premiers payloads par sonde")
+        description="Exports garak's probes (run it in the garak venv).")
+    parser.add_argument("--output", "--sortie", dest="output",
+                        default="payloads/garak.json",
+                        help="snapshot file (default: payloads/garak.json)")
+    parser.add_argument("--all", "--toutes", action="store_true",
+                        dest="all_probes",
+                        help="include the probes not active by default "
+                             "(exhaustive variants, far bulkier)")
+    parser.add_argument("--max-per-probe", "--max-par-sonde", type=int,
+                        default=None, metavar="N", dest="max_per_probe",
+                        help="keep only the first N payloads per probe")
     arguments = parser.parse_args(arguments)
 
     try:
         import garak  # noqa: F401
     except ImportError:
-        print("garak n'est pas installé dans cet environnement.\n"
-              "  Ce script se lance avec le venv garak, pas celui du projet :\n"
+        print("garak is not installed in this environment.\n"
+              "  This script runs in the garak venv, not the project's:\n"
               "    python -m venv venv-garak\n"
               "    venv-garak/Scripts/pip install garak\n"
               "    venv-garak/Scripts/python payloads/exporter_garak.py",
@@ -161,34 +163,34 @@ def main(arguments=None):
 
     # No accents or Unicode punctuation in these messages: this environment is
     # not ours, and its console may be cp1252.
-    print("Chargement des sondes (long au premier lancement : garak "
-          "telecharge des jeux de donnees tiers)...", file=sys.stderr)
+    print("Loading the probes (slow on the first run: garak downloads "
+          "third-party datasets)...", file=sys.stderr)
     kept, skipped = collect(
-        active_only=not arguments.toutes,
-        max_per_probe=arguments.max_par_sonde)
+        active_only=not arguments.all_probes,
+        max_per_probe=arguments.max_per_probe)
 
     # A guard: if garak reorganises its private API (`_plugins`), the
     # collection may bring back nothing WITHOUT raising. Overwriting the
     # existing snapshot then would silently deprive campaigns of their
     # payloads, and a "no finding" would pass for a good result.
     if not kept:
-        print("Aucune sonde retenue : l'instantane existant est CONSERVE.\n"
-              f"  {len(skipped)} sonde(s) ecartee(s). Causes probables :\n"
-              "  - l'API de garak a change (ce script utilise garak._plugins,\n"
-              "    qui est privee) ;\n"
-              "  - les familles retenues ne correspondent plus a ses tags.",
+        print("No probe kept: the existing snapshot is PRESERVED.\n"
+              f"  {len(skipped)} probe(s) skipped. Likely causes:\n"
+              "  - garak's API changed (this script uses garak._plugins,\n"
+              "    which is private);\n"
+              "  - the families kept no longer match its tags.",
               file=sys.stderr)
         return 1
 
     snapshot = build_snapshot(kept, skipped)
-    path = Path(arguments.sortie)
+    path = Path(arguments.output)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2),
                     encoding="utf-8")
 
     total = sum(len(p["payloads"]) for p in kept)
-    print(f"{len(kept)} sonde(s), {total} payload(s) -> {path}")
-    print(f"{len(skipped)} sonde(s) écartée(s) ; garak "
+    print(f"{len(kept)} probe(s), {total} payload(s) -> {path}")
+    print(f"{len(skipped)} probe(s) skipped; garak "
           f"{snapshot['garak_version']}")
     return 0
 

@@ -70,9 +70,9 @@ def choose_target(name=None, profile=None):
     # meant to prevent. A test showed it.
     if profile and not name.startswith(("http://", "https://")):
         raise ValueError(
-            f"Le profil de cible « {profile} » décrit la forme d'une API "
-            f"http(s) ; la cible '{name}' est livrée avec le projet et n'a "
-            f"rien à configurer.")
+            f'The target profile "{profile}" describes the shape of an '
+            f"http(s) API; the target '{name}' ships with the project and "
+            f"has nothing to configure.")
 
     if name in NAMED_TARGETS:
         return NAMED_TARGETS[name]
@@ -85,7 +85,7 @@ def choose_target(name=None, profile=None):
             return build_demo_target(int(level) if level else 1)
         except ValueError as error:
             raise ValueError(
-                f"Niveau de démonstration invalide dans '{name}' : {error}\n"
+                f"Invalid demo level in '{name}': {error}\n"
                 f"  Attendu : demo, ou demo:N avec N dans "
                 f"{{{', '.join(str(n) for n in LEVELS)}}}."
             ) from error

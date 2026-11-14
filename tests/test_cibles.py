@@ -135,9 +135,9 @@ class TestFailures:
 
     @pytest.mark.parametrize("path, kwargs, expected", [
         ("/refuse", {}, "401"),
-        ("/pastexte", {}, "pas du texte"),
-        ("/pasjson", {}, "illisible"),
-        ("/chat", {"response_path": "nawak"}, "absente"),
+        ("/pastexte", {}, "not text"),
+        ("/pasjson", {}, "unreadable"),
+        ("/chat", {"response_path": "nawak"}, "missing"),
     ])
     def test_the_failure_is_explained(self, base, path, kwargs, expected):
         interroger = build_http_target(f"{base}{path}", **kwargs)
@@ -145,7 +145,7 @@ class TestFailures:
             interroger("x")
 
     def test_a_server_that_is_down_is_reported(self):
-        with pytest.raises(RuntimeError, match="injoignable"):
+        with pytest.raises(RuntimeError, match="unreachable"):
             build_http_target("http://127.0.0.1:9/x")("x")
 
 
@@ -168,7 +168,7 @@ class TestSilentTemplate:
         {"a": {"b": ["rien ici"]}},
     ])
     def test_a_template_without_the_marker_is_refused(self, body):
-        with pytest.raises(RuntimeError, match="marqueur"):
+        with pytest.raises(RuntimeError, match="marker"):
             check_template(body)
 
     @pytest.mark.parametrize("body", [
@@ -182,7 +182,7 @@ class TestSilentTemplate:
     def test_the_refusal_comes_at_CONSTRUCTION_not_at_send(self, base):
         # Decouvrir ca apres avoir consomme du debit sur la cible d'un client
         # coute une entree dans la piste d'audit pour une coquille.
-        with pytest.raises(RuntimeError, match="marqueur"):
+        with pytest.raises(RuntimeError, match="marker"):
             build_http_target(base, body={"input": "fixe"})
 
     def test_the_message_says_what_to_fix(self, base):
@@ -249,7 +249,7 @@ class TestCheckingTheWiring:
     def test_correct_wiring_is_declared_valid(self, base):
         ok, output = self._output(url=f"{base}/imbrique", profile="openai")
         assert ok is True
-        assert "VALIDE" in output
+        assert "VALID" in output
 
     def test_the_message_sent_is_harmless(self):
         # Une verification precede souvent le mandat : elle ne doit rien
@@ -269,7 +269,7 @@ class TestCheckingTheWiring:
         ok, output = self._output(url=f"{base}/imbrique",
                                   body={"input": "fixe"})
         assert ok is False
-        assert "marqueur" in output
+        assert "marker" in output
         assert "Envoi" not in output      # aucune requete n'est partie
 
     def test_header_values_are_never_displayed(self, base):
@@ -283,7 +283,7 @@ class TestCheckingTheWiring:
     def test_an_unreachable_target_fails_cleanly(self):
         ok, output = self._output(url="http://127.0.0.1:9/x", profile="openai")
         assert ok is False
-        assert "injoignable" in output
+        assert "unreachable" in output
 
 
 class TestTargetFailureDuringACampaign:
@@ -305,7 +305,7 @@ class TestTargetFailureDuringACampaign:
         def cible_cassee(*a, **k):
             def interroger(message):
                 raise RuntimeError(
-                    "Cible http://exemple.invalid/x : injoignable (test).\n"
+                    "Target http://exemple.invalid/x: unreachable (test).\n"
                     "  Verifie l'URL, le reseau, et que la cible est demarree.")
             return interroger
 
@@ -325,9 +325,9 @@ class TestTargetFailureDuringACampaign:
             failing_campaign.cli(["--cible", "http://127.0.0.1:9/x",
                                      "--rapport", str(tmp_path)])
         erreur = capsys.readouterr().err
-        assert "INTERROMPUE" in erreur
-        assert "--tester-cible" in erreur       # le raccourci exact
-        assert "injoignable" in erreur          # le message d'origine
+        assert "INTERRUPTED" in erreur
+        assert "--probe-target" in erreur       # le raccourci exact
+        assert "unreachable" in erreur          # le message d'origine
 
     def test_no_traceback_is_displayed(self, failing_campaign,
                                            tmp_path, capsys):
@@ -345,7 +345,7 @@ class TestTargetFailureDuringACampaign:
         with pytest.raises(SystemExit):
             failing_campaign.cli(["--cible", "http://127.0.0.1:9/x",
                                      "--rapport", str(tmp_path)])
-        assert "Piste d'audit" in capsys.readouterr().err
+        assert "Audit trail" in capsys.readouterr().err
         pistes = list(tmp_path.glob("*-journal.jsonl"))
         assert len(pistes) == 1
         lignes = [json.loads(l) for l in
@@ -367,7 +367,7 @@ class TestTargetFailureDuringACampaign:
             failing_campaign.cli(["--cible", "https://exemple.invalid/x",
                                      "--rapport", str(tmp_path)])
         assert output.value.code == 2
-        assert "REFUSÉE" in capsys.readouterr().err
+        assert "REFUSED" in capsys.readouterr().err
         # Et rien n'a ete ecrit : pas meme une piste d'audit.
         assert list(tmp_path.glob("*.jsonl")) == []
 
@@ -382,12 +382,12 @@ class TestDiagnosingANonJsonReply:
     """
 
     @pytest.mark.parametrize("raw, expected", [
-        ("<!DOCTYPE html><html><body>Bienvenue</body></html>", "PAGE WEB"),
-        ("<html><title>chat</title></html>", "PAGE WEB"),
-        ("  \n<?xml version='1.0'?><erreur/>", "PAGE WEB"),
-        ('data: {"delta":"bon"}\n\ndata: [DONE]', "FLUX"),
-        ("", "VIDE"),
-        ("   ", "VIDE"),
+        ("<!DOCTYPE html><html><body>Bienvenue</body></html>", "WEB PAGE"),
+        ("<html><title>chat</title></html>", "WEB PAGE"),
+        ("  \n<?xml version='1.0'?><erreur/>", "WEB PAGE"),
+        ('data: {"delta":"bon"}\n\ndata: [DONE]', "STREAM"),
+        ("", "EMPTY"),
+        ("   ", "EMPTY"),
     ])
     def test_the_likely_cause_is_named(self, raw, expected):
         assert expected in _diagnose(raw)
@@ -396,7 +396,7 @@ class TestDiagnosingANonJsonReply:
         # Without it, "this is not an API" leaves the reader with no way
         # out.
         message = _diagnose("<html></html>")
-        assert "Réseau" in message            # l'onglet du navigateur
+        assert "Network" in message            # l'onglet du navigateur
         assert "POST" in message
 
     def test_the_stream_diagnosis_names_the_setting(self):
@@ -413,8 +413,8 @@ class TestDiagnosingANonJsonReply:
         with pytest.raises(RuntimeError) as failure:
             interroger("bonjour")
         text = str(failure.value)
-        assert "JSON attendu" in text        # le fait
-        assert "PAGE WEB" in text            # la cause probable
+        assert "JSON expected" in text        # le fait
+        assert "WEB PAGE" in text            # la cause probable
 
 
 FLUX_OPENAI = (
@@ -473,11 +473,11 @@ class TestNonJsonReplies:
     def test_a_wrong_inner_path_says_so_clearly(self):
         # Erreur la plus probable : le chemin DANS chaque fragment est
         # different de celui d'une reponse complete (delta, pas message).
-        with pytest.raises(ValueError, match="aucun fragment lisible"):
+        with pytest.raises(ValueError, match="no readable fragment"):
             read_reply(FLUX_OPENAI, "@flux:choices.0.message.content")
 
     def test_a_stream_with_no_content_at_all_fails(self):
-        with pytest.raises(ValueError, match="aucun fragment lisible"):
+        with pytest.raises(ValueError, match="no readable fragment"):
             read_reply("data: [DONE]\n\n", CHEMIN_FLUX_OPENAI)
 
     # --- Le JSON reste le defaut ------------------------------------------
@@ -533,8 +533,8 @@ class TestFormatDeclaredByTheTarget:
     def test_the_declared_type_names_the_profile(self, declared_type, profile,
                                              path):
         message = _diagnose("peu importe le corps", declared_type)
-        assert "ANNONCE" in message
-        assert f"--profil-cible {profile}" in message
+        assert "DECLARES" in message
+        assert f"--target-profile {profile}" in message
         assert path in message
 
     def test_the_recommended_profile_really_exists(self):
@@ -546,8 +546,8 @@ class TestFormatDeclaredByTheTarget:
     def test_declared_html_stays_an_address_error(self):
         # text/html n'a PAS de profil : c'est qu'on a vise la page.
         message = _diagnose("sans aucune balise", "text/html")
-        assert "PAGE WEB" in message
-        assert "profil-cible" not in message
+        assert "WEB PAGE" in message
+        assert "target-profile" not in message
 
     def test_a_LYING_content_type_does_not_get_html_scored(self):
         # LE garde-fou. Bien des passerelles renvoient une page d'erreur
@@ -555,12 +555,12 @@ class TestFormatDeclaredByTheTarget:
         # mode de lecture, l'arbitre se retrouverait a juger du HTML.
         message = _diagnose("<html>502 Bad Gateway</html>",
                                  "application/json")
-        assert "PAGE WEB" in message
+        assert "WEB PAGE" in message
 
     def test_without_a_declaration_we_fall_back_on_the_body(self):
         # Une cible qui n'annonce rien doit rester diagnosticable.
-        assert "FLUX" in _diagnose('data: {"a":1}', "")
-        assert "PAGE WEB" in _diagnose("<html></html>", "")
+        assert "STREAM" in _diagnose('data: {"a":1}', "")
+        assert "WEB PAGE" in _diagnose("<html></html>", "")
 
     def test_the_declared_type_appears_in_the_error(self, base):
         # Bout en bout : l'erreur cite ce que la cible a declare, pour qu'on
@@ -568,7 +568,7 @@ class TestFormatDeclaredByTheTarget:
         interroger = build_http_target(f"{base}/pasjson")
         with pytest.raises(RuntimeError) as failure:
             interroger("bonjour")
-        assert "Annoncé par la cible" in str(failure.value)
+        assert "Declared by the target" in str(failure.value)
 
     def test_an_unknown_type_recommends_nothing(self):
         for inconnu in ("application/xml", "image/png", "", None):
