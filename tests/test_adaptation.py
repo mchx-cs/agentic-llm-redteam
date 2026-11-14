@@ -566,9 +566,9 @@ class TestTemoinStatique:
         main.judge_by_vote = juger
         try:
             with contextlib.redirect_stdout(_io.StringIO()):
-                resultat = main.lancer_campagne(
+                resultat = main.run_campaign(
                     lambda m: "Je ne peux pas.", "simulee",
-                    adaptatif=adaptatif)
+                    adaptive=adaptatif)
             return [e["technique"] for e in resultat["lances"]]
         finally:
             main.reconnoitre, main.judge_by_vote, main.MAX_ESSAIS = originaux

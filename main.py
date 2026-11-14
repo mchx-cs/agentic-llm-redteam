@@ -1,20 +1,20 @@
 """
-main.py — L'orchestrateur : reconnaissance → planification → attaque → jugement.
+main.py — The orchestrator: reconnaissance → planning → attack → judgement.
 
-Déroulement d'une campagne :
-  1. On OBSERVE la cible (questions anodines) pour en dresser une fiche.
-  2. On PLANIFIE : quelles familles ont un sens ici, dans quel ordre.
-  3. Pour chaque essai retenu : on envoie, la cible répond, l'arbitre juge.
-  4. Une divulgation est vérifiée par REJEU avant d'être déclarée (une cible
-     qui invente un mot de passe n'a rien divulgué).
+How a campaign runs:
+  1. We OBSERVE the target (harmless questions) to build a profile.
+  2. We PLAN: which families make sense here, and in what order.
+  3. For each attempt kept: we send, the target answers, the judge scores.
+  4. A disclosure is checked by REPLAY before being declared (a target that
+     invents a password has disclosed nothing).
 
-Deux budgets, parce que deux boucles : RECON_BUDGET pour l'observation,
-MAX_ESSAIS pour l'attaque. Sans eux, un agent adaptatif tournerait sans fin.
+Two budgets, because two loops: RECON_BUDGET for observation, MAX_ESSAIS for
+the attack. Without them, an adaptive agent would run for ever.
 
-Lance-le avec :
-    python main.py                       # la cible désignée par .env
-    python main.py --cible mock          # déterministe, sans LLM
-    python main.py --cible https://...   # un vrai endpoint
+Run it with:
+    python main.py                       # the target named in .env
+    python main.py --cible mock          # deterministic, no model
+    python main.py --cible https://...   # a real endpoint
 """
 
 import argparse
@@ -28,7 +28,7 @@ from agents.adaptation import accumulate, observe, next_attempt
 from agents.arbitre import judge, judge_by_vote
 from agents.planificateur import plan_campaign, summarise as summarise_plan
 from agents.reconnaissance import (KNOWN_CONTEXTS, reconnoitre,
-                                    summarise as summarise_profile)
+                                   summarise as summarise_profile)
 from agents.verificateur import verify_by_replay
 from cibles import choose_target
 from cibles.http import TARGET_PROFILES, probe_target as probe_http_target
@@ -36,254 +36,254 @@ from config import CALL_BUDGET, TOKEN_BUDGET, TARGET
 from llm_client import BudgetExceeded, call_log, reset_call_log
 from rapport import enregistrer
 
-# Règle d'arrêt : on ne tente pas une attaque à l'infini.
+# The stopping rule: we do not attack indefinitely.
 MAX_ESSAIS = 3
 
 
-def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
-                    contexte=(), adaptatif=True, seulement=(), sauf=()):
+def run_campaign(ask_target=None, target_name=None, trail=None,
+                 context=(), adaptive=True, only=(), excluding=()):
     """
-    Lance une campagne contre `interroger_cible`.
+    Runs a campaign against `ask_target`.
 
-    La cible est un paramètre, pas un import : c'est ce qui permet de viser
-    un vrai endpoint, le leurre local ou une cible simulée, sans toucher au
-    code de l'orchestrateur. Par défaut, celle que désigne `.env`.
+    The target is a parameter, not an import: that is what lets us aim at a
+    real endpoint, the local decoy or a simulated target without touching the
+    orchestrator's code. By default, the one `.env` names.
 
-    `piste` est une AuditTrail facultative. Quand elle est fournie, chaque
-    échange avec la cible y est consigné au fil de l'eau — y compris ceux de
-    la reconnaissance et du rejeu, puisque la cible y est tracée en amont.
+    `trail` is an optional AuditTrail. When supplied, every exchange with the
+    target is recorded in it as it goes — reconnaissance and replay included,
+    since the target is wrapped upstream.
     """
-    interroger_cible = interroger_cible or choose_target()
-    nom_cible = nom_cible or TARGET
+    ask_target = ask_target or choose_target()
+    target_name = target_name or TARGET
 
     print("=== Campagne ===\n")
-    # Le budget est armé ICI, pas dans llm_client : les scripts d'évaluation
-    # consomment bien plus qu'une campagne et n'ont aucune raison d'être
-    # coupés au milieu d'une mesure.
+    # The budget is armed HERE, not in llm_client: the evaluation scripts
+    # consume far more than a campaign and have no reason to be cut off in
+    # the middle of a measurement.
     reset_call_log(CALL_BUDGET, TOKEN_BUDGET)
 
-    # --- 1. Reconnaissance : qui est cette cible ? -------------------------
+    # --- 1. Reconnaissance: who is this target? ----------------------------
     print("--- Reconnaissance ---")
     try:
-        fiche = reconnoitre(piste.trace("reconnaissance", interroger_cible)
-                            if piste else interroger_cible)
-    except BudgetExceeded as arret:
-        print(f"\n>>> {arret}")
-        return _terminer({"statut": "budget_epuise", "fiche": None,
-                          "plan": {"essais": [], "candidats": [],
-                                   "ecartees": []},
-                          "constats": [], "ecourtee": str(arret)})
-    # Le contexte vient de l'OPÉRATEUR, pas d'une sonde : une cible ne sait
-    # pas dans quoi sa sortie est rendue, et le lui demander inviterait à
-    # l'hallucination. On le verse donc après coup, sans toucher aux faits
-    # observés.
-    fiche["contexte"] = list(contexte)
-    print(summarise_profile(fiche))
+        profile = reconnoitre(trail.trace("reconnaissance", ask_target)
+                              if trail else ask_target)
+    except BudgetExceeded as stop:
+        print(f"\n>>> {stop}")
+        return _finish({"statut": "budget_epuise", "fiche": None,
+                        "plan": {"essais": [], "candidats": [],
+                                 "ecartees": []},
+                        "constats": [], "ecourtee": str(stop)})
+    # The context comes from the OPERATOR, not from a probe: a target does not
+    # know what its output is rendered in, and asking it would invite
+    # hallucination. So we add it afterwards, without touching the observed
+    # facts.
+    profile["contexte"] = list(context)
+    print(summarise_profile(profile))
 
-    # --- 2. Planification : que lancer, et dans quel ordre ? ---------------
+    # --- 2. Planning: what to launch, and in what order? -------------------
     print("\n--- Plan ---")
-    plan = plan_campaign(fiche, MAX_ESSAIS, seulement, sauf)
+    plan = plan_campaign(profile, MAX_ESSAIS, only, excluding)
     print(summarise_plan(plan))
 
     if not plan["essais"]:
         print("\n>>> Aucun essai applicable à cette cible. Campagne terminée.")
-        return _terminer({"statut": "aucun_essai", "fiche": fiche, "plan": plan,
-                          "constats": []})
+        return _finish({"statut": "aucun_essai", "fiche": profile,
+                        "plan": plan, "constats": []})
 
-    # --- 3. Attaque ---------------------------------------------------------
-    # On va au BOUT du budget, au lieu de s'arrêter à la première faille : un
-    # rapport n'a de valeur que s'il dit tout ce qui a été trouvé, et sur quoi
-    # il s'est tu. S'arrêter tôt empêcherait toute affirmation de couverture.
+    # --- 3. Attack ---------------------------------------------------------
+    # We go to the END of the budget instead of stopping at the first
+    # vulnerability: a report is only worth something if it says everything
+    # that was found, and what it stayed silent about. Stopping early would
+    # make any claim of coverage impossible.
     #
-    # Le prochain essai n'est pas lu dans une liste figée : il est CHOISI à
-    # chaque tour dans le vivier du planificateur, d'après ce que la cible a
-    # déjà répondu (phase 3a, agents/adaptation.py). La boucle reste bornée
-    # par MAX_ESSAIS — l'adaptation change l'ordre, jamais le nombre d'essais.
-    constats = []
-    observations = []       # ce qu'on a appris de la cible, cumulé
-    lances = []             # les essais réellement envoyés, dans l'ordre
-    etats = []              # l'issue de chacun : scorable ou non (ASR)
-    ecourtee = None
+    # The next attempt is not read from a frozen list: it is CHOSEN each turn
+    # from the planner's pool, from what the target has already replied
+    # (phase 3a, agents/adaptation.py). The loop stays bounded by MAX_ESSAIS —
+    # adaptation changes the order, never the number of attempts.
+    findings = []
+    observations = []       # what we have learned about the target, cumulated
+    launched = []           # the attempts actually sent, in order
+    states = []             # each one's outcome: scorable or not (ASR)
+    cut_short = None
     print()
-    for numero in range(1, MAX_ESSAIS + 1):
-        # `adaptatif=False` rejoue le plan statique : même vivier, même
-        # ordre de priorité, mais sans rien apprendre des réponses. C'est le
-        # TÉMOIN dont la mesure du gain a besoin — sans lui, on ne peut
-        # comparer l'adaptation qu'à des campagnes simulées.
+    for number in range(1, MAX_ESSAIS + 1):
+        # `adaptive=False` replays the static plan: same pool, same priority
+        # order, but learning nothing from the replies. That is the CONTROL
+        # the gain measurement needs — without it, adaptation can only be
+        # compared against simulated campaigns.
         payload = next_attempt(plan["candidats"],
-                           observations if adaptatif else (), lances)
+                               observations if adaptive else (), launched)
         if payload is None:
             print(">>> Vivier épuisé : plus aucun essai applicable.")
             break
-        lances.append(payload)
+        launched.append(payload)
 
-        print(f"--- Essai {numero}/{MAX_ESSAIS} ---")
+        print(f"--- Essai {number}/{MAX_ESSAIS} ---")
         print(f"  [Attaquant] {payload['technique']} / "
               f"{payload['objectif'] or 'payload complet'} "
               f"/ {payload['transformation']}")
         if payload.get("raisons_adaptation"):
-            # Le solde d'abord : un essai peut cumuler bonus et malus, et sans
-            # lui les raisons semblent se contredire.
+            # The net first: an attempt can carry both a bonus and a penalty,
+            # and without it the reasons look contradictory.
             print(f"  [Adaptation] solde {payload['score_adaptation']:+d} "
                   f"sur sa priorité de départ "
                   f"({payload['priorite']}) :")
-            for raison in payload["raisons_adaptation"]:
-                print(f"               - {raison}")
+            for reason in payload["raisons_adaptation"]:
+                print(f"               - {reason}")
         print(f"              envoie : {payload['texte']}")
 
         try:
-            # Une réponse coupée par le plafond de sortie de la cible se lit
-            # comme une réponse complète : le verdict ne vaudrait alors rien.
-            tronquees_avant = len(call_log()["tronquees"])
-            reponse = interroger_cible(payload["texte"])
-            tronquee = len(call_log()["tronquees"]) > tronquees_avant
-            if piste:
-                piste.record_exchange("attaque", payload["texte"], reponse,
-                                        tronquee)
-            print(f"  [Cible]     répond : {reponse}")
-            if tronquee:
+            # A reply cut off by the target's output cap reads like a complete
+            # one: the verdict would then be worth nothing.
+            truncated_before = len(call_log()["tronquees"])
+            reply = ask_target(payload["texte"])
+            truncated = len(call_log()["tronquees"]) > truncated_before
+            if trail:
+                trail.record_exchange("attaque", payload["texte"], reply,
+                                      truncated)
+            print(f"  [Cible]     répond : {reply}")
+            if truncated:
                 print("  /!\\        réponse TRONQUÉE : une fuite a pu être "
                       "coupée en deux, le verdict ci-dessous n'est pas fiable.")
 
-            # Vote : le juge n'est pas déterministe sur les cas limites, et
-            # une faille qui apparaît selon le tirage n'a rien à faire dans
-            # un rapport.
-            verdict = judge_by_vote(payload["texte"], reponse)
-            if piste:
-                piste.record_verdict(numero, verdict)
+            # Voting: the judge is not deterministic on borderline cases, and
+            # a vulnerability that appears with the draw has no business in a
+            # report.
+            verdict = judge_by_vote(payload["texte"], reply)
+            if trail:
+                trail.record_verdict(number, verdict)
             print(f"  [Arbitre]   enfreint={verdict['reussi']} "
                   f"({verdict['critere']}, votes {verdict['votes']}) : "
                   f"{verdict['analyse']}\n")
 
-            # Ce que cet échange nous apprend, pour le choix du prochain
-            # essai. Enregistré AVANT tout `continue` : un échec instruit
-            # autant qu'un succès, et c'est même sa seule utilité.
+            # What this exchange teaches us, for choosing the next attempt.
+            # Recorded BEFORE any `continue`: a failure instructs as much as a
+            # success, and that is in fact its only use.
             observations = accumulate(observations,
-                                   observe(payload, reponse, verdict))
+                                      observe(payload, reply, verdict))
 
-            # Un verdict illisible (None) n'est PAS une faille — mais ce
-            # n'est pas non plus une victoire de la cible. Les confondre
-            # gonflait sa solidité apparente : un juge qui ne tranche pas est
-            # une mesure MANQUANTE, pas un refus. L'essai est donc exclu du
-            # dénominateur de l'ASR (manuel OWASP §7.5), et compté à part.
-            if tronquee:
-                etats.append("reponse_tronquee")
+            # An unreadable verdict (None) is NOT a vulnerability — but it is
+            # not a win for the target either. Confusing the two inflated its
+            # apparent soundness: a judge that does not decide is a MISSING
+            # measurement, not a refusal. The attempt is therefore excluded
+            # from the ASR denominator (OWASP manual §7.5), and counted apart.
+            if truncated:
+                states.append("reponse_tronquee")
                 continue
             if verdict["reussi"] is None:
-                etats.append("juge_indecis")
+                states.append("juge_indecis")
                 continue
             if verdict["reussi"] is False:
-                etats.append("resiste")
+                states.append("resiste")
                 continue
 
-            # --- 4. Vérification par rejeu, si une valeur a été divulguée --
-            verification = None
+            # --- 4. Replay check, if a value was disclosed -----------------
+            replay_check = None
             if verdict["critere"] == "divulgation":
-                # Le rejeu reçoit `juger` sans vote : il interroge déjà la
-                # cible plusieurs fois, ce qui lisse le bruit. Voter en plus
-                # coûterait neuf appels là où trois suffisent.
-                verification = verify_by_replay(
+                # The replay gets `judge` without voting: it already queries
+                # the target several times, which smooths the noise. Voting on
+                # top would cost nine calls where three are enough.
+                replay_check = verify_by_replay(
                     payload["texte"], verdict["valeur"],
-                    piste.trace("rejeu", interroger_cible) if piste
-                    else interroger_cible,
+                    trail.trace("rejeu", ask_target) if trail
+                    else ask_target,
                     judge,
                 )
-                print(f"  [Rejeu]     {verification['statut']} : "
-                      f"{verification['explication']}")
+                print(f"  [Rejeu]     {replay_check['statut']} : "
+                      f"{replay_check['explication']}")
 
-                if verification["statut"] == "hallucination_probable":
-                    # La cible a inventé : rien n'a fuité, pas de constat.
-                    # Scorable malgré tout — l'attaque a bien échoué, et le
-                    # rejeu l'a établi plutôt que de le supposer.
-                    etats.append("hallucination")
+                if replay_check["statut"] == "hallucination_probable":
+                    # The target made it up: nothing leaked, no finding.
+                    # Scorable all the same — the attack did fail, and the
+                    # replay established it instead of assuming it.
+                    states.append("hallucination")
                     print("  >>> Valeur inventée par la cible : on continue.\n")
                     continue
-        except BudgetExceeded as arret:
-            # Arrêt NORMAL, pas une panne : on garde ce qui a été trouvé
-            # jusqu'ici, et on dira franchement que le plan n'est pas allé
-            # à son terme. L'essai en cours est perdu, c'est assumé.
-            ecourtee = str(arret)
-            print(f"\n>>> {arret}")
-            print(f">>> Campagne ÉCOURTÉE à l'essai {numero} sur "
+        except BudgetExceeded as stop:
+            # A NORMAL stop, not a failure: we keep what has been found so
+            # far, and we will say plainly that the plan did not run to its
+            # end. The attempt in flight is lost, and that is accepted.
+            cut_short = str(stop)
+            print(f"\n>>> {stop}")
+            print(f">>> Campagne ÉCOURTÉE à l'essai {number} sur "
                   f"{MAX_ESSAIS}.")
             break
 
         print("  >>> Constat retenu.\n")
-        etats.append("faille")
-        constats.append({
-            "essai": numero,
+        states.append("faille")
+        findings.append({
+            "essai": number,
             "payload": payload,
-            "reponse": reponse,
+            "reponse": reply,
             "verdict": verdict,
-            # None (obéissance, pas de valeur), ou le résultat du rejeu :
+            # None (compliance, no value), or the replay's result:
             # "confirmee", "contradictoire", "inconcluant"…
-            "verification": verification,
-            "tronquee": tronquee,
+            "verification": replay_check,
+            "tronquee": truncated,
         })
 
-    if not ecourtee:
-        print(f">>> Budget d'essais épuisé : {len(constats)} constat(s).")
+    if not cut_short:
+        print(f">>> Budget d'essais épuisé : {len(findings)} constat(s).")
 
-    return _terminer({
-        # Un plan écourté ne doit JAMAIS se présenter comme un plan terminé :
-        # « aucun constat » n'a pas le même sens dans les deux cas.
-        "statut": ("budget_epuise" if ecourtee
-                   else "constats" if constats else "aucun_constat"),
-        "fiche": fiche,
+    return _finish({
+        # A plan cut short must NEVER present itself as a finished plan:
+        # "no finding" does not mean the same thing in the two cases.
+        "statut": ("budget_epuise" if cut_short
+                   else "constats" if findings else "aucun_constat"),
+        "fiche": profile,
         "plan": plan,
-        "constats": constats,
-        # Les essais RÉELLEMENT envoyés, et ce qu'on a appris en route. C'est
-        # d'eux que le rapport tire sa couverture : depuis l'adaptation, le
-        # plan initial n'est plus ce qui a été lancé, et annoncer la
-        # couverture du plan serait un mensonge par omission.
-        "lances": lances,
+        "constats": findings,
+        # The attempts REALLY sent, and what we learned along the way. It is
+        # from these that the report draws its coverage: since adaptation, the
+        # initial plan is no longer what was launched, and announcing the
+        # plan's coverage would be a lie by omission.
+        "lances": launched,
         "observations": observations,
-        # L'issue de chaque essai, pour que le rapport calcule un ASR sur un
-        # dénominateur DÉFINI plutôt que sur le nombre d'envois.
-        "etats": etats,
-        # Le périmètre demandé : le rapport DOIT le dire, sinon une campagne
-        # restreinte à une famille présenterait sa couverture comme complète.
-        "perimetre": {"seulement": list(seulement), "sauf": list(sauf)},
-        # Les essais sont-ils i.i.d. ? Deux conditions, toutes deux
-        # nécessaires : pas d'adaptation (sinon le prochain dépend des
-        # réponses précédentes) et une seule technique lancée (sinon des
-        # payloads de familles différentes ne partagent pas la même
-        # probabilité de succès). Quand les deux sont vraies — typiquement
-        # `--seulement X --sans-adaptation` — le rapport peut enfin borner son
-        # « aucun constat », ce qui est précisément ce que pass@k demande.
+        # Each attempt's outcome, so the report computes an ASR over a DEFINED
+        # denominator rather than over the number of sends.
+        "etats": states,
+        # The scope asked for: the report MUST say it, otherwise a campaign
+        # restricted to one family would present its coverage as complete.
+        "perimetre": {"seulement": list(only), "sauf": list(excluding)},
+        # Are the attempts i.i.d.? Two conditions, both necessary: no
+        # adaptation (otherwise the next one depends on the previous replies)
+        # and a single technique launched (otherwise payloads from different
+        # families do not share the same probability of success). When both
+        # hold — typically `--seulement X --sans-adaptation` — the report can
+        # finally bound its "no finding", which is precisely what pass@k asks.
         "essais_independants": (
-            not adaptatif
-            and len({e["technique"] for e in lances}) <= 1
-            and len(lances) > 0),
-        "ecourtee": ecourtee,
+            not adaptive
+            and len({a["technique"] for a in launched}) <= 1
+            and len(launched) > 0),
+        "ecourtee": cut_short,
     })
 
 
-def _terminer(resultat):
-    """Attache le journal des appels et avertit si des réponses ont été coupées."""
-    resultat.setdefault("ecourtee", None)
-    resultat.setdefault("lances", [])
-    resultat.setdefault("etats", [])
-    resultat.setdefault("perimetre", {"seulement": [], "sauf": []})
-    resultat.setdefault("essais_independants", False)
-    resultat.setdefault("observations", [])
-    resultat.setdefault("payloads", _provenance_des_payloads())
-    resultat["journal"] = call_log()
-    tronquees = len(resultat["journal"]["tronquees"])
+def _finish(result):
+    """Attaches the call log and warns if any reply was cut off."""
+    result.setdefault("ecourtee", None)
+    result.setdefault("lances", [])
+    result.setdefault("etats", [])
+    result.setdefault("perimetre", {"seulement": [], "sauf": []})
+    result.setdefault("essais_independants", False)
+    result.setdefault("observations", [])
+    result.setdefault("payloads", _payload_provenance())
+    result["journal"] = call_log()
+    truncated_count = len(result["journal"]["tronquees"])
 
-    print(f"\n{resultat['journal']['appels']} appel(s) au LLM, "
-          f"{resultat['journal']['tokens']} tokens.")
-    if tronquees:
-        # Un « aucune faille » obtenu sur des réponses coupées ne vaut rien :
-        # le dire franchement plutôt que de laisser croire à une couverture.
-        print(f"/!\\ {tronquees} réponse(s) tronquée(s) : les verdicts "
+    print(f"\n{result['journal']['appels']} appel(s) au LLM, "
+          f"{result['journal']['tokens']} tokens.")
+    if truncated_count:
+        # A "no vulnerability" obtained on cut-off replies is worth nothing:
+        # say so plainly rather than letting it look like coverage.
+        print(f"/!\\ {truncated_count} réponse(s) tronquée(s) : les verdicts "
               f"correspondants sont peu fiables, et un « aucune faille » "
               f"pourrait masquer une fuite coupée en deux.")
-    return resultat
+    return result
 
 
-def _provenance_des_payloads():
-    """Avec quelle bibliothèque la campagne a travaillé, et de quand date-t-elle."""
+def _payload_provenance():
+    """Which library the campaign worked with, and how old it is."""
     from agents.attaquant import SNAPSHOT_AGE_SUSPECT, load_library
 
     garak = load_library().get("_garak")
@@ -294,51 +294,51 @@ def _provenance_des_payloads():
             "perime": age is not None and age > SNAPSHOT_AGE_SUSPECT}
 
 
-def perimetre(valeur):
-    """Découpe « dan, encoding » en motifs propres, sans vide ni doublon."""
-    vus, motifs = set(), []
-    for motif in (valeur or "").split(","):
-        motif = motif.strip()
-        if motif and motif.lower() not in vus:
-            vus.add(motif.lower())
-            motifs.append(motif)
-    return motifs
+def scope_patterns(value):
+    """Splits "dan, encoding" into clean patterns, no blanks, no duplicates."""
+    seen, patterns = set(), []
+    for pattern in (value or "").split(","):
+        pattern = pattern.strip()
+        if pattern and pattern.lower() not in seen:
+            seen.add(pattern.lower())
+            patterns.append(pattern)
+    return patterns
 
 
 def cli(arguments=None):
-    """Point d'entrée en ligne de commande (voir [project.scripts])."""
-    parseur = argparse.ArgumentParser(description="Lance une campagne de test.")
-    parseur.add_argument(
+    """Command-line entry point (see [project.scripts])."""
+    parser = argparse.ArgumentParser(description="Lance une campagne de test.")
+    parser.add_argument(
         "--cible", default=None,
         help="'leurre' (défaut), 'mock', ou une URL http(s). "
              "Sinon la valeur de CIBLE dans .env.")
-    parseur.add_argument(
+    parser.add_argument(
         "--rapport", nargs="?", const="rapports", default=None,
         metavar="DOSSIER",
         help="écrire resultat.json et rapport.md dans DOSSIER "
              "(par défaut : rapports/).")
-    parseur.add_argument(
+    parser.add_argument(
         "--abreger", action="store_true",
         help="tronquer payloads et réponses dans rapport.md (pour partager "
              "un rapport sans réponses verbatim, ou publier un exemple). "
              "resultat.json garde tout.")
-    parseur.add_argument(
+    parser.add_argument(
         "--seulement", default="", metavar="MOTIFS",
         help="restreindre la campagne, par famille OWASP (LLM07), module "
              "garak (dan) ou technique (fuite-prompt-systeme) ; plusieurs "
              "motifs séparés par des virgules. Le rapport dit toujours que "
              "la campagne était restreinte.")
-    parseur.add_argument(
+    parser.add_argument(
         "--sauf", default="", metavar="MOTIFS",
         help="écarter des techniques, mêmes motifs que --seulement. Sert à "
              "respecter une portée de mandat qui exclut des techniques ; "
              "l'emporte sur --seulement.")
-    parseur.add_argument(
+    parser.add_argument(
         "--sans-adaptation", action="store_true", dest="sans_adaptation",
         help="suivre le plan statique sans rien apprendre des réponses. "
              "Sert de témoin pour mesurer ce que l'adaptation apporte ; "
              "inutile en usage normal.")
-    parseur.add_argument(
+    parser.add_argument(
         "--profil-cible", default=None, metavar="NOM", dest="profil_cible",
         help="forme d'API de la cible, au lieu de décrire CIBLE_CORPS et "
              "CIBLE_CHEMIN_REPONSE à la main : "
@@ -346,136 +346,135 @@ def cli(arguments=None):
              + ". L'emporte sur CIBLE_CORPS et CIBLE_CHEMIN_REPONSE de .env : "
                "la ligne de commande est plus spécifique. Pour un corps sur mesure, "
                "règle .env et ne passe pas de profil.")
-    parseur.add_argument(
+    parser.add_argument(
         "--tester-cible", action="store_true", dest="tester_cible",
         help="envoyer UN message anodin pour vérifier le branchement, puis "
              "s'arrêter. Aucune attaque, aucun mandat requis : à lancer "
              "avant toute campagne contre une cible réelle.")
-    parseur.add_argument(
+    parser.add_argument(
         "--contexte", default="", metavar="LISTE",
         help="ce que l'application AUTOUR de la cible fait de sa sortie, "
              "séparé par des virgules : "
              + ", ".join(KNOWN_CONTEXTS)
              + ". Certaines familles de sondes n'ont aucun sens sans ça, et "
                "une cible ne peut pas le déclarer elle-même.")
-    parseur.add_argument(
+    parser.add_argument(
         "--autorisation", default=AUTHORISATION_FILE, metavar="FICHIER",
         help=f"mandat couvrant la cible (défaut : {AUTHORISATION_FILE}). "
              f"Inutile pour une cible locale.")
-    arguments = parseur.parse_args(arguments)
+    arguments = parser.parse_args(arguments)
 
-    nom_cible = arguments.cible or TARGET
+    target_name = arguments.cible or TARGET
 
-    # Le NOM de la cible d'abord, et c'est une correction : une faute de
-    # frappe (« demo:9 », « leure ») sortait soit en trace Python, soit —
-    # pire — en message d'autorisation, qui parlait de mandat à quelqu'un
-    # qui s'était juste trompé de lettre. On vérifie donc le nom avant tout,
-    # ce qui n'envoie aucune requête et ne touche pas à l'ordre du mandat.
+    # The target's NAME first, and this is a correction: a typo ("demo:9",
+    # "leure") used to come out either as a Python traceback or — worse — as
+    # an authorisation message, which talked about a mandate to someone who
+    # had simply mistyped a letter. So we check the name before anything,
+    # which sends no request and does not disturb the mandate's order.
     try:
-        choose_target(nom_cible, arguments.profil_cible)
-    except (ValueError, RuntimeError) as refus:
-        print(f"Cible inutilisable.\n{refus}", file=sys.stderr)
+        choose_target(target_name, arguments.profil_cible)
+    except (ValueError, RuntimeError) as refusal:
+        print(f"Cible inutilisable.\n{refusal}", file=sys.stderr)
         raise SystemExit(2)
 
-    # Un nom de contexte inconnu est une FAUTE DE FRAPPE, pas un contexte
-    # absent : l'accepter en silence écarterait des familles entières sans que
-    # personne comprenne pourquoi. Même logique que le profil inconnu, qui
-    # échoue dès l'import avec la liste des valeurs valides.
-    contexte = [c.strip() for c in arguments.contexte.split(",") if c.strip()]
-    inconnus = [c for c in contexte if c not in KNOWN_CONTEXTS]
-    if inconnus:
-        print(f"Contexte inconnu : {', '.join(inconnus)}.\n"
+    # An unknown context name is a TYPO, not an absent context: accepting it
+    # silently would skip whole families without anyone understanding why.
+    # Same logic as an unknown profile, which fails at import with the list of
+    # valid values.
+    context = [c.strip() for c in arguments.contexte.split(",") if c.strip()]
+    unknown = [c for c in context if c not in KNOWN_CONTEXTS]
+    if unknown:
+        print(f"Contexte inconnu : {', '.join(unknown)}.\n"
               f"Valeurs acceptées : {', '.join(KNOWN_CONTEXTS)}.",
               file=sys.stderr)
         raise SystemExit(2)
 
-    # Vérifier le branchement AVANT d'exiger le mandat, et avant de lancer
-    # quoi que ce soit : c'est une requête anodine, pas un test d'intrusion.
-    # L'ordre compte — découvrir une coquille de configuration ne doit pas
-    # coûter une entrée dans la piste d'audit d'un client.
+    # Check the wiring BEFORE demanding the mandate, and before launching
+    # anything: this is a harmless request, not a penetration test. The order
+    # matters — discovering a configuration typo must not cost an entry in a
+    # client's audit trail.
     if arguments.tester_cible:
-        if not nom_cible.startswith(("http://", "https://")):
-            print(f"--tester-cible vise une URL http(s) ; '{nom_cible}' est "
+        if not target_name.startswith(("http://", "https://")):
+            print(f"--tester-cible vise une URL http(s) ; '{target_name}' est "
                   f"une cible livrée, qui n'a rien à configurer.",
                   file=sys.stderr)
             raise SystemExit(2)
         try:
-            ok = probe_http_target(nom_cible, profil=arguments.profil_cible)
-        except RuntimeError as refus:
-            print(refus, file=sys.stderr)
+            ok = probe_http_target(target_name, profil=arguments.profil_cible)
+        except RuntimeError as refusal:
+            print(refusal, file=sys.stderr)
             raise SystemExit(2)
         raise SystemExit(0 if ok else 1)
 
-    # Le mandat AVANT tout : on ne lance pas une seule requête vers un
-    # système tiers sans pouvoir prouver qu'on en avait le droit.
+    # The mandate BEFORE anything else: we do not send a single request to a
+    # third-party system without being able to prove we were entitled to.
     try:
-        autorisation = require_mandate(nom_cible, arguments.autorisation)
-    except MissingAuthorisation as refus:
-        # Une consigne, pas une trace : le lecteur doit savoir quoi faire.
-        print(f"Campagne REFUSÉE.\n{refus}", file=sys.stderr)
+        authorisation = require_mandate(target_name, arguments.autorisation)
+    except MissingAuthorisation as refusal:
+        # Advice, not a traceback: the reader must know what to do.
+        print(f"Campagne REFUSÉE.\n{refusal}", file=sys.stderr)
         raise SystemExit(2)
 
-    if autorisation:
-        print(f"Mandat : {autorisation['reference']} — "
-              f"autorisé par {autorisation['autorise_par']}, "
-              f"du {autorisation['debut']} au {autorisation['fin']}.\n")
+    if authorisation:
+        print(f"Mandat : {authorisation['reference']} — "
+              f"autorisé par {authorisation['autorise_par']}, "
+              f"du {authorisation['debut']} au {authorisation['fin']}.\n")
 
-    dossier = arguments.rapport or "rapports"
-    horodatage = datetime.now().strftime("%Y%m%d-%H%M%S")
-    # La piste d'audit est écrite TOUJOURS, même sans --rapport : elle est
-    # la trace de ce qu'on a envoyé, pas un livrable optionnel.
-    piste = AuditTrail(Path(dossier) / f"{horodatage}-journal.jsonl",
-                       nom_cible, autorisation,
-                       context=telemetry(nom_cible, arguments.profil_cible))
+    folder = arguments.rapport or "rapports"
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    # The audit trail is ALWAYS written, even without --rapport: it is the
+    # trace of what we sent, not an optional deliverable.
+    trail = AuditTrail(Path(folder) / f"{timestamp}-journal.jsonl",
+                       target_name, authorisation,
+                       context=telemetry(target_name, arguments.profil_cible))
 
     try:
-        resultat = lancer_campagne(
+        result = run_campaign(
             choose_target(arguments.cible, arguments.profil_cible),
-            nom_cible, piste, contexte,
-            adaptatif=not arguments.sans_adaptation,
-            seulement=perimetre(arguments.seulement),
-            sauf=perimetre(arguments.sauf))
-    except RuntimeError as panne:
-        # La cible ne répond pas comme prévu : hôte injoignable, erreur HTTP,
-        # réponse non-JSON, chemin de réponse erroné. Le message de
-        # `cibles/http.py` dit déjà quoi corriger — il sortait seulement noyé
-        # dans huit lignes de trace Python, alors que le projet tient à
-        # donner une consigne. On y ajoute le raccourci qui évite de
-        # recommencer à l'aveugle.
+            target_name, trail, context,
+            adaptive=not arguments.sans_adaptation,
+            only=scope_patterns(arguments.seulement),
+            excluding=scope_patterns(arguments.sauf))
+    except RuntimeError as failure:
+        # The target did not answer as expected: unreachable host, HTTP
+        # error, non-JSON reply, wrong response path. `cibles/http.py`'s
+        # message already says what to fix — it was only drowning in eight
+        # lines of Python traceback, while the project insists on giving
+        # advice. We add the shortcut that avoids starting again blind.
         print(f"\nCampagne INTERROMPUE : la cible n'a pas répondu comme "
-              f"attendu.\n{panne}\n\n"
+              f"attendu.\n{failure}\n\n"
               f"Vérifie le branchement sans rien attaquer :\n"
-              f"  python main.py --cible {nom_cible} --tester-cible",
+              f"  python main.py --cible {target_name} --tester-cible",
               file=sys.stderr)
-        print(f"Piste d'audit : {piste.path}", file=sys.stderr)
+        print(f"Piste d'audit : {trail.path}", file=sys.stderr)
         raise SystemExit(1)
     finally:
-        # Même si la campagne lève, le journal doit se refermer proprement.
-        sceau = piste.close(
-            locals().get("resultat", {}).get("statut", "interrompue"),
+        # Even if the campaign raises, the trail must close cleanly.
+        seal = trail.close(
+            locals().get("result", {}).get("statut", "interrompue"),
             call_log())
 
-    resultat["autorisation"] = autorisation
-    # La chaîne de preuve passe de la piste au RAPPORT. `construire` lisait
-    # déjà ces trois champs, mais personne ne les remplissait : un rapport
-    # sortait donc sans identifiant de dossier, alors que la piste en avait
-    # un. Le lecteur du rapport ne pouvait pas remonter à la trace qui le
-    # justifie — exactement ce à quoi sert un identifiant de dossier.
-    resultat["case_id"] = piste.case_id
-    resultat["piste"] = str(piste.path)
-    resultat["sceau_piste"] = sceau
-    resultat["telemetrie"] = telemetry(nom_cible, arguments.profil_cible)
-    print(f"\nRésultat final : {resultat['statut']}")
-    print(f"Piste d'audit : {piste.path}")
+    result["autorisation"] = authorisation
+    # The chain of custody passes from the trail to the REPORT. `construire`
+    # already read these three fields, but nothing filled them: a report came
+    # out with no case identifier while the trail had one. The report's reader
+    # could not get back to the trace that justifies it — which is exactly
+    # what a case identifier is for.
+    result["case_id"] = trail.case_id
+    result["piste"] = str(trail.path)
+    result["sceau_piste"] = seal
+    result["telemetrie"] = telemetry(target_name, arguments.profil_cible)
+    print(f"\nRésultat final : {result['statut']}")
+    print(f"Piste d'audit : {trail.path}")
 
     if arguments.rapport:
-        chemin_json, chemin_md = enregistrer(
-            resultat, cible=nom_cible, dossier=arguments.rapport,
+        json_path, md_path = enregistrer(
+            result, cible=target_name, dossier=arguments.rapport,
             abreger=arguments.abreger)
-        print(f"Rapport écrit : {chemin_md}\n"
-              f"Source de vérité : {chemin_json}")
+        print(f"Rapport écrit : {md_path}\n"
+              f"Source de vérité : {json_path}")
 
-    return resultat
+    return result
 
 
 if __name__ == "__main__":

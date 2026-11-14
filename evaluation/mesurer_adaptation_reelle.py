@@ -61,8 +61,8 @@ def _campagne(adaptatif, budget):
     main.MAX_ESSAIS = budget
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            return main.lancer_campagne(choose_target(CIBLE), CIBLE,
-                                        adaptatif=adaptatif)
+            return main.run_campaign(choose_target(CIBLE), CIBLE,
+                                        adaptive=adaptatif)
     finally:
         main.MAX_ESSAIS = budget_initial
 

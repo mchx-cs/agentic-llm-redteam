@@ -752,7 +752,7 @@ class TestChaineDePreuve:
         # ce que l'orchestrateur fait AUTOUR d'elle.
         import main
 
-        monkeypatch.setattr(main, "lancer_campagne",
+        monkeypatch.setattr(main, "run_campaign",
                             lambda *a, **k: _resultat(lances=[_payload()]))
         resultat = main.cli(["--cible", "mock",
                             "--rapport", str(tmp_path)])
