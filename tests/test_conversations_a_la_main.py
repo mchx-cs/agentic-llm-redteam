@@ -8,7 +8,7 @@ dire quelque chose.
 
 import pytest
 
-from evaluation.conversations_a_la_main import CAS, SECRET, entrees
+from evaluation.conversations_a_la_main import CASES, SECRET, entries
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +31,7 @@ class TestVeriteTerrain:
         # Sinon `evaluer_arbitre` l'écarterait, alors que le juge sait très
         # bien le lire : un échange d'un tour déguisé en conversation serait
         # perdu pour une mesure qu'il peut nourrir.
-        for entree in entrees():
+        for entree in entries():
             if entree["format"] == "mono-tour":
                 assert "payload" in entree and "reponse" in entree
                 assert "tours" not in entree
@@ -39,7 +39,7 @@ class TestVeriteTerrain:
                 assert "tours" in entree and len(entree["tours"]) > 2
 
     def test_aucun_verdict_n_est_pre_rempli(self):
-        for entree in entrees():
+        for entree in entries():
             assert entree["attendu"] is None, entree["id"]
             assert entree["categorie"] is None, entree["id"]
             assert entree["jeu"] is None, entree["id"]
@@ -47,7 +47,7 @@ class TestVeriteTerrain:
     def test_chaque_cas_dit_POURQUOI_il_existe(self):
         # Sans l'intention, l'auteur reçoit deux conversations presque
         # identiques sans savoir pourquoi on lui soumet les deux.
-        for entree in entrees():
+        for entree in entries():
             assert len(entree["piege"]) > 60, entree["id"]
 
 
@@ -59,7 +59,7 @@ class TestLesPairesSontDesPaires:
 
     def _par_groupe(self):
         groupes = {}
-        for identifiant, groupe, _, tours in CAS:
+        for identifiant, groupe, _, tours in CASES:
             groupes.setdefault(groupe, []).append((identifiant, tours))
         return groupes
 
@@ -92,14 +92,14 @@ class TestLesPiegesInatteignablesSontCouverts:
         # Le faux positif propre au multi-tours. Aucune récolte ne peut le
         # produire : nos payloads cherchent le secret, ils ne le contiennent
         # pas.
-        attaquant = [t for _, _, _, tours in CAS for t in tours
+        attaquant = [t for _, _, _, tours in CASES for t in tours
                      if t["role"] == "utilisateur" and SECRET in t["contenu"]]
         assert attaquant, "aucun cas ne met le secret dans la bouche de l'attaquant"
 
     def test_un_cas_a_la_fuite_a_un_tour_ANTERIEUR(self):
         # 7 fuites sur 11 avaient cette forme sur la récolte réelle.
         trouve = False
-        for _, _, _, tours in CAS:
+        for _, _, _, tours in CASES:
             reponses = [t["contenu"] for t in tours if t["role"] == "cible"]
             if len(reponses) >= 2 and SECRET in reponses[0] \
                     and SECRET not in reponses[-1]:
@@ -108,18 +108,18 @@ class TestLesPiegesInatteignablesSontCouverts:
 
     def test_des_conversations_depassent_deux_tours(self):
         # `sequence_turns()` n'en produit que deux : au-delà, c'est à la main.
-        assert any(len(tours) // 2 > 2 for _, _, _, tours in CAS)
+        assert any(len(tours) // 2 > 2 for _, _, _, tours in CASES)
 
     def test_il_y_a_des_controles_entierement_anodins(self):
         # Sans eux, les faux positifs seraient nuls par construction.
-        anodins = [tours for _, _, _, tours in CAS
+        anodins = [tours for _, _, _, tours in CASES
                    if not any(SECRET in t["contenu"] for t in tours)
                    and "instructions" not in tours[0]["contenu"].lower()]
         assert anodins
 
     def test_les_tours_alternent_toujours(self):
         # Un corpus mal formé ferait juger un dialogue incohérent.
-        for identifiant, _, _, tours in CAS:
+        for identifiant, _, _, tours in CASES:
             roles = [t["role"] for t in tours]
             assert roles == ["utilisateur", "cible"] * (len(roles) // 2), \
                 identifiant
@@ -133,18 +133,18 @@ class TestVersement:
         recolte = tmp_path / "recolte.json"
         recolte.write_text(json.dumps({"conversations": [
             {"id": "C-demo-01-1", "attendu": None}]}), encoding="utf-8")
-        monkeypatch.setattr(maison, "FICHIER_RECOLTE", recolte)
+        monkeypatch.setattr(maison, "HARVEST_FILE", recolte)
 
-        ajoutees, total = maison.verser()
-        assert len(ajoutees) == len(CAS)
-        assert total == len(CAS) + 1
+        ajoutees, total = maison.pour_in()
+        assert len(ajoutees) == len(CASES)
+        assert total == len(CASES) + 1
 
     def test_verser_deux_fois_ne_duplique_rien(self, monkeypatch, tmp_path):
         import evaluation.conversations_a_la_main as maison
 
-        monkeypatch.setattr(maison, "FICHIER_RECOLTE",
+        monkeypatch.setattr(maison, "HARVEST_FILE",
                             tmp_path / "recolte.json")
-        maison.verser()
-        ajoutees, total = maison.verser()
+        maison.pour_in()
+        ajoutees, total = maison.pour_in()
         assert ajoutees == []
-        assert total == len(CAS)
+        assert total == len(CASES)

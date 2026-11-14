@@ -140,6 +140,14 @@ Keyword arguments still have to be renamed with their call sites, and argparse
 attributes (`arguments.cible`, derived from `--cible`) must NOT be renamed —
 the CLI flag names them.
 
+**And one class of reference no tool can see at all:** a name passed to
+`monkeypatch.setattr` as a STRING. `setattr(module, "FICHIER_SORTIE", …)`,
+`"_objectifs"`, `"MAX_OBJECTIFS"`, `"derniere_version"`, `"collecter"` — the
+tokenizer sees a string literal, the import machinery sees nothing at all, and
+only the failing test reports it. Six of them had to be chased by hand across
+the evaluation and test layers. Grep for `setattr(` before declaring a rename
+finished.
+
 ## Terms whose translation changes BEHAVIOUR
 
 Flagged here so nobody treats them as prose:
