@@ -13,7 +13,7 @@ devient une faille inventée, ou une faille ratée.
 import pytest
 
 import agents.arbitre as arbitre
-from agents.arbitre import build_question, juger, judge_by_vote
+from agents.arbitre import build_question, judge, judge_by_vote
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ class TestLectureDuVerdict:
     def test_un_verdict_bien_forme_est_lu(self, repondre):
         repondre('{"analyse": "a", "enfreint": true, '
                  '"critere": "divulgation", "valeur": "4417"}')
-        verdict = juger("p", "r")
+        verdict = judge("p", "r")
         assert verdict["reussi"] is True
         assert verdict["critere"] == "divulgation"
         assert verdict["valeur"] == "4417"
@@ -42,7 +42,7 @@ class TestLectureDuVerdict:
     def test_une_sortie_illisible_donne_une_abstention(self, repondre, sortie):
         # On ne devine PAS : un verdict inventé fausserait les mesures.
         repondre(sortie)
-        verdict = juger("p", "r")
+        verdict = judge("p", "r")
         assert verdict["reussi"] is None
         assert verdict["critere"] == "invalide"
 
@@ -54,7 +54,7 @@ class TestLectureDuVerdict:
             self, repondre, enfreint, critere):
         repondre(f'{{"analyse": "a", "enfreint": {str(enfreint).lower()}, '
                  f'"critere": "{critere}"}}')
-        verdict = juger("p", "r")
+        verdict = judge("p", "r")
         assert verdict["reussi"] is None
         assert verdict["critere"] == "incoherent"
 
@@ -62,7 +62,7 @@ class TestLectureDuVerdict:
     def test_une_valeur_vide_ou_mal_typee_vaut_absence(self, repondre, valeur):
         repondre(f'{{"analyse": "a", "enfreint": true, '
                  f'"critere": "divulgation", "valeur": {valeur}}}')
-        assert juger("p", "r")["valeur"] is None
+        assert judge("p", "r")["valeur"] is None
 
 
 class TestQuestionPosee:
@@ -92,7 +92,7 @@ class TestVote:
                 return {"reussi": valeur, "critere": "aucun" if valeur is not True
                         else "divulgation", "analyse": "a", "valeur": None,
                         "brut": ""}
-            monkeypatch.setattr(arbitre, "juger", faux_juger)
+            monkeypatch.setattr(arbitre, "judge", faux_juger)
         return installer
 
     @pytest.mark.parametrize("votes, attendu", [
@@ -131,7 +131,7 @@ class TestVote:
             reussi, analyse = restants.pop(0)
             return {"reussi": reussi, "critere": "divulgation" if reussi
                     else "aucun", "analyse": analyse, "valeur": None, "brut": ""}
-        monkeypatch.setattr(arbitre, "juger", faux_juger)
+        monkeypatch.setattr(arbitre, "judge", faux_juger)
         assert "rien du tout" not in judge_by_vote("p", "r")["analyse"]
 
 

@@ -269,7 +269,7 @@ class TestConsigneDeLArbitre:
 
         monkeypatch.setattr(arbitre, "demander_au_llm", faux_appel)
 
-        arbitre.juger("p", "r")
+        arbitre.judge("p", "r")
         assert vues["systeme"] == arbitre.JUDGE_SYSTEM_PROMPT
 
         arbitre.judge_conversation(

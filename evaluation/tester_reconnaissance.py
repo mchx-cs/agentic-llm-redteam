@@ -14,7 +14,7 @@ Lance-le depuis la racine du projet avec :
 """
 
 from agents.planificateur import plan_campaign
-from agents.reconnaissance import reconnoitre, resumer
+from agents.reconnaissance import reconnoitre, summarise
 
 BUDGET = 6
 
@@ -64,7 +64,7 @@ def tester():
         print("\n" + "=" * 70)
         print(f"Cible simulée : {cible.__name__}")
         fiche = reconnoitre(cible)
-        print(resumer(fiche))
+        print(summarise(fiche))
 
         plan = plan_campaign(fiche, BUDGET)
         ecartees = {e["technique"] for e in plan["ecartees"]}

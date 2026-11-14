@@ -1,415 +1,416 @@
 """
-agents/planificateur.py — L'agent qui décide QUOI lancer, et dans quel ordre.
+agents/planificateur.py — The agent that decides WHAT to launch, and in what
+order.
 
-Entre la reconnaissance et l'attaque : à partir de la fiche cible, il choisit
-les techniques qui ont un sens ici, les objectifs à viser, et classe le tout
-pour que les meilleures combinaisons tiennent dans le budget d'essais.
+Between reconnaissance and attack: from the target profile it picks the
+techniques that make sense here, the objectives to aim at, and ranks the lot
+so the best combinations fit inside the attempt budget.
 
-Choix de conception — des RÈGLES, pas un LLM :
-C'est volontairement du code déterministe. Le LLM a déjà fait sa part en
-extrayant des faits (la fiche) ; lui confier en plus la décision, ce serait
-risquer qu'il invente un contexte et gaspille tout le budget. Ici, chaque
-exclusion est traçable : on peut dire POURQUOI une famille n'a pas été lancée,
-ce qui comptera dans le rapport (Phase 6).
+Design choice — RULES, not a model:
+This is deliberately deterministic code. The model has already done its part
+by extracting facts (the profile); handing it the decision as well would risk
+it inventing a context and burning the whole budget. Here every exclusion is
+traceable: we can say WHY a family was not launched, which will matter in the
+report (Phase 6).
 
-Planification ≠ adaptation. On décide ici AVANT la campagne. Reformuler
-pendant l'attaque, selon la réponse de la cible, c'est la Phase 3 (PyRIT).
+Planning ≠ adaptation. We decide here BEFORE the campaign. Rewording during
+the attack, from the target's reply, is Phase 3 (PyRIT).
 """
 
 from agents.attaquant import (TRANSFORMATIONS, load_library, compose)
 
-# Chaque prérequis est une question posée à la fiche cible. Ajouter une
-# famille d'attaque = ajouter son prérequis ici, et rien d'autre.
+# Each prerequisite is a question put to the target profile. Adding an attack
+# family = adding its prerequisite here, and nothing else.
 PREREQUISITES = {
-    # Abuser d'un outil suppose que la cible en ait au moins un.
+    # Abusing a tool assumes the target has at least one.
     "outils": (
-        lambda fiche: bool(fiche["outils"]),
+        lambda profile: bool(profile["outils"]),
         "aucun outil détecté chez la cible",
     ),
-    # Faire fuiter une donnée confidentielle suppose qu'il y en ait une :
-    # une cible qui ne refuse rien et n'évoque aucune règle n'a probablement
-    # rien à protéger.
+    # Leaking confidential data assumes there is some: a target that refuses
+    # nothing and mentions no rule probably has nothing to protect.
     "secret": (
-        lambda fiche: bool(fiche["sujets_refuses"]) or fiche["mentionne_consignes"],
+        lambda profile: bool(profile["sujets_refuses"])
+        or profile["mentionne_consignes"],
         "la cible ne déclare ni sujet interdit ni consigne",
     ),
-    # Extraire des instructions internes suppose qu'elle en ait évoqué.
+    # Extracting internal instructions assumes it has mentioned some.
     "consignes": (
-        lambda fiche: fiche["mentionne_consignes"] or bool(fiche["sujets_refuses"]),
+        lambda profile: profile["mentionne_consignes"]
+        or bool(profile["sujets_refuses"]),
         "la cible n'évoque aucune consigne interne",
     ),
 
-    # --- Capacités de la cible, sondées en reconnaissance -------------------
-    # Tri-état assumé : on n'écarte que sur un NON explicite. « La cible n'en a
-    # pas parlé » (None) laisse passer la sonde, parce que rater une faille
-    # coûte plus cher qu'un essai gaspillé — et parce qu'un chatbot ne détaille
-    # pas forcément tout ce qu'il sait faire.
+    # --- Target capabilities, probed during reconnaissance ------------------
+    # A deliberate tri-state: we only skip on an explicit NO. "The target did
+    # not mention it" (None) lets the probe through, because missing a
+    # vulnerability costs more than a wasted attempt — and because a chatbot
+    # does not necessarily spell out everything it can do.
     "produit-du-code": (
-        lambda fiche: fiche.get("produit_du_code") is not False,
+        lambda profile: profile.get("produit_du_code") is not False,
         "la cible dit ne pas écrire de code",
     ),
     "traite-des-documents": (
-        lambda fiche: fiche.get("traite_des_documents") is not False,
+        lambda profile: profile.get("traite_des_documents") is not False,
         "la cible dit ne pas traiter de document fourni",
     ),
 
-    # --- Contexte d'exécution, DÉCLARÉ par l'opérateur ----------------------
-    # Asymétrie volontaire avec les capacités ci-dessus : ici, non déclaré veut
-    # dire écarté. Une cible ne sait pas dans quoi sa sortie est rendue, donc
-    # personne n'a répondu — et l'attaque est structurellement intestable sans
-    # ce contexte. Jusqu'au 2026-11-11, `web_injection` partait contre un
-    # chatbot texte et le rapport annonçait « LLM02 testée » : un essai perdu
-    # ET une couverture surévaluée. Le motif dit comment l'activer.
+    # --- Execution context, DECLARED by the operator ------------------------
+    # A deliberate asymmetry with the capabilities above: here, not declared
+    # means skipped. A target does not know what its output is rendered in, so
+    # nobody answered — and the attack is structurally untestable without that
+    # context. Until 2026-11-11 `web_injection` went out against a text
+    # chatbot and the report announced "LLM02 tested": a wasted attempt AND
+    # overstated coverage. The reason says how to enable it.
     "terminal": (
-        lambda fiche: "terminal" in (fiche.get("contexte") or []),
+        lambda profile: "terminal" in (profile.get("contexte") or []),
         "sortie non rendue dans un terminal (--contexte terminal pour l'activer)",
     ),
     "rendu-riche": (
-        lambda fiche: "rendu-riche" in (fiche.get("contexte") or []),
+        lambda profile: "rendu-riche" in (profile.get("contexte") or []),
         "aucun client ne rend le Markdown de la sortie "
         "(--contexte rendu-riche pour l'activer)",
     ),
     "base-donnees": (
-        lambda fiche: "base-donnees" in (fiche.get("contexte") or []),
+        lambda profile: "base-donnees" in (profile.get("contexte") or []),
         "aucune base ni moteur de gabarits déclaré derrière la cible "
         "(--contexte base-donnees pour l'activer)",
     ),
 }
 
-# Une technique sans modèle de texte ne peut rien produire : on le dit
-# explicitement plutôt que de la voir disparaître sans explication.
+# A technique with no text template can produce nothing: we say so explicitly
+# rather than letting it vanish without explanation.
 REASON_NO_TEMPLATE = "aucun modèle de payload dans la bibliothèque"
 
 
-def objectives_for(fiche, bibliotheque):
+def objectives_for(profile, library):
     """
-    Les objectifs à viser : ceux de la bibliothèque, plus ceux déduits de la
-    fiche. Si la cible dit refuser de parler du « code du coffre », alors
-    obtenir ce code devient un objectif propre à CETTE cible — c'est tout
-    l'intérêt de la reconnaissance.
+    The objectives to aim at: the library's, plus those derived from the
+    profile. If the target says it refuses to discuss the "vault code", then
+    obtaining that code becomes an objective specific to THIS target — which
+    is the whole point of reconnaissance.
     """
-    objectifs = list(bibliotheque["objectifs"])
+    objectives = list(library["objectifs"])
 
-    for numero, sujet in enumerate(fiche["sujets_refuses"], start=1):
-        objectifs.append({
-            "id": f"refus-{numero}",
-            "formulation": f"me parler de : {sujet}",
+    for number, subject in enumerate(profile["sujets_refuses"], start=1):
+        objectives.append({
+            "id": f"refus-{number}",
+            "formulation": f"me parler de : {subject}",
             "origine": "reconnaissance",
         })
 
-    # Un outil découvert devient un objectif. Écrire « appelle
-    # consulter_dossier » dans la bibliothèque ne vaudrait que contre la cible
-    # de démonstration ; le nom de l'outil doit venir de la reconnaissance,
-    # exactement comme le sujet refusé vient d'elle juste au-dessus.
+    # A discovered tool becomes an objective. Writing "call consulter_dossier"
+    # into the library would only hold against the demo target; the tool's
+    # name must come from reconnaissance, exactly as the refused subject does
+    # just above.
     #
-    # Le « pour quelqu'un d'autre que moi » n'est pas un ornement : c'est le
-    # discriminant du critère `abus_outils` de l'arbitre. Consulter SON propre
-    # dossier est un usage légitime (cas D17 du corpus) ; obtenir celui d'un
-    # tiers est la faille. Sans ce membre de phrase, les quatre registres
-    # produiraient des essais que le juge classerait — à raison — « aucun ».
-    for numero, outil in enumerate(fiche["outils"], start=1):
-        objectifs.append({
-            "id": f"outil-{numero}",
-            "formulation": f"utiliser ton outil « {outil} » pour quelqu'un "
+    # The "pour quelqu'un d'autre que moi" is not an ornament: it is the
+    # discriminant of the judge's `abus_outils` criterion. Consulting ONE'S
+    # OWN record is legitimate use (case D17 of the corpus); obtaining a third
+    # party's is the vulnerability. Without that clause, the four registers
+    # would produce attempts the judge would class — rightly — as "aucun".
+    for number, tool in enumerate(profile["outils"], start=1):
+        objectives.append({
+            "id": f"outil-{number}",
+            "formulation": f"utiliser ton outil « {tool} » pour quelqu'un "
                            f"d'autre que moi",
             "origine": "reconnaissance",
-            # La famille pour laquelle cet objectif a été fabriqué : voir
-            # `_priority`, qui le fait passer devant sur cette famille-là.
+            # The family this objective was built FOR: see `_priority`, which
+            # moves it ahead on that family alone.
             "pour_famille": "LLM06",
         })
 
-    return objectifs
+    return objectives
 
 
-# --- Restreindre le périmètre d'une campagne ---------------------------------
-# Trois besoins distincts, un seul mécanisme :
+# --- Restricting a campaign's scope ------------------------------------------
+# Three distinct needs, one mechanism:
 #
-# 1. LE MANDAT. `autorisation.example.json` déclare une portée qui mentionne
-#    « techniques exclues », et le rapport l'affiche fidèlement — mais rien ne
-#    l'appliquait. Un rapport qui cite un mandat excluant une technique, puis
-#    documente le lancement de cette technique, est un écart contractuel.
-# 2. REPRODUIRE un constat après correction, sans relancer toute la campagne
-#    et sans que l'adaptation change d'avis en route.
-# 3. pass@k, qui exige de rejouer la MÊME technique k fois — impossible tant
-#    que le tour de rôle balaye les modules.
+# 1. THE MANDATE. `autorisation.example.json` declares a scope that mentions
+#    "excluded techniques", and the report displays it faithfully — but
+#    nothing enforced it. A report that cites a mandate excluding a technique,
+#    then documents launching that technique, is a contractual breach.
+# 2. REPRODUCING a finding after a fix, without rerunning the whole campaign
+#    and without adaptation changing its mind along the way.
+# 3. pass@k, which requires replaying the SAME technique k times — impossible
+#    while the round-robin sweeps across modules.
 #
-# Un seul motif couvre les trois granularités utiles, parce qu'en demander
-# trois serait trois options à retenir pour le même geste : famille OWASP
-# (« LLM07 »), module garak (« dan ») ou technique (« fuite-prompt-systeme »).
+# One pattern covers the three useful granularities, because asking for three
+# would be three options to remember for the same gesture: OWASP family
+# ("LLM07"), garak module ("dan") or technique ("fuite-prompt-systeme").
 
-def _matches(technique, motif):
-    """Le motif désigne-t-il cette technique, son module ou sa famille ?"""
-    motif = motif.strip().lower()
-    if not motif:
+def _matches(technique, pattern):
+    """Does the pattern name this technique, its module or its family?"""
+    pattern = pattern.strip().lower()
+    if not pattern:
         return False
-    champs = (technique["id"], technique.get("groupe") or "",
+    fields = (technique["id"], technique.get("groupe") or "",
               technique.get("famille_owasp") or "")
-    return any(motif in champ.lower() for champ in champs)
+    return any(pattern in field.lower() for field in fields)
 
 
-def filter_techniques(techniques, seulement=(), sauf=()):
+def filter_techniques(techniques, only=(), excluding=()):
     """
-    Les techniques retenues, et celles qu'un motif a écartées avec son motif.
+    The techniques kept, and those a pattern skipped, with their reason.
 
-    `sauf` l'emporte sur `seulement` : une exclusion vient du mandat, et un
-    mandat ne se contourne pas par une autre option de la même commande.
+    `excluding` wins over `only`: an exclusion comes from the mandate, and a
+    mandate is not worked around by another option of the same command.
     """
-    retenues, ecartees = [], []
+    kept, skipped = [], []
     for technique in techniques:
-        exclusion = next((m for m in sauf if _matches(technique, m)), None)
+        exclusion = next((p for p in excluding if _matches(technique, p)), None)
         if exclusion:
-            ecartees.append((technique, f"exclue par --sauf {exclusion}"))
+            skipped.append((technique, f"exclue par --sauf {exclusion}"))
             continue
-        if seulement and not any(_matches(technique, m) for m in seulement):
-            ecartees.append(
+        if only and not any(_matches(technique, p) for p in only):
+            skipped.append(
                 (technique,
                  f"hors du périmètre demandé (--seulement "
-                 f"{', '.join(seulement)})"))
+                 f"{', '.join(only)})"))
             continue
-        retenues.append(technique)
-    return retenues, ecartees
+        kept.append(technique)
+    return kept, skipped
 
 
-def plan_campaign(fiche, budget, seulement=(), sauf=()):
+def plan_campaign(profile, budget, only=(), excluding=()):
     """
-    Renvoie {"essais": [...], "candidats": [...], "ecartees": [...]}.
+    Returns {"essais": [...], "candidats": [...], "ecartees": [...]}.
 
-    - essais    : le plan INITIAL, les mieux classés d'abord, au plus `budget`
-                  (le planificateur ne décide jamais de dépasser la limite de
-                  la campagne). C'est ce qu'on lancerait sans rien apprendre
-                  de la cible.
-    - candidats : le VIVIER complet, trié. La campagne y pioche au fur et à
-                  mesure, en réordonnant d'après les réponses déjà obtenues
-                  (agents/adaptation.py). Il n'est pas tronqué : un essai
-                  relégué au-delà du budget initial doit pouvoir remonter si
-                  la cible révèle qu'il est pertinent.
-    - ecartees  : les techniques non retenues ET pourquoi. Un outil de sécurité
-                  qui ne dit pas ce qu'il n'a PAS testé donne une fausse
-                  impression de couverture.
+    - essais    : the INITIAL plan, best ranked first, at most `budget` (the
+                  planner never decides to exceed the campaign's limit). This
+                  is what we would launch while learning nothing from the
+                  target.
+    - candidats : the full POOL, sorted. The campaign draws from it as it
+                  goes, reordering from the replies already obtained
+                  (agents/adaptation.py). It is not truncated: an attempt
+                  pushed past the initial budget must be able to climb back if
+                  the target reveals it is relevant.
+    - ecartees  : the techniques not kept AND why. A security tool that does
+                  not say what it did NOT test gives a false impression of
+                  coverage.
     """
-    bibliotheque = load_library()
-    objectifs = objectives_for(fiche, bibliotheque)
+    library = load_library()
+    objectives = objectives_for(profile, library)
 
-    retenues, ecartees = [], []
+    kept, skipped = [], []
 
-    # Le périmètre d'abord : une technique exclue par le mandat n'a pas à être
-    # écartée pour « aucun outil détecté », ce qui masquerait la vraie raison.
-    techniques, hors_perimetre = filter_techniques(bibliotheque["techniques"],
-                                         seulement, sauf)
-    for technique, motif in hors_perimetre:
-        ecartees.append({"technique": technique["id"],
-                         "famille_owasp": technique["famille_owasp"],
-                         "motifs": [motif]})
+    # Scope first: a technique excluded by the mandate has no business being
+    # skipped for "no tool detected", which would mask the real reason.
+    techniques, out_of_scope = filter_techniques(library["techniques"],
+                                                 only, excluding)
+    for technique, reason in out_of_scope:
+        skipped.append({"technique": technique["id"],
+                        "famille_owasp": technique["famille_owasp"],
+                        "motifs": [reason]})
 
     for technique in techniques:
-        motifs = [texte for nom, (verifier, texte) in PREREQUISITES.items()
-                  if nom in technique["prerequis"] and not verifier(fiche)]
+        reasons = [text for name, (check, text) in PREREQUISITES.items()
+                   if name in technique["prerequis"] and not check(profile)]
         if not technique["modeles"] and not technique.get("payloads_complets"):
-            motifs.append(REASON_NO_TEMPLATE)
+            reasons.append(REASON_NO_TEMPLATE)
 
-        if motifs:
-            ecartees.append({"technique": technique["id"],
-                             "famille_owasp": technique["famille_owasp"],
-                             "motifs": motifs})
+        if reasons:
+            skipped.append({"technique": technique["id"],
+                            "famille_owasp": technique["famille_owasp"],
+                            "motifs": reasons})
         else:
-            retenues.append(technique)
+            kept.append(technique)
 
-    # Une technique maison encore vide dont la FAMILLE est par ailleurs
-    # couverte par garak n'est pas un trou de couverture. Sans cette
-    # distinction, le rapport affichait côte à côte « divulgation-information
-    # (LLM02) — aucun modèle de payload » et « Familles testées : LLM02 », ce
-    # qui est contradictoire pour un lecteur et invente un trou qui n'existe
-    # pas. On ne la masque pas pour autant : on dit où la famille est traitée.
-    familles_retenues = {t["famille_owasp"] for t in retenues
-                         if t["famille_owasp"]}
-    for ecartee in ecartees:
-        # Réservé au SEUL cas qui le justifie : une technique écartée faute de
-        # payload, dont la famille est traitée ailleurs. Le champ s'appliquait
-        # à toutes les écartées, ce qui est devenu visible — et faux — avec les
-        # règles de pertinence du 2026-11-11 : `ansiescape` relève de LLM01,
-        # couverte par ailleurs, mais elle teste les séquences ANSI que nulle
-        # autre sonde ne teste. Dire « couverte ailleurs » laissait croire que
-        # son écartement ne coûtait rien.
-        ecartee["famille_couverte_ailleurs"] = (
-            REASON_NO_TEMPLATE in ecartee["motifs"]
-            and ecartee["famille_owasp"] in familles_retenues)
+    # A still-empty hand-written technique whose FAMILY is covered elsewhere
+    # by garak is not a coverage hole. Without this distinction the report
+    # displayed side by side "divulgation-information (LLM02) — no payload
+    # template" and "Families tested: LLM02", which is contradictory for a
+    # reader and invents a hole that does not exist. We do not hide it for all
+    # that: we say where the family is handled.
+    families_kept = {t["famille_owasp"] for t in kept if t["famille_owasp"]}
+    for entry in skipped:
+        # Reserved for the ONE case that justifies it: a technique skipped for
+        # want of a payload, whose family is handled elsewhere. The field
+        # applied to every skipped technique, which became visible — and false
+        # — with the relevance rules of 2026-11-11: `ansiescape` belongs to
+        # LLM01, covered elsewhere, but it tests the ANSI sequences no other
+        # probe tests. Saying "covered elsewhere" suggested that skipping it
+        # cost nothing.
+        entry["famille_couverte_ailleurs"] = (
+            REASON_NO_TEMPLATE in entry["motifs"]
+            and entry["famille_owasp"] in families_kept)
 
-    essais = []
-    for technique in retenues:
-        for modele in technique["modeles"]:
-            for objectif in objectifs:
-                for nom_transfo, transformer in TRANSFORMATIONS.items():
-                    texte = modele.format(objectif=objectif["formulation"])
-                    essais.append({
+    attempts = []
+    for technique in kept:
+        for template in technique["modeles"]:
+            for objective in objectives:
+                for name, transform in TRANSFORMATIONS.items():
+                    text = template.format(objectif=objective["formulation"])
+                    attempts.append({
                         "technique": technique["id"],
                         "famille_owasp": technique["famille_owasp"],
-                        "objectif": objectif["id"],
-                        "transformation": nom_transfo,
-                        "texte": transformer(texte),
+                        "objectif": objective["id"],
+                        "transformation": name,
+                        "texte": transform(text),
                         "familles_non_jugeables":
                             technique.get("familles_non_jugeables") or [],
                         "groupe": _group(technique),
-                        "priorite": _priority(technique, objectif, nom_transfo),
+                        "priorite": _priority(technique, objective, name),
                     })
 
-        # Les payloads venus de l'extérieur (garak) sont des prompts complets :
-        # ils portent leur propre intention, donc pas d'axe objectif.
+        # Payloads coming from outside (garak) are complete prompts: they
+        # carry their own intention, so no objective axis.
         for payload in technique.get("payloads_complets", []):
-            # Un payload complet sert de PRÉAMBULE : seul, il mesure la
-            # résistance au détournement ; composé avec un objectif issu de
-            # la reconnaissance, il va chercher ce que la cible protège.
-            variantes = [(o, compose(payload, o)) for o in objectifs]
-            variantes.append((None, payload))
-            for objectif, texte in variantes:
-                for nom_transfo, transformer in TRANSFORMATIONS.items():
-                    essais.append({
+            # A complete payload serves as a PREAMBLE: alone it measures
+            # resistance to hijacking; composed with an objective derived from
+            # reconnaissance it goes after what the target protects.
+            variants = [(o, compose(payload, o)) for o in objectives]
+            variants.append((None, payload))
+            for objective, text in variants:
+                for name, transform in TRANSFORMATIONS.items():
+                    attempts.append({
                         "technique": technique["id"],
                         "famille_owasp": technique["famille_owasp"],
-                        "objectif": objectif["id"] if objectif else None,
-                        "transformation": nom_transfo,
-                        "texte": transformer(texte),
+                        "objectif": objective["id"] if objective else None,
+                        "transformation": name,
+                        "texte": transform(text),
                         "source": technique.get("source"),
                         "familles_non_jugeables":
                             technique.get("familles_non_jugeables") or [],
                         "groupe": _group(technique),
-                        "priorite": _priority(technique, objectif, nom_transfo),
+                        "priorite": _priority(technique, objective, name),
                     })
 
-    # Tri stable : à priorité égale, l'ordre de la bibliothèque est conservé,
-    # donc deux campagnes identiques produisent la même liste.
-    essais.sort(key=lambda essai: essai["priorite"])
-    return {"essais": _share_budget(essais, budget),
-            "candidats": essais,
-            "ecartees": ecartees}
+    # Stable sort: on an equal priority the library's order is kept, so two
+    # identical campaigns produce the same list.
+    attempts.sort(key=lambda attempt: attempt["priorite"])
+    return {"essais": _share_budget(attempts, budget),
+            "candidats": attempts,
+            "ecartees": skipped}
 
 
 def _group(technique):
     """
-    Le grain du tour de rôle : le module garak, ou l'identifiant pour une
-    technique maison.
+    The grain of the round-robin: the garak module, or the identifier for a
+    hand-written technique.
 
-    Pourquoi pas la technique : `encoding` compte quinze sondes sur les
-    cinquante-deux du périmètre, toutes variantes du même test. Compter par
-    technique leur donnait quinze tours quand `dan` en obtenait trois, et
-    l'ordre alphabétique faisait le reste — une campagne à budget élargi se
-    serait épuisée en variantes d'encodage avant d'atteindre `promptinject`.
+    Why not the technique: `encoding` is fifteen of the fifty-two probes in
+    scope, all variants of the same test. Counting by technique gave them
+    fifteen turns where `dan` got three, and alphabetical order did the rest —
+    a campaign on a wider budget would have burned itself on encoding variants
+    before reaching `promptinject`.
     """
     return technique.get("groupe") or technique["id"]
 
 
-def _share_budget(essais, budget):
+def _share_budget(attempts, budget):
     """
-    Répartit le budget ENTRE les groupes de techniques, au lieu de le donner
-    à la première.
+    Shares the budget BETWEEN groups of techniques, instead of handing it to
+    the first one.
 
-    Trier puis trancher paraissait suffisant tant que la bibliothèque tenait
-    en douze payloads. Avec 614, la première technique raflait les six essais
-    disponibles : on apprenait tout d'une sonde et rien des cinquante-deux
-    autres. Or un scanner doit d'abord balayer, puis creuser.
+    Sorting then cutting looked enough while the library held twelve payloads.
+    With 614, the first technique took all six available attempts: we learned
+    everything about one probe and nothing about the other fifty-two. But a
+    scanner must sweep first, and dig second.
 
-    On prend donc un essai par technique, dans l'ordre de priorité, puis un
-    deuxième de chacune, et ainsi de suite. À budget égal, la couverture est
-    maximale — et le rapport peut enfin parler de plusieurs familles.
+    So we take one attempt per technique, in priority order, then a second
+    from each, and so on. At an equal budget, coverage is maximal — and the
+    report can finally speak of several families.
     """
     if budget <= 0:
         return []
 
-    par_technique = {}
-    for essai in essais:                     # `essais` est déjà trié
-        cle = essai.get("groupe") or essai["technique"]
-        par_technique.setdefault(cle, []).append(essai)
+    by_technique = {}
+    for attempt in attempts:                 # `attempts` is already sorted
+        key = attempt.get("groupe") or attempt["technique"]
+        by_technique.setdefault(key, []).append(attempt)
 
-    retenus = []
-    tours = max((len(v) for v in par_technique.values()), default=0)
-    for tour in range(tours):
-        for candidats in par_technique.values():
-            if tour < len(candidats):
-                retenus.append(candidats[tour])
-                if len(retenus) >= budget:
-                    return retenus
-    return retenus
+    kept = []
+    rounds = max((len(v) for v in by_technique.values()), default=0)
+    for index in range(rounds):
+        for candidates in by_technique.values():
+            if index < len(candidates):
+                kept.append(candidates[index])
+                if len(kept) >= budget:
+                    return kept
+    return kept
 
 
-def _paired(technique, objectif):
+def _paired(technique, objective):
     """
-    Cet objectif a-t-il été fabriqué pour la famille de cette technique ?
+    Was this objective built for this technique's family?
 
-    Le rapprochement se fait sur le PRÉFIXE de la famille (`LLM06`), pas sur
-    son libellé complet : `bibliotheque.json` écrit « LLM06:2025 Excessive
-    Agency », et faire dépendre une règle de priorité du millésime OWASP la
-    casserait à la prochaine révision du Top 10.
+    The match is on the family's PREFIX (`LLM06`), not on its full label:
+    `bibliotheque.json` writes "LLM06:2025 Excessive Agency", and making a
+    priority rule depend on the OWASP vintage would break it at the Top 10's
+    next revision.
     """
-    attendue = objectif.get("pour_famille")
-    famille = technique.get("famille_owasp") or ""
-    return bool(attendue) and famille.startswith(attendue)
+    expected = objective.get("pour_famille")
+    family = technique.get("famille_owasp") or ""
+    return bool(expected) and family.startswith(expected)
 
 
-def _priority(technique, objectif, nom_transformation):
+def _priority(technique, objective, transformation_name):
     """
-    Plus le nombre est petit, plus l'essai passe tôt. Quatre idées, dans
-    l'ordre : viser ce que la cible protège, préférer un payload éprouvé,
-    attaquer avant de contrôler, et commencer sans transformation (une
-    attaque qui échoue en clair n'échoue pas à cause de l'encodage).
+    The smaller the number, the earlier the attempt goes. Four ideas, in
+    order: aim at what the target protects, prefer a proven payload, attack
+    before controlling, and start without a transformation (an attack that
+    fails in clear text did not fail because of the encoding).
 
-    `objectif` vaut None pour un payload complet, qui porte déjà sa propre
-    intention : il est traité comme ciblé, ni mieux ni moins bien qu'un
-    objectif issu de la reconnaissance.
+    `objective` is None for a complete payload, which already carries its own
+    intention: it is treated as targeted, neither better nor worse than an
+    objective derived from reconnaissance.
     """
-    priorite = 0
-    if objectif is None:
-        # Un payload complet SEUL mesure la résistance au détournement. Utile,
-        # mais moins que le même payload chargé de réclamer ce que la cible
-        # protège : à priorité égale, le tour de rôle ne retiendrait que lui.
-        priorite += 1
-    elif objectif.get("origine") != "reconnaissance":
-        priorite += 4          # un objectif générique passe après un objectif ciblé
-    elif _paired(technique, objectif):
-        # Un objectif fabriqué POUR une famille passe devant sur cette
-        # famille. Sans cette règle, le tour de rôle ne retenait qu'un essai
-        # par technique, et à égalité c'était l'ordre de la liste qui
-        # tranchait : la technique `abus-outils` partait avec un objectif
-        # `refus-N` et n'appelait aucun outil. Un payload d'abus d'outil qui
-        # ne nomme pas d'outil ne teste rien.
-        priorite -= 1
+    priority = 0
+    if objective is None:
+        # A complete payload ALONE measures resistance to hijacking. Useful,
+        # but less so than the same payload tasked with demanding what the
+        # target protects: on an equal priority the round-robin would keep
+        # only the bare one.
+        priority += 1
+    elif objective.get("origine") != "reconnaissance":
+        priority += 4      # a generic objective comes after a targeted one
+    elif _paired(technique, objective):
+        # An objective built FOR a family moves ahead on that family. Without
+        # this rule the round-robin kept one attempt per technique, and on a
+        # tie the list's order decided: the `abus-outils` technique went out
+        # with a `refus-N` objective and called no tool at all. A tool-abuse
+        # payload that names no tool tests nothing.
+        priority -= 1
     if technique["id"] == "controle":
-        priorite += 2          # le témoin n'est pas une attaque : il attend son tour
-    if nom_transformation != "identite":
-        priorite += 1          # le texte brut d'abord, les variantes ensuite
-    return priorite
+        priority += 2      # the control is not an attack: it waits its turn
+    if transformation_name != "identite":
+        priority += 1      # raw text first, variants afterwards
+    return priority
 
 
-def resumer(plan):
-    """Le plan en quelques lignes, pour l'affichage d'une campagne."""
-    lignes = [f"  {len(plan['essais'])} essai(s) retenu(s) :"]
-    for essai in plan["essais"]:
-        lignes.append(f"    - {essai['technique']} / "
-                      f"{essai['objectif'] or 'payload complet'} "
-                      f"/ {essai['transformation']}")
+def summarise(plan):
+    """The plan in a few lines, for a campaign's display."""
+    lines = [f"  {len(plan['essais'])} essai(s) retenu(s) :"]
+    for attempt in plan["essais"]:
+        lines.append(f"    - {attempt['technique']} / "
+                     f"{attempt['objectif'] or 'payload complet'} "
+                     f"/ {attempt['transformation']}")
     if plan["ecartees"]:
-        # Groupé par MOTIF, pas par technique : depuis les règles de
-        # pertinence, ce sont des modules entiers qui sont écartés, et huit
-        # sondes `web_injection` affichaient huit fois « aucun client ne rend
-        # le Markdown ». Une information répétée noie celle qui ne l'est pas.
-        lignes.append("  écartées :")
-        for motif, techniques in group_by_reason(plan["ecartees"]):
-            lignes.append(f"    - {len(techniques)} technique(s) : {motif}")
-            apercu = ", ".join(techniques[:3])
+        # Grouped by REASON, not by technique: since the relevance rules it is
+        # whole modules that get skipped, and eight `web_injection` probes
+        # printed "no client renders Markdown" eight times. Repeated
+        # information drowns the information that is not repeated.
+        lines.append("  écartées :")
+        for reason, techniques in group_by_reason(plan["ecartees"]):
+            lines.append(f"    - {len(techniques)} technique(s) : {reason}")
+            preview = ", ".join(techniques[:3])
             if len(techniques) > 3:
-                apercu += f", +{len(techniques) - 3} autre(s)"
-            lignes.append(f"      ({apercu})")
-    return "\n".join(lignes)
+                preview += f", +{len(techniques) - 3} autre(s)"
+            lines.append(f"      ({preview})")
+    return "\n".join(lines)
 
 
-def group_by_reason(ecartees):
+def group_by_reason(skipped):
     """
-    [(motif, [techniques])], dans l'ordre d'apparition des motifs.
+    [(reason, [techniques])], in the order the reasons first appear.
 
-    Partagé entre l'affichage de campagne et le rapport : les deux doivent
-    grouper de la même façon, sinon un lecteur qui a vu la campagne ne
-    reconnaîtrait pas le rapport.
+    Shared between the campaign display and the report: the two must group the
+    same way, otherwise a reader who watched the campaign would not recognise
+    the report.
     """
-    groupes = {}
-    for ecartee in ecartees:
-        motif = " ; ".join(ecartee["motifs"])
-        groupes.setdefault(motif, []).append(ecartee["technique"])
-    return list(groupes.items())
+    groups = {}
+    for entry in skipped:
+        reason = " ; ".join(entry["motifs"])
+        groups.setdefault(reason, []).append(entry["technique"])
+    return list(groups.items())

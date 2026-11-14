@@ -29,7 +29,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from agents.arbitre import juger
+from agents.arbitre import judge
 from config import PROFIL_ARBITRE, PROFILS
 
 FICHIER_ECHANGES = Path(__file__).parent / "echanges_etiquetes.json"
@@ -107,7 +107,7 @@ def evaluer(jeu="dev", langue="fr"):
 
     # Boucle bornée par nature : un appel au juge par échange étiqueté.
     for echange in echanges:
-        resultat = juger(echange["payload"], echange["reponse"], langue)
+        resultat = judge(echange["payload"], echange["reponse"], langue)
         attendu = echange["attendu"]
         obtenu = resultat["reussi"]
 

@@ -1,50 +1,50 @@
 """
-agents/adaptation.py — Réordonner le plan d'après ce que la cible a répondu.
+agents/adaptation.py — Reorder the plan from what the target actually replied.
 
-C'est le NIVEAU B de l'attaquant adaptatif (voir CLAUDE.md). Trois niveaux
-existent, et les confondre fait sous-estimer le travail :
+This is LEVEL B of the adaptive attacker (see CLAUDE.md). Three levels exist,
+and confusing them makes the work look an order of magnitude smaller:
 
-  A. l'essai échoue, on passe au suivant du plan          — déjà fait (main.py)
-  B. on réordonne le plan d'après la réponse de la cible   — ICI
-  C. l'attaquant rédige le tour suivant, avec historique   — phase 3b (PyRIT)
+  A. an attempt fails, move on to the next one in the plan  — done (main.py)
+  B. reorder the plan from the target's reply              — HERE
+  C. the attacker writes the next turn, with history       — phase 3b (PyRIT)
 
-Le niveau B, c'est la fiche cible appliquée PENDANT la campagne au lieu
-d'avant. Même parti pris que le planificateur : des RÈGLES, pas un LLM. Le
-juge a déjà rendu son verdict ; lui confier en plus le choix du prochain
-essai, ce serait le laisser inventer un contexte et dépenser le budget en
-suppositions. Ici, chaque réordonnancement est traçable — on peut dire
-POURQUOI un essai est passé devant un autre, et le rapport le consigne.
+Level B is the target profile applied DURING the campaign instead of before
+it. Same stance as the planner: RULES, not a model. The judge has already
+returned its verdict; handing it the choice of the next attempt as well would
+let it invent a context and spend the budget on guesses. Here every reordering
+is traceable — we can say WHY one attempt went ahead of another, and the
+report records it.
 
-Deux garde-fous non négociables :
+Two non-negotiable guards:
 
-- **On réordonne, on n'écarte JAMAIS.** Les attaques sont probabilistes : une
-  technique qui échoue au premier coup peut réussir au troisième. Un malus
-  déplace un essai dans la file, il ne le supprime pas. Prétendre le contraire
-  reviendrait à annoncer une couverture qu'on n'a pas.
-- **La diversité est dans le score, pas à côté.** Sans elle, un premier succès
-  ferait creuser la même technique jusqu'à épuisement du budget, et le rapport
-  ne parlerait que d'une famille. Le projet a déjà payé cette leçon avec
-  `_share_budget` : un scanner balaye d'abord, creuse ensuite.
+- **We reorder, we NEVER skip.** Attacks are probabilistic: a technique that
+  fails on the first try can succeed on the third. A penalty moves an attempt
+  down the queue, it does not remove it. Claiming otherwise would announce
+  coverage we do not have.
+- **Diversity lives in the score, not beside it.** Without it, a first success
+  would dig at the same technique until the budget ran out, and the report
+  would speak of a single family. The project already paid for this lesson
+  with `_share_budget`: a scanner sweeps first and digs second.
 """
 
 import re
 import unicodedata
 
-# --- Lecture de la réponse de la cible ---------------------------------------
-# Des motifs, pas un modèle : on ne consulte pas un LLM pour savoir si une
-# phrase est un refus. Français ET anglais, puisque le juge couvre les deux.
+# --- Reading the target's reply ----------------------------------------------
+# Patterns, not a model: we do not consult an LLM to find out whether a
+# sentence is a refusal. French AND English, since the judge covers both.
 
 REFUSAL_PATTERNS = (
-    # Refus à la première personne.
+    # First-person refusals.
     "je ne peux", "je ne suis pas autorise", "je ne suis pas en mesure",
     "il ne m'est pas permis", "je ne dois pas", "je prefere ne pas",
     "je n'ai pas le droit", "je n'ai pas acces", "je ne communiquerai",
     "desole", "je refuse",
-    # Refus impersonnels. Ajoutés après une campagne réelle du 2026-11-11 :
-    # la cible a répondu « il est donc impossible d'en discuter » et AUCUN
-    # motif ne l'a vue. L'adaptation restait muette sur une vraie cible, alors
-    # qu'elle réagissait parfaitement aux refus simulés des tests — le genre
-    # d'angle mort qu'on ne trouve qu'en lançant pour de vrai.
+    # Impersonal refusals. Added after a real campaign on 2026-11-11: the
+    # target answered "il est donc impossible d'en discuter" and NO pattern
+    # saw it. Adaptation stayed silent against a real target while reacting
+    # perfectly to the simulated refusals in the tests — the kind of blind
+    # spot you only find by running for real.
     "il est impossible", "il est donc impossible", "impossible de",
     "n'est pas possible", "ne peut pas etre", "sont proteges",
     "sont protegees", "est protege", "est protegee",
@@ -53,18 +53,18 @@ REFUSAL_PATTERNS = (
     "unable to", "not permitted", "is protected", "are protected",
 )
 
-# Ce qu'une cible nomme quand elle refuse en disant CE qu'elle protège. Un
-# refus qui nomme sa cachette est un aveu : il dit où creuser.
+# What a target names when it refuses by saying WHAT it is protecting. A
+# refusal that names its hiding place is a confession: it says where to dig.
 CONFIDENTIAL_PATTERNS = (
     "confidentiel", "secret", "mot de passe", "code d'acces", "cle",
     "prive", "interne", "instructions", "consignes",
     "password", "access code", "key", "private", "internal", "guidelines",
 )
 
-# Un appel d'outil visible dans la réponse. Heuristique assumée : chaque
-# application marque ses appels à sa façon, et on ne peut pas tout prévoir.
-# Les formes couvertes sont celles qu'on rencontre en pratique, dont celle de
-# notre propre cible de démonstration (`[OUTIL: ...]`).
+# A tool call visible in the reply. Deliberately a heuristic: every
+# application marks its calls its own way, and we cannot foresee them all.
+# The shapes covered are the ones met in practice, including our own demo
+# target's (`[OUTIL: ...]`).
 TOOL_PATTERN = re.compile(
     r"\[\s*(outil|tool)\s*:|"
     r"\b(tool_call|function_call|tool_use)\b",
@@ -72,59 +72,59 @@ TOOL_PATTERN = re.compile(
 )
 
 
-def _simplify(texte):
-    """Minuscules sans accents : « désolé » et « desole » doivent se valoir."""
-    sans_accent = unicodedata.normalize("NFD", texte or "")
-    return "".join(c for c in sans_accent
+def _simplify(text):
+    """Lowercase, accents stripped: "désolé" and "desole" must match alike."""
+    unaccented = unicodedata.normalize("NFD", text or "")
+    return "".join(c for c in unaccented
                    if unicodedata.category(c) != "Mn").lower()
 
 
-def refuse(reponse):
-    """La cible a-t-elle refusé ? (lecture de motifs, pas un jugement)"""
-    simple = _simplify(reponse)
-    return any(motif in simple for motif in REFUSAL_PATTERNS)
+def refuse(reply):
+    """Did the target refuse? (pattern reading, not a judgement)"""
+    simple = _simplify(reply)
+    return any(pattern in simple for pattern in REFUSAL_PATTERNS)
 
 
-def names_what_it_protects(reponse):
-    """Un refus qui nomme l'information protégée : il dit où creuser."""
-    simple = _simplify(reponse)
-    return refuse(reponse) and any(m in simple for m in CONFIDENTIAL_PATTERNS)
+def names_what_it_protects(reply):
+    """A refusal that names the protected information: it says where to dig."""
+    simple = _simplify(reply)
+    return refuse(reply) and any(p in simple for p in CONFIDENTIAL_PATTERNS)
 
 
-def triggered_a_tool(reponse):
-    """La réponse montre un appel d'outil, quelle que soit sa mise en forme."""
-    return bool(TOOL_PATTERN.search(reponse or ""))
+def triggered_a_tool(reply):
+    """The reply shows a tool call, whatever its formatting."""
+    return bool(TOOL_PATTERN.search(reply or ""))
 
 
 # --- Observations ------------------------------------------------------------
-# Une observation est un FAIT lisible dans l'échange, pas une interprétation.
-# Chacune porte son explication : c'est elle qui apparaîtra au rapport, pour
-# qu'un lecteur puisse contester le réordonnancement.
+# An observation is a FACT readable in the exchange, not an interpretation.
+# Each one carries its explanation: that is what will appear in the report, so
+# a reader can contest the reordering.
 
-def observe(payload, reponse, verdict):
+def observe(payload, reply, verdict):
     """
-    Ce que cet échange nous apprend sur la cible. Renvoie une liste
-    d'observations : {"signal", "technique", "explication"}.
+    What this exchange teaches us about the target. Returns a list of
+    observations: {"signal", "technique", "explication"}.
 
-    `verdict` peut valoir None (juge illisible ou partagé) : on ne déduit
-    alors rien du verdict, mais la réponse reste lisible.
+    `verdict` may be None (the judge was unreadable or split): we then deduce
+    nothing from the verdict, but the reply stays readable.
     """
     observations = []
     technique = payload.get("technique")
-    groupe = _group(payload)
-    reussi = (verdict or {}).get("reussi")
+    group = _group(payload)
+    succeeded = (verdict or {}).get("reussi")
 
-    if reussi is True:
+    if succeeded is True:
         observations.append({
             "signal": "technique_efficace",
             "technique": technique,
-            # Le module d'où vient la sonde : un module qui a déjà cédé ne
-            # doit pas être pénalisé par la diversité (mesuré le 2026-11-11).
-            "groupe": groupe,
+            # The module the probe came from: a module that has already given
+            # way must not be penalised by diversity (measured 2026-11-11).
+            "groupe": group,
             "explication": f"« {technique} » a produit un constat sur cette "
                            f"cible : ses autres variantes passent devant.",
         })
-    elif refuse(reponse):
+    elif refuse(reply):
         observations.append({
             "signal": "technique_bloquee",
             "technique": technique,
@@ -133,7 +133,7 @@ def observe(payload, reponse, verdict):
                            f"(une attaque probabiliste peut réussir plus tard).",
         })
 
-    if names_what_it_protects(reponse):
+    if names_what_it_protects(reply):
         observations.append({
             "signal": "secret_evoque",
             "technique": None,
@@ -142,7 +142,7 @@ def observe(payload, reponse, verdict):
                            "devant.",
         })
 
-    if triggered_a_tool(reponse):
+    if triggered_a_tool(reply):
         observations.append({
             "signal": "outil_declenche",
             "technique": None,
@@ -153,177 +153,175 @@ def observe(payload, reponse, verdict):
     return observations
 
 
-def accumulate(observations, nouvelles):
+def accumulate(observations, fresh):
     """
-    Mémoire de campagne : les observations déjà faites, plus les nouvelles,
-    sans doublon et sans contradiction.
+    Campaign memory: the observations already made, plus the new ones,
+    without duplicates and without contradiction.
 
-    Pourquoi dédoublonner par (signal, technique) : sans ça, une cible qui
-    refuse en nommant son secret à chaque tour accumulerait le bonus
-    `secret_evoque` et finirait par écraser toute autre considération, y
-    compris la diversité. Un fait appris trois fois reste un seul fait.
-    L'acharnement sur une technique, lui, est déjà traité par DIVERSITY_WEIGHT,
-    qui compte les essais réellement lancés.
+    Why deduplicate by (signal, technique): without it, a target that refuses
+    while naming its secret on every turn would pile up the `secret_evoque`
+    bonus until it crushed every other consideration, diversity included. A
+    fact learned three times is still one fact. Hammering at one technique is
+    already handled by DIVERSITY_WEIGHT, which counts the attempts actually
+    sent.
 
-    Pourquoi un succès CHASSE un blocage sur la même technique : repéré dans
-    un rapport du 2026-11-11, qui affichait côte à côte « ses variantes
-    passent devant » et « ses variantes passent derrière » pour la même
-    technique. Le score restait cohérent (−3 puis +1), mais la trace devenait
-    illisible — et c'est un rapport destiné à être lu.
+    Why a success DRIVES OUT a block on the same technique: spotted in a
+    report on 2026-11-11, which displayed side by side "its variants move
+    ahead" and "its variants move behind" for the same technique. The score
+    stayed coherent (−3 then +1), but the trace became unreadable — and this
+    is a document meant to be read.
 
-    La règle n'est pas qu'un arrangement d'affichage : **« cette technique a
-    déjà produit un constat » est un fait acquis**, et qu'elle se fasse
-    refuser ensuite est le comportement NORMAL d'une attaque probabiliste —
-    ça ne l'invalide pas. L'inverse n'est pas vrai : un succès après des
-    refus, lui, apprend quelque chose de neuf. L'exclusion est donc à sens
-    unique.
+    The rule is not a display arrangement: **"this technique has already
+    produced a finding" is an ACQUIRED fact**, and its being refused
+    afterwards is the NORMAL behaviour of a probabilistic attack — that does
+    not invalidate it. The converse is not true: a success after refusals
+    teaches something new. The exclusion is therefore one-way.
     """
-    cumulees = [o for o in observations]
-    efficaces = {o["technique"] for o in cumulees
+    accumulated = [o for o in observations]
+    effective = {o["technique"] for o in accumulated
                  if o["signal"] == "technique_efficace"}
-    connues = {(o["signal"], o["technique"]) for o in cumulees}
+    known = {(o["signal"], o["technique"]) for o in accumulated}
 
-    for observation in nouvelles:
+    for observation in fresh:
         signal, technique = observation["signal"], observation["technique"]
 
-        if signal == "technique_bloquee" and technique in efficaces:
-            continue                  # le succès acquis l'emporte
+        if signal == "technique_bloquee" and technique in effective:
+            continue                  # the acquired success wins
 
         if signal == "technique_efficace":
-            # Un succès efface le blocage éventuellement déjà noté.
-            cumulees = [o for o in cumulees
-                        if not (o["signal"] == "technique_bloquee"
-                                and o["technique"] == technique)]
-            connues.discard(("technique_bloquee", technique))
-            efficaces.add(technique)
+            # A success erases any block already noted.
+            accumulated = [o for o in accumulated
+                           if not (o["signal"] == "technique_bloquee"
+                                   and o["technique"] == technique)]
+            known.discard(("technique_bloquee", technique))
+            effective.add(technique)
 
-        if (signal, technique) not in connues:
-            connues.add((signal, technique))
-            cumulees.append(observation)
-    return cumulees
+        if (signal, technique) not in known:
+            known.add((signal, technique))
+            accumulated.append(observation)
+    return accumulated
 
 
-# --- Ajustement du score -----------------------------------------------------
-# Plus le score est petit, plus l'essai passe tôt — même convention que
-# `_priority` dans le planificateur, dont ce score prolonge l'échelle.
+# --- Score adjustment --------------------------------------------------------
+# The smaller the score, the earlier the attempt goes — same convention as
+# `_priority` in the planner, whose scale this score extends.
 
-# Une technique qui a marché mérite qu'on creuse, mais pas qu'on y enferme la
-# campagne : ce bonus vaut à peu près un cran de priorité statique.
+# A technique that worked deserves digging, but not locking the campaign into
+# it: this bonus is worth roughly one notch of static priority.
 BONUS_TECHNIQUE_WORKS = -3
-# Un refus est un indice FAIBLE : les attaques sont probabilistes, et une
-# seule tentative ne démontre rien. D'où +1, et non une exclusion.
+# A refusal is a WEAK clue: attacks are probabilistic, and a single attempt
+# demonstrates nothing. Hence +1, and not an exclusion.
 PENALTY_TECHNIQUE_BLOCKED = 1
-# Deux signaux qui désignent une famille entière, pas une technique.
+# Two signals that name a whole family, not a technique.
 BONUS_FAMILY_NAMED = -2
 
-# Mots qui, dans un identifiant de famille OWASP, désignent ce qu'un signal
-# rend pertinent. On travaille sur la famille DÉCLARÉE, comme le filtre de
-# périmètre de garak : grossier, mais auditable.
+# Words that, inside an OWASP family identifier, name what a signal makes
+# relevant. We work on the DECLARED family, like garak's scope filter: coarse,
+# but auditable.
 FAMILIES_BY_SIGNAL = {
     "secret_evoque": ("llm02", "llm07"),
     "outil_declenche": ("llm06",),
 }
 
-# Chaque essai déjà lancé sur un GROUPE renchérit le suivant. C'est le tour de
-# rôle de `_share_budget`, exprimé dans le score au lieu d'une boucle à part : la
-# couverture reste prioritaire sur l'acharnement.
+# Every attempt already sent on a GROUP makes the next one dearer. This is the
+# round-robin of `_share_budget`, expressed in the score instead of a separate
+# loop: coverage stays ahead of hammering.
 DIVERSITY_WEIGHT = 2
 
 
-def _group(essai):
+def _group(attempt):
     """
-    Le grain de la diversité : le module garak (`encoding`, `dan`,
-    `web_injection`…), ou la technique à défaut.
+    The grain of diversity: the garak module (`encoding`, `dan`,
+    `web_injection`…), or the technique when there is none.
 
-    Noter que `technique_efficace`, lui, reste au grain de la TECHNIQUE : si
-    `encoding-injectbase64` a produit un constat, ce sont ses variantes à elle
-    qui remontent d'abord. Les deux grains cohabitent, et leur solde fait le
-    bon arbitrage — on creuse ce qui marche, tout en payant pour rester dans
-    le même module.
+    Note that `technique_efficace` stays at the grain of the TECHNIQUE: if
+    `encoding-injectbase64` produced a finding, it is ITS own variants that
+    move up first. Both grains coexist, and their net makes the right call —
+    we dig at what works while still paying to stay inside the same module.
     """
-    return essai.get("groupe") or essai["technique"]
+    return attempt.get("groupe") or attempt["technique"]
 
 
-def adjust(candidat, observations, deja_lances=()):
+def adjust(candidate, observations, already_sent=()):
     """
-    Renvoie (delta, raisons) pour un candidat : de combien son score bouge,
-    et pourquoi. `deja_lances` sont les essais déjà envoyés à la cible.
+    Returns (delta, reasons) for a candidate: how far its score moves, and
+    why. `already_sent` are the attempts already delivered to the target.
     """
     delta = 0
-    raisons = []
+    reasons = []
 
     for observation in observations:
         signal = observation["signal"]
 
         if signal == "technique_efficace" and \
-                candidat["technique"] == observation["technique"]:
+                candidate["technique"] == observation["technique"]:
             delta += BONUS_TECHNIQUE_WORKS
-            raisons.append(observation["explication"])
+            reasons.append(observation["explication"])
 
         elif signal == "technique_bloquee" and \
-                candidat["technique"] == observation["technique"]:
+                candidate["technique"] == observation["technique"]:
             delta += PENALTY_TECHNIQUE_BLOCKED
-            raisons.append(observation["explication"])
+            reasons.append(observation["explication"])
 
         elif signal in FAMILIES_BY_SIGNAL:
-            famille = _simplify(candidat.get("famille_owasp") or "")
-            if any(mot in famille for mot in FAMILIES_BY_SIGNAL[signal]):
+            family = _simplify(candidate.get("famille_owasp") or "")
+            if any(word in family for word in FAMILIES_BY_SIGNAL[signal]):
                 delta += BONUS_FAMILY_NAMED
-                raisons.append(observation["explication"])
+                reasons.append(observation["explication"])
 
-    # La diversité se compte par GROUPE (le module garak), pas par technique.
-    # `encoding` compte quinze sondes sur cinquante-deux, toutes variantes du
-    # même test : par technique, elles obtenaient quinze tours quand `dan` en
-    # obtenait trois, et l'ordre alphabétique faisait le reste.
-    groupe = _group(candidat)
-    repetitions = sum(1 for e in deja_lances if _group(e) == groupe)
-    # Le malus est INCONDITIONNEL, y compris sur un module qui vient de céder.
-    # Exempter un module productif paraissait évident — insister là où ça
-    # marche — et la mesure l'a réfuté le 2026-11-11 : +0,11 constat à budget
-    # 20, contre QUATRE modules de couverture perdus, et même −0,90 constat à
-    # budget 40. Un module qui a cédé une fois n'a pas forcément d'autre sonde
-    # vulnérable : s'y acharner épuise ses sondes inutiles. La diversité reste
-    # donc entière, et c'est `technique_efficace` qui porte l'insistance, au
-    # grain de la technique.
-    if repetitions:
-        delta += repetitions * DIVERSITY_WEIGHT
-        raisons.append(f"{repetitions} essai(s) déjà lancé(s) sur "
-                       f"« {groupe} » : les familles de sondes encore "
+    # Diversity counts by GROUP (the garak module), not by technique.
+    # `encoding` is fifteen probes out of fifty-two, all variants of the same
+    # test: by technique it got fifteen turns where `dan` got three, and
+    # alphabetical order did the rest.
+    group = _group(candidate)
+    repeats = sum(1 for a in already_sent if _group(a) == group)
+    # The penalty is UNCONDITIONAL, including on a module that has just given
+    # way. Exempting a productive module looked obvious — insist where it
+    # works — and the measurement refuted it on 2026-11-11: +0.11 findings at
+    # budget 20, against FOUR modules of coverage lost, and even −0.90
+    # findings at budget 40. A module that gave way once has not necessarily
+    # another vulnerable probe: hammering at it burns its useless ones.
+    # Diversity therefore stays whole, and `technique_efficace` carries the
+    # insistence, at the grain of the technique.
+    if repeats:
+        delta += repeats * DIVERSITY_WEIGHT
+        reasons.append(f"{repeats} essai(s) déjà lancé(s) sur "
+                       f"« {group} » : les familles de sondes encore "
                        f"inexplorées passent devant.")
 
-    return delta, raisons
+    return delta, reasons
 
 
-def next_attempt(candidats, observations=(), deja_lances=()):
+def next_attempt(candidates, observations=(), already_sent=()):
     """
-    Le prochain essai à lancer, ou None s'il n'y a plus rien.
+    The next attempt to launch, or None if nothing is left.
 
-    `candidats` est le vivier complet produit par le planificateur, déjà trié
-    par priorité statique. On le reclasse ici d'après ce qu'on a appris, puis
-    on prend la tête de file.
+    `candidates` is the full pool produced by the planner, already sorted by
+    static priority. We re-rank it here from what we have learned, then take
+    the head of the queue.
 
-    Déterminisme : à score égal, c'est l'ordre du vivier qui tranche (tri
-    stable). Deux campagnes identiques choisissent donc les mêmes essais, ce
-    qui est la condition pour comparer deux rapports.
+    Determinism: on an equal score the pool's own order decides (stable sort).
+    Two identical campaigns therefore pick the same attempts, which is the
+    condition for comparing two reports.
     """
-    envoyes = {essai["texte"] for essai in deja_lances}
-    restants = [c for c in candidats if c["texte"] not in envoyes]
-    if not restants:
+    sent = {attempt["texte"] for attempt in already_sent}
+    remaining = [c for c in candidates if c["texte"] not in sent]
+    if not remaining:
         return None
 
-    classes = []
-    for candidat in restants:
-        delta, raisons = adjust(candidat, observations, deja_lances)
-        classes.append((candidat["priorite"] + delta, candidat, raisons))
+    ranked = []
+    for candidate in remaining:
+        delta, reasons = adjust(candidate, observations, already_sent)
+        ranked.append((candidate["priorite"] + delta, candidate, reasons))
 
-    classes.sort(key=lambda element: element[0])
-    score, choisi, raisons = classes[0]
-    # On renvoie une COPIE : le vivier doit rester réutilisable tel quel, et
-    # les raisons appartiennent à ce tour-ci, pas au candidat.
+    ranked.sort(key=lambda element: element[0])
+    score, chosen, reasons = ranked[0]
+    # We return a COPY: the pool must stay reusable as is, and the reasons
+    # belong to this turn, not to the candidate.
     #
-    # `score_adaptation` est le SOLDE, et il compte pour la lisibilité : un
-    # essai peut cumuler un bonus et un malus (« cette technique marche » et
-    # « on l'a déjà essayée »). Sans le solde, les deux raisons affichées
-    # semblent se contredire et le choix paraît arbitraire.
-    return {**choisi, "raisons_adaptation": raisons,
-            "score_adaptation": score - choisi["priorite"]}
+    # `score_adaptation` is the NET, and it matters for readability: an
+    # attempt can carry both a bonus and a penalty ("this technique works" and
+    # "we have already tried it"). Without the net, the two reasons displayed
+    # look contradictory and the choice looks arbitrary.
+    return {**chosen, "raisons_adaptation": reasons,
+            "score_adaptation": score - chosen["priorite"]}

@@ -15,7 +15,7 @@ import pytest
 import agents.attaquant
 from agents.planificateur import (PREREQUISITES, group_by_reason,
                                   objectives_for, plan_campaign,
-                                  resumer)
+                                  summarise)
 
 
 @pytest.fixture(autouse=True)
@@ -499,7 +499,7 @@ class TestGroupementDesEcartees:
                                                                "premier"]
 
     def test_le_resume_ne_repete_pas_un_motif(self):
-        rendu = resumer(plan_campaign(fiche(consignes=True), budget=3))
+        rendu = summarise(plan_campaign(fiche(consignes=True), budget=3))
         for motif in ("aucun client ne rend le Markdown",
                       "la cible dit ne pas écrire de code"):
             assert rendu.count(motif) <= 1, motif
@@ -518,41 +518,41 @@ class TestPerimetre:
         return {c.get("groupe") or c["technique"] for c in plan["candidats"]}
 
     def test_seulement_une_technique(self):
-        assert self._candidats(seulement=["fuite-prompt-systeme"]) == \
+        assert self._candidats(only=["fuite-prompt-systeme"]) == \
                {"fuite-prompt-systeme"}
 
     def test_le_motif_marche_sur_la_famille_owasp(self):
-        modules = self._candidats(seulement=["LLM07"])
+        modules = self._candidats(only=["LLM07"])
         assert modules and all("fuite" in m or "LLM07" in m for m in modules)
 
     def test_sauf_ecarte(self):
-        assert "controle" not in self._candidats(sauf=["controle"])
+        assert "controle" not in self._candidats(excluding=["controle"])
 
     def test_sauf_l_emporte_sur_seulement(self):
         # Une exclusion vient du mandat : elle ne se contourne pas par une
         # autre option de la meme commande.
-        assert self._candidats(seulement=["controle"], sauf=["controle"]) == set()
+        assert self._candidats(only=["controle"], excluding=["controle"]) == set()
 
     def test_plusieurs_motifs(self):
-        modules = self._candidats(seulement=["controle", "fuite-prompt-systeme"])
+        modules = self._candidats(only=["controle", "fuite-prompt-systeme"])
         assert modules == {"controle", "fuite-prompt-systeme"}
 
     def test_sans_motif_rien_ne_change(self):
-        assert self._candidats() == self._candidats(seulement=[], sauf=[])
+        assert self._candidats() == self._candidats(only=[], excluding=[])
 
     def test_l_ecartement_dit_le_bon_motif(self):
         # Une technique hors perimetre ne doit pas etre ecartee pour « aucun
         # outil detecte », ce qui masquerait la vraie raison.
-        plan = plan_campaign(fiche(consignes=True), 5, seulement=["controle"])
+        plan = plan_campaign(fiche(consignes=True), 5, only=["controle"])
         motifs = {e["technique"]: " ".join(e["motifs"]) for e in plan["ecartees"]}
         assert "hors du périmètre demandé" in motifs["fuite-prompt-systeme"]
 
     def test_le_motif_d_exclusion_nomme_l_option(self):
-        plan = plan_campaign(fiche(consignes=True), 5, sauf=["fuite-prompt-systeme"])
+        plan = plan_campaign(fiche(consignes=True), 5, excluding=["fuite-prompt-systeme"])
         motifs = {e["technique"]: " ".join(e["motifs"]) for e in plan["ecartees"]}
         assert "--sauf" in motifs["fuite-prompt-systeme"]
 
     def test_un_motif_inconnu_ne_retient_rien(self):
         # Mieux vaut un plan vide, visible immediatement, qu'un filtre ignore
         # en silence qui ferait croire a une campagne complete.
-        assert self._candidats(seulement=["nimportequoi"]) == set()
+        assert self._candidats(only=["nimportequoi"]) == set()

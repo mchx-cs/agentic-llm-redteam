@@ -19,7 +19,7 @@ import pytest
 
 import agents.reconnaissance as reconnaissance
 from agents.reconnaissance import (KNOWN_CONTEXTS, PROBES, reconnoitre,
-                                   resumer)
+                                   summarise)
 
 CHAMPS_ATTENDUS = {"role", "langue", "outils", "sujets_refuses",
                    "mentionne_consignes", "produit_du_code",
@@ -158,11 +158,11 @@ class TestBudgetEtAffichage:
 
     def test_le_resume_affiche_les_nouveaux_champs(self, analyser):
         analyser('{"produit_du_code": true, "traite_des_documents": false}')
-        rendu = resumer(reconnoitre(_cible()))
+        rendu = summarise(reconnoitre(_cible()))
         assert "écrit du code : oui" in rendu
         assert "lit des documents : non" in rendu
         assert "contexte déclaré : aucun" in rendu
 
     def test_le_resume_distingue_non_de_non_declare(self, analyser):
         analyser('{"produit_du_code": null}')
-        assert "écrit du code : non déclaré" in resumer(reconnoitre(_cible()))
+        assert "écrit du code : non déclaré" in summarise(reconnoitre(_cible()))

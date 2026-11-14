@@ -25,10 +25,10 @@ from pathlib import Path
 from audit import (FICHIER_AUTORISATION, AutorisationManquante, PisteAudit,
                    exiger, telemetrie)
 from agents.adaptation import accumulate, observe, next_attempt
-from agents.arbitre import juger, judge_by_vote
-from agents.planificateur import plan_campaign, resumer as resumer_plan
+from agents.arbitre import judge, judge_by_vote
+from agents.planificateur import plan_campaign, summarise as summarise_plan
 from agents.reconnaissance import (KNOWN_CONTEXTS, reconnoitre,
-                                    resumer as resumer_fiche)
+                                    summarise as summarise_profile)
 from agents.verificateur import verify_by_replay
 from cibles import choose_target
 from cibles.http import TARGET_PROFILES, probe_target as probe_http_target
@@ -78,12 +78,12 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     # l'hallucination. On le verse donc après coup, sans toucher aux faits
     # observés.
     fiche["contexte"] = list(contexte)
-    print(resumer_fiche(fiche))
+    print(summarise_profile(fiche))
 
     # --- 2. Planification : que lancer, et dans quel ordre ? ---------------
     print("\n--- Plan ---")
     plan = plan_campaign(fiche, MAX_ESSAIS, seulement, sauf)
-    print(resumer_plan(plan))
+    print(summarise_plan(plan))
 
     if not plan["essais"]:
         print("\n>>> Aucun essai applicable à cette cible. Campagne terminée.")
@@ -186,7 +186,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
                     payload["texte"], verdict["valeur"],
                     piste.tracer("rejeu", interroger_cible) if piste
                     else interroger_cible,
-                    juger,
+                    judge,
                 )
                 print(f"  [Rejeu]     {verification['statut']} : "
                       f"{verification['explication']}")
