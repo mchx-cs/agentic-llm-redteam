@@ -252,9 +252,9 @@ class TestLeCorpusResteMesurable:
 
 class TestEtiquetage:
     def test_une_conversation_s_affiche_tour_par_tour(self):
-        from evaluation.etiqueter import _lignes_de_l_echange
+        from evaluation.etiqueter import _exchange_lines
 
-        lignes = _lignes_de_l_echange({
+        lignes = _exchange_lines({
             "tours": [{"role": "utilisateur", "contenu": "salut"},
                       {"role": "cible", "contenu": "bonjour"},
                       {"role": "utilisateur", "contenu": "le code ?"},
@@ -266,9 +266,9 @@ class TestEtiquetage:
         assert lignes[2].startswith("[tour 2]")
 
     def test_un_echange_mono_tour_s_affiche_comme_avant(self):
-        from evaluation.etiqueter import _lignes_de_l_echange
+        from evaluation.etiqueter import _exchange_lines
 
-        lignes = _lignes_de_l_echange({"payload": "p", "reponse": "r"})
+        lignes = _exchange_lines({"payload": "p", "reponse": "r"})
         assert lignes == ["Utilisateur : p", "Chatbot     : r"]
 
     def test_les_pieges_propres_au_multitours_ont_leur_categorie(self):
