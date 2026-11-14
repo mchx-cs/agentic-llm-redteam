@@ -48,7 +48,7 @@ def is_bundled_target(name):
     return name in NAMED_TARGETS or name == "demo" or name.startswith("demo:")
 
 
-def choose_target(name=None, profil=None):
+def choose_target(name=None, profile=None):
     """
     Return the asking function matching `name`.
 
@@ -68,9 +68,9 @@ def choose_target(name=None, profil=None):
     # Placed lower down, this check was unreachable — the named targets return
     # before it — and the profile was silently ignored, exactly what it was
     # meant to prevent. A test showed it.
-    if profil and not name.startswith(("http://", "https://")):
+    if profile and not name.startswith(("http://", "https://")):
         raise ValueError(
-            f"Le profil de cible « {profil} » décrit la forme d'une API "
+            f"Le profil de cible « {profile} » décrit la forme d'une API "
             f"http(s) ; la cible '{name}' est livrée avec le projet et n'a "
             f"rien à configurer.")
 
@@ -91,7 +91,7 @@ def choose_target(name=None, profil=None):
             ) from error
 
     if name.startswith(("http://", "https://")):
-        return build_http_target(name, profil=profil)
+        return build_http_target(name, profile=profile)
 
     raise ValueError(
         f"Cible inconnue : '{name}'. Attendu : "

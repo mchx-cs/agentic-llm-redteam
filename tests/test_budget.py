@@ -37,7 +37,7 @@ def fake_model(monkeypatch):
         chat = type("C", (), {"completions": type("D", (), {
             "create": staticmethod(lambda **k: _Reply())})()})()
 
-    monkeypatch.setattr(llm_client, "_client_for", lambda profil: _Client())
+    monkeypatch.setattr(llm_client, "_client_for", lambda profile: _Client())
     yield
     reset_call_log()  # we leave no cap armed behind us
 

@@ -149,8 +149,8 @@ def _validated_history(history):
     return checked
 
 
-def ask_llm(message, systeme=None, modele=None, temperature=None,
-            format_json=False, profil=None, max_tokens=None,
+def ask_llm(message, system=None, model=None, temperature=None,
+            json_format=False, profile=None, max_tokens=None,
             history=None):
     """
     Sends a message to a model and returns its reply (text).
@@ -183,12 +183,12 @@ def ask_llm(message, systeme=None, modele=None, temperature=None,
     glossary records what renaming a keyword without its call sites costs.
     They move with the operator-facing pass.
     """
-    profil = profil or ACTIVE_PROFILE
-    modele = modele or PROFILES[profil]["modele"]
+    profile = profile or ACTIVE_PROFILE
+    model = model or PROFILES[profile]["modele"]
 
     messages = []
-    if systeme:
-        messages.append({"role": "system", "content": systeme})
+    if system:
+        messages.append({"role": "system", "content": system})
     messages += _validated_history(history)
     messages.append({"role": "user", "content": message})
 
@@ -197,7 +197,7 @@ def ask_llm(message, systeme=None, modele=None, temperature=None,
     options = {}
     if temperature is not None:
         options["temperature"] = temperature
-    if format_json:
+    if json_format:
         # OpenAI's format, understood by Ollama and Groq too.
         options["response_format"] = {"type": "json_object"}
     if max_tokens is not None:
@@ -209,8 +209,8 @@ def ask_llm(message, systeme=None, modele=None, temperature=None,
     _check_budget()
 
     try:
-        reply = _client_for(profil).chat.completions.create(
-            model=modele,
+        reply = _client_for(profile).chat.completions.create(
+            model=model,
             messages=messages,
             **options,
         )
@@ -219,9 +219,9 @@ def ask_llm(message, systeme=None, modele=None, temperature=None,
         # The three most common configuration failures. The SDK reports them
         # as "Connection error." or an HTTP code: we translate them into
         # actionable advice, naming the offending profile and model.
-        raise RuntimeError(_error_message(profil, modele, error)) from error
+        raise RuntimeError(_error_message(profile, model, error)) from error
 
-    _record(reply, profil, modele)
+    _record(reply, profile, model)
     return reply.choices[0].message.content
 
 

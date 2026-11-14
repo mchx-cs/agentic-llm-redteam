@@ -161,10 +161,10 @@ def reconnoitre(ask_target):
 
     raw = ask_llm(
         f"Voici les réponses du chatbot :\n\n{transcript}",
-        systeme=ANALYST_SYSTEM_PROMPT,
+        system=ANALYST_SYSTEM_PROMPT,
         temperature=0,
-        format_json=True,
-        profil=JUDGE_PROFILE,
+        json_format=True,
+        profile=JUDGE_PROFILE,
     )
 
     try:

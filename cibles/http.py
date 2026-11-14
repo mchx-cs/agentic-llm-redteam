@@ -192,7 +192,7 @@ def _text_from_stream(brut, inner_path):
     return "".join(pieces)
 
 
-def read_reply(brut, chemin_reponse):
+def read_reply(brut, response_path):
     """
     Extract the text of a reply, as `chemin_reponse` describes it.
 
@@ -206,11 +206,11 @@ def read_reply(brut, chemin_reponse):
     an HTML error page pass for a chatbot's answer, and the judge would end up
     scoring HTML.
     """
-    if chemin_reponse == RAW_TEXT_PATH:
+    if response_path == RAW_TEXT_PATH:
         return brut
-    if chemin_reponse.startswith(STREAM_PATH):
-        return _text_from_stream(brut, chemin_reponse[len(STREAM_PATH):])
-    return _extract(json.loads(brut), chemin_reponse)
+    if response_path.startswith(STREAM_PATH):
+        return _text_from_stream(brut, response_path[len(STREAM_PATH):])
+    return _extract(json.loads(brut), response_path)
 
 
 # What the target DECLARES in its `Content-Type` header, and the matching
@@ -310,7 +310,7 @@ def _contains_marker(template):
     return template == MESSAGE_MARKER
 
 
-def check_template(corps):
+def check_template(body):
     """
     Reject a body template with nowhere to put the payload.
 
@@ -325,21 +325,21 @@ def check_template(corps):
     refusal AT STARTUP rather than a check at send time — we do not want to
     discover this after spending a client's allowed throughput.
     """
-    if _contains_marker(corps):
+    if _contains_marker(body):
         return
     raise RuntimeError(
         f"Le template du corps ne contient pas le marqueur "
         f"« {MESSAGE_MARKER} » : le payload n'aurait nulle part où aller, "
         f"et la cible recevrait le même texte fixe à chaque essai.\n"
-        f"  Gabarit lu : {json.dumps(corps, ensure_ascii=False)}\n"
+        f"  Gabarit lu : {json.dumps(body, ensure_ascii=False)}\n"
         f"  Attendu, par exemple : "
         f'{{"message": "{MESSAGE_MARKER}"}}\n'
         f"  Vérifie CIBLE_CORPS dans .env (voir .env.example)."
     )
 
 
-def build_http_target(url, entetes=None, corps=None, chemin_reponse=None,
-                          delai=None, profil=None):
+def build_http_target(url, headers=None, body=None, response_path=None,
+                          timeout=None, profile=None):
     """
     Return an `interroger(message) -> str` function aimed at `url`.
 
@@ -357,33 +357,33 @@ def build_http_target(url, entetes=None, corps=None, chemin_reponse=None,
     """
     from config import HTTP_TARGET
 
-    if profil is not None and profil not in TARGET_PROFILES:
+    if profile is not None and profile not in TARGET_PROFILES:
         raise RuntimeError(
-            f"Profil de cible inconnu : « {profil} ».\n"
+            f"Profil de cible inconnu : « {profile} ».\n"
             f"  Profils disponibles : {', '.join(TARGET_PROFILES)}."
         )
-    settings = TARGET_PROFILES.get(profil, {})
+    settings = TARGET_PROFILES.get(profile, {})
 
-    entetes = {**HTTP_TARGET["entetes"], **(entetes or {})}
-    corps = _first_defined(corps, settings.get("corps"), HTTP_TARGET["corps"])
-    chemin_reponse = _first_defined(
-        chemin_reponse, settings.get("chemin_reponse"),
+    headers = {**HTTP_TARGET["entetes"], **(headers or {})}
+    body = _first_defined(body, settings.get("corps"), HTTP_TARGET["corps"])
+    response_path = _first_defined(
+        response_path, settings.get("chemin_reponse"),
         HTTP_TARGET["chemin_reponse"])
-    delai = delai or HTTP_TARGET["delai"]
+    timeout = timeout or HTTP_TARGET["delai"]
 
     # BEFORE the first call: a whole campaign on a mute template would
     # conclude "no finding" without having sent any of what we believed.
-    check_template(corps)
+    check_template(body)
 
     def interroger(message):
-        data = json.dumps(_inject(corps, message)).encode("utf-8")
+        data = json.dumps(_inject(body, message)).encode("utf-8")
         request = urllib.request.Request(
             url, data=data, method="POST",
-            headers={"Content-Type": "application/json", **entetes},
+            headers={"Content-Type": "application/json", **headers},
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=delai) as reponse:
+            with urllib.request.urlopen(request, timeout=timeout) as reponse:
                 brut = reponse.read().decode("utf-8")
                 # What the target DECLARES its format to be. Never used to
                 # change reading mode — only to explain a failure better.
@@ -403,7 +403,7 @@ def build_http_target(url, entetes=None, corps=None, chemin_reponse=None,
             ) from error
 
         try:
-            texte = read_reply(brut, chemin_reponse)
+            texte = read_reply(brut, response_path)
         except json.JSONDecodeError as error:
             raise RuntimeError(
                 f"Cible {url} : réponse illisible (JSON attendu).\n"
@@ -417,7 +417,7 @@ def build_http_target(url, entetes=None, corps=None, chemin_reponse=None,
 
         if not isinstance(texte, str):
             raise RuntimeError(
-                f"Cible {url} : '{chemin_reponse}' donne un "
+                f"Cible {url} : '{response_path}' donne un "
                 f"{type(texte).__name__}, pas du texte."
             )
         return texte
@@ -469,8 +469,8 @@ def _plausible_paths(data, prefix="", depth=4):
     return trouves
 
 
-def probe_target(url, entetes=None, corps=None, chemin_reponse=None, delai=None,
-           profil=None, show=print):
+def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
+           profile=None, show=print):
     """
     Envoie UN message anodin et rend compte, sans rien juger.
 
@@ -486,19 +486,19 @@ def probe_target(url, entetes=None, corps=None, chemin_reponse=None, delai=None,
     """
     from config import HTTP_TARGET
 
-    settings = TARGET_PROFILES.get(profil, {})
-    corps_final = _first_defined(corps, settings.get("corps"),
+    settings = TARGET_PROFILES.get(profile, {})
+    corps_final = _first_defined(body, settings.get("corps"),
                                   HTTP_TARGET["corps"])
-    chemin_final = _first_defined(chemin_reponse,
+    chemin_final = _first_defined(response_path,
                                    settings.get("chemin_reponse"),
                                    HTTP_TARGET["chemin_reponse"])
 
     show(f"Cible    : {url}")
-    if profil:
-        show(f"Profil   : {profil} — {settings['description']}")
+    if profile:
+        show(f"Profil   : {profile} — {settings['description']}")
     show(f"Corps    : {json.dumps(corps_final, ensure_ascii=False)}")
     show(f"Chemin   : {chemin_final}")
-    entetes_finaux = {**HTTP_TARGET["entetes"], **(entetes or {})}
+    entetes_finaux = {**HTTP_TARGET["entetes"], **(headers or {})}
     # On nomme les en-têtes sans montrer leur valeur : un jeton n'a rien à
     # faire dans une sortie de terminal qu'on colle dans un rapport ou un chat.
     show(f"En-têtes : {', '.join(entetes_finaux) or 'aucun'}"
@@ -511,14 +511,14 @@ def probe_target(url, entetes=None, corps=None, chemin_reponse=None, delai=None,
         show(f"ÉCHEC — {error}")
         return False
 
-    interroger = build_http_target(url, entetes, corps_final,
-                                       chemin_final, delai, profil=None)
+    interroger = build_http_target(url, headers, corps_final,
+                                       chemin_final, timeout, profile=None)
     show(f"Envoi    : {PROBE_MESSAGE}")
     try:
         reponse = interroger(PROBE_MESSAGE)
     except RuntimeError as error:
         show(f"\nÉCHEC — {error}")
-        _suggest(url, entetes_finaux, corps_final, delai, show)
+        _suggest(url, entetes_finaux, corps_final, timeout, show)
         return False
 
     show(f"Réponse  : {reponse[:300]}"
@@ -527,14 +527,14 @@ def probe_target(url, entetes=None, corps=None, chemin_reponse=None, delai=None,
     return True
 
 
-def _suggest(url, entetes, corps, delai, show):
+def _suggest(url, headers, body, timeout, show):
     """Relit la réponse brute pour proposer un path qui mène à du texte."""
     request = urllib.request.Request(
-        url, data=json.dumps(_inject(corps, PROBE_MESSAGE)).encode("utf-8"),
+        url, data=json.dumps(_inject(body, PROBE_MESSAGE)).encode("utf-8"),
         method="POST",
-        headers={"Content-Type": "application/json", **entetes})
+        headers={"Content-Type": "application/json", **headers})
     try:
-        with urllib.request.urlopen(request, timeout=delai or 60) as reponse:
+        with urllib.request.urlopen(request, timeout=timeout or 60) as reponse:
             data = json.loads(reponse.read().decode("utf-8"))
     except Exception:
         # La suggestion est un bonus : si elle échoue, l'error d'origine

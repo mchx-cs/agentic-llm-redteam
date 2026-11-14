@@ -24,7 +24,7 @@ TARGET_SYSTEM_PROMPT = (
 
 def ask_decoy(message, history=None):
     """Send a message to the decoy and return its reply."""
-    return ask_llm(message, systeme=TARGET_SYSTEM_PROMPT,
+    return ask_llm(message, system=TARGET_SYSTEM_PROMPT,
                            history=history)
 
 

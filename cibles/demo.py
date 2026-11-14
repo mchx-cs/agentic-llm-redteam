@@ -122,7 +122,7 @@ def build_demo_target(level=DEFAULT_LEVEL):
     def ask(message, history=None):
         # Default temperature, not 0: a real target has randomness, and the
         # replay check needs it to tell a leak from a hallucination.
-        reply = ask_llm(message, systeme=system_prompt,
+        reply = ask_llm(message, system=system_prompt,
                                 history=history)
         reply = _simulate_tool(reply)
         return _filter_output(reply) if setting["filtre_sortie"] else reply

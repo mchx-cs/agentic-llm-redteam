@@ -46,7 +46,7 @@ class TestDeclaredCapability:
         from cibles.http import build_http_target
         target = build_http_target(
             "http://exemple.invalid/chat",
-            corps={"prompt": "{message}"}, chemin_reponse="reply")
+            body={"prompt": "{message}"}, response_path="reply")
         assert supports_conversation(target) is False
 
     def test_the_refusal_says_what_to_do(self):
@@ -260,8 +260,8 @@ class TestTheJudgesInstruction:
         import agents.arbitre as arbitre
         seen_args = {}
 
-        def fake_call(question, systeme=None, **_):
-            seen_args["systeme"] = systeme
+        def fake_call(question, system=None, **_):
+            seen_args["systeme"] = system
             seen_args["question"] = question
             return '{"analyse": "a", "enfreint": false, "critere": "aucun"}'
 
@@ -281,8 +281,8 @@ class TestTheJudgesInstruction:
         import agents.arbitre as arbitre
         calls = []
 
-        def fake_call(question, systeme=None, **_):
-            calls.append(systeme)
+        def fake_call(question, system=None, **_):
+            calls.append(system)
             return '{"analyse": "a", "enfreint": true, "critere": "divulgation"}'
 
         monkeypatch.setattr(arbitre, "ask_llm", fake_call)

@@ -21,8 +21,8 @@ def answer(monkeypatch):
     seen = {}
 
     def installer(reponse):
-        def faux(message, systeme=None, **kwargs):
-            seen["systeme"] = systeme
+        def faux(message, system=None, **kwargs):
+            seen["systeme"] = system
             seen["message"] = message
             return reponse
         monkeypatch.setattr(demo, "ask_llm", faux)

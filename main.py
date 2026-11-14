@@ -400,7 +400,7 @@ def cli(arguments=None):
                   file=sys.stderr)
             raise SystemExit(2)
         try:
-            ok = probe_http_target(target_name, profil=arguments.profil_cible)
+            ok = probe_http_target(target_name, profile=arguments.profil_cible)
         except RuntimeError as refusal:
             print(refusal, file=sys.stderr)
             raise SystemExit(2)

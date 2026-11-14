@@ -347,10 +347,10 @@ def judge_conversation(turns):
 def _ask_judge(question, multiturn, language=DEFAULT_LANGUAGE):
     raw = ask_llm(
         question,
-        systeme=system_prompt_for(multiturn, language),
+        system=system_prompt_for(multiturn, language),
         temperature=0,
-        format_json=True,
-        profil=JUDGE_PROFILE,
+        json_format=True,
+        profile=JUDGE_PROFILE,
     )
 
     try:
