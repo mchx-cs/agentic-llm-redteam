@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 from agents.arbitre import judge
-from config import PROFIL_ARBITRE, PROFILS
+from config import JUDGE_PROFILE, PROFILES
 
 FICHIER_ECHANGES = Path(__file__).parent / "echanges_etiquetes.json"
 JOURNAL_TEST = Path(__file__).parent / "journal_test.jsonl"
@@ -81,7 +81,7 @@ def journaliser_consultation_test(compteurs, metriques, langue='fr'):
     entree = {
         "date": datetime.now().isoformat(timespec="seconds"),
         # Sans le juge mesuré, les lignes du journal ne seraient pas comparables.
-        "juge": f"{PROFIL_ARBITRE}/{PROFILS[PROFIL_ARBITRE]['modele']}",
+        "juge": f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['modele']}",
         # La LANGUE de la consigne, depuis le 2026-11-14 : deux consultations
         # avec deux consignes différentes seraient sinon indistinguables dans
         # le journal, et le jeu gelé perdrait sa valeur de référence.
@@ -98,8 +98,8 @@ def evaluer(jeu="dev", langue="fr"):
     compteurs = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
     erreurs = []
 
-    print(f"Juge : profil {PROFIL_ARBITRE}, "
-          f"modèle {PROFILS[PROFIL_ARBITRE]['modele']}\n")
+    print(f"Juge : profil {JUDGE_PROFILE}, "
+          f"modèle {PROFILES[JUDGE_PROFILE]['modele']}\n")
 
     if jeu == "test":
         print("!!! Jeu de TEST gelé : ne règle pas l'arbitre d'après ces "

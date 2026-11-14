@@ -91,8 +91,8 @@ class TestGenerationDesPayloads:
 
 class TestConfiguration:
     def test_les_profils_declarent_ce_qu_il_faut(self):
-        from config import PROFILS
-        for nom, profil in PROFILS.items():
+        from config import PROFILES
+        for nom, profil in PROFILES.items():
             assert {"base_url", "api_key", "modele"} <= set(profil), nom
 
     def test_un_profil_inconnu_echoue_des_l_import(self, monkeypatch):
@@ -108,5 +108,5 @@ class TestConfiguration:
 
     def test_la_cible_par_defaut_ne_demande_aucune_cle(self):
         import config
-        assert config.CIBLE == "leurre"
-        assert config.PROFILS[config.PROFIL_ACTIF]["api_key"]
+        assert config.TARGET == "leurre"
+        assert config.PROFILES[config.ACTIVE_PROFILE]["api_key"]

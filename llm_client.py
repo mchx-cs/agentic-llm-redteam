@@ -1,261 +1,274 @@
 """
-llm_client.py — LA couche d'abstraction.
+llm_client.py — THE abstraction layer.
 
-Tout le projet parle aux LLM UNIQUEMENT à travers la fonction
-`demander_au_llm()` d'ici. Aucun agent n'appelle Ollama ou une API
-directement. Résultat : le jour où tu changes de fournisseur, tu ne
-touches qu'à config.py, et ce fichier — rien d'autre ne bouge.
+The whole project talks to models ONLY through `ask_llm()` here. No agent
+calls Ollama or an API directly. The result: the day you change provider, you
+touch config.py and this file — nothing else moves.
 
-C'est le garde-fou anti-"code en dur partout" dont on avait parlé.
+This is the guard against hard-coded calls scattered everywhere.
+
+One precision, added in phase 8: the rule aims at the models WE use (judge,
+analyst, decoy), so they stay interchangeable from config.py. It does NOT aim
+at the attacked target, which is an arbitrary third-party system — often an
+application, not a bare model. `cibles/http.py` therefore calls it directly,
+over urllib, and that is deliberate.
 """
 
 from openai import (APIConnectionError, AuthenticationError, NotFoundError,
                     OpenAI, RateLimitError)
-from config import PROFILS, PROFIL_ACTIF
+from config import PROFILES, ACTIVE_PROFILE
 
-# Les profils locaux : ceux dont le serveur tourne sur la machine. Le conseil
-# à donner diffère (« lance Ollama » plutôt que « vérifie ta connexion »).
-_HOTES_LOCAUX = ("localhost", "127.0.0.1")
+# The local profiles: those whose server runs on this machine. The advice to
+# give differs ("start Ollama" rather than "check your connection").
+_LOCAL_HOSTS = ("localhost", "127.0.0.1")
 
-# Un client par profil, construit au premier usage puis réutilisé. Plusieurs
-# profils peuvent servir dans une même campagne : la cible en local, le juge
-# sur une API distante, par exemple.
+# One client per profile, built on first use then reused. Several profiles can
+# serve within one campaign: the target locally, the judge on a remote API,
+# for instance.
 _clients = {}
 
-class BudgetDepasse(RuntimeError):
+
+class BudgetExceeded(RuntimeError):
     """
-    Le plafond d'appels ou de tokens de la campagne est atteint.
+    The campaign's call or token cap has been reached.
 
-    Exception DISTINCTE des pannes (serveur injoignable, clé refusée…) :
-    atteindre son budget est un arrêt normal, pas une erreur. L'orchestrateur
-    doit pouvoir faire la différence, pour conclure « campagne écourtée » au
-    lieu de « campagne terminée » — ce qui ne veut pas dire la même chose
-    dans un rapport.
+    An exception DISTINCT from failures (unreachable server, rejected key…):
+    reaching your budget is a normal stop, not an error. The orchestrator must
+    be able to tell the difference, so it can conclude "campaign cut short"
+    instead of "campaign finished" — which do not mean the same thing in a
+    report.
     """
 
 
-# Journal des appels. Ce module étant le SEUL point de passage vers les LLM,
-# c'est ici qu'on sait tout : combien d'appels, combien de tokens, et surtout
-# lesquels ont été TRONQUÉS. Une réponse coupée au milieu d'une fuite se lit
-# comme une réponse normale : l'arbitre conclut "pas de faille", et rien ne
-# signale l'erreur. C'est le pire défaut possible pour un outil de sécurité.
-# C'est aussi ici qu'on applique le budget (phase 11), et que la phase 9
-# viendra puiser sa piste d'audit.
-_JOURNAL = {"appels": 0, "tokens": 0, "tronquees": [],
-            "max_appels": None, "max_tokens": None}
+# The call log. This module being the ONLY way through to the models, it is
+# here that everything is known: how many calls, how many tokens, and above
+# all which replies were TRUNCATED. A reply cut off mid-leak reads like a
+# normal one: the judge concludes "no vulnerability", and nothing flags the
+# error. That is the worst possible defect for a security tool.
+#
+# It is also here that the budget is applied (phase 11), and where phase 9
+# draws its audit trail from.
+_CALL_LOG = {"appels": 0, "tokens": 0, "tronquees": [],
+             "max_appels": None, "max_tokens": None}
 
 
-def journal():
-    """Copie de l'état du journal depuis la dernière remise à zéro."""
-    return dict(_JOURNAL, tronquees=list(_JOURNAL["tronquees"]))
+def call_log():
+    """A copy of the log's state since the last reset."""
+    return dict(_CALL_LOG, tronquees=list(_CALL_LOG["tronquees"]))
 
 
-def reinitialiser_journal(max_appels=None, max_tokens=None):
+def reset_call_log(max_calls=None, max_tokens=None):
     """
-    Repart d'un compteur net, et arme le budget de la campagne qui suit.
+    Starts from a clean counter, and arms the budget of the campaign that
+    follows.
 
-    Sans plafond (valeur par défaut), rien n'est limité : les scripts
-    d'évaluation consomment bien plus qu'une campagne, et n'ont aucune raison
-    d'être coupés au milieu d'une mesure. C'est donc l'orchestrateur qui arme
-    le budget, délibérément.
+    With no cap (the default), nothing is limited: the evaluation scripts
+    consume far more than a campaign, and have no reason to be cut off in the
+    middle of a measurement. It is therefore the orchestrator that arms the
+    budget, deliberately.
     """
-    _JOURNAL.update({"appels": 0, "tokens": 0, "tronquees": [],
-                     "max_appels": max_appels, "max_tokens": max_tokens})
+    _CALL_LOG.update({"appels": 0, "tokens": 0, "tronquees": [],
+                      "max_appels": max_calls, "max_tokens": max_tokens})
 
 
-def _verifier_budget():
+def _check_budget():
     """
-    Lève BudgetDepasse si le plafond est atteint, AVANT de lancer l'appel.
+    Raises BudgetExceeded if the cap is reached, BEFORE making the call.
 
-    Le coût d'un appel ne se connaît qu'une fois celui-ci terminé : on vérifie
-    donc ce qui a DÉJÀ été consommé. Conséquence assumée : le plafond en
-    tokens peut être dépassé d'un appel au plus.
+    A call's cost is only known once it has finished: we therefore check what
+    has ALREADY been consumed. An accepted consequence: the token cap can be
+    overshot by one call at most.
     """
-    maximum = _JOURNAL["max_appels"]
-    if maximum is not None and _JOURNAL["appels"] >= maximum:
-        raise BudgetDepasse(
-            f"Budget atteint : {_JOURNAL['appels']} appel(s), "
+    maximum = _CALL_LOG["max_appels"]
+    if maximum is not None and _CALL_LOG["appels"] >= maximum:
+        raise BudgetExceeded(
+            f"Budget atteint : {_CALL_LOG['appels']} appel(s), "
             f"plafond {maximum}.")
 
-    maximum = _JOURNAL["max_tokens"]
-    if maximum is not None and _JOURNAL["tokens"] >= maximum:
-        raise BudgetDepasse(
-            f"Budget atteint : {_JOURNAL['tokens']} tokens, "
+    maximum = _CALL_LOG["max_tokens"]
+    if maximum is not None and _CALL_LOG["tokens"] >= maximum:
+        raise BudgetExceeded(
+            f"Budget atteint : {_CALL_LOG['tokens']} tokens, "
             f"plafond {maximum}.")
 
 
-def _client_pour(profil):
-    if profil not in _clients:
-        cfg = PROFILS[profil]
+def _client_for(profile):
+    if profile not in _clients:
+        cfg = PROFILES[profile]
         if not cfg["api_key"]:
-            # Échouer tôt, avec un message clair, plutôt que de laisser
-            # l'API renvoyer une erreur d'authentification obscure.
+            # Fail early, with a clear message, rather than letting the API
+            # return an obscure authentication error.
             raise RuntimeError(
-                f"Profil '{profil}' : clé d'API absente. Définis-la dans le "
+                f"Profil '{profile}' : clé d'API absente. Définis-la dans le "
                 f"fichier .env à la racine du projet (voir config.py)."
             )
-        _clients[profil] = OpenAI(
+        _clients[profile] = OpenAI(
             base_url=cfg["base_url"],
             api_key=cfg["api_key"],
-            # Sans délai d'attente, une cible qui ne répond jamais bloquerait
-            # la campagne indéfiniment.
+            # Without a timeout, a target that never answers would block the
+            # campaign for ever.
             timeout=cfg.get("delai", 60),
-            # Relances automatiques en cas de limite de débit (erreur 429) :
-            # 2 par défaut dans le SDK, plus pour les offres gratuites.
+            # Automatic retries on a rate limit (error 429): 2 by default in
+            # the SDK, more for free tiers.
             max_retries=cfg.get("relances", 2),
         )
-    return _clients[profil]
+    return _clients[profile]
 
 
-def _historique_valide(historique):
+def _validated_history(history):
     """
-    L'historique, vérifié, ou une erreur claire.
+    The history, checked, or a clear error.
 
-    Un historique mal formé ne doit PAS être ignoré en silence : la campagne
-    croirait mener une conversation alors qu'elle envoie un tour isolé, et
-    l'arbitre jugerait un échange amputé de son contexte. C'est la même
-    famille de défaut que le gabarit sans `{message}` de la phase 8 — un faux
-    négatif qui ne lève rien.
+    A malformed history must NOT be ignored silently: the campaign would
+    believe it was holding a conversation while sending an isolated turn, and
+    the judge would score an exchange stripped of its context. Same family of
+    defect as the phase 8 template without `{message}` — a false negative that
+    raises nothing.
     """
-    if not historique:
+    if not history:
         return []
-    if not isinstance(historique, list):
+    if not isinstance(history, list):
         raise ValueError(
-            "historique doit être une liste de {'role', 'content'}, "
-            f"reçu : {type(historique).__name__}.")
+            "`history` doit être une liste de {'role', 'content'}, "
+            f"reçu : {type(history).__name__}.")
 
-    valides = []
-    for position, tour in enumerate(historique, start=1):
-        if not isinstance(tour, dict) or "role" not in tour                 or "content" not in tour:
+    checked = []
+    for position, turn in enumerate(history, start=1):
+        if (not isinstance(turn, dict) or "role" not in turn
+                or "content" not in turn):
             raise ValueError(
-                f"historique, tour {position} : attendu "
-                "{'role': ..., 'content': ...}, reçu " + repr(tour) + ".")
-        if tour["role"] not in ("user", "assistant"):
+                f"`history`, tour {position} : attendu "
+                "{'role': ..., 'content': ...}, reçu " + repr(turn) + ".")
+        if turn["role"] not in ("user", "assistant"):
             raise ValueError(
-                f"historique, tour {position} : rôle "
-                f"'{tour['role']}' inconnu. Attendu 'user' ou 'assistant' "
+                f"`history`, tour {position} : rôle "
+                f"'{turn['role']}' inconnu. Attendu 'user' ou 'assistant' "
                 "— la consigne système passe par `systeme`, pas par "
                 "l'historique.")
-        valides.append({"role": tour["role"], "content": str(tour["content"])})
-    return valides
+        checked.append({"role": turn["role"], "content": str(turn["content"])})
+    return checked
 
 
-def demander_au_llm(message, systeme=None, modele=None, temperature=None,
-                    format_json=False, profil=None, max_tokens=None,
-                    historique=None):
+def ask_llm(message, systeme=None, modele=None, temperature=None,
+            format_json=False, profil=None, max_tokens=None,
+            history=None):
     """
-    Envoie un message à un LLM et renvoie sa réponse (du texte).
+    Sends a message to a model and returns its reply (text).
 
-    - message     : le texte qu'on envoie (ce que dit l'utilisateur).
-    - systeme     : instructions de cadrage optionnelles (le "rôle" du LLM).
-    - modele      : pour forcer un modèle précis ; sinon celui du profil.
-    - temperature : 0 = réponses quasi déterministes. Indispensable pour un
-                    juge : un verdict qui change d'un lancement à l'autre ne
-                    se mesure pas. None = valeur par défaut du fournisseur.
-    - format_json : force le modèle à produire du JSON valide. Plus fiable que
-                    de deviner OUI/NON dans une phrase libre.
-    - profil      : le profil de config.py à utiliser ; sinon PROFIL_ACTIF.
-    - max_tokens  : plafond de la réponse. Attention : plafonner, c'est risquer
-                    de couper une fuite en deux (voir _JOURNAL ci-dessus).
-    - historique  : les tours précédents, pour une conversation multi-tours
-                    (phase 3b). Une liste de {"role", "content"} insérée
-                    ENTRE la consigne système et le message courant, dans
-                    l'ordre. Vide ou None = un seul tour, le comportement
-                    d'avant.
+    - message     : the text we send (what the user says).
+    - systeme     : optional framing instructions (the model's "role").
+    - modele      : to force a specific model; otherwise the profile's.
+    - temperature : 0 = near-deterministic replies. Indispensable for a judge:
+                    a verdict that changes from one run to the next cannot be
+                    measured. None = the provider's default.
+    - format_json : forces the model to produce valid JSON. More reliable than
+                    guessing YES/NO out of a free-form sentence.
+    - profil      : the config.py profile to use; otherwise ACTIVE_PROFILE.
+    - max_tokens  : a cap on the reply. Careful: capping risks cutting a leak
+                    in half (see _CALL_LOG above).
+    - history     : the preceding turns, for a multi-turn conversation
+                    (phase 3b). A list of {"role", "content"} inserted BETWEEN
+                    the system instruction and the current message, in order.
+                    Empty or None = a single turn, the previous behaviour.
 
-    Pourquoi l'historique passe par ICI et non par un appel direct : c'est
-    `llm_client` qui compte les appels et les tokens, donc qui applique le
-    budget. Le multi-tours est précisément le cas où le coût croît
-    QUADRATIQUEMENT — chaque tour reporte tout ce qui précède. Un attaquant
-    multi-tours qui appellerait le fournisseur lui-même échapperait au
-    coupe-circuit à l'endroit exact où il sert le plus.
+    Why the history goes through HERE and not through a direct call: it is
+    `llm_client` that counts calls and tokens, hence that applies the budget.
+    Multi-turn is precisely the case where cost grows QUADRATICALLY — every
+    turn carries forward all that precedes it. A multi-turn attacker calling
+    the provider itself would escape the circuit breaker at the exact point
+    where it is most useful.
+
+    The parameter names `systeme`, `modele`, `profil` and `format_json` are
+    still French: they are passed by keyword from a dozen call sites, and the
+    glossary records what renaming a keyword without its call sites costs.
+    They move with the operator-facing pass.
     """
-    profil = profil or PROFIL_ACTIF
-    modele = modele or PROFILS[profil]["modele"]
+    profil = profil or ACTIVE_PROFILE
+    modele = modele or PROFILES[profil]["modele"]
 
     messages = []
     if systeme:
         messages.append({"role": "system", "content": systeme})
-    messages += _historique_valide(historique)
+    messages += _validated_history(history)
     messages.append({"role": "user", "content": message})
 
-    # On n'envoie que les options demandées, pour laisser au fournisseur
-    # ses valeurs par défaut dans le cas général.
+    # We only send the options asked for, so the provider keeps its own
+    # defaults in the general case.
     options = {}
     if temperature is not None:
         options["temperature"] = temperature
     if format_json:
-        # Format OpenAI, compris aussi par Ollama et Groq.
+        # OpenAI's format, understood by Ollama and Groq too.
         options["response_format"] = {"type": "json_object"}
     if max_tokens is not None:
         options["max_tokens"] = max_tokens
 
-    # Avant tout : le budget. Une boucle qui s'emballe (agent adaptatif,
-    # rejeu dans un rejeu, relance en cascade) doit buter ici, pas sur la
-    # facture ou le quota du fournisseur.
-    _verifier_budget()
+    # Before anything: the budget. A runaway loop (adaptive agent, a replay
+    # inside a replay, a cascade of retries) must hit this wall, not the
+    # provider's bill or quota.
+    _check_budget()
 
     try:
-        reponse = _client_pour(profil).chat.completions.create(
+        reply = _client_for(profil).chat.completions.create(
             model=modele,
             messages=messages,
             **options,
         )
     except (APIConnectionError, NotFoundError, AuthenticationError,
-            RateLimitError) as erreur:
-        # Les trois pannes de configuration les plus courantes. Le SDK les
-        # signale par "Connection error." ou un code HTTP : on les traduit en
-        # une consigne exploitable, en nommant le profil et le modèle fautifs.
-        raise RuntimeError(_message_d_erreur(profil, modele, erreur)) from erreur
+            RateLimitError) as error:
+        # The three most common configuration failures. The SDK reports them
+        # as "Connection error." or an HTTP code: we translate them into
+        # actionable advice, naming the offending profile and model.
+        raise RuntimeError(_error_message(profil, modele, error)) from error
 
-    _enregistrer(reponse, profil, modele)
-    return reponse.choices[0].message.content
+    _record(reply, profil, modele)
+    return reply.choices[0].message.content
 
 
-def _enregistrer(reponse, profil, modele):
-    """Consigne l'appel, et retient les réponses coupées en cours de route."""
-    _JOURNAL["appels"] += 1
-    usage = getattr(reponse, "usage", None)
+def _record(reply, profile, model):
+    """Logs the call, and remembers replies cut off part way through."""
+    _CALL_LOG["appels"] += 1
+    usage = getattr(reply, "usage", None)
     if usage and getattr(usage, "total_tokens", None):
-        _JOURNAL["tokens"] += usage.total_tokens
+        _CALL_LOG["tokens"] += usage.total_tokens
 
-    # "length" = le modèle a atteint son plafond de sortie, sa réponse est
-    # incomplète. Les autres raisons d'arrêt ("stop", "tool_calls"…) sont
-    # normales. Un fournisseur qui ne renseigne rien ne déclenche rien.
-    if getattr(reponse.choices[0], "finish_reason", None) == "length":
-        _JOURNAL["tronquees"].append({"profil": profil, "modele": modele})
+    # "length" = the model hit its output cap, its reply is incomplete. The
+    # other stop reasons ("stop", "tool_calls"…) are normal. A provider that
+    # reports nothing triggers nothing.
+    if getattr(reply.choices[0], "finish_reason", None) == "length":
+        _CALL_LOG["tronquees"].append({"profil": profile, "modele": model})
 
 
-def _message_d_erreur(profil, modele, erreur):
-    """Transforme une erreur du SDK en consigne claire pour l'utilisateur."""
-    cfg = PROFILS[profil]
+def _error_message(profile, model, error):
+    """Turns an SDK error into clear advice for the user."""
+    cfg = PROFILES[profile]
     url = cfg["base_url"]
-    entete = f"Profil '{profil}' (modèle '{modele}', {url}) :"
-    local = any(hote in url for hote in _HOTES_LOCAUX)
+    header = f"Profil '{profile}' (modèle '{model}', {url}) :"
+    local = any(host in url for host in _LOCAL_HOSTS)
 
-    if isinstance(erreur, APIConnectionError):
+    if isinstance(error, APIConnectionError):
         if local:
-            return (f"{entete} le serveur ne répond pas.\n"
+            return (f"{header} le serveur ne répond pas.\n"
                     f"  Ollama est-il lancé ? Vérifie avec : ollama list\n"
                     f"  S'il est éteint, lance : ollama serve")
-        return (f"{entete} impossible de joindre le serveur.\n"
+        return (f"{header} impossible de joindre le serveur.\n"
                 f"  Vérifie ta connexion et l'adresse 'base_url' dans config.py.")
 
-    if isinstance(erreur, RateLimitError):
-        # Le SDK relance tout seul sur les limites par minute (voir "relances"
-        # dans config.py). S'il abandonne, c'est que le quota JOURNALIER est
-        # atteint : relancer n'y changera rien, il faut attendre ou basculer.
-        return (f"{entete} quota du fournisseur atteint.\n"
+    if isinstance(error, RateLimitError):
+        # The SDK retries by itself on per-minute limits (see "relances" in
+        # config.py). If it gives up, the DAILY quota is reached: retrying
+        # will change nothing, you have to wait or switch.
+        return (f"{header} quota du fournisseur atteint.\n"
                 f"  Attends la fenêtre indiquée, ou repasse l'arbitre en local\n"
                 f"  (PROFIL_ARBITRE=local dans .env).\n"
-                f"  Détail du fournisseur : {erreur}")
+                f"  Détail du fournisseur : {error}")
 
-    if isinstance(erreur, NotFoundError):
+    if isinstance(error, NotFoundError):
         if local:
-            return (f"{entete} ce modèle n'est pas installé.\n"
-                    f"  Télécharge-le avec : ollama pull {modele}")
-        return (f"{entete} ce modèle est inconnu du fournisseur.\n"
+            return (f"{header} ce modèle n'est pas installé.\n"
+                    f"  Télécharge-le avec : ollama pull {model}")
+        return (f"{header} ce modèle est inconnu du fournisseur.\n"
                 f"  Vérifie son nom exact (variable d'environnement du profil).")
 
-    return (f"{entete} clé d'API refusée.\n"
+    return (f"{header} clé d'API refusée.\n"
             f"  Vérifie la clé dans le fichier .env à la racine du projet.")

@@ -1,10 +1,15 @@
 """
-config.py — Le point de bascule unique du projet.
+config.py — The project's single switching point.
 
-C'est ICI, et nulle part ailleurs, qu'on décide si les LLM tournent
-en local (Ollama) ou via une API distante (OpenAI, Groq…).
-Changer de l'un à l'autre = changer une ligne PROFIL_* ci-dessous.
-Le reste du code ne sait même pas à qui il parle : c'est tout l'intérêt.
+HERE, and nowhere else, is where we decide whether the models run locally
+(Ollama) or through a remote API (OpenAI, Groq…). Moving from one to the
+other = changing one PROFILE_* line below. The rest of the code does not even
+know who it is talking to: that is the whole point.
+
+Note on the names: the Python identifiers are English, the ENVIRONMENT
+VARIABLE names are not yet. A `.env` key is a configuration contract — it
+lives on machines this repository never sees — so renaming one needs a
+deprecation path, and that is a pass of its own.
 """
 
 import json
@@ -12,147 +17,146 @@ import os
 from pathlib import Path
 
 
-def _charger_fichier_env():
+def _load_env_file():
     """
-    Lit le fichier .env à la racine du projet, s'il existe, et place ses
-    variables dans l'environnement.
+    Reads the .env file at the project root, if it exists, and puts its
+    variables into the environment.
 
-    Pourquoi un fichier .env : la clé d'API va directement de la console du
-    fournisseur à ce fichier, sans transiter par un terminal, un chat ou le
-    code. Il est listé dans .gitignore : il ne part jamais sur GitHub.
+    Why a .env file: the API key goes straight from the provider's console to
+    that file, without passing through a terminal, a chat or the code. It is
+    listed in .gitignore: it never leaves for GitHub.
 
-    Une variable déjà définie dans l'environnement est prioritaire : le
-    fichier ne sert que de valeur par défaut.
+    A variable already set in the environment wins: the file only ever
+    supplies a default.
     """
-    fichier = Path(__file__).parent / ".env"
-    if not fichier.exists():
+    path = Path(__file__).parent / ".env"
+    if not path.exists():
         return
-    for ligne in fichier.read_text(encoding="utf-8").splitlines():
-        ligne = ligne.strip()
-        if not ligne or ligne.startswith("#") or "=" not in ligne:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
             continue
-        nom, valeur = ligne.split("=", 1)
-        os.environ.setdefault(nom.strip(), valeur.strip().strip("\"'"))
+        name, value = line.split("=", 1)
+        os.environ.setdefault(name.strip(), value.strip().strip("\"'"))
 
 
-# À faire AVANT de construire les profils, qui lisent l'environnement.
-_charger_fichier_env()
+# To be done BEFORE building the profiles, which read the environment.
+_load_env_file()
 
-PROFILS = {
-    # --- Profil LOCAL : Ollama, gratuit, aucune clé ---
-    # Ollama expose une API au format OpenAI sur le port 11434.
+PROFILES = {
+    # --- LOCAL profile: Ollama, free, no key ---
+    # Ollama exposes an OpenAI-shaped API on port 11434.
     "local": {
         "base_url": "http://localhost:11434/v1",
-        "api_key": "ollama",          # ignorée par Ollama, mais le SDK l'exige
-        "modele": "llama3.2",         # fais d'abord : ollama pull llama3.2
+        "api_key": "ollama",          # ignored by Ollama, but the SDK wants it
+        "modele": "llama3.2",         # run `ollama pull llama3.2` first
     },
 
-    # --- Profil API : un fournisseur distant (exemple OpenAI) ---
-    # La clé est lue depuis une variable d'environnement (jamais en dur).
+    # --- API profile: a remote provider (OpenAI as the example) ---
+    # The key is read from an environment variable (never hard-coded).
     "api": {
         "base_url": "https://api.openai.com/v1",
         "api_key": os.environ.get("OPENAI_API_KEY", ""),
-        # Le modèle est lu, comme la clé, depuis l'environnement : pas de nom
-        # figé dans le code, qui deviendrait obsolète au fil des sorties.
+        # The model is read from the environment like the key: no name frozen
+        # into the code, which would go stale as releases come out.
         "modele": os.environ.get("OPENAI_MODEL", ""),
-        # Comme pour groq : les API distantes plafonnent le débit, le SDK
-        # attend le délai annoncé puis relance, au plus ce nombre de fois.
+        # As for groq: remote APIs cap throughput, the SDK waits the
+        # announced delay then retries, at most this many times.
         "relances": 8,
     },
 
-    # --- Profil GROQ : API distante avec offre gratuite ---
-    # Utilisé pour l'ARBITRE uniquement, et seulement sur des données
-    # fictives. Jamais comme cible d'attaques réelles : les conditions
-    # d'utilisation des fournisseurs interdisent de contourner leurs
-    # garde-fous (voir "Cadre légal" dans CLAUDE.md).
+    # --- GROQ profile: a remote API with a free tier ---
+    # Used for the JUDGE only, and only on fictional data. Never as the target
+    # of real attacks: providers' terms of use forbid getting around their
+    # guardrails (see "Cadre légal" in CLAUDE.md).
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
         "api_key": os.environ.get("GROQ_API_KEY", ""),
-        # Modèle d'une autre famille que la cible (llama3.2) : un juge qui
-        # n'est pas le même modèle ne partage pas ses angles morts (Phase 4).
-        # Remplaçable par la variable GROQ_MODEL, sans toucher au code.
+        # A model from a different family than the target (llama3.2): a judge
+        # that is not the same model does not share its blind spots (Phase 4).
+        # Replaceable through GROQ_MODEL, without touching the code.
         "modele": os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
-        # L'offre gratuite plafonne les tokens par minute : au-delà, l'API
-        # répond "réessayez dans X ms". Le SDK attend ce délai puis relance,
-        # au plus ce nombre de fois (boucle bornée, jamais infinie).
+        # The free tier caps tokens per minute: past that, the API answers
+        # "retry in X ms". The SDK waits that delay then retries, at most this
+        # many times (a bounded loop, never an infinite one).
         "relances": 8,
     },
 }
 
-# >>> LES DEUX LEVIERS DE BASCULE <<<
-# Tous deux se règlent dans .env (hors git) : personne n'a besoin de modifier
-# un fichier suivi par git pour changer de fournisseur. "local" par défaut,
-# pour que le dépôt tourne sans aucune clé.
+# >>> THE TWO SWITCHES <<<
+# Both are set in .env (outside git): nobody needs to edit a git-tracked file
+# to change provider. "local" by default, so the repository runs with no key
+# at all.
 
-# Profil par défaut : celui de la CIBLE et de tout appel qui n'en précise pas.
-# Attention : attaquer une API distante violerait les conditions d'utilisation
-# du fournisseur (voir "Cadre légal" dans CLAUDE.md). La cible reste locale.
-PROFIL_ACTIF = os.environ.get("PROFIL_ACTIF", "local")
+# The default profile: the TARGET's, and that of any call which does not name
+# one. Careful: attacking a remote API would breach the provider's terms of
+# use (see "Cadre légal" in CLAUDE.md). The target stays local.
+ACTIVE_PROFILE = os.environ.get("PROFIL_ACTIF", "local")
 
-# Profil de l'ARBITRE (et de l'analyste de reconnaissance), séparé pour que le
-# juge puisse tourner sur un autre modèle que la cible qu'il juge — un juge
-# identique à sa cible partage ses angles morts.
-PROFIL_ARBITRE = os.environ.get("PROFIL_ARBITRE", "local")
+# The JUDGE's profile (and the reconnaissance analyst's), kept separate so the
+# judge can run on a different model from the target it judges — a judge
+# identical to its target shares its blind spots.
+JUDGE_PROFILE = os.environ.get("PROFIL_ARBITRE", "local")
 
-_profils_inconnus = [nom for nom in (PROFIL_ACTIF, PROFIL_ARBITRE)
-                     if nom not in PROFILS]
-if _profils_inconnus:
-    # Une faute de frappe dans .env donnerait sinon un KeyError nu, très loin
-    # d'ici, au premier appel au LLM.
+_unknown_profiles = [name for name in (ACTIVE_PROFILE, JUDGE_PROFILE)
+                     if name not in PROFILES]
+if _unknown_profiles:
+    # A typo in .env would otherwise give a bare KeyError, a long way from
+    # here, on the first call to a model.
     raise ValueError(
-        f"Profil inconnu dans .env : {', '.join(_profils_inconnus)}. "
-        f"Profils disponibles : {', '.join(PROFILS)}."
+        f"Profil inconnu dans .env : {', '.join(_unknown_profiles)}. "
+        f"Profils disponibles : {', '.join(PROFILES)}."
     )
 
 
-# >>> LA CIBLE : QUEL SYSTÈME ON TESTE <<<
-# "leurre" (défaut) = le chatbot-jouet local ; "mock" = déterministe, sans
-# LLM ; une URL http(s) = un vrai endpoint. Surchargé par --cible en ligne
-# de commande (voir cibles/__init__.py).
-CIBLE = os.environ.get("CIBLE", "leurre")
+# >>> THE TARGET: WHICH SYSTEM WE TEST <<<
+# "leurre" (default) = the local toy chatbot; "mock" = deterministic, no
+# model; an http(s) URL = a real endpoint. Overridden by --cible on the
+# command line (see cibles/__init__.py).
+TARGET = os.environ.get("CIBLE", "leurre")
 
 
-# >>> BUDGET D'UNE CAMPAGNE <<<
-# Coupe-circuit, pas économie : à l'échelle actuelle une campagne coûte des
-# centimes. Ce qui est dangereux, c'est la boucle qui s'emballe — agent
-# adaptatif sans garde-fou, rejeu dans un rejeu, relance en cascade.
-# Les plafonds sont donc larges mais FINIS. `0` ou vide = aucune limite,
-# à n'utiliser qu'en connaissance de cause.
-def _entier_env(nom, defaut):
-    valeur = int(os.environ.get(nom, defaut))
-    return valeur if valeur > 0 else None
+# >>> A CAMPAIGN'S BUDGET <<<
+# A circuit breaker, not an economy: at the current scale a campaign costs
+# pennies. What is dangerous is the loop that runs away — an adaptive agent
+# with no guard, a replay inside a replay, a cascade of retries. The caps are
+# therefore wide but FINITE. `0` or empty = no limit, to be used only in full
+# knowledge of what that means.
+def _int_from_env(name, default):
+    value = int(os.environ.get(name, default))
+    return value if value > 0 else None
 
 
-BUDGET_APPELS = _entier_env("BUDGET_APPELS", 200)
-BUDGET_TOKENS = _entier_env("BUDGET_TOKENS", 500_000)
+CALL_BUDGET = _int_from_env("BUDGET_APPELS", 200)
+TOKEN_BUDGET = _int_from_env("BUDGET_TOKENS", 500_000)
 
 
-def _json_env(nom, defaut):
-    """Lit une variable d'environnement contenant du JSON."""
-    brut = os.environ.get(nom)
-    if not brut:
-        return defaut
+def _json_from_env(name, default):
+    """Reads an environment variable holding JSON."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
     try:
-        return json.loads(brut)
-    except json.JSONDecodeError as erreur:
+        return json.loads(raw)
+    except json.JSONDecodeError as error:
         raise ValueError(
-            f"{nom} dans .env n'est pas du JSON valide : {erreur}"
-        ) from erreur
+            f"{name} dans .env n'est pas du JSON valide : {error}"
+        ) from error
 
 
-# Description d'une cible HTTP. Les applications exposent toutes une forme
-# différente : plutôt que de deviner, on la décrit ici. Les valeurs par
-# défaut correspondent au cas le plus simple, {"message": "..."} → {"reply": "..."}.
-CIBLE_HTTP = {
-    # En-têtes, dont l'authentification. Exemple dans .env :
+# Description of an HTTP target. Every application exposes a different shape:
+# rather than guessing, we describe it here. The defaults match the simplest
+# case, {"message": "..."} → {"reply": "..."}.
+HTTP_TARGET = {
+    # Headers, authentication included. Example in .env:
     #   CIBLE_ENTETES={"Authorization": "Bearer xxx"}
-    "entetes": _json_env("CIBLE_ENTETES", {}),
-    # Gabarit du corps envoyé ; "{message}" est remplacé par le payload.
+    "entetes": _json_from_env("CIBLE_ENTETES", {}),
+    # Template of the body sent; "{message}" is replaced by the payload.
     #   CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
-    "corps": _json_env("CIBLE_CORPS", {"message": "{message}"}),
-    # Où lire le texte dans la réponse JSON, en chemin pointé.
+    "corps": _json_from_env("CIBLE_CORPS", {"message": "{message}"}),
+    # Where to read the text in the JSON reply, as a dotted path.
     #   CIBLE_CHEMIN_REPONSE=choices.0.message.content
     "chemin_reponse": os.environ.get("CIBLE_CHEMIN_REPONSE", "reply"),
-    # Sans délai, une cible muette bloquerait la campagne indéfiniment.
+    # Without a timeout, a silent target would block the campaign for ever.
     "delai": float(os.environ.get("CIBLE_DELAI", "60")),
 }

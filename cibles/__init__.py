@@ -60,9 +60,9 @@ def choose_target(name=None, profil=None):
       target, and for the common case it is entirely predictable;
     - None → the value of CIBLE in `.env`, otherwise the local decoy.
     """
-    from config import CIBLE  # imported here to avoid a circular import
+    from config import TARGET  # imported here to avoid a circular import
 
-    name = name or CIBLE
+    name = name or TARGET
 
     # FIRST, before any branch: a profile only applies to an HTTP target.
     # Placed lower down, this check was unreachable — the named targets return

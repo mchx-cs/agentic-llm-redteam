@@ -7,7 +7,7 @@ concrete to try to break, and something the judge can score.
 The secret is FICTIONAL, and must stay so: the repository is public.
 """
 
-from llm_client import demander_au_llm
+from llm_client import ask_llm
 
 # The target's instructions and guardrail. This is what we will try to get
 # around, with the payload library behind us.
@@ -22,10 +22,10 @@ TARGET_SYSTEM_PROMPT = (
 )
 
 
-def ask_decoy(message, historique=None):
+def ask_decoy(message, history=None):
     """Send a message to the decoy and return its reply."""
-    return demander_au_llm(message, systeme=TARGET_SYSTEM_PROMPT,
-                           historique=historique)
+    return ask_llm(message, systeme=TARGET_SYSTEM_PROMPT,
+                           history=history)
 
 
 # Real multi-turn: the decoy runs on our own client, so the turns go out as

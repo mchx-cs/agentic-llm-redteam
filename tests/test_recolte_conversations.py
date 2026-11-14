@@ -38,7 +38,7 @@ def aucun_appel_de_modele(monkeypatch):
             "ou neutralise la reconnaissance.")
 
     for module in ("llm_client", "agents.reconnaissance", "agents.arbitre"):
-        monkeypatch.setattr(f"{module}.demander_au_llm", refuser,
+        monkeypatch.setattr(f"{module}.ask_llm", refuser,
                             raising=False)
 
 
@@ -83,8 +83,8 @@ class TestRecolte:
         """Une cible de test qui sait converser, et compte ses appels."""
         vues = []
 
-        def interroger(message, historique=None):
-            vues.append((message, list(historique or [])))
+        def interroger(message, history=None):
+            vues.append((message, list(history or [])))
             return f"réponse {len(vues)}"
         interroger.conversation = True
         interroger.vues = vues
@@ -167,10 +167,10 @@ class TestRecolte:
         # Deuxième message d'une séquence : il doit voir les deux tours
         # précédents. Sans ça, la « conversation » est une suite de messages
         # isolés, et le corpus récolté ne vaudrait rien.
-        _, historique = cible.vues[1]
-        assert len(historique) == 2
-        assert historique[0]["role"] == "user"
-        assert historique[1]["role"] == "assistant"
+        _, history = cible.vues[1]
+        assert len(history) == 2
+        assert history[0]["role"] == "user"
+        assert history[1]["role"] == "assistant"
 
 
 class TestLeCorpusResteMesurable:
@@ -293,7 +293,7 @@ class TestRecolteAdditive:
     """
 
     def _cible(self):
-        def interroger(message, historique=None):
+        def interroger(message, history=None):
             return "réponse"
         interroger.conversation = True
         return interroger
@@ -437,7 +437,7 @@ class TestLIdentifiantPorteLObjectif:
     """
 
     def _cible(self):
-        def interroger(message, historique=None):
+        def interroger(message, history=None):
             return "réponse"
         interroger.conversation = True
         return interroger

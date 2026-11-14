@@ -1,7 +1,7 @@
 """
 Tests de la cible de démonstration.
 
-Aucun modèle n'intervient : on remplace `demander_au_llm` par une réponse
+Aucun modèle n'intervient : on remplace `ask_llm` par une réponse
 choisie, et on vérifie ce qui entoure l'appel — les consignes de chaque
 niveau, le filtre de sortie, la simulation d'outil. Ce qu'une vraie cible
 répond, lui, est probabiliste et se mesure à la main.
@@ -25,7 +25,7 @@ def repondre(monkeypatch):
             vu["systeme"] = systeme
             vu["message"] = message
             return reponse
-        monkeypatch.setattr(demo, "demander_au_llm", faux)
+        monkeypatch.setattr(demo, "ask_llm", faux)
         return vu
     return installer
 

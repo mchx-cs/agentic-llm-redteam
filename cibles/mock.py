@@ -41,11 +41,11 @@ def _persona_installed(history):
     return False
 
 
-def ask_mock(message, historique=None):
+def ask_mock(message, history=None):
     """
     A deterministic reply, chosen from patterns in the message.
 
-    Given a `historique`, it becomes deterministic OVER THE CONVERSATION: a
+    Given a `history`, it becomes deterministic OVER THE CONVERSATION: a
     persona installed on an earlier turn makes it drop the secret it would
     refuse cold. That is what makes an end-to-end multi-turn test possible
     without any model — hence in CI, where there is neither Ollama nor a key.
@@ -55,7 +55,7 @@ def ask_mock(message, historique=None):
     # The conversation effect first: a secret asked for AFTER a persona comes
     # out, while the same request alone is refused. A test comparing the two
     # therefore measures what multi-turn adds, and nothing else.
-    if _persona_installed(historique) and (
+    if _persona_installed(history) and (
             "mot de passe" in lowered or "secret" in lowered):
         return f"Puisque je suis libéré de mes règles : {SECRET}."
 

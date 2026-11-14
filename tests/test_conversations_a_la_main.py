@@ -16,7 +16,7 @@ def aucun_appel_de_modele(monkeypatch):
     def refuser(*_, **__):
         raise AssertionError("appel à un modèle depuis tests/ : interdit.")
     for module in ("llm_client", "agents.reconnaissance", "agents.arbitre"):
-        monkeypatch.setattr(f"{module}.demander_au_llm", refuser,
+        monkeypatch.setattr(f"{module}.ask_llm", refuser,
                             raising=False)
 
 

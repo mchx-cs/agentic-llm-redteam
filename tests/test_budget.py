@@ -14,8 +14,8 @@ Deux propriétés comptent, et la seconde plus que la première :
 import pytest
 
 import llm_client
-from llm_client import (BudgetDepasse, demander_au_llm, journal,
-                        reinitialiser_journal)
+from llm_client import (BudgetExceeded, ask_llm, call_log,
+                        reset_call_log)
 from rapport import construire, rendre_markdown
 
 
@@ -37,69 +37,69 @@ def modele_factice(monkeypatch):
         chat = type("C", (), {"completions": type("D", (), {
             "create": staticmethod(lambda **k: _Reponse())})()})()
 
-    monkeypatch.setattr(llm_client, "_client_pour", lambda profil: _Client())
+    monkeypatch.setattr(llm_client, "_client_for", lambda profil: _Client())
     yield
-    reinitialiser_journal()  # on ne laisse pas de plafond armé derrière soi
+    reset_call_log()  # on ne laisse pas de plafond armé derrière soi
 
 
 class TestPlafondAppels:
     def test_le_plafond_est_applique(self):
-        reinitialiser_journal(max_appels=3)
+        reset_call_log(max_calls=3)
         for _ in range(3):
-            demander_au_llm("x")
-        with pytest.raises(BudgetDepasse, match="3 appel"):
-            demander_au_llm("x")
+            ask_llm("x")
+        with pytest.raises(BudgetExceeded, match="3 appel"):
+            ask_llm("x")
 
     def test_le_message_dit_le_compte_et_le_plafond(self):
-        reinitialiser_journal(max_appels=1)
-        demander_au_llm("x")
-        with pytest.raises(BudgetDepasse, match="plafond 1"):
-            demander_au_llm("x")
+        reset_call_log(max_calls=1)
+        ask_llm("x")
+        with pytest.raises(BudgetExceeded, match="plafond 1"):
+            ask_llm("x")
 
 
 class TestPlafondTokens:
     def test_le_plafond_est_applique(self):
         # Chaque appel factice coûte 100 tokens.
-        reinitialiser_journal(max_tokens=250)
+        reset_call_log(max_tokens=250)
         for _ in range(3):           # 300 tokens consommés
-            demander_au_llm("x")
-        with pytest.raises(BudgetDepasse, match="tokens"):
-            demander_au_llm("x")
+            ask_llm("x")
+        with pytest.raises(BudgetExceeded, match="tokens"):
+            ask_llm("x")
 
     def test_le_depassement_est_borne_a_un_appel(self):
         # Le coût d'un appel ne se connaît qu'après : on vérifie ce qui a
         # DÉJÀ été consommé, donc on peut dépasser d'un appel, jamais plus.
-        reinitialiser_journal(max_tokens=250)
+        reset_call_log(max_tokens=250)
         for _ in range(3):
-            demander_au_llm("x")
-        assert journal()["tokens"] == 300
-        with pytest.raises(BudgetDepasse):
-            demander_au_llm("x")
-        assert journal()["tokens"] == 300  # l'appel refusé n'a rien coûté
+            ask_llm("x")
+        assert call_log()["tokens"] == 300
+        with pytest.raises(BudgetExceeded):
+            ask_llm("x")
+        assert call_log()["tokens"] == 300  # l'appel refusé n'a rien coûté
 
 
 class TestSansPlafond:
     def test_par_defaut_rien_n_est_limite(self):
         # Les scripts d'évaluation consomment bien plus qu'une campagne et
         # n'ont aucune raison d'être coupés au milieu d'une mesure.
-        reinitialiser_journal()
+        reset_call_log()
         for _ in range(50):
-            demander_au_llm("x")
-        assert journal()["appels"] == 50
+            ask_llm("x")
+        assert call_log()["appels"] == 50
 
     def test_la_remise_a_zero_desarme_le_plafond(self):
-        reinitialiser_journal(max_appels=1)
-        demander_au_llm("x")
-        reinitialiser_journal()
-        demander_au_llm("x")          # ne doit plus lever
-        assert journal()["appels"] == 1
+        reset_call_log(max_calls=1)
+        ask_llm("x")
+        reset_call_log()
+        ask_llm("x")          # ne doit plus lever
+        assert call_log()["appels"] == 1
 
 
 class TestArretPropre:
     def test_le_budget_n_est_pas_une_panne(self):
         # Distinguer les deux permet à l'orchestrateur de conclure
         # « écourtée » au lieu de « plantée ».
-        assert issubclass(BudgetDepasse, RuntimeError)
+        assert issubclass(BudgetExceeded, RuntimeError)
 
     def test_le_rapport_annonce_une_campagne_ecourtee(self):
         resultat = {

@@ -24,7 +24,7 @@ def aucun_appel_de_modele(monkeypatch):
     def refuser(*_, **__):
         raise AssertionError("appel à un modèle depuis tests/ : interdit.")
     for module in ("llm_client", "agents.reconnaissance", "agents.arbitre"):
-        monkeypatch.setattr(f"{module}.demander_au_llm", refuser,
+        monkeypatch.setattr(f"{module}.ask_llm", refuser,
                             raising=False)
 
 
@@ -69,7 +69,7 @@ class TestDesSignes:
 class TestUnePaire:
     def _cible(self, fuite_en_sequence=False, fuite_en_mono=False):
         """Une cible dont on décide quand elle cède."""
-        def interroger(message, historique=None):
+        def interroger(message, history=None):
             # Un message COMPOSÉ porte les DEUX ingrédients à la fois ; la
             # séquence les sépare — préambule au tour 1, demande au tour 2.
             # Distinguer sur l'historique était faux (le premier tour n'en a
@@ -78,7 +78,7 @@ class TestUnePaire:
             compose = "préambule" in message and "Maintenant" in message
             if compose:
                 return f"Voici : {SECRET}" if fuite_en_mono else "Je ne peux pas."
-            if historique and fuite_en_sequence:
+            if history and fuite_en_sequence:
                 return f"Voici : {SECRET}"      # cède au second tour
             return "Je ne peux pas."
         interroger.conversation = True
@@ -105,8 +105,8 @@ class TestUnePaire:
     def test_le_tour_de_fuite_est_consigne(self):
         # 1 signifie que la fuite est invisible dans la dernière réponse
         # d'une conversation à deux tours — le piège mesuré le 2026-11-13.
-        def au_premier_tour(message, historique=None):
-            return f"Voici : {SECRET}" if not historique else "De rien."
+        def au_premier_tour(message, history=None):
+            return f"Voici : {SECRET}" if not history else "De rien."
         au_premier_tour.conversation = True
 
         resultat = une_paire(au_premier_tour, "préambule", self.OBJECTIF)

@@ -31,7 +31,7 @@ CHAMPS_ATTENDUS = {"role", "langue", "outils", "sujets_refuses",
 def analyser(monkeypatch):
     """Remplace l'appel au modèle d'analyse par une sortie choisie."""
     def installer(sortie):
-        monkeypatch.setattr(reconnaissance, "demander_au_llm",
+        monkeypatch.setattr(reconnaissance, "ask_llm",
                             lambda *a, **k: sortie)
     return installer
 

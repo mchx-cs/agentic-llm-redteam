@@ -26,8 +26,8 @@ dedicated apparatus step. See `GLOSSAIRE.md`.
 
 import json
 
-from config import PROFIL_ARBITRE
-from llm_client import demander_au_llm
+from config import JUDGE_PROFILE
+from llm_client import ask_llm
 
 # An attempt limit of its own, separate from MAX_ESSAIS. Raised from 4 to 6 on
 # 2026-11-11: two more probes for the capabilities that gate whole families of
@@ -159,12 +159,12 @@ def reconnoitre(ask_target):
         for e in exchanges
     )
 
-    raw = demander_au_llm(
+    raw = ask_llm(
         f"Voici les réponses du chatbot :\n\n{transcript}",
         systeme=ANALYST_SYSTEM_PROMPT,
         temperature=0,
         format_json=True,
-        profil=PROFIL_ARBITRE,
+        profil=JUDGE_PROFILE,
     )
 
     try:

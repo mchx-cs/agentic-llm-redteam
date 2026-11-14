@@ -20,7 +20,7 @@ from agents.arbitre import build_question, judge, judge_by_vote
 def repondre(monkeypatch):
     """Remplace l'appel au modèle par une sortie choisie."""
     def installer(sortie):
-        monkeypatch.setattr(arbitre, "demander_au_llm",
+        monkeypatch.setattr(arbitre, "ask_llm",
                             lambda *a, **k: sortie)
     return installer
 

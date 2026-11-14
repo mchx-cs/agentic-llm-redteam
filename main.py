@@ -32,8 +32,8 @@ from agents.reconnaissance import (KNOWN_CONTEXTS, reconnoitre,
 from agents.verificateur import verify_by_replay
 from cibles import choose_target
 from cibles.http import TARGET_PROFILES, probe_target as probe_http_target
-from config import BUDGET_APPELS, BUDGET_TOKENS, CIBLE
-from llm_client import BudgetDepasse, journal, reinitialiser_journal
+from config import CALL_BUDGET, TOKEN_BUDGET, TARGET
+from llm_client import BudgetExceeded, call_log, reset_call_log
 from rapport import enregistrer
 
 # Règle d'arrêt : on ne tente pas une attaque à l'infini.
@@ -54,20 +54,20 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     la reconnaissance et du rejeu, puisque la cible y est tracée en amont.
     """
     interroger_cible = interroger_cible or choose_target()
-    nom_cible = nom_cible or CIBLE
+    nom_cible = nom_cible or TARGET
 
     print("=== Campagne ===\n")
     # Le budget est armé ICI, pas dans llm_client : les scripts d'évaluation
     # consomment bien plus qu'une campagne et n'ont aucune raison d'être
     # coupés au milieu d'une mesure.
-    reinitialiser_journal(BUDGET_APPELS, BUDGET_TOKENS)
+    reset_call_log(CALL_BUDGET, TOKEN_BUDGET)
 
     # --- 1. Reconnaissance : qui est cette cible ? -------------------------
     print("--- Reconnaissance ---")
     try:
         fiche = reconnoitre(piste.tracer("reconnaissance", interroger_cible)
                             if piste else interroger_cible)
-    except BudgetDepasse as arret:
+    except BudgetExceeded as arret:
         print(f"\n>>> {arret}")
         return _terminer({"statut": "budget_epuise", "fiche": None,
                           "plan": {"essais": [], "candidats": [],
@@ -134,9 +134,9 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
         try:
             # Une réponse coupée par le plafond de sortie de la cible se lit
             # comme une réponse complète : le verdict ne vaudrait alors rien.
-            tronquees_avant = len(journal()["tronquees"])
+            tronquees_avant = len(call_log()["tronquees"])
             reponse = interroger_cible(payload["texte"])
-            tronquee = len(journal()["tronquees"]) > tronquees_avant
+            tronquee = len(call_log()["tronquees"]) > tronquees_avant
             if piste:
                 piste.consigner_echange("attaque", payload["texte"], reponse,
                                         tronquee)
@@ -198,7 +198,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
                     etats.append("hallucination")
                     print("  >>> Valeur inventée par la cible : on continue.\n")
                     continue
-        except BudgetDepasse as arret:
+        except BudgetExceeded as arret:
             # Arrêt NORMAL, pas une panne : on garde ce qui a été trouvé
             # jusqu'ici, et on dira franchement que le plan n'est pas allé
             # à son terme. L'essai en cours est perdu, c'est assumé.
@@ -268,7 +268,7 @@ def _terminer(resultat):
     resultat.setdefault("essais_independants", False)
     resultat.setdefault("observations", [])
     resultat.setdefault("payloads", _provenance_des_payloads())
-    resultat["journal"] = journal()
+    resultat["journal"] = call_log()
     tronquees = len(resultat["journal"]["tronquees"])
 
     print(f"\n{resultat['journal']['appels']} appel(s) au LLM, "
@@ -364,7 +364,7 @@ def cli(arguments=None):
              f"Inutile pour une cible locale.")
     arguments = parseur.parse_args(arguments)
 
-    nom_cible = arguments.cible or CIBLE
+    nom_cible = arguments.cible or TARGET
 
     # Le NOM de la cible d'abord, et c'est une correction : une faute de
     # frappe (« demo:9 », « leure ») sortait soit en trace Python, soit —
@@ -453,7 +453,7 @@ def cli(arguments=None):
         # Même si la campagne lève, le journal doit se refermer proprement.
         sceau = piste.clore(
             locals().get("resultat", {}).get("statut", "interrompue"),
-            journal())
+            call_log())
 
     resultat["autorisation"] = autorisation
     # La chaîne de preuve passe de la piste au RAPPORT. `construire` lisait

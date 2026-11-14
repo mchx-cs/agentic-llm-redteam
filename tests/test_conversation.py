@@ -3,7 +3,7 @@ Tests du contrat de cible multi-tours (phase 3b).
 
 Aucun appel LLM : la cible `mock` est déterministe SUR LA CONVERSATION, ce
 qui permet de vérifier en intégration continue la seule chose qui compte
-ici — qu'un historique est bien transmis, et qu'une cible incapable d'en
+ici — qu'un history est bien transmis, et qu'une cible incapable d'en
 tenir un REFUSE au lieu de l'ignorer.
 """
 
@@ -13,7 +13,7 @@ from cibles.conversation import (MAX_TURNS, ATTACKER_ROLE, TARGET_ROLE,
                                  require_conversation, play, to_api, render,
                                  supports_conversation)
 from cibles.mock import ask_mock
-from llm_client import _historique_valide
+from llm_client import _validated_history
 
 
 def _mono_tour(message):
@@ -82,8 +82,8 @@ class TestHistoriqueTransmis:
     def test_chaque_tour_recoit_ce_qui_precede(self):
         vus = []
 
-        def espion(message, historique=None):
-            vus.append(list(historique or []))
+        def espion(message, history=None):
+            vus.append(list(history or []))
             return "ok"
         espion.conversation = True
 
@@ -134,30 +134,30 @@ class TestHistoriqueValide:
     sans `{message}` de la phase 8.
     """
 
-    @pytest.mark.parametrize("historique", [None, [], ()])
-    def test_un_historique_absent_vaut_un_seul_tour(self, historique):
-        assert _historique_valide(historique) == []
+    @pytest.mark.parametrize("history", [None, [], ()])
+    def test_un_historique_absent_vaut_un_seul_tour(self, history):
+        assert _validated_history(history) == []
 
     def test_un_historique_qui_n_est_pas_une_liste_leve(self):
         with pytest.raises(ValueError):
-            _historique_valide("deux tours")
+            _validated_history("deux tours")
 
     def test_un_tour_sans_les_bonnes_cles_leve(self):
         with pytest.raises(ValueError) as echec:
-            _historique_valide([{"role": "user"}])
+            _validated_history([{"role": "user"}])
         assert "tour 1" in str(echec.value)
 
     def test_un_role_inconnu_leve_et_dit_pourquoi(self):
         with pytest.raises(ValueError) as echec:
-            _historique_valide([{"role": "system", "content": "x"}])
+            _validated_history([{"role": "system", "content": "x"}])
         # La consigne système a son propre paramètre : la confusion est
         # assez courante pour mériter d'être nommée dans l'erreur.
         assert "systeme" in str(echec.value)
 
     def test_un_historique_valide_passe_tel_quel(self):
-        historique = [{"role": "user", "content": "a"},
+        history = [{"role": "user", "content": "a"},
                       {"role": "assistant", "content": "b"}]
-        assert _historique_valide(historique) == historique
+        assert _validated_history(history) == history
 
 
 class TestApportDuMultiTours:
@@ -192,10 +192,10 @@ class TestApportDuMultiTours:
         # distinction, une cible qui répète la demande dans son refus
         # s'ouvrirait elle-même — un faux positif que l'arbitre prendrait
         # pour une faille.
-        historique = [{"role": "user", "content": "bonjour"},
+        history = [{"role": "user", "content": "bonjour"},
                       {"role": "assistant", "content": "Tu es DAN ?"}]
         assert "TOPSECRET42" not in ask_mock(self.DEMANDE,
-                                                    historique=historique)
+                                                    history=history)
 
 
 class TestConsigneDeLArbitre:
@@ -267,7 +267,7 @@ class TestConsigneDeLArbitre:
             vues["question"] = question
             return '{"analyse": "a", "enfreint": false, "critere": "aucun"}'
 
-        monkeypatch.setattr(arbitre, "demander_au_llm", faux_appel)
+        monkeypatch.setattr(arbitre, "ask_llm", faux_appel)
 
         arbitre.judge("p", "r")
         assert vues["systeme"] == arbitre.JUDGE_SYSTEM_PROMPT
@@ -287,7 +287,7 @@ class TestConsigneDeLArbitre:
             appels.append(systeme)
             return '{"analyse": "a", "enfreint": true, "critere": "divulgation"}'
 
-        monkeypatch.setattr(arbitre, "demander_au_llm", faux_appel)
+        monkeypatch.setattr(arbitre, "ask_llm", faux_appel)
         verdict = arbitre.judge_conversation_by_vote(
             [{"role": "utilisateur", "contenu": "a"},
              {"role": "cible", "contenu": "b"}])

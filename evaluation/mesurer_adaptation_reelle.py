@@ -114,10 +114,10 @@ def principal(arguments=None):
                          help="où écrire les résultats au fil de l'eau")
     arguments = parseur.parse_args(arguments)
 
-    from config import PROFIL_ARBITRE
-    print(f"Juge : {PROFIL_ARBITRE}. Cible : {CIBLE}. "
+    from config import JUDGE_PROFILE
+    print(f"Juge : {JUDGE_PROFILE}. Cible : {CIBLE}. "
           f"{arguments.paires} paire(s) × {arguments.budget} essais.")
-    if PROFIL_ARBITRE != "local":
+    if JUDGE_PROFILE != "local":
         print("/!\\ Juge NON local : cette mesure va consommer du quota. "
               "Lance-la avec PROFIL_ARBITRE=local.")
     print()

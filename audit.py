@@ -306,20 +306,20 @@ def telemetrie(nom_cible, profil_cible=None):
     """L'environnement de test, côté connu et côté inconnu."""
     from agents.arbitre import VOTE_COUNT
     from agents.verificateur import REPLAY_COUNT
-    from config import PROFIL_ACTIF, PROFIL_ARBITRE, PROFILS
+    from config import ACTIVE_PROFILE, JUDGE_PROFILE, PROFILES
 
-    arbitre = PROFILS.get(PROFIL_ARBITRE, {})
+    arbitre = PROFILES.get(JUDGE_PROFILE, {})
     return {
         # Ce que NOUS exécutons : entièrement connu, donc entièrement consigné.
         "nos_modeles": {
             "arbitre": {
-                "profil": PROFIL_ARBITRE,
+                "profil": JUDGE_PROFILE,
                 "modele": arbitre.get("modele"),
                 "base_url": arbitre.get("base_url"),
                 "temperature": 0,
                 "votes_par_verdict": VOTE_COUNT,
             },
-            "profil_actif": PROFIL_ACTIF,
+            "profil_actif": ACTIVE_PROFILE,
         },
         "cible": {
             "nom": nom_cible,

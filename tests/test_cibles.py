@@ -596,9 +596,9 @@ class TestOrdreDePriorite:
         # Le piege reel : un corps pose dans .env, et un profil passe en
         # option. C'est le profil qui part sur le reseau.
         import config
-        monkeypatch.setitem(config.CIBLE_HTTP, "corps",
+        monkeypatch.setitem(config.HTTP_TARGET, "corps",
                             {"message": "{message}"})
-        monkeypatch.setitem(config.CIBLE_HTTP, "chemin_reponse", "reply")
+        monkeypatch.setitem(config.HTTP_TARGET, "chemin_reponse", "reply")
         interroger = build_http_target(f"{base}/imbrique",
                                            profil="openai")
         # Si .env l'emportait, la cible /imbrique ne saurait pas lire ce corps.
@@ -607,8 +607,8 @@ class TestOrdreDePriorite:
     def test_le_env_sert_quand_aucun_profil_n_est_passe(self, base,
                                                         monkeypatch):
         import config
-        monkeypatch.setitem(config.CIBLE_HTTP, "corps", CORPS_IMBRIQUE)
-        monkeypatch.setitem(config.CIBLE_HTTP, "chemin_reponse",
+        monkeypatch.setitem(config.HTTP_TARGET, "corps", CORPS_IMBRIQUE)
+        monkeypatch.setitem(config.HTTP_TARGET, "chemin_reponse",
                             CHEMIN_IMBRIQUE)
         interroger = build_http_target(f"{base}/imbrique")
         assert interroger("bonjour") == "bonjour"

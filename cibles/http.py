@@ -355,7 +355,7 @@ def build_http_target(url, entetes=None, corps=None, chemin_reponse=None,
     profile is a CONVENIENCE, not a constraint: it must never override a
     setting made by hand.
     """
-    from config import CIBLE_HTTP
+    from config import HTTP_TARGET
 
     if profil is not None and profil not in TARGET_PROFILES:
         raise RuntimeError(
@@ -364,12 +364,12 @@ def build_http_target(url, entetes=None, corps=None, chemin_reponse=None,
         )
     settings = TARGET_PROFILES.get(profil, {})
 
-    entetes = {**CIBLE_HTTP["entetes"], **(entetes or {})}
-    corps = _first_defined(corps, settings.get("corps"), CIBLE_HTTP["corps"])
+    entetes = {**HTTP_TARGET["entetes"], **(entetes or {})}
+    corps = _first_defined(corps, settings.get("corps"), HTTP_TARGET["corps"])
     chemin_reponse = _first_defined(
         chemin_reponse, settings.get("chemin_reponse"),
-        CIBLE_HTTP["chemin_reponse"])
-    delai = delai or CIBLE_HTTP["delai"]
+        HTTP_TARGET["chemin_reponse"])
+    delai = delai or HTTP_TARGET["delai"]
 
     # BEFORE the first call: a whole campaign on a mute template would
     # conclude "no finding" without having sent any of what we believed.
@@ -484,21 +484,21 @@ def probe_target(url, entetes=None, corps=None, chemin_reponse=None, delai=None,
     erroné, propose les chemins qui mènent à du texte dans la réponse reçue —
     le bon y est presque toujours.
     """
-    from config import CIBLE_HTTP
+    from config import HTTP_TARGET
 
     settings = TARGET_PROFILES.get(profil, {})
     corps_final = _first_defined(corps, settings.get("corps"),
-                                  CIBLE_HTTP["corps"])
+                                  HTTP_TARGET["corps"])
     chemin_final = _first_defined(chemin_reponse,
                                    settings.get("chemin_reponse"),
-                                   CIBLE_HTTP["chemin_reponse"])
+                                   HTTP_TARGET["chemin_reponse"])
 
     show(f"Cible    : {url}")
     if profil:
         show(f"Profil   : {profil} — {settings['description']}")
     show(f"Corps    : {json.dumps(corps_final, ensure_ascii=False)}")
     show(f"Chemin   : {chemin_final}")
-    entetes_finaux = {**CIBLE_HTTP["entetes"], **(entetes or {})}
+    entetes_finaux = {**HTTP_TARGET["entetes"], **(entetes or {})}
     # On nomme les en-têtes sans montrer leur valeur : un jeton n'a rien à
     # faire dans une sortie de terminal qu'on colle dans un rapport ou un chat.
     show(f"En-têtes : {', '.join(entetes_finaux) or 'aucun'}"

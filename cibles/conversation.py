@@ -6,9 +6,9 @@ Until now a target was a function `interroger(message) -> str`, and the whole
 project depends on it: reconnaissance, replay, audit trail, tests. That
 contract does not change. This module adds the multi-turn form ALONGSIDE it:
 
-    interroger(message, historique=None) -> str
+    interroger(message, history=None) -> str
 
-where `historique` lists the previous turns. A target able to do that DECLARES
+where `history` lists the previous turns. A target able to do that DECLARES
 it (`interroger.conversation = True`).
 
 Why the capability is declared rather than guessed
@@ -50,7 +50,7 @@ measurement.
 
 NOTE ON NAMING (2026-11-13). The role VALUES ("utilisateur", "cible") stay
 French: they are persisted in harvested conversations and in the labelled
-corpus. The `interroger` / `historique` contract is renamed in one coordinated
+corpus. The `interroger` / `history` contract is renamed in one coordinated
 pass with the package itself. See `GLOSSAIRE.md`.
 """
 
@@ -62,7 +62,7 @@ MAX_TURNS = 5
 ATTACKER_ROLE = "utilisateur"
 TARGET_ROLE = "cible"
 
-# Mapping to the roles `demander_au_llm` expects: our vocabulary is ours, the
+# Mapping to the roles `ask_llm` expects: our vocabulary is ours, the
 # API's is not.
 _API_ROLES = {ATTACKER_ROLE: "user", TARGET_ROLE: "assistant"}
 
@@ -108,7 +108,7 @@ def require_conversation(ask, target_name="cette cible"):
 
 def to_api(turns):
     """
-    The history in the form `demander_au_llm` expects.
+    The history in the form `ask_llm` expects.
 
     TARGET turns become `assistant` messages, because that is what they are
     from the attacked model's point of view: its own replies.
@@ -154,7 +154,7 @@ def play(ask, messages, target_name="cette cible"):
 
     turns = []
     for message in messages:
-        reply = ask(message, historique=to_api(turns))
+        reply = ask(message, history=to_api(turns))
         turns.append({"role": ATTACKER_ROLE, "contenu": message})
         turns.append({"role": TARGET_ROLE, "contenu": reply})
     return turns
