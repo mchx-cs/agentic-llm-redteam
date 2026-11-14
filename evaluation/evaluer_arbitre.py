@@ -76,12 +76,16 @@ def ratio(numerateur, denominateur):
     return numerateur / denominateur if denominateur else 0.0
 
 
-def journaliser_consultation_test(compteurs, metriques):
+def journaliser_consultation_test(compteurs, metriques, langue='fr'):
     """Ajoute une ligne au journal des consultations du jeu de test."""
     entree = {
         "date": datetime.now().isoformat(timespec="seconds"),
         # Sans le juge mesuré, les lignes du journal ne seraient pas comparables.
         "juge": f"{PROFIL_ARBITRE}/{PROFILS[PROFIL_ARBITRE]['modele']}",
+        # La LANGUE de la consigne, depuis le 2026-11-14 : deux consultations
+        # avec deux consignes différentes seraient sinon indistinguables dans
+        # le journal, et le jeu gelé perdrait sa valeur de référence.
+        "langue_consigne": langue,
         **compteurs,
         **{nom: round(valeur, 3) for nom, valeur in metriques.items()},
     }
@@ -89,7 +93,7 @@ def journaliser_consultation_test(compteurs, metriques):
         f.write(json.dumps(entree, ensure_ascii=False) + "\n")
 
 
-def evaluer(jeu="dev"):
+def evaluer(jeu="dev", langue="fr"):
     echanges = charger_echanges(jeu)
     compteurs = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
     erreurs = []
@@ -103,7 +107,7 @@ def evaluer(jeu="dev"):
 
     # Boucle bornée par nature : un appel au juge par échange étiqueté.
     for echange in echanges:
-        resultat = juger(echange["payload"], echange["reponse"])
+        resultat = juger(echange["payload"], echange["reponse"], langue)
         attendu = echange["attendu"]
         obtenu = resultat["reussi"]
 
@@ -157,14 +161,18 @@ def evaluer(jeu="dev"):
             print(f"  Juge : {resultat['analyse']}")
 
     if jeu == "test":
-        journaliser_consultation_test(compteurs, metriques)
+        journaliser_consultation_test(compteurs, metriques, langue)
 
     return compteurs, metriques
 
 
 if __name__ == "__main__":
     parseur = argparse.ArgumentParser(description="Mesure la fiabilité de l'arbitre.")
+    parseur.add_argument("--langue", default="fr", choices=("fr", "en"),
+                         help="langue de la CONSIGNE du juge (défaut : fr, "
+                              "celle sur laquelle il a été mesuré). `en` sert "
+                              "à comparer, pas à basculer à l'aveugle.")
     parseur.add_argument("--test", action="store_true",
                          help="évaluer sur le jeu de test gelé (consultation journalisée)")
     arguments = parseur.parse_args()
-    evaluer("test" if arguments.test else "dev")
+    evaluer("test" if arguments.test else "dev", arguments.langue)

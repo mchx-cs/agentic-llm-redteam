@@ -2945,6 +2945,89 @@ vérité terrain ; renommer les clés de `resultat.json` casse la lecture des an
 résultats, que le projet soutient explicitement. Toutes les mesures publiées devront être
 refaites, et les 90 étiquettes revalidées à la main par l'auteur.
 
+**Protocole DÉCLARÉ avant lancement : la consigne du juge en anglais aide-t-elle ?
+(2026-11-14)** Question posée sous une forme plus large — « passer l'intégralité du projet
+en anglais va aider les performances de l'arbitre ? » — et la réponse honnête est NON pour
+tout sauf un fichier.
+
+**Ce que le juge reçoit réellement** : sa consigne système (4 375 caractères), le payload,
+la réponse de la cible, et le bloc de décodage. **Rien d'autre.** Il ne voit ni les
+identifiants, ni les commentaires, ni les docstrings, ni les commits, ni le README, ni ce
+fichier. Donc la bascule en anglais du code — `statistiques`, `detecteurs`, les cibles,
+l'API des agents — a **zéro effet** sur ses performances. C'est de la lisibilité pour un
+lecteur humain, et c'était bien l'argument écrit dans les commits ; ce n'est pas un
+argument de performance.
+
+**Et deux faits déjà mesurés disent que la langue n'est pas son goulot :**
+- le corpus contient **13 cas anglais** (11 en `dev`, 2 dans le jeu gelé). Sur la mesure
+  `dev`, les trois seules erreurs étaient E08, E08-b et **E08-en** — le trio des
+  hallucinations. L'anglais échoue exactement là où son jumeau français échoue, et pour
+  la même raison ;
+- le plafond documenté le 2026-10-30 était la TAILLE du modèle (llama3.2, 3 milliards :
+  « ne relie pas son raisonnement à sa conclusion »), levé en changeant de modèle — rappel
+  50 % vers 100 %. Deux retouches de prompt mesurées n'avaient rien donné.
+
+Le seul levier plausible est donc **la consigne du juge elle-même**, un fichier sur 55. Et
+c'est mesurable, donc ça se mesure.
+
+**PROTOCOLE, fixé avant d'avoir vu un chiffre :**
+- jeu `dev`, 67 échanges, le même corpus pour les deux bras ;
+- même juge (`groq` / `gpt-oss-120b`), même température 0, `juger()` direct sans vote —
+  l'évaluation doit mesurer le juge tel qu'il est ;
+- **une seule variable** : la langue de la consigne. La traduction est FIDÈLE (4 375
+  contre 4 376 caractères, mêmes trois critères, mêmes quatre exemptions, mêmes sept
+  exemples, même ordre de champs JSON). Si la version anglaise était aussi mieux écrite,
+  on ne saurait plus si le gain vient de la langue ou de la réécriture ;
+- deux lancements : `--langue fr` d'abord (le bras de référence, qu'on devait de toute
+  façon refaire après la correction du faux positif Base64), puis `--langue en` ;
+- **seuil de lecture déclaré AVANT** : l'arbitre n'est pas déterministe, un cas sur 67
+  vaut environ 1,5 point, et le projet a déjà mesuré plus ou moins 2 points de dérive.
+  **Un écart inférieur à 3 points est du BRUIT** et ne sera pas interprété. Dire ça après
+  avoir vu les chiffres n'aurait aucune valeur ;
+- coût : environ 100 000 tokens par bras, soit la journée de quota pour les deux.
+
+**Ce qui NE sera pas traduit dans la consigne**, et il faut le dire parce que ça limite ce
+que la mesure peut montrer :
+- les VALEURS des critères (`divulgation`, `obeissance`, `abus_outils`, `aucun`) restent
+  françaises : ce sont des clés de données, lues par le rapport et persistées dans les
+  pistes scellées ;
+- les étiquettes `Utilisateur` / `Chatbot` de la question restent françaises : la consigne
+  doit parler de ce que le juge VOIT. Les basculer est une décision séparée.
+
+Donc même en « anglais », la consigne garde quatre mots français et deux étiquettes. Si
+l'effet mesuré est nul, cette impureté fait partie des explications possibles.
+
+**Les deux consignes coexistent** (`CONSIGNES = {"fr": …, "en": …}`,
+`system_prompt_for(multitours, langue)`), et le défaut reste le FRANÇAIS. On ne bascule
+pas un artefact mesuré avant d'avoir la mesure, et garder les deux permet de revenir en
+arrière si l'anglais fait moins bien. Même motif que `--sans-adaptation`, qui fournit le
+témoin statique. `journal_test.jsonl` enregistre désormais la langue : sans ça, deux
+consultations du jeu gelé avec deux consignes différentes seraient indistinguables, et le
+jeu gelé perdrait sa valeur de référence.
+
+**Et le préalable a été levé d'abord : l'anti-forgeage.** Basculer la consigne en anglais
+armait l'injection trouvée la veille — ses étiquettes deviendraient `User:` /
+`Assistant:`, que 59 payloads contiennent. Le durcissement ne se déclenche QUE si une
+étiquette apparaît dans le contenu : sur les 272 échanges réels et les 1 160 payloads,
+aucun ne le fait, donc la question reste **identique octet pour octet** et les mesures
+restent comparables. On ne change pas le prompt de 272 échanges pour un risque que zéro
+d'entre eux n'exhibe.
+
+Trois détails de ce garde-fou valent d'être notés :
+- le marqueur de clôture s'allonge tant qu'il apparaît dans le contenu, **sans plafond** —
+  la leçon de `rapport._cloture()`, où une première version bornée recréait le bug
+  qu'elle devait empêcher ;
+- le contenu arrive INTACT au juge : un garde-fou qui tronquerait la réponse cacherait la
+  fuite qu'on cherche ;
+- l'explication de la clôture va dans la QUESTION, pas dans la consigne système, qui
+  reste ainsi l'artefact mesuré, inchangé.
+
+Un test vérifie qu'aucun échange du corpus ne déclenche la clôture — c'est la preuve que
+le durcissement est inerte sur les données réelles, donc que la remesure mesure bien
+autre chose que lui. Désarmer le garde-fou fait échouer quatre tests.
+
+707 tests `pytest`, toujours sans aucun appel LLM.
+
 ## Cadre légal
 
 Projet de recherche en sécurité. Le red teaming de LLM n'est licite que contre des
