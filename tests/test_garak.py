@@ -26,7 +26,7 @@ def _probe(nom="probes.dan.DanInTheWild", familles=("owasp:llm01",),
 
 @pytest.fixture
 def snapshot(monkeypatch, tmp_path):
-    """Installe un instantané garak fabriqué pour le test."""
+    """Installs a garak snapshot built for the test."""
     def installer(sondes):
         path = tmp_path / "garak.json"
         path.write_text(json.dumps({
@@ -414,7 +414,7 @@ class TestProvenanceInTheReport:
         assert "garak 0.17.1" in texte and "52 sonde(s)" in texte
 
     def test_an_ageing_library_is_reported(self):
-        # Un « aucun constat » obtenu avec des payloads de trois mois ne dit
+        # A "no finding" obtained with three-month-old payloads does not say
         # not the same thing as with payloads from today.
         texte = self._report({"version": "0.14.0", "sondes": 48,
                                "age_jours": 94, "perime": True})

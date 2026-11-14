@@ -79,7 +79,8 @@ class TestPayloadGeneration:
         # then serves as a preamble, and the objective supplies the request),
         # plus its bare variant, which measures resistance to hijacking.
         #
-        # This formula said "complete × transformations" until 2026-11-11, and
+        # This formula said "complete x transformations" until 2026-11-11,
+        # and
         # the test passed anyway: composition dated from the same day, but the
         # fixture neutralises the garak snapshot and no HAND-WRITTEN technique
         # had a complete payload yet, so the term was zero. The LLM07 payloads

@@ -28,7 +28,7 @@ CHAMPS_ATTENDUS = {"role", "langue", "outils", "sujets_refuses",
 
 @pytest.fixture
 def analyst(monkeypatch):
-    """Remplace l'appel au modèle d'analyse par une sortie choisie."""
+    """Replaces the call to the analyst model with a chosen output."""
     def installer(sortie):
         monkeypatch.setattr(reconnaissance, "ask_llm",
                             lambda *a, **k: sortie)
@@ -127,7 +127,7 @@ class TestDeclaredContext:
 
     def test_no_probe_asks_about_the_context(self):
         # Garde-fou contre la tentation : si quelqu'un ajoute « ta sortie est
-        # rendue en Markdown ? » aux sondes, ce test tombe.
+        # rendered as Markdown?" is ever added to the probes, this test
         questions = " ".join(PROBES).lower()
         for interdit in ("markdown", "html", "terminal", "rendu"):
             assert interdit not in questions, interdit

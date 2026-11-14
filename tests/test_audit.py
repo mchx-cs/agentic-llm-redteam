@@ -181,15 +181,15 @@ class TestMandateInTheReport:
             build_report(resultat, target="mock"))
 
 
-class TestChaineDePreuve:
+class TestChainOfCustody:
     """
-    Manuel OWASP §7.3 : « Tag each artifact with a unique Case ID […].
-    Calculate a SHA-256 hash of raw evidence at collection. »
+    OWASP manual §7.3: "Tag each artifact with a unique Case ID […].
+    Calculate a SHA-256 hash of raw evidence at collection."
 
-    Ce que ces empreintes font : montrer qu'une piste n'a pas ete retouchee
-    entre sa production et sa remise, et citer une preuve sans recopier la
-    reponse verbatim d'un client. Ce qu'elles ne font pas : la conservation en
-    lecture seule, qui releve de l'infrastructure.
+    What these digests do: show that a trail was not retouched between its
+    production and its delivery, and cite a piece of evidence without copying
+    a client's verbatim reply. What they do not do: write-once retention,
+    which is a matter of infrastructure.
     """
 
     @staticmethod
@@ -275,13 +275,14 @@ class TestChaineDePreuve:
 
 class TestTelemetry:
     """
-    Manuel §7.3 : consigner le modele, les parametres de generation, l'etat
-    du contexte — puis « Residual Non-Determinism: If sampling parameters or
-    backend routing cannot be locked, explicitly note the potential for
-    variance during replay. »
+    Manual §7.3: record the model, the generation parameters, the context
+    state — then "Residual Non-Determinism: If sampling parameters or backend
+    routing cannot be locked, explicitly note the potential for variance
+    during replay."
 
-    Un red teamer en boite noire ne connait RIEN de la configuration de sa
-    cible : c'est ce qu'il cherche. Pretendre la consigner serait inventer.
+    A black-box red teamer knows NOTHING of their target's configuration:
+    that is what they are looking for. Claiming to record it would be
+    inventing.
     """
 
     def test_what_we_run_is_entirely_logged(self):

@@ -31,8 +31,8 @@ def without_garak_snapshot(monkeypatch, tmp_path):
 
 def profile(role="assistant", tools=(), refused=(), instructions=False,
           code=None, documents=None, context=()):
-    # `code` et `documents` sont des TRI-ÉTATS : None = la cible n'en a rien
-    # dit, ce qui n'est pas « elle ne sait pas faire ».
+    # `code` and `documents` are TRI-STATES: None = the target said nothing
+    # about it, which is not "it cannot do it".
     return {"role": role, "langue": "fr", "outils": list(tools),
             "sujets_refuses": list(refused), "mentionne_consignes": instructions,
             "produit_du_code": code, "traite_des_documents": documents,
@@ -277,7 +277,7 @@ class TestToolAbuse:
         # Ce n'est pas un ornement de formulation : c'est le discriminant du
         # critere `abus_outils` de l'arbitre. Consulter SON dossier est un
         # usage legitime (cas D17 du corpus) ; obtenir celui d'un tiers est la
-        # faille. Sans ce membre de phrase, le juge classerait « aucun » — a
+        # vulnerability. Without that clause the judge would class it as
         # raison — et les quatre registres ne mesureraient rien.
         objective = next(o for o in objectives_for(
             profile(tools=["consulter_dossier"]), {"objectifs": []})
@@ -390,7 +390,7 @@ class TestRelevanceRules:
     # --- Capacites sondees : on n'ecarte que sur un NON explicite ----------
 
     def test_an_explicit_no_skips(self):
-        # La cible a repondu « je n'ecris pas de code » : la sonde est inutile.
+        # The target answered "I do not write code": the probe is useless.
         regles = dict(PREREQUISITES)
         verifier, _ = regles["produit-du-code"]
         assert verifier(profile(code=False)) is False
@@ -541,7 +541,7 @@ class TestScope:
 
     def test_the_skip_states_the_right_reason(self):
         # Une technique hors perimetre ne doit pas etre ecartee pour « aucun
-        # outil detecte », ce qui masquerait la vraie raison.
+        # tool detected", which would mask the real reason.
         plan = plan_campaign(profile(instructions=True), 5, only=["controle"])
         reasons = {e["technique"]: " ".join(e["motifs"]) for e in plan["ecartees"]}
         assert "hors du périmètre demandé" in reasons["fuite-prompt-systeme"]

@@ -298,7 +298,7 @@ class TestTargetFailureDuringACampaign:
     """
 
     @pytest.fixture
-    def campagne_qui_echoue(self, monkeypatch):
+    def failing_campaign(self, monkeypatch):
         """`cli()` avec une cible qui leve, sans toucher au reseau."""
         import main
 
@@ -312,38 +312,38 @@ class TestTargetFailureDuringACampaign:
         monkeypatch.setattr(main, "choose_target", cible_cassee)
         return main
 
-    def test_the_failure_exits_with_code_1(self, campagne_qui_echoue, tmp_path,
+    def test_the_failure_exits_with_code_1(self, failing_campaign, tmp_path,
                                     capsys):
         with pytest.raises(SystemExit) as output:
-            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+            failing_campaign.cli(["--cible", "http://127.0.0.1:9/x",
                                      "--rapport", str(tmp_path)])
         assert output.value.code == 1
 
-    def test_the_message_offers_the_check(self, campagne_qui_echoue,
+    def test_the_message_offers_the_check(self, failing_campaign,
                                                 tmp_path, capsys):
         with pytest.raises(SystemExit):
-            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+            failing_campaign.cli(["--cible", "http://127.0.0.1:9/x",
                                      "--rapport", str(tmp_path)])
         erreur = capsys.readouterr().err
         assert "INTERROMPUE" in erreur
         assert "--tester-cible" in erreur       # le raccourci exact
         assert "injoignable" in erreur          # le message d'origine
 
-    def test_no_traceback_is_displayed(self, campagne_qui_echoue,
+    def test_no_traceback_is_displayed(self, failing_campaign,
                                            tmp_path, capsys):
         with pytest.raises(SystemExit):
-            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+            failing_campaign.cli(["--cible", "http://127.0.0.1:9/x",
                                      "--rapport", str(tmp_path)])
         capture = capsys.readouterr()
         for marque in ("Traceback", "File \"", "raise RuntimeError"):
             assert marque not in capture.err + capture.out, marque
 
-    def test_the_audit_trail_is_closed_and_named(self, campagne_qui_echoue,
+    def test_the_audit_trail_is_closed_and_named(self, failing_campaign,
                                                      tmp_path, capsys):
         # Si la campagne tombe, on doit garder la trace de ce qui a DEJA ete
         # envoye — c'est precisement le moment ou on en a besoin.
         with pytest.raises(SystemExit):
-            campagne_qui_echoue.cli(["--cible", "http://127.0.0.1:9/x",
+            failing_campaign.cli(["--cible", "http://127.0.0.1:9/x",
                                      "--rapport", str(tmp_path)])
         assert "Piste d'audit" in capsys.readouterr().err
         pistes = list(tmp_path.glob("*-journal.jsonl"))
@@ -357,14 +357,14 @@ class TestTargetFailureDuringACampaign:
         assert lignes[-2]["statut"] == "interrompue"
 
     def test_a_remote_target_demands_the_mandate_BEFORE_the_campaign(
-            self, campagne_qui_echoue, tmp_path, capsys):
+            self, failing_campaign, tmp_path, capsys):
         # Decouvert en ecrivant les tests ci-dessus : visant d'abord
         # `exemple.invalid`, ils echouaient sur le mandat et non sur la cible.
         # C'etait le bon comportement, et il merite son propre test — l'ordre
         # des deux garde-fous est ce qui garantit qu'aucune requete ne part
         # vers un tiers sans autorisation.
         with pytest.raises(SystemExit) as output:
-            campagne_qui_echoue.cli(["--cible", "https://exemple.invalid/x",
+            failing_campaign.cli(["--cible", "https://exemple.invalid/x",
                                      "--rapport", str(tmp_path)])
         assert output.value.code == 2
         assert "REFUSÉE" in capsys.readouterr().err
