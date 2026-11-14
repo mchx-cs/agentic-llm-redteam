@@ -140,7 +140,19 @@ Keyword arguments still have to be renamed with their call sites, and argparse
 attributes (`arguments.cible`, derived from `--cible`) must NOT be renamed —
 the CLI flag names them.
 
-**And one class of reference no tool can see at all:** a name passed to
+**Two more classes of reference that live in STRINGS or belong to someone
+else**, and the tokenizer renames neither correctly:
+
+- `@pytest.mark.parametrize("texte, attendu", …)` names the test's parameters
+  in a string. Renaming the function's parameters without the string gives
+  `function uses no argument 'texte'` at COLLECTION time, so the whole file
+  fails to load rather than one test failing.
+- an ATTRIBUTE after a dot belongs to the object, not to this file. A table
+  containing `encode` rewrote `clear.encode()` into `clear.encoded()`. The
+  renamer now refuses to touch a name preceded by `.`; before that guard it
+  was caught by a test, but it could have landed on a less covered method.
+
+**And one class no tool can see at all:** a name passed to
 `monkeypatch.setattr` as a STRING. `setattr(module, "FICHIER_SORTIE", …)`,
 `"_objectifs"`, `"MAX_OBJECTIFS"`, `"derniere_version"`, `"collecter"` — the
 tokenizer sees a string literal, the import machinery sees nothing at all, and

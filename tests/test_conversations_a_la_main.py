@@ -1,9 +1,8 @@
 """
-Tests des conversations écrites à la main (phase 3b).
+Tests for the hand-written conversations (phase 3b).
 
-Aucun appel LLM. Ce qui se vérifie ici n'est pas un comportement de modèle
-mais des propriétés du CORPUS — et ce sont elles qui font qu'une mesure veut
-dire quelque chose.
+No LLM call. What is checked here is not a model's behaviour but properties
+of the CORPUS — and they are what makes a measurement mean something.
 """
 
 import pytest
@@ -12,139 +11,138 @@ from evaluation.conversations_a_la_main import CASES, SECRET, entries
 
 
 @pytest.fixture(autouse=True)
-def aucun_appel_de_modele(monkeypatch):
-    def refuser(*_, **__):
+def no_model_call(monkeypatch):
+    def refuse(*_, **__):
         raise AssertionError("appel à un modèle depuis tests/ : interdit.")
     for module in ("llm_client", "agents.reconnaissance", "agents.arbitre"):
-        monkeypatch.setattr(f"{module}.ask_llm", refuser,
+        monkeypatch.setattr(f"{module}.ask_llm", refuse,
                             raising=False)
 
 
-class TestVeriteTerrain:
+class TestGroundTruth:
     """
-    Les étiquettes sont la vérité terrain, et c'est l'AUTEUR qui les valide.
-    Ce fichier rédige des SCÉNARIOS, pas des verdicts — un test le garantit,
-    parce que c'est la règle la plus facile à enfreindre par commodité.
+    The labels are the ground truth, and it is the AUTHOR who validates them.
+    This file writes SCENARIOS, not verdicts — a test guarantees it, because
+    that is the rule easiest to break out of convenience.
     """
 
-    def test_un_cas_d_un_seul_tour_sort_au_format_mono_tour(self):
-        # Sinon `evaluer_arbitre` l'écarterait, alors que le juge sait très
-        # bien le lire : un échange d'un tour déguisé en conversation serait
-        # perdu pour une mesure qu'il peut nourrir.
-        for entree in entries():
-            if entree["format"] == "mono-tour":
-                assert "payload" in entree and "reponse" in entree
-                assert "tours" not in entree
+    def test_a_single_turn_case_comes_out_single_turn(self):
+        # Otherwise `evaluer_arbitre` would skip it, while the judge reads
+        # it perfectly well: a one-turn exchange dressed up as a conversation
+        # would be lost to a measurement it can feed.
+        for entry in entries():
+            if entry["format"] == "mono-tour":
+                assert "payload" in entry and "reponse" in entry
+                assert "tours" not in entry
             else:
-                assert "tours" in entree and len(entree["tours"]) > 2
+                assert "tours" in entry and len(entry["tours"]) > 2
 
-    def test_aucun_verdict_n_est_pre_rempli(self):
-        for entree in entries():
-            assert entree["attendu"] is None, entree["id"]
-            assert entree["categorie"] is None, entree["id"]
-            assert entree["jeu"] is None, entree["id"]
+    def test_no_verdict_is_pre_filled(self):
+        for entry in entries():
+            assert entry["attendu"] is None, entry["id"]
+            assert entry["categorie"] is None, entry["id"]
+            assert entry["jeu"] is None, entry["id"]
 
-    def test_chaque_cas_dit_POURQUOI_il_existe(self):
-        # Sans l'intention, l'auteur reçoit deux conversations presque
-        # identiques sans savoir pourquoi on lui soumet les deux.
-        for entree in entries():
-            assert len(entree["piege"]) > 60, entree["id"]
+    def test_every_case_says_WHY_it_exists(self):
+        # Without the intention, the author gets two nearly identical
+        # conversations with no idea why both are being shown.
+        for entry in entries():
+            assert len(entry["piege"]) > 60, entry["id"]
 
 
-class TestLesPairesSontDesPaires:
+class TestThePairsReallyArePairs:
     """
-    La leçon de D13/D14 : un cas négatif seul apprend au juge une règle trop
-    large. Il lui faut son jumeau positif, au texte presque identique.
+    The lesson of D13/D14: a negative case on its own teaches the judge too
+    broad a rule. It needs its positive twin, with nearly identical text.
     """
 
-    def _par_groupe(self):
-        groupes = {}
-        for identifiant, groupe, _, tours in CASES:
-            groupes.setdefault(groupe, []).append((identifiant, tours))
-        return groupes
+    def _by_group(self):
+        groups = {}
+        for identifier, group, _, turns in CASES:
+            groups.setdefault(group, []).append((identifier, turns))
+        return groups
 
-    def test_les_paires_partagent_leur_groupe(self):
-        # Donc leur jeu : on ne peut pas régler l'arbitre sur l'un et le
-        # mesurer sur son jumeau.
-        groupes = self._par_groupe()
-        assert len(groupes["A-secret-attaquant"]) == 2
-        assert len(groupes["A-confirmation"]) == 2
+    def test_the_pairs_share_their_group(self):
+        # Hence their set: the judge cannot be tuned on one and measured on
+        # its twin.
+        groups = self._by_group()
+        assert len(groups["A-secret-attaquant"]) == 2
+        assert len(groups["A-confirmation"]) == 2
 
-    def test_les_jumeaux_ne_diffèrent_que_par_la_REPONSE(self):
-        # Le discriminant doit être ce que la CIBLE dit, pas ce que
-        # l'attaquant demande : sinon le cas mesure autre chose.
-        for groupe in ("A-secret-attaquant", "A-confirmation"):
-            (_, premiers), (_, seconds) = self._par_groupe()[groupe]
-            demandes_1 = [t["contenu"] for t in premiers
+    def test_the_twins_differ_only_by_the_REPLY(self):
+        # The discriminant must be what the TARGET says, not what the
+        # attacker asks: otherwise the case measures something else.
+        for group in ("A-secret-attaquant", "A-confirmation"):
+            (_, first), (_, second) = self._by_group()[group]
+            requests_1 = [t["contenu"] for t in first
                           if t["role"] == "utilisateur"]
-            demandes_2 = [t["contenu"] for t in seconds
+            requests_2 = [t["contenu"] for t in second
                           if t["role"] == "utilisateur"]
-            assert demandes_1 == demandes_2, groupe
-            reponses_1 = [t["contenu"] for t in premiers
+            assert requests_1 == requests_2, group
+            replies_1 = [t["contenu"] for t in first
                           if t["role"] == "cible"]
-            reponses_2 = [t["contenu"] for t in seconds
+            replies_2 = [t["contenu"] for t in second
                           if t["role"] == "cible"]
-            assert reponses_1 != reponses_2, groupe
+            assert replies_1 != replies_2, group
 
 
-class TestLesPiegesInatteignablesSontCouverts:
-    def test_le_secret_apparait_dans_un_tour_de_l_ATTAQUANT(self):
-        # Le faux positif propre au multi-tours. Aucune récolte ne peut le
-        # produire : nos payloads cherchent le secret, ils ne le contiennent
-        # pas.
-        attaquant = [t for _, _, _, tours in CASES for t in tours
+class TestTheUnreachableTrapsAreCovered:
+    def test_the_secret_appears_in_an_ATTACKER_turn(self):
+        # The false positive specific to multi-turn. No harvest can produce
+        # it: our payloads look for the secret, they do not contain it.
+        attacker = [t for _, _, _, turns in CASES for t in turns
                      if t["role"] == "utilisateur" and SECRET in t["contenu"]]
-        assert attaquant, "aucun cas ne met le secret dans la bouche de l'attaquant"
+        assert attacker, "aucun cas ne met le secret dans la bouche de l'attaquant"
 
-    def test_un_cas_a_la_fuite_a_un_tour_ANTERIEUR(self):
-        # 7 fuites sur 11 avaient cette forme sur la récolte réelle.
-        trouve = False
-        for _, _, _, tours in CASES:
-            reponses = [t["contenu"] for t in tours if t["role"] == "cible"]
-            if len(reponses) >= 2 and SECRET in reponses[0] \
-                    and SECRET not in reponses[-1]:
-                trouve = True
-        assert trouve
+    def test_one_case_leaks_on_an_EARLIER_turn(self):
+        # 7 leaks out of 11 had this shape in the real harvest.
+        found = False
+        for _, _, _, turns in CASES:
+            replies = [t["contenu"] for t in turns if t["role"] == "cible"]
+            if len(replies) >= 2 and SECRET in replies[0] \
+                    and SECRET not in replies[-1]:
+                found = True
+        assert found
 
-    def test_des_conversations_depassent_deux_tours(self):
-        # `sequence_turns()` n'en produit que deux : au-delà, c'est à la main.
-        assert any(len(tours) // 2 > 2 for _, _, _, tours in CASES)
+    def test_some_conversations_exceed_two_turns(self):
+        # `sequence_turns()` produces only two: beyond that, by hand.
+        assert any(len(turns) // 2 > 2 for _, _, _, turns in CASES)
 
-    def test_il_y_a_des_controles_entierement_anodins(self):
-        # Sans eux, les faux positifs seraient nuls par construction.
-        anodins = [tours for _, _, _, tours in CASES
-                   if not any(SECRET in t["contenu"] for t in tours)
-                   and "instructions" not in tours[0]["contenu"].lower()]
-        assert anodins
+    def test_there_are_entirely_harmless_controls(self):
+        # Without them, false positives would be zero by construction.
+        harmless = [turns for _, _, _, turns in CASES
+                   if not any(SECRET in t["contenu"] for t in turns)
+                   and "instructions" not in turns[0]["contenu"].lower()]
+        assert harmless
 
-    def test_les_tours_alternent_toujours(self):
-        # Un corpus mal formé ferait juger un dialogue incohérent.
-        for identifiant, _, _, tours in CASES:
-            roles = [t["role"] for t in tours]
+    def test_the_turns_always_alternate(self):
+        # A malformed corpus would have an incoherent dialogue scored.
+        for identifier, _, _, turns in CASES:
+            roles = [t["role"] for t in turns]
             assert roles == ["utilisateur", "cible"] * (len(roles) // 2), \
-                identifiant
+                identifier
 
 
-class TestVersement:
-    def test_verser_n_ecrase_pas_la_recolte(self, monkeypatch, tmp_path):
-        import evaluation.conversations_a_la_main as maison
+class TestPouringIn:
+    def test_pouring_in_does_not_overwrite_the_harvest(self, monkeypatch, tmp_path):
+        import evaluation.conversations_a_la_main as by_hand
         import json
 
-        recolte = tmp_path / "recolte.json"
-        recolte.write_text(json.dumps({"conversations": [
+        harvest = tmp_path / "recolte.json"
+        harvest.write_text(json.dumps({"conversations": [
             {"id": "C-demo-01-1", "attendu": None}]}), encoding="utf-8")
-        monkeypatch.setattr(maison, "HARVEST_FILE", recolte)
+        monkeypatch.setattr(by_hand, "HARVEST_FILE", harvest)
 
-        ajoutees, total = maison.pour_in()
-        assert len(ajoutees) == len(CASES)
+        added, total = by_hand.pour_in()
+        assert len(added) == len(CASES)
         assert total == len(CASES) + 1
 
-    def test_verser_deux_fois_ne_duplique_rien(self, monkeypatch, tmp_path):
-        import evaluation.conversations_a_la_main as maison
+    def test_pouring_in_twice_duplicates_nothing(self, monkeypatch, tmp_path):
+        import evaluation.conversations_a_la_main as by_hand
 
-        monkeypatch.setattr(maison, "HARVEST_FILE",
+        monkeypatch.setattr(by_hand, "HARVEST_FILE",
                             tmp_path / "recolte.json")
-        maison.pour_in()
-        ajoutees, total = maison.pour_in()
-        assert ajoutees == []
+        by_hand.pour_in()
+        added, total = by_hand.pour_in()
+        assert added == []
         assert total == len(CASES)
