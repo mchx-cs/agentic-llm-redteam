@@ -93,8 +93,8 @@ class TestTriStates:
     @pytest.mark.parametrize("field", ["produit_du_code",
                                        "traite_des_documents"])
     def test_a_missing_field_means_none_not_false(self, analyst, field):
-        # C'est LE piège : `bool()` ou `.get(champ, False)` transformerait
-        # tous les silences en refus, et la campagne perdrait seize sondes.
+        # THE trap: `bool()` or `.get(field, False)` would turn every
+        # silence into a refusal, and the campaign would lose sixteen probes.
         analyst('{"role": "assistant"}')
         assert reconnoitre(_target())[field] is None
 
