@@ -51,6 +51,17 @@ part of the change, not a detail.
 | tour | turn | one exchange in a conversation |
 | historique | history | prior turns |
 | adaptation | adaptation | reordering, not rewording |
+| journal (des appels) | call log | `llm_client` counts calls and tokens |
+| mandat | mandate | `require_mandate` is the campaign's front door |
+| empreinte | digest | SHA-256; the KEY `"empreinte"` stays, the function moved |
+| motif (de refus) | pattern | a regex, in `adaptation` |
+| motif (d'écartement) | reason | a sentence, in `planificateur` |
+| gravité | severity | from rules, never a model |
+| résumer | summarise | the one-screen view of a profile or a plan |
+| seulement / sauf | only / excluding | a campaign's scope |
+| lancés | launched | the attempts actually sent |
+| écourtée | cut short | the budget stopped the campaign |
+| clôture | fence | the report's code-block delimiter |
 
 ## Judge criteria — DATA, not prose
 
@@ -102,7 +113,32 @@ wrong. Each entry here cost a broken test run.
 | French PROSE containing an identifier | the worst of the four, because the suite stays green. Renaming `prochain` → `next_attempt` rewrote twelve French sentences, including two strings rendered into the client-facing report and — worst — a target reply pinned VERBATIM in `tests/test_adaptation.py`. A test whose data is falsified no longer tests what it claims. A detector now scans for English identifiers inside French sentences after every rename pass |
 | data keys that look like identifiers | `TRANSFORMATIONS`' keys (`"identite"`, `"majuscules"`) travel into `resultat.json`, the committed example and the README excerpt. A `identite` rename hits the string literal too, and the tests follow silently because they were renamed in the same pass |
 | local variables sharing a name with a dict key | the same hazard as above, met THREE times: renaming the local `echanges`, `fiche` or `identite` also rewrote `"echanges"`, `"identite"` and `"majuscules"` in the neighbouring dict. The suite caught each one, but by ricochet — `tests/test_rapport.py::TestLeSchemaDeDonneesEstEPINGLE` now pins the data schema directly and names the offending key |
+| `motif` | two unrelated meanings AGAIN: a regex *pattern* (`adaptation.REFUSAL_PATTERNS`) and a *reason* a technique was skipped (`planificateur`). One rename cannot serve both |
+| `exiger` | an ordinary French verb as well as the authorisation gate. Renaming it to `require_mandate` produced "finirait par require_mandate un mandat" in a comment and "AVANT d'require_mandate le mandat" in main. Neither broke a test |
 | keyword arguments | `independants=` / `quoi=` are passed by name from four call sites. Renaming the parameter without them turned 693 green tests into 99 failures in one step — which is exactly why the order runs leaves-to-root |
+
+## How to rename, now that both failures have happened
+
+A global `sed` cannot tell an identifier from the same word in a French
+sentence, nor from a JSON data key of the same spelling. Both damages were
+done and caught in one afternoon: `"constats"` and `"campagne"` were rewritten
+inside `rapport.py`'s data structure, and `# --- Gravité` became English words
+inside French prose.
+
+Two tools, used in this order:
+
+1. **Rename with Python's `tokenize`**, which only touches NAME tokens, so
+   strings and comments are untouchable by construction. That is how
+   `rapport.py`'s 72 identifiers moved without a single data key changing —
+   verified by diffing the sorted set of `"key":` strings before and after.
+2. **Then run `check_rename_damage.py`** with the identifiers just
+   introduced. It lists every line that holds both an accented word and a new
+   identifier. It reports, it never rewrites: deciding whether `ask_llm`
+   legitimately appears inside a French comment is a reading job.
+
+Keyword arguments still have to be renamed with their call sites, and argparse
+attributes (`arguments.cible`, derived from `--cible`) must NOT be renamed —
+the CLI flag names them.
 
 ## Terms whose translation changes BEHAVIOUR
 

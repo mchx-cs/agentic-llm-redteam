@@ -400,12 +400,12 @@ class TestRedondanceAvecGarak:
 
 class TestProvenanceDansLeRapport:
     def _rapport(self, payloads):
-        from rapport import construire, rendre_markdown
-        return rendre_markdown(construire({
+        from rapport import build_report, render_markdown
+        return render_markdown(build_report({
             "statut": "aucun_constat", "fiche": None,
             "plan": {"essais": [], "ecartees": []}, "constats": [],
             "journal": {}, "ecourtee": None, "payloads": payloads},
-            cible="essai"))
+            target="essai"))
 
     def test_le_rapport_dit_avec_quoi_il_a_teste(self):
         texte = self._rapport({"version": "0.17.1", "sondes": 52,

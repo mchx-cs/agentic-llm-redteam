@@ -16,7 +16,7 @@ import pytest
 import llm_client
 from llm_client import (BudgetExceeded, ask_llm, call_log,
                         reset_call_log)
-from rapport import construire, rendre_markdown
+from rapport import build_report, render_markdown
 
 
 @pytest.fixture(autouse=True)
@@ -110,7 +110,7 @@ class TestArretPropre:
             "constats": [], "ecourtee": "Budget atteint : 6 appel(s).",
             "journal": {"appels": 6, "tokens": 100, "tronquees": []},
         }
-        texte = rendre_markdown(construire(resultat, cible="essai"))
+        texte = render_markdown(build_report(resultat, target="essai"))
         assert "ÉCOURTÉE" in texte
         # Et surtout : la couverture doit se dénoncer elle-même.
         assert "incomplète" in texte
@@ -121,5 +121,5 @@ class TestArretPropre:
             "plan": {"essais": [], "ecartees": []}, "constats": [],
             "ecourtee": None, "journal": {},
         }
-        texte = rendre_markdown(construire(resultat, cible="essai"))
+        texte = render_markdown(build_report(resultat, target="essai"))
         assert "ÉCOURTÉE" not in texte

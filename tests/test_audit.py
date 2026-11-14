@@ -161,21 +161,21 @@ class TestPisteAudit:
 
 class TestMandatDansLeRapport:
     def test_le_rapport_cite_le_mandat(self):
-        from rapport import construire, rendre_markdown
+        from rapport import build_report, render_markdown
         resultat = {"statut": "aucun_constat", "fiche": None,
                     "plan": {"essais": [], "ecartees": []}, "constats": [],
                     "journal": {}, "autorisation": MANDAT}
-        texte = rendre_markdown(construire(resultat, cible="client.fr"))
+        texte = render_markdown(build_report(resultat, target="client.fr"))
         assert "## Mandat" in texte
         assert "Convention 2026-042" in texte
 
     def test_sans_mandat_aucune_section_parasite(self):
-        from rapport import construire, rendre_markdown
+        from rapport import build_report, render_markdown
         resultat = {"statut": "aucun_constat", "fiche": None,
                     "plan": {"essais": [], "ecartees": []}, "constats": [],
                     "journal": {}, "autorisation": None}
-        assert "## Mandat" not in rendre_markdown(
-            construire(resultat, cible="mock"))
+        assert "## Mandat" not in render_markdown(
+            build_report(resultat, target="mock"))
 
 
 class TestChaineDePreuve:

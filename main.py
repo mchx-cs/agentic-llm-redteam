@@ -34,7 +34,7 @@ from cibles import choose_target
 from cibles.http import TARGET_PROFILES, probe_target as probe_http_target
 from config import CALL_BUDGET, TOKEN_BUDGET, TARGET
 from llm_client import BudgetExceeded, call_log, reset_call_log
-from rapport import enregistrer
+from rapport import save_report
 
 # The stopping rule: we do not attack indefinitely.
 MAX_ESSAIS = 3
@@ -455,7 +455,7 @@ def cli(arguments=None):
             call_log())
 
     result["autorisation"] = authorisation
-    # The chain of custody passes from the trail to the REPORT. `construire`
+    # The chain of custody passes from the trail to the REPORT. `build_report`
     # already read these three fields, but nothing filled them: a report came
     # out with no case identifier while the trail had one. The report's reader
     # could not get back to the trace that justifies it — which is exactly
@@ -468,9 +468,9 @@ def cli(arguments=None):
     print(f"Piste d'audit : {trail.path}")
 
     if arguments.rapport:
-        json_path, md_path = enregistrer(
-            result, cible=target_name, dossier=arguments.rapport,
-            abreger=arguments.abreger)
+        json_path, md_path = save_report(
+            result, target=target_name, folder=arguments.rapport,
+            abridge=arguments.abreger)
         print(f"Rapport écrit : {md_path}\n"
               f"Source de vérité : {json_path}")
 
