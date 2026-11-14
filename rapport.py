@@ -373,7 +373,7 @@ def _bloc_preuve(campagne):
             f"- **Sceau de la piste** (SHA-256) : `{campagne['sceau_piste']}`",
             "",
             "Le sceau porte sur tout ce que la piste contient. "
-            "`audit.verifier_sceau(piste)` répond à la seule question qui "
+            "`audit.verify_seal(piste)` répond à la seule question qui "
             "compte si ce rapport est contesté : la trace a-t-elle bougé "
             "depuis son écriture ?",
         ]

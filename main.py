@@ -22,8 +22,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from audit import (FICHIER_AUTORISATION, AutorisationManquante, PisteAudit,
-                   exiger, telemetrie)
+from audit import (AUTHORISATION_FILE, MissingAuthorisation, AuditTrail,
+                   require_mandate, telemetry)
 from agents.adaptation import accumulate, observe, next_attempt
 from agents.arbitre import judge, judge_by_vote
 from agents.planificateur import plan_campaign, summarise as summarise_plan
@@ -49,7 +49,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     un vrai endpoint, le leurre local ou une cible simulée, sans toucher au
     code de l'orchestrateur. Par défaut, celle que désigne `.env`.
 
-    `piste` est une PisteAudit facultative. Quand elle est fournie, chaque
+    `piste` est une AuditTrail facultative. Quand elle est fournie, chaque
     échange avec la cible y est consigné au fil de l'eau — y compris ceux de
     la reconnaissance et du rejeu, puisque la cible y est tracée en amont.
     """
@@ -65,7 +65,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
     # --- 1. Reconnaissance : qui est cette cible ? -------------------------
     print("--- Reconnaissance ---")
     try:
-        fiche = reconnoitre(piste.tracer("reconnaissance", interroger_cible)
+        fiche = reconnoitre(piste.trace("reconnaissance", interroger_cible)
                             if piste else interroger_cible)
     except BudgetExceeded as arret:
         print(f"\n>>> {arret}")
@@ -138,7 +138,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
             reponse = interroger_cible(payload["texte"])
             tronquee = len(call_log()["tronquees"]) > tronquees_avant
             if piste:
-                piste.consigner_echange("attaque", payload["texte"], reponse,
+                piste.record_exchange("attaque", payload["texte"], reponse,
                                         tronquee)
             print(f"  [Cible]     répond : {reponse}")
             if tronquee:
@@ -150,7 +150,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
             # un rapport.
             verdict = judge_by_vote(payload["texte"], reponse)
             if piste:
-                piste.consigner_verdict(numero, verdict)
+                piste.record_verdict(numero, verdict)
             print(f"  [Arbitre]   enfreint={verdict['reussi']} "
                   f"({verdict['critere']}, votes {verdict['votes']}) : "
                   f"{verdict['analyse']}\n")
@@ -184,7 +184,7 @@ def lancer_campagne(interroger_cible=None, nom_cible=None, piste=None,
                 # coûterait neuf appels là où trois suffisent.
                 verification = verify_by_replay(
                     payload["texte"], verdict["valeur"],
-                    piste.tracer("rejeu", interroger_cible) if piste
+                    piste.trace("rejeu", interroger_cible) if piste
                     else interroger_cible,
                     judge,
                 )
@@ -359,8 +359,8 @@ def cli(arguments=None):
              + ". Certaines familles de sondes n'ont aucun sens sans ça, et "
                "une cible ne peut pas le déclarer elle-même.")
     parseur.add_argument(
-        "--autorisation", default=FICHIER_AUTORISATION, metavar="FICHIER",
-        help=f"mandat couvrant la cible (défaut : {FICHIER_AUTORISATION}). "
+        "--autorisation", default=AUTHORISATION_FILE, metavar="FICHIER",
+        help=f"mandat couvrant la cible (défaut : {AUTHORISATION_FILE}). "
              f"Inutile pour une cible locale.")
     arguments = parseur.parse_args(arguments)
 
@@ -409,8 +409,8 @@ def cli(arguments=None):
     # Le mandat AVANT tout : on ne lance pas une seule requête vers un
     # système tiers sans pouvoir prouver qu'on en avait le droit.
     try:
-        autorisation = exiger(nom_cible, arguments.autorisation)
-    except AutorisationManquante as refus:
+        autorisation = require_mandate(nom_cible, arguments.autorisation)
+    except MissingAuthorisation as refus:
         # Une consigne, pas une trace : le lecteur doit savoir quoi faire.
         print(f"Campagne REFUSÉE.\n{refus}", file=sys.stderr)
         raise SystemExit(2)
@@ -424,9 +424,9 @@ def cli(arguments=None):
     horodatage = datetime.now().strftime("%Y%m%d-%H%M%S")
     # La piste d'audit est écrite TOUJOURS, même sans --rapport : elle est
     # la trace de ce qu'on a envoyé, pas un livrable optionnel.
-    piste = PisteAudit(Path(dossier) / f"{horodatage}-journal.jsonl",
+    piste = AuditTrail(Path(dossier) / f"{horodatage}-journal.jsonl",
                        nom_cible, autorisation,
-                       contexte=telemetrie(nom_cible, arguments.profil_cible))
+                       context=telemetry(nom_cible, arguments.profil_cible))
 
     try:
         resultat = lancer_campagne(
@@ -447,11 +447,11 @@ def cli(arguments=None):
               f"Vérifie le branchement sans rien attaquer :\n"
               f"  python main.py --cible {nom_cible} --tester-cible",
               file=sys.stderr)
-        print(f"Piste d'audit : {piste.chemin}", file=sys.stderr)
+        print(f"Piste d'audit : {piste.path}", file=sys.stderr)
         raise SystemExit(1)
     finally:
         # Même si la campagne lève, le journal doit se refermer proprement.
-        sceau = piste.clore(
+        sceau = piste.close(
             locals().get("resultat", {}).get("statut", "interrompue"),
             call_log())
 
@@ -462,11 +462,11 @@ def cli(arguments=None):
     # un. Le lecteur du rapport ne pouvait pas remonter à la trace qui le
     # justifie — exactement ce à quoi sert un identifiant de dossier.
     resultat["case_id"] = piste.case_id
-    resultat["piste"] = str(piste.chemin)
+    resultat["piste"] = str(piste.path)
     resultat["sceau_piste"] = sceau
-    resultat["telemetrie"] = telemetrie(nom_cible, arguments.profil_cible)
+    resultat["telemetrie"] = telemetry(nom_cible, arguments.profil_cible)
     print(f"\nRésultat final : {resultat['statut']}")
-    print(f"Piste d'audit : {piste.chemin}")
+    print(f"Piste d'audit : {piste.path}")
 
     if arguments.rapport:
         chemin_json, chemin_md = enregistrer(

@@ -10,7 +10,7 @@ répond, lui, est probabiliste et se mesure à la main.
 import pytest
 
 import cibles.demo as demo
-from audit import est_locale
+from audit import is_local
 from cibles import NAMED_TARGETS, choose_target, is_bundled_target
 from cibles.demo import LEVELS, SECRET, build_demo_target
 
@@ -148,15 +148,15 @@ class TestAucunMandatPourLesCiblesLivrees:
 
     @pytest.mark.parametrize("nom", ["demo", "demo:2", "demo:3"])
     def test_la_cible_de_demonstration_n_en_demande_pas(self, nom):
-        assert is_bundled_target(nom) and est_locale(nom)
+        assert is_bundled_target(nom) and is_local(nom)
 
     def test_toute_cible_nommee_est_reconnue_comme_livree(self):
         # Le garde-fou qui attrapera le prochain oubli.
         for nom in NAMED_TARGETS:
-            assert is_bundled_target(nom) and est_locale(nom), nom
+            assert is_bundled_target(nom) and is_local(nom), nom
 
     def test_une_cible_distante_en_demande_toujours_un(self):
-        assert not est_locale("https://client.fr/chat")
+        assert not is_local("https://client.fr/chat")
 
 
 class TestSecretsFactices:

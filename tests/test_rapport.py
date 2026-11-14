@@ -705,7 +705,7 @@ class TestChaineDePreuve:
     Le manuel (§7.3) veut qu'une preuve soit identifiable. `construire` lisait
     `case_id`, `sceau_piste` et `telemetrie` depuis le 2026-11-12... mais rien
     ne les REMPLISSAIT : `main.py` jetait la valeur de retour de
-    `piste.clore()`. Un rapport sortait donc sans identifiant de dossier
+    `piste.close()`. Un rapport sortait donc sans identifiant de dossier
     alors que sa piste en avait un, et un identifiant qu'un seul des deux
     documents connaît ne relie rien.
 
@@ -730,7 +730,7 @@ class TestChaineDePreuve:
                             sceau_piste="3f" * 32)
         assert "## Chaîne de preuve" in rendu
         assert "rapports/20261112-233201-journal.jsonl" in rendu
-        assert "verifier_sceau" in rendu
+        assert "verify_seal" in rendu
 
     def test_le_sceau_n_est_jamais_tronque(self):
         # Un condensat tronque ne se verifie pas, et il n'est la que pour
