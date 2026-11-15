@@ -23,6 +23,8 @@ import argparse
 import json
 from pathlib import Path
 
+from evaluation.languages import language_pair
+
 FOLDER = Path(__file__).parent
 TO_LABEL_FILE = FOLDER / "to_label.json"
 CONVERSATIONS_FILE = FOLDER / "to_label_conversations.json"
@@ -242,6 +244,13 @@ def label():
             exchange["category"] = category
             exchange["dataset"] = dataset
             exchange["trap"] = trap
+            # A MECHANICAL fact, stamped rather than asked: the author is not
+            # questioned about something derivable from the text. Recorded
+            # only if absent, so a stamp made earlier is never overwritten —
+            # the figure must stay reproducible if the classifier's word lists
+            # ever move. See evaluation/languages.py for why it exists.
+            if not exchange.get("languages"):
+                exchange["languages"] = language_pair(exchange)
 
             # Saved after EVERY exchange: an interruption never loses the work
             # already done.

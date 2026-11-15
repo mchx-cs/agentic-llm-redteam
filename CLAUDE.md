@@ -2976,6 +2976,71 @@ What that arm does NOT say: the FROZEN set had its single false positive on R09-
 polluted entry. That `dev` did not move makes it plausible that `test` did not move; it is not
 a measurement. **To be decided, not assumed.**
 
+**The corpus mixes languages, and it did so silently (2026-11-15).** Found by a plain
+question — "is it normal that our exchanges are in French?" — asked before labelling the
+119 harvested entries, which is the only moment it was cheap to answer.
+
+The target speaks French by decision: it IS a French library assistant, and `GLOSSARY.md`
+lists its system prompt among the things whose translation would change the measured
+object. But the ATTACKER does not. `attacker.sequence_turns()` puts a garak complete
+payload (English) on turn 1 and an objective from reconnaissance (French) on turn 2.
+Measured on the harvest:
+
+| Pair (attacker -> target) | Entries | Groups | Mechanical positives |
+|---|---|---|---|
+| fr -> fr | 79 | 22 | **10** |
+| en -> fr | 33 | 10 | 0 |
+| en -> en | 7 | 1 | 0 |
+
+And 36 conversations have an attacker who CHANGES language between turn 1 and turn 2,
+with the target following each — so the target speaks two languages inside one
+conversation. Real behaviour, not an artefact.
+
+**Three facts decided the choice.**
+1. **All ten positives are in `fr->fr`.** The forty English-attacker entries hold no leak
+   at all: they are forty NEGATIVES. That is not a competing population blurring the
+   measurement, it is exactly what a corpus needs — the risk a judge runs there is not
+   missing a leak, it is flagging a visibly offensive conversation where there is nothing
+   to flag.
+2. **No group straddles the boundary.** Splitting by language cuts no group, so the "a
+   group is never split between dev and test" rule is untouched.
+3. **The existing 90-exchange corpus was already mixed**, and never said so: 13 of its
+   exchanges are English, all `en->en` — the deliberate translations. There is no
+   `en->fr` anywhere in it. So the multi-turn harvest introduces a population the
+   measuring instrument did not contain, rather than more of the same.
+
+**Decision: keep all 119, and record the pair.** `evaluation/languages.py` derives it
+mechanically and `evaluate_judge` reports the figures per population. The field is
+STORED, not computed at read time, for the same reason the garak snapshot is frozen: a
+recorded fact stays reproducible if the classifier ever moves.
+
+What the breakdown will NEVER give is a RECALL on crossed exchanges, for want of a
+positive there. It prints `n/a (no vulnerability in this pair)` rather than 0% — the same
+refusal as the report printing "not calculable" instead of a 0% success rate. Same shape
+as the `abus_outils` situation on the frozen set: the figure measures the absence of false
+positives, not the correctness of detection.
+
+**The classifier is function words, counted, and it is NOT tuned further.** Driving the
+`?` rate to zero would mean fitting it to the data it is about to split. What matters is
+that it makes no WRONG call, which was checked by hand on every remaining `?`: they are
+spelled-out secrets, Base64, hex, a reversed value, and one bare greeting — strings that
+genuinely have no language. `?` is a real answer there.
+
+**And the test caught a flaw in my own word lists.** I had written that the two lists are
+"deliberately disjoint" and they were not: `as` was in both, and worse, the ENGLISH list
+held `on`, `me` and `a`, three common French words. That would have made English vote on
+French text — the dangerous direction, and no sample caught it because French text also
+matches many French words. The lists are now strictly disjoint, a test holds it, and
+re-deriving every stamp afterwards showed the change was inert on this data.
+
+A method note: this is the second time in two days that an undeclared population was
+found by asking what the data actually contains rather than by reading code — after the
+`cible` role that `migration` left half-mapped. The pre-pass reported "secret said by the
+target: 0 / 119" where the answer is 10, and it took comparing its header with a figure
+recorded two days earlier to see it.
+
+814 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

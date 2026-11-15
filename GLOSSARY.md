@@ -62,6 +62,7 @@ each with its reason.
 | résumer | summarise | the one-screen view of a profile or a plan |
 | seulement / sauf | only / excluding | a campaign's scope |
 | lancés | launched | the attempts actually sent |
+| langue (d'un échange) | language pair | a FACT on every corpus entry, `fr->fr`, `en->fr`… |
 | écourtée | cut short | the budget stopped the campaign |
 | clôture | fence | the report's code-block delimiter |
 
@@ -252,6 +253,29 @@ tokenizer sees a string literal, the import machinery sees nothing at all, and
 only the failing test reports it. Six of them had to be chased by hand across
 the evaluation and test layers. Grep for `setattr(` before declaring a rename
 finished.
+
+## The corpus's languages, recorded rather than assumed
+
+The corpus is not monolingual, and until 2026-11-15 nothing said so. The field
+`languages` now carries each entry's pair, derived mechanically by
+`evaluation/languages.py`.
+
+| Pair | Where it occurs |
+|---|---|
+| `fr->fr` | 69 of the 90 single-turn exchanges, 79 of the 119 harvested conversations — and **every** positive |
+| `en->en` | the 13 deliberate English cases (E01-en … E12-en, T02, T05) |
+| `en->fr` | 33 harvested conversations, a population the single-turn corpus does NOT contain |
+| `?` on one side | a spelled-out secret, Base64, hex, a reversed value, a bare greeting — strings with no language. A real answer, not a failure |
+
+Two rules this imposes on a future rename or translation pass:
+
+- **the field is a FACT, never a label.** It is stamped by `label.py`, not asked of the
+  author, and nothing about it touches `expected`. The three questions the author answers
+  stay three;
+- **the stamp is STORED, not re-derived on read.** If the classifier's word lists move,
+  past measurements keep the pair they were measured with — the same reason the garak
+  snapshot is frozen. A test checks the stored stamps still match the text, and if it ever
+  fails that is a signal to decide, not to re-derive in silence.
 
 ## Terms whose translation changes BEHAVIOUR
 
