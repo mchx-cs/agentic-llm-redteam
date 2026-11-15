@@ -3195,6 +3195,45 @@ The gaps are pinned by tests instead, which is the part that lasts: adding a thi
 clause, a third conversation role, a fingerprinting criterion or a multi-criterion
 verdict each FAILS a test that names what the corpus then needs. Verified by mutation.
 
+**The judge moves to Groq's paid plan, and the model does NOT change (2026-11-16).**
+Once the 119 were integrated the corpus became unmeasurable on the free tier: ~224,000
+tokens for `dev` and ~77,000 for `test`, against a 200,000/day cap. A conversation
+carries its whole history into every call, so the per-entry cost is far above the ~1,500
+tokens a single-turn judgement costs.
+
+**Why the paid plan and not another provider.** Groq's Developer plan keeps
+`gpt-oss-120b` and removes the daily cap; moving to OpenAI would have changed the MODEL,
+and a change of model is a change of MEASUREMENT, not a check of one. The single-turn
+line of the new run would have stopped being comparable with 89 / 100 / 96 — which is
+exactly the comparison that separating the formats exists to protect. Cost of the full
+consultation at the listed rates: **about six cents**. Nothing in the repository changes:
+same profile, same `GROQ_MODEL`, same key.
+
+`evaluate_judge` now enforces that: `MEASURED_ON` names the judge the published figures
+were taken on, and the "comparable with 89 / 100 / 96" note is WITHDRAWN and replaced by
+a warning as soon as the current judge differs. A note that claimed comparability
+unconditionally would have invited the wrong reading on the first model change — and the
+project has changed judge model before.
+
+**What the paid plan does and does not change about the data rule.** The "fictional data
+only" constraint on the `groq` profile had a specific reason: several providers allow
+themselves to train on FREE-tier requests. That reason stops applying. Whether the paid
+terms actually exclude training is a contractual question to READ, not to assume — and
+the project's other rule is untouched either way: a client's data leaving their perimeter
+belongs in the engagement contract.
+
+**Two facts verified rather than assumed while preparing this.** The evaluation is NOT
+budgeted — only `main.py` arms the circuit breaker, so a 209-call run cannot be truncated
+by `CALL_BUDGET=200`. And the frozen-set log already records the judge as
+`profile/model`, so consultations on different judges stay distinguishable in
+`test_set_log.jsonl`.
+
+**The one thing still missing for a paid run, and it is robustness not cost.** The
+evaluation cannot RESUME: a failure on call 150 of 154 loses the run. At six cents that
+is not a money problem, but it is a run to redo. Verdicts written as they come, with
+finished entries skipped — the same shape as the audit trail's line-by-line flush — would
+fix it, and it needs no quota to build.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
