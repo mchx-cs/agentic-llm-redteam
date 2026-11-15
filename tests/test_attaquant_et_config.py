@@ -101,10 +101,10 @@ class TestConfiguration:
         # long way from here, on the first call to a model.
         import importlib
         import config
-        monkeypatch.setenv("PROFIL_ARBITRE", "faute_de_frappe")
-        with pytest.raises(ValueError, match="Profil inconnu"):
+        monkeypatch.setenv("JUDGE_PROFILE", "faute_de_frappe")
+        with pytest.raises(ValueError, match="Unknown profile"):
             importlib.reload(config)
-        monkeypatch.delenv("PROFIL_ARBITRE")
+        monkeypatch.delenv("JUDGE_PROFILE")
         importlib.reload(config)  # put the configuration back on its feet
 
     def test_the_default_target_asks_for_no_key(self):

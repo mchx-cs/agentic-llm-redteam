@@ -35,7 +35,7 @@ Consequence for reading a result:
   the pair {adaptation + this judge} is not worth the static plan. Which is
   useful to know, but does not answer the question asked.
 
-Run it from the project root, with PROFIL_ARBITRE=local:
+Run it from the project root, with JUDGE_PROFILE=local:
     python -m evaluation.mesurer_adaptation_reelle --paires 3 --budget 8
 """
 
@@ -122,7 +122,7 @@ def main(arguments=None):
           f"{arguments.pairs} paire(s) × {arguments.budget} essais.")
     if JUDGE_PROFILE != "local":
         print("/!\\ Juge NON local : cette mesure va consommer du quota. "
-              "Lance-la avec PROFIL_ARBITRE=local.")
+              "Lance-la avec JUDGE_PROFILE=local.")
     print()
 
     output = Path(arguments.output) if arguments.output else None

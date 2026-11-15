@@ -6,14 +6,16 @@ HERE, and nowhere else, is where we decide whether the models run locally
 other = changing one PROFILE_* line below. The rest of the code does not even
 know who it is talking to: that is the whole point.
 
-Note on the names: the Python identifiers are English, the ENVIRONMENT
-VARIABLE names are not yet. A `.env` key is a configuration contract — it
-lives on machines this repository never sees — so renaming one needs a
-deprecation path, and that is a pass of its own.
+Note on the names: a `.env` key is a configuration CONTRACT. It lives on
+machines this repository never sees, and nothing in git can migrate them. So
+each one is read under its English name FIRST and under the French name it
+carried until 2026-11-15 as a fallback: an existing `.env` keeps working, and
+says once on stderr which lines to rename. See `LEGACY_ENV` below.
 """
 
 import json
 import os
+import sys
 from pathlib import Path
 
 
@@ -42,6 +44,46 @@ def _load_env_file():
 
 # To be done BEFORE building the profiles, which read the environment.
 _load_env_file()
+
+
+# >>> THE DEPRECATION PATH FOR THE KEY NAMES <<<
+# Keys the project renamed when it switched to English, new name -> old name.
+# The provider keys (OPENAI_API_KEY, GROQ_MODEL…) are not here: they were
+# never French, and two of them follow each provider's own convention.
+LEGACY_ENV = {
+    "TARGET": "CIBLE",
+    "TARGET_HEADERS": "CIBLE_ENTETES",
+    "TARGET_BODY": "CIBLE_CORPS",
+    "TARGET_RESPONSE_PATH": "CIBLE_CHEMIN_REPONSE",
+    "TARGET_TIMEOUT": "CIBLE_DELAI",
+    "ACTIVE_PROFILE": "PROFIL_ACTIF",
+    "JUDGE_PROFILE": "PROFIL_ARBITRE",
+    "CALL_BUDGET": "BUDGET_APPELS",
+    "TOKEN_BUDGET": "BUDGET_TOKENS",
+}
+
+# Filled while the module body reads the environment, reported once at the end.
+# A list, not a print on the spot: nine separate warnings for one stale .env
+# would bury the campaign's own first lines.
+_legacy_in_use = []
+
+
+def _from_env(name, default=None):
+    """
+    Reads a configuration key, falling back to the French name it had before.
+
+    The new name WINS when both are set. Anything else would be surprising:
+    someone who adds the new line to an old `.env` means it to take effect,
+    and the stale line is exactly what they are in the middle of replacing.
+    """
+    if name in os.environ:
+        return os.environ[name]
+    old = LEGACY_ENV.get(name)
+    if old and old in os.environ:
+        _legacy_in_use.append((old, name))
+        return os.environ[old]
+    return default
+
 
 PROFILES = {
     # --- LOCAL profile: Ollama, free, no key ---
@@ -91,12 +133,12 @@ PROFILES = {
 # The default profile: the TARGET's, and that of any call which does not name
 # one. Careful: attacking a remote API would breach the provider's terms of
 # use (see "Cadre légal" in CLAUDE.md). The target stays local.
-ACTIVE_PROFILE = os.environ.get("PROFIL_ACTIF", "local")
+ACTIVE_PROFILE = _from_env("ACTIVE_PROFILE", "local")
 
 # The JUDGE's profile (and the reconnaissance analyst's), kept separate so the
 # judge can run on a different model from the target it judges — a judge
 # identical to its target shares its blind spots.
-JUDGE_PROFILE = os.environ.get("PROFIL_ARBITRE", "local")
+JUDGE_PROFILE = _from_env("JUDGE_PROFILE", "local")
 
 _unknown_profiles = [name for name in (ACTIVE_PROFILE, JUDGE_PROFILE)
                      if name not in PROFILES]
@@ -104,8 +146,8 @@ if _unknown_profiles:
     # A typo in .env would otherwise give a bare KeyError, a long way from
     # here, on the first call to a model.
     raise ValueError(
-        f"Profil inconnu dans .env : {', '.join(_unknown_profiles)}. "
-        f"Profils disponibles : {', '.join(PROFILES)}."
+        f"Unknown profile in .env: {', '.join(_unknown_profiles)}. "
+        f"Available profiles: {', '.join(PROFILES)}."
     )
 
 
@@ -113,7 +155,7 @@ if _unknown_profiles:
 # "leurre" (default) = the local toy chatbot; "mock" = deterministic, no
 # model; an http(s) URL = a real endpoint. Overridden by --cible on the
 # command line (see cibles/__init__.py).
-TARGET = os.environ.get("CIBLE", "leurre")
+TARGET = _from_env("TARGET", "leurre")
 
 
 # >>> A CAMPAIGN'S BUDGET <<<
@@ -123,24 +165,24 @@ TARGET = os.environ.get("CIBLE", "leurre")
 # therefore wide but FINITE. `0` or empty = no limit, to be used only in full
 # knowledge of what that means.
 def _int_from_env(name, default):
-    value = int(os.environ.get(name, default))
+    value = int(_from_env(name, default))
     return value if value > 0 else None
 
 
-CALL_BUDGET = _int_from_env("BUDGET_APPELS", 200)
-TOKEN_BUDGET = _int_from_env("BUDGET_TOKENS", 500_000)
+CALL_BUDGET = _int_from_env("CALL_BUDGET", 200)
+TOKEN_BUDGET = _int_from_env("TOKEN_BUDGET", 500_000)
 
 
 def _json_from_env(name, default):
     """Reads an environment variable holding JSON."""
-    raw = os.environ.get(name)
+    raw = _from_env(name)
     if not raw:
         return default
     try:
         return json.loads(raw)
     except json.JSONDecodeError as error:
         raise ValueError(
-            f"{name} dans .env n'est pas du JSON valide : {error}"
+            f"{name} in .env is not valid JSON: {error}"
         ) from error
 
 
@@ -149,14 +191,26 @@ def _json_from_env(name, default):
 # case, {"message": "..."} → {"reply": "..."}.
 HTTP_TARGET = {
     # Headers, authentication included. Example in .env:
-    #   CIBLE_ENTETES={"Authorization": "Bearer xxx"}
-    "headers": _json_from_env("CIBLE_ENTETES", {}),
+    #   TARGET_HEADERS={"Authorization": "Bearer xxx"}
+    "headers": _json_from_env("TARGET_HEADERS", {}),
     # Template of the body sent; "{message}" is replaced by the payload.
-    #   CIBLE_CORPS={"messages":[{"role":"user","content":"{message}"}]}
-    "body": _json_from_env("CIBLE_CORPS", {"message": "{message}"}),
+    #   TARGET_BODY={"messages":[{"role":"user","content":"{message}"}]}
+    "body": _json_from_env("TARGET_BODY", {"message": "{message}"}),
     # Where to read the text in the JSON reply, as a dotted path.
-    #   CIBLE_CHEMIN_REPONSE=choices.0.message.content
-    "response_path": os.environ.get("CIBLE_CHEMIN_REPONSE", "reply"),
+    #   TARGET_RESPONSE_PATH=choices.0.message.content
+    "response_path": _from_env("TARGET_RESPONSE_PATH", "reply"),
     # Without a timeout, a silent target would block the campaign for ever.
-    "timeout": float(os.environ.get("CIBLE_DELAI", "60")),
+    "timeout": float(_from_env("TARGET_TIMEOUT", "60")),
 }
+
+
+# Said ONCE, after every key has been read, and on stderr — a note about the
+# configuration has no business in a report that gets piped to a file.
+if _legacy_in_use:
+    print(
+        "Note: your .env still uses the key name(s) this project carried "
+        "before it switched to English. They keep working; rename them when "
+        "convenient:",
+        file=sys.stderr)
+    for old, new in _legacy_in_use:
+        print(f"  {old} -> {new}", file=sys.stderr)

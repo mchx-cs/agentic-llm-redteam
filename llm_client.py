@@ -261,7 +261,7 @@ def _error_message(profile, model, error):
         return (f"{header} the provider's quota is reached.\n"
                 f"  Wait for the window it states, or put the judge back on "
                 f"local\n"
-                f"  (PROFIL_ARBITRE=local in .env).\n"
+                f"  (JUDGE_PROFILE=local in .env).\n"
                 f"  Provider detail: {error}")
 
     if isinstance(error, NotFoundError):

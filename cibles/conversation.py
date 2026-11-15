@@ -44,7 +44,7 @@ thing:
   an approximation, and it must be said.
 
 This module only does the first. The HTTP adapter cannot yet send several
-messages (its `CIBLE_CORPS` template carries a single `{message}`), so it
+messages (its `TARGET_BODY` template carries a single `{message}`), so it
 refuses, rather than offering an approximation that would later be taken for a
 measurement.
 
@@ -101,7 +101,7 @@ def require_conversation(ask, target_name="cette cible"):
         f"{target_name} ne sait pas tenir une conversation : une attaque "
         f"multi-tours n'y est pas testable.\n"
         f"Les cibles livrées (demo, leurre, mock) le savent. Un endpoint "
-        f"HTTP ne le sait pas encore : son gabarit `CIBLE_CORPS` ne porte "
+        f"HTTP ne le sait pas encore : son gabarit `TARGET_BODY` ne porte "
         f"qu'un seul `{{message}}`.\n"
         f"Lance une campagne mono-tour, ou vise `--cible demo`.")
 

@@ -347,10 +347,10 @@ def cli(arguments=None):
     parser.add_argument(
         "--target-profile", "--profil-cible", default=None, metavar="NAME",
         dest="target_profile",
-        help="the target's API shape, instead of describing CIBLE_CORPS and "
-             "CIBLE_CHEMIN_REPONSE by hand: "
+        help="the target's API shape, instead of describing TARGET_BODY and "
+             "TARGET_RESPONSE_PATH by hand: "
              + ", ".join(TARGET_PROFILES)
-             + ". Wins over CIBLE_CORPS and CIBLE_CHEMIN_REPONSE from .env: "
+             + ". Wins over TARGET_BODY and TARGET_RESPONSE_PATH from .env: "
                "the command line is more specific. For a bespoke body, set "
                ".env and pass no profile.")
     parser.add_argument(

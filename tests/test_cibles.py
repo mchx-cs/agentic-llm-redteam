@@ -189,13 +189,13 @@ class TestSilentTemplate:
         with pytest.raises(RuntimeError) as failure:
             build_http_target(base, body={"input": "fixe"})
         text = str(failure.value)
-        assert "CIBLE_CORPS" in text          # la variable a corriger
+        assert "TARGET_BODY" in text          # la variable a corriger
         assert '"input"' in text              # ce qui a ete lu
 
 
 class TestTargetProfiles:
     """
-    Decrire CIBLE_CORPS et CIBLE_CHEMIN_REPONSE a la main suppose de lire la
+    Decrire TARGET_BODY et TARGET_RESPONSE_PATH a la main suppose de lire la
     documentation de l'API puis d'ecrire du JSON imbrique dans une variable
     d'environnement. Pour le cas le plus courant, c'est previsible.
     """
@@ -263,7 +263,7 @@ class TestCheckingTheWiring:
                                   response_path="reply")
         assert ok is False
         # Le bon chemin est dans la liste, puisqu'il mene au texte recu.
-        assert f"CIBLE_CHEMIN_REPONSE={CHEMIN_IMBRIQUE}" in output
+        assert f"TARGET_RESPONSE_PATH={CHEMIN_IMBRIQUE}" in output
 
     def test_a_silent_template_fails_without_sending_anything(self, base):
         ok, output = self._output(url=f"{base}/imbrique",
@@ -581,7 +581,7 @@ class TestPriorityOrder:
     option est plus specifique qu'un fichier de configuration — et le code la
     suivait deja. C'etait la DOCUMENTATION qui affirmait l'inverse (« ce qui
     est pose dans .env a toujours la priorite »), decouvert le 2026-11-11 en
-    deroulant un guide pas a pas : un CIBLE_CORPS pose pour Ollama etait
+    deroulant un guide pas a pas : un TARGET_BODY pose pour Ollama etait
     ecrase par --profil-cible openai, et l'API repondait « model is required ».
 
     D'ou ces tests : l'ordre est maintenant verifie, pas seulement decrit.

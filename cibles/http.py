@@ -15,8 +15,8 @@ third-party system without written authorisation is an offence. `audit.py` now
 makes that check explicit in code — a remote target does not start without a
 mandate.
 
-NOTE ON NAMING (2026-11-13). The `.env` keys (`CIBLE_CORPS`,
-`CIBLE_CHEMIN_REPONSE`, `CIBLE_ENTETES`) and the profile dictionaries' keys
+NOTE ON NAMING (2026-11-13). The `.env` keys (`TARGET_BODY`,
+`TARGET_RESPONSE_PATH`, `TARGET_HEADERS`) and the profile dictionaries' keys
 stay French: they are a CONFIGURATION contract. Renaming them would break every
 existing `.env`, including those on machines this repository never sees. They
 move with the coordinated data-key pass, with a documented migration. See
@@ -32,7 +32,7 @@ MESSAGE_MARKER = "{message}"
 
 
 # --- Target profiles: the shapes met in practice -----------------------------
-# Describing `CIBLE_CORPS` and `CIBLE_CHEMIN_REPONSE` by hand means reading the
+# Describing `TARGET_BODY` and `TARGET_RESPONSE_PATH` by hand means reading the
 # API's documentation, then writing nested JSON inside an environment variable.
 # It is the most tedious part of wiring a target, and for the MOST COMMON case
 # it is entirely predictable: most LLM endpoints speak the OpenAI dialect.
@@ -260,7 +260,7 @@ def _diagnose(brut, declared_type=""):
                 f"JSON object.\n"
                 f"  The matching profile exists —\n"
                 f"    --target-profile {advised}\n"
-                f"    or CIBLE_CHEMIN_REPONSE={settings['response_path']}\n"
+                f"    or TARGET_RESPONSE_PATH={settings['response_path']}\n"
                 f"  ({settings['description']})")
 
     declares_html = (declared_type or "").split(";")[0].strip().lower() \
@@ -280,8 +280,8 @@ def _diagnose(brut, declared_type=""):
         return ("  This API answers as a STREAM (server-sent events).\n"
                 "  Two ways out: switch the stream off if the body lets you "
                 '("stream": false in\n'
-                "  CIBLE_CORPS), or read the stream as it is —\n"
-                f"    CIBLE_CHEMIN_REPONSE={STREAM_PATH}"
+                "  TARGET_BODY), or read the stream as it is —\n"
+                f"    TARGET_RESPONSE_PATH={STREAM_PATH}"
                 "choices.0.delta.content\n"
                 "    or --target-profile openai-flux\n"
                 "  The second is the right one when you are testing a "
@@ -335,7 +335,7 @@ def check_template(body):
         f"  Template read: {json.dumps(body, ensure_ascii=False)}\n"
         f"  Expected, for instance: "
         f'{{"message": "{MESSAGE_MARKER}"}}\n'
-        f"  Check CIBLE_CORPS in .env (see .env.example)."
+        f"  Check TARGET_BODY in .env (see .env.example)."
     )
 
 
@@ -425,7 +425,7 @@ def build_http_target(url, headers=None, body=None, response_path=None,
 
 
     # Single-turn, and declared as such (see cibles/conversation.py): the
-    # `CIBLE_CORPS` template carries a single `{message}`, so we cannot yet
+    # `TARGET_BODY` template carries a single `{message}`, so we cannot yet
     # send several messages to an endpoint. A flat refusal beats a flattened
     # transcript that would later be taken for real multi-turn.
     interroger.conversation = False
@@ -548,7 +548,7 @@ def _suggest(url, headers, body, timeout, show):
     show("\nPaths that lead to text in the reply received:")
     for path, valeur in chemins[:6]:
         extrait = valeur.replace("\n", " ")[:60]
-        show(f"  CIBLE_CHEMIN_REPONSE={path}")
+        show(f"  TARGET_RESPONSE_PATH={path}")
         show(f"      → {extrait!r}")
 
     # Si AUCUN texte reçu ne reprend ce qu'on a envoyé, c'est que la cible ne
@@ -560,6 +560,6 @@ def _suggest(url, headers, body, timeout, show):
     if not any(extrait_envoye in valeur for _, valeur in chemins):
         show("\nWarning: none of these texts echoes the message that was "
              "sent.\n  The target therefore did not receive it where it "
-             "expected: CIBLE_CORPS needs fixing too, not just the path."
+             "expected: TARGET_BODY needs fixing too, not just the path."
              "\n  Try --target-profile "
              f"{', '.join(TARGET_PROFILES)} to start from a known shape.")
