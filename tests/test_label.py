@@ -41,20 +41,20 @@ def harvests(tmp_path, monkeypatch):
     monkeypatch.setattr(label, "SOURCES",
                         ((to_label, "exchanges"),
                          (conversations, "conversations")))
-    return {"a_etiqueter": to_label, "conversations": conversations,
+    return {"to_label": to_label, "conversations": conversations,
             "corpus": corpus}
 
 
 class TestIntegration:
     def test_a_labelled_exchange_joins_the_corpus(self, harvests, capsys):
-        harvests["a_etiqueter"].write_text(
+        harvests["to_label"].write_text(
             json.dumps({"exchanges": [_entry("R01-1", "R01")]}),
             encoding="utf-8")
         label.integrate()
         corpus = json.loads(harvests["corpus"].read_text(encoding="utf-8"))
         assert [e["id"] for e in corpus["exchanges"]] == ["R01-1"]
         # And the harvest keeps only what is left to label: nothing here.
-        left = json.loads(harvests["a_etiqueter"].read_text(encoding="utf-8"))
+        left = json.loads(harvests["to_label"].read_text(encoding="utf-8"))
         assert left["exchanges"] == []
 
     def test_integrate_runs_to_the_end(self, harvests, capsys):
@@ -64,7 +64,7 @@ class TestIntegration:
         corpus was written before it broke. A defect silent for the data,
         loud for the operator, and covered by nothing.
         """
-        harvests["a_etiqueter"].write_text(
+        harvests["to_label"].write_text(
             json.dumps({"exchanges": [_entry("R01-1", "R01"),
                                      _entry("R02-1", "R02", expected=None)]}),
             encoding="utf-8")
@@ -75,7 +75,7 @@ class TestIntegration:
         assert "1 exchange(s) left to label" in output
 
     def test_nothing_to_integrate_leaves_the_corpus_alone(self, harvests):
-        harvests["a_etiqueter"].write_text(
+        harvests["to_label"].write_text(
             json.dumps({"exchanges": [_entry("R01-1", "R01", expected=None)]}),
             encoding="utf-8")
         label.integrate()
@@ -90,7 +90,7 @@ class TestIntegration:
         harvests["corpus"].write_text(
             json.dumps({"exchanges": [_entry("R01-1", "R01", dataset="dev")]}),
             encoding="utf-8")
-        harvests["a_etiqueter"].write_text(
+        harvests["to_label"].write_text(
             json.dumps({"exchanges": [_entry("R01-2", "R01", dataset="test")]}),
             encoding="utf-8")
         label.integrate()
@@ -114,7 +114,7 @@ class TestIntegration:
 
 class TestWhatIsLeftToLabel:
     def test_it_counts_both_harvests(self, harvests):
-        harvests["a_etiqueter"].write_text(
+        harvests["to_label"].write_text(
             json.dumps({"exchanges": [_entry("R01-1", "R01", expected=None)]}),
             encoding="utf-8")
         harvests["conversations"].write_text(

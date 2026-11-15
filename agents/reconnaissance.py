@@ -29,7 +29,7 @@ import json
 from config import JUDGE_PROFILE
 from llm_client import ask_llm
 
-# An attempt limit of its own, separate from MAX_ESSAIS. Raised from 4 to 6 on
+# An attempt limit of its own, separate from MAX_ATTEMPTS. Raised from 4 to 6 on
 # 2026-11-11: two more probes for the capabilities that gate whole families of
 # garak probes (see PROBES).
 RECON_BUDGET = 6

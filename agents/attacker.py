@@ -291,7 +291,7 @@ def generate_payloads():
     technique, crossed with each objective and each transformation.
 
     The list is finite by construction (a product of finite lists), but it
-    grows fast: it is MAX_ESSAIS, in main.py, that bounds the campaign.
+    grows fast: it is MAX_ATTEMPTS, in main.py, that bounds the campaign.
     """
     library = load_library()
     payloads = []

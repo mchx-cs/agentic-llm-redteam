@@ -144,7 +144,7 @@ class TestDeclaredContext:
 class TestBudgetAndDisplay:
     def test_the_probing_loop_is_bounded(self, monkeypatch, analyst):
         # Toute boucle a sa limite : ici RECON_BUDGET, distinct de
-        # MAX_ESSAIS, because probing can already wake the defences.
+        # MAX_ATTEMPTS, because probing can already wake the defences.
         monkeypatch.setattr(reconnaissance, "RECON_BUDGET", 2)
         analyst("{}")
         assert len(reconnoitre(_target())["exchanges"]) == 2

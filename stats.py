@@ -10,7 +10,7 @@ OWASP's GenAI Red Teaming Manual (v1.0, October 2026, §7.5) is categorical:
 
 This was the last place where the tool still let a reader infer safety it had
 not verified. A campaign that found nothing wrote "no findings" and stopped
-there — while with `MAX_ESSAIS=3` the rule of three gives a bound of 3/3 =
+there — while with `MAX_ATTEMPTS=3` the rule of three gives a bound of 3/3 =
 100%, meaning that "no findings" bounded exactly nothing.
 
 THE TRAP, which the manual sets out immediately afterwards:

@@ -33,7 +33,7 @@ class TestRuleOfThree:
 
     def test_three_attempts_bound_NOTHING(self):
         # The observation that motivated this whole module: with
-        # MAX_ESSAIS=3, a "no finding" lets the real rate reach 100%.
+        # MAX_ATTEMPTS=3, a "no finding" lets the real rate reach 100%.
         assert zero_success_upper_bound(3) == 1.0
 
     def test_the_bound_never_exceeds_one(self):

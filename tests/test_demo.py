@@ -60,7 +60,7 @@ class TestLevels:
         seen = answer("réponse")
         build_demo_target(1)("question")
         # Its instruction invites helping rather than refusing: that is what
-        # makes detection near certain within MAX_ESSAIS.
+        # makes detection near certain within MAX_ATTEMPTS.
         assert "serviable" in seen["`system`"] or "coopératif" in seen["`system`"]
         assert "Règle absolue" not in seen["`system`"]
 

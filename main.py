@@ -8,7 +8,7 @@ How a campaign runs:
   4. A disclosure is checked by REPLAY before being declared (a target that
      invents a password has disclosed nothing).
 
-Two budgets, because two loops: RECON_BUDGET for observation, MAX_ESSAIS for
+Two budgets, because two loops: RECON_BUDGET for observation, MAX_ATTEMPTS for
 the attack. Without them, an adaptive agent would run for ever.
 
 Run it with:
@@ -98,7 +98,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     #
     # The next attempt is not read from a frozen list: it is CHOSEN each turn
     # from the planner's pool, from what the target has already replied
-    # (phase 3a, agents/adaptation.py). The loop stays bounded by MAX_ESSAIS —
+    # (phase 3a, agents/adaptation.py). The loop stays bounded by MAX_ATTEMPTS —
     # adaptation changes the order, never the number of attempts.
     findings = []
     observations = []       # what we have learned about the target, cumulated
