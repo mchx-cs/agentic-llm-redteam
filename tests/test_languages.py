@@ -173,14 +173,34 @@ class TestTheRealCorpus:
         for entry in self._corpus():
             assert entry["languages"] == language_pair(entry), entry["id"]
 
-    def test_the_corpus_was_already_mixed_before_anyone_said_so(self):
-        # 13 English exchanges out of 90, and they are en->en: the deliberate
-        # translations. This is what makes the multi-turn harvest's `en->fr`
-        # a genuinely new population rather than more of the same.
-        pairs = {e["languages"] for e in self._corpus()}
+    def test_the_crossed_population_came_in_with_the_harvest(self):
+        """
+        THIS TEST CHANGED when the 119 were integrated, and the change is the
+        integration rather than a convenience.
+
+        It used to assert that `en->fr` is absent from the corpus — true of
+        the 90 single-turn exchanges, and the fact that made the multi-turn
+        harvest a genuinely new population. Integration made it false, as it
+        had to.
+
+        What endures, and is the reason the pair was recorded in the first
+        place: the crossed population is traceable. Every `en->fr` entry came
+        in with the harvest, so the AUTHOR-labelled population still has
+        none — and a figure measured over the author's 90 is still a figure
+        about one language population.
+        """
+        corpus = self._corpus()
+        by_author = [e for e in corpus if e["labelled_by"] == "author"]
+        assert by_author, "no author-labelled entry left: check the corpus"
+
+        pairs = {e["languages"] for e in by_author}
         assert "fr->fr" in pairs
-        assert "en->en" in pairs
+        assert "en->en" in pairs          # the 13 deliberate translations
         assert "en->fr" not in pairs
+
+        # And the crossed pair does exist in the corpus now, among the
+        # entries the harvest brought.
+        assert any(e["languages"] == "en->fr" for e in corpus)
 
     def test_no_entry_is_unclear_on_both_sides(self):
         # One such entry would be unsplittable, and worth looking at by hand.
