@@ -1,0 +1,194 @@
+"""
+evaluation/split_sets.py — Which group goes to `dev` and which to `test`.
+
+A SAMPLING DESIGN decision, not ground truth. It needs no verdict: assigning
+a group to a set does not require knowing whether its exchanges are
+vulnerabilities. The verdicts, the categories and the breach turns stay the
+author's, and nothing here touches them.
+
+WHY IT IS DECIDED BEFORE LABELLING, AND NOT DURING. `label.py` asks for the
+set as one of its questions, which means the set gets chosen just after the
+verdict has been read — and that is a bias: a hard case is exactly the one you
+are tempted to keep in `dev`, where you are allowed to tune against it.
+Assigning the set from the group's STRUCTURE, before any verdict has been
+seen, removes that temptation entirely. The tool then says "Set: dev (imposed
+by group X)" and does not ask.
+
+THE RULES, in order of precedence:
+
+1. **A group is never split.** One payload and its samples travel together,
+   or the frozen set would hold a rewording of a case the judge was tuned on.
+   This is enforced elsewhere too — `label.py --check`, `integrate()` and
+   `load_exchanges()` all refuse a split group.
+
+2. **Hand-written cases go to `dev`.** Precedent, and a reason: D13–D20 all
+   went to `dev` because a case written to expose a specific trap is a case
+   you need to be ALLOWED to tune against. In the frozen set it would be
+   unusable for the job it exists for.
+
+3. **Stratify on the axes that are genuinely different populations**, so that
+   neither set is a skewed sample:
+   - the defence LEVEL (`demo`, `demo:2`, `demo:3`). The project already
+     refuses to pool targets of different resistances in one test;
+   - the LANGUAGE family (a French attacker, or garak's English one). A
+     population established on 2026-11-15, absent from the single-turn
+     corpus.
+
+4. **Roughly a quarter of the groups to `test`**, matching the existing
+   corpus's 23 / 90.
+
+WHAT THIS CANNOT DO, and it has to be said: it does not stratify on the
+POSITIVES, because the labels do not exist yet. The mechanical facts give a
+LOWER bound — 10 entries where the secret string appears in a chatbot turn —
+and an `obeissance` or `abus_outils` breach leaves no string to count. So the
+split is balanced on structure, and the positives fall where they fall. The
+assignment prints how many mechanical positives each set receives, so a
+badly skewed draw is visible before any labelling is done rather than after.
+
+DETERMINISTIC. No randomness at all: the groups of a stratum are sorted by
+name and every fourth one goes to `test`. Two runs give the same split, and
+the split can be re-derived from the data alone — the same requirement as the
+garak snapshot, for the same reason.
+"""
+
+import argparse
+import json
+import re
+from pathlib import Path
+
+HARVEST = Path(__file__).parent / "to_label_conversations.json"
+
+# One group in this many goes to the frozen set.
+ONE_IN = 4
+
+TEST = "test"
+DEV = "dev"
+
+
+def defence_level(group):
+    """
+    The target the group was harvested against, read from its name.
+
+    `C-demo-04` and `C-demo-refus1-04` are both level 1 — the middle part is
+    the OBJECTIVE, not the target. `C-demo2-04` is level 2. Getting this
+    wrong would put three different resistances in one stratum.
+    """
+    if group.startswith("A-"):
+        return "hand-written"
+    match = re.match(r"C-demo(\d?)", group)
+    return f"demo{match.group(1) or '1'}" if match else "other"
+
+
+def attacker_language(entries):
+    """
+    `fr` or `en`, from the pair already recorded on each entry.
+
+    Taken from the group as a whole: four samples of one payload share their
+    attacker, so a disagreement would mean the recorded pairs are wrong rather
+    than the group being mixed.
+    """
+    languages = {e.get("languages", "?->?").split("->")[0] for e in entries}
+    if languages == {"en"}:
+        return "en"
+    if languages == {"fr"}:
+        return "fr"
+    return "mixed"
+
+
+def stratum(group, entries):
+    return f"{defence_level(group)}/{attacker_language(entries)}"
+
+
+def assign(groups):
+    """
+    group name -> "dev" or "test".
+
+    `groups` maps a group name to its entries. Deterministic: within a
+    stratum, groups are sorted by name and every ONE_IN-th goes to `test`.
+    Starting at index 1 rather than 0 means a stratum of one or two groups
+    keeps them ALL in `dev` — with so few, sending one to the frozen set
+    would leave `dev` with no example of that population at all, and `dev` is
+    the set that has to cover everything.
+    """
+    decision = {}
+    strata = {}
+    for name, entries in groups.items():
+        # Rule 2 is ABSOLUTE and comes before the striping. A first version
+        # let the every-fourth rule run over the hand-written stratum too, and
+        # it sent `A-confirmation` — the A03/A04 twins, written to pin one
+        # specific trap — into the frozen set, where they would be unusable
+        # for the only job they exist for.
+        if defence_level(name) == "hand-written":
+            decision[name] = DEV
+            continue
+        strata.setdefault(stratum(name, entries), []).append(name)
+
+    for names in strata.values():
+        for position, name in enumerate(sorted(names)):
+            decision[name] = (TEST if position % ONE_IN == 1 else DEV)
+    return decision
+
+
+def _groups(entries):
+    groups = {}
+    for entry in entries:
+        groups.setdefault(entry["group"], []).append(entry)
+    return groups
+
+
+def main(arguments=None):
+    parser = argparse.ArgumentParser(
+        description="Assign each group to dev or test, deterministically.")
+    parser.add_argument("--harvest", default=str(HARVEST),
+                        help="the harvest to read")
+    parser.add_argument("--write", action="store_true",
+                        help="write the assignment into the harvest. Without "
+                             "it, nothing is modified and the plan is only "
+                             "printed.")
+    arguments = parser.parse_args(arguments)
+
+    from migration import modernise
+    from evaluation.labelling_prepass import facts
+
+    path = Path(arguments.harvest)
+    data = modernise(json.loads(path.read_text(encoding="utf-8")))
+    entries = data["conversations"]
+    groups = _groups(entries)
+    decision = assign(groups)
+
+    print(f"{len(groups)} group(s), {len(entries)} entr(y/ies).\n")
+    print(f"{'group':20s} {'stratum':20s} {'n':>2} {'pos':>3}  set")
+    print("-" * 56)
+    for name in sorted(groups):
+        members = groups[name]
+        positives = sum(1 for e in members if facts(e)["secret_par_la_cible"])
+        print(f"{name:20s} {stratum(name, members):20s} {len(members):>2} "
+              f"{positives:>3}  {decision[name]}")
+
+    for which in (DEV, TEST):
+        chosen = [n for n, s in decision.items() if s == which]
+        n_entries = sum(len(groups[n]) for n in chosen)
+        positives = sum(1 for n in chosen for e in groups[n]
+                        if facts(e)["secret_par_la_cible"])
+        print(f"\n{which:4s}: {len(chosen):>2} group(s), {n_entries:>3} "
+              f"entr(y/ies), {positives} mechanical positive(s)")
+
+    print("\nThe positives above are a LOWER bound: an `obeissance` or "
+          "`abus_outils` breach\nleaves no string to count. The split is "
+          "balanced on structure, not on labels.")
+
+    if not arguments.write:
+        print("\nNothing written. Re-run with --write to apply it.")
+        return 0
+
+    for entry in entries:
+        entry["dataset"] = decision[entry["group"]]
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8")
+    print(f"\nWritten into {path.name}. `label.py` will now say "
+          f'"Set: … (imposed by group …)" instead of asking.')
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

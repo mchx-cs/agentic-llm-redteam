@@ -375,3 +375,83 @@ class TestTurnAgreementIsASecondMeasurement:
         exchanges = [{"id": "a", "expected": True, "breach_turn": 2}]
         verdicts = {"a": {"reussi": True, "tour": None}}
         assert self._call(exchanges, verdicts) is None
+
+
+class TestTheDevTestSplit:
+    """
+    The split is a SAMPLING DESIGN decision, not ground truth: assigning a
+    group to a set needs no verdict. What the tests hold is that the rules are
+    applied in the right order, and that the result is reproducible.
+    """
+
+    @staticmethod
+    def _groups(names, language="fr"):
+        return {n: [{"id": f"{n}-1", "group": n,
+                     "languages": f"{language}->fr"}] for n in names}
+
+    def test_a_hand_written_group_always_goes_to_dev(self):
+        """
+        Rule 2, and it is ABSOLUTE. A first version let the every-fourth
+        striping run over the hand-written stratum as well, and it sent the
+        A03/A04 twins into the frozen set — where a case written to pin one
+        specific trap is unusable for the only job it exists for.
+        """
+        from evaluation.split_sets import assign
+        names = [f"A-case-{n}" for n in range(1, 9)]
+        decision = assign(self._groups(names))
+        assert set(decision.values()) == {"dev"}
+
+    def test_about_a_quarter_of_the_harvested_groups_go_to_test(self):
+        from evaluation.split_sets import assign
+        names = [f"C-demo-{n:02d}" for n in range(1, 21)]
+        decision = assign(self._groups(names))
+        in_test = sum(1 for s in decision.values() if s == "test")
+        assert in_test == 5
+
+    def test_a_stratum_of_one_keeps_it_in_dev(self):
+        """
+        With a single group, sending it to the frozen set would leave `dev`
+        with no example of that population at all — and `dev` is the set that
+        has to cover everything.
+        """
+        from evaluation.split_sets import assign
+        decision = assign(self._groups(["C-demo3-04"], language="en"))
+        assert decision["C-demo3-04"] == "dev"
+
+    def test_the_level_is_read_from_the_target_not_the_objective(self):
+        """
+        `C-demo-refus1-04` is level 1: the middle part is the OBJECTIVE. Get
+        this wrong and three different resistances land in one stratum, which
+        is the pooling the project refuses.
+        """
+        from evaluation.split_sets import defence_level
+        assert defence_level("C-demo-04") == "demo1"
+        assert defence_level("C-demo-refus1-04") == "demo1"
+        assert defence_level("C-demo2-04") == "demo2"
+        assert defence_level("C-demo3-04") == "demo3"
+        assert defence_level("A-confirmation") == "hand-written"
+
+    def test_the_language_family_separates_the_strata(self):
+        from evaluation.split_sets import stratum
+        french = [{"languages": "fr->fr"}]
+        english = [{"languages": "en->fr"}]
+        assert stratum("C-demo-01", french) != stratum("C-demo-01", english)
+
+    def test_it_is_deterministic(self):
+        # Two runs must give the same split, and it must be re-derivable from
+        # the data alone — the garak-snapshot requirement.
+        from evaluation.split_sets import assign
+        names = [f"C-demo-{n:02d}" for n in range(1, 13)]
+        groups = self._groups(names)
+        assert assign(groups) == assign(groups)
+
+    def test_no_group_is_ever_split(self):
+        # The decision is per GROUP by construction, so every entry of a
+        # group gets the same set. This is the invariant three other places
+        # also refuse to break.
+        from evaluation.split_sets import assign
+        groups = {"C-demo-01": [{"id": f"C-demo-01-{n}",
+                                 "group": "C-demo-01",
+                                 "languages": "fr->fr"} for n in range(4)]}
+        decision = assign(groups)
+        assert len(set(decision.values())) == 1

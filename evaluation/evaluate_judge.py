@@ -30,7 +30,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from agents.judge import judge
+from agents.judge import judge, judge_conversation
 from config import JUDGE_PROFILE, PROFILES
 
 EXCHANGES_FILE = Path(__file__).parent / "labelled_exchanges.json"
@@ -59,19 +59,46 @@ def load_exchanges(dataset):
 
     in_dataset = [e for e in exchanges if e["dataset"] == dataset]
 
-    # The conversations (phase 3b) are in the corpus but NOT measurable
-    # here: the judge's instruction expects a single turn, and its examples
-    # are written that way. Giving them to it anyway would produce verdicts on
-    # a format it does not know, and those verdicts would count in the
-    # precision — so the first `--integrer` of conversations would silently
-    # shift a reference measurement. We skip them, and we SAY SO: a corpus
-    # that grows without the measurement changing needs explaining.
-    single_turn = [e for e in in_dataset if not e.get("turns")]
-    ignored = len(in_dataset) - len(single_turn)
-    if ignored:
-        print(f"{ignored} multi-turn conversation(s) skipped: the judge can "
-              f"only score a single turn (phase 3b).\n")
-    return single_turn
+    return in_dataset
+
+
+def is_conversation(exchange):
+    """
+    Does this entry need the multi-turn instruction?
+
+    DERIVED from the number of turns, never from the `format` field — a
+    declared format can disagree with the data, and two hand-written entries
+    (A03, A04) are single-turn exchanges living in the conversations harvest,
+    which is exactly the case a declared format gets wrong.
+
+    One turn means the SINGLE-TURN instruction, which is the frozen artefact:
+    an entry stored as `turns` but holding one exchange must be judged by the
+    same bytes as the 90 exchanges the 89 / 100 / 96 were measured on.
+    """
+    turns = exchange.get("turns")
+    return bool(turns) and len(turns) > 2
+
+
+def ask_the_judge(exchange, language):
+    """
+    One verdict, by whichever instruction the entry's format calls for.
+
+    The two paths are DISTINCT functions in `agents.judge`, deliberately, so
+    the caller has to declare which format it is judging. This is the caller,
+    and it declares it from the data.
+    """
+    if is_conversation(exchange):
+        # No `language` here: only the French instruction has been measured on
+        # conversations, and there is nothing yet to compare an English one
+        # against. Passing it silently would suggest a choice had been made.
+        return judge_conversation(exchange["turns"])
+    if exchange.get("turns"):
+        # Stored as turns, but a single exchange: flatten to the two strings
+        # the frozen instruction expects, rather than sending a one-turn
+        # "conversation" through the multi-turn addendum.
+        attacker, target = exchange["turns"][0], exchange["turns"][1]
+        return judge(attacker["content"], target["content"], language)
+    return judge(exchange["payload"], exchange["reply"], language)
 
 
 def ratio(numerator, denominator):
@@ -142,6 +169,58 @@ def _per_language(exchanges, results_by_id):
               f"TP={tp} FP={fp} TN={tn}  recall={recall}")
 
 
+def scores(exchanges, results_by_id):
+    """Precision, recall and accuracy over any subset. No printing."""
+    tp = sum(1 for e in exchanges
+             if results_by_id[e["id"]]["reussi"] and e["expected"])
+    fp = sum(1 for e in exchanges
+             if results_by_id[e["id"]]["reussi"] and not e["expected"])
+    tn = sum(1 for e in exchanges
+             if results_by_id[e["id"]]["reussi"] is False
+             and not e["expected"])
+    positives = sum(1 for e in exchanges if e["expected"])
+    return {"n": len(exchanges), "tp": tp, "fp": fp, "tn": tn,
+            "positives": positives,
+            "precision": ratio(tp, tp + fp),
+            "rappel": ratio(tp, positives) if positives else None,
+            "exactitude": ratio(tp + tn, len(exchanges))}
+
+
+def _per_format(exchanges, results_by_id):
+    """
+    Single-turn and conversations, side by side and NEVER pooled.
+
+    This is the point of the whole split. Until conversations entered the
+    corpus, the headline figure was single-turn by construction, and that is
+    what the published 89 / 100 / 96 describes. Pooling the two formats would
+    silently turn it into a mixed figure, incomparable with every consultation
+    logged since 2026-11-09 — the exact blending this project refuses when it
+    declines to pool defence levels in one test.
+
+    So the headline above is the POOLED one, printed because a reader asking
+    for "set dev" expects to hear about set dev, and this block is what makes
+    it readable: the single-turn line is the one to compare with history, the
+    conversation line is a NEW measurement with no history to compare to.
+    """
+    single = [e for e in exchanges if not is_conversation(e)]
+    conversations = [e for e in exchanges if is_conversation(e)]
+    if not conversations or not single:
+        return
+
+    print("\n--- Per format: never pooled ---")
+    print("Compare the single-turn line with the published figures; the "
+          "conversation line is a new measurement with no history.")
+    for name, subset, note in (
+            ("single-turn ", single, "comparable with 89 / 100 / 96"),
+            ("conversation", conversations, "NEW format, phase 3b")):
+        s = scores(subset, results_by_id)
+        recall = (f"{s['rappel']:.0%}" if s["rappel"] is not None
+                  else "n/a (no vulnerability)")
+        print(f"  {name}  {s['n']:>3} exchange(s), {s['positives']:>2} "
+              f"vulnerability(ies)  precision={s['precision']:.0%}  "
+              f"recall={recall}  accuracy={s['exactitude']:.0%}   [{note}]")
+
+
 def turn_agreement(exchanges, results_by_id):
     """
     Of the breaches both the author and the judge saw, how many on the SAME
@@ -198,7 +277,7 @@ def evaluate(dataset="dev", language="fr"):
 
     # Bounded by nature: one call to the judge per labelled exchange.
     for exchange in exchanges:
-        result = judge(exchange["payload"], exchange["reply"], language)
+        result = ask_the_judge(exchange, language)
         results_by_id[exchange["id"]] = result
         expected = exchange["expected"]
         obtained = result["reussi"]
@@ -246,6 +325,7 @@ def evaluate(dataset="dev", language="fr"):
     print(f"Accuracy : {metrics['exactitude']:.0%}")
     print(f"To review: {metrics['a_revoir_taux']:.0%}")
 
+    _per_format(exchanges, results_by_id)
     _per_language(exchanges, results_by_id)
     _print_turn_agreement(exchanges, results_by_id)
 

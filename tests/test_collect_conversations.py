@@ -193,37 +193,78 @@ class TestTheCorpusStaysMeasurable:
                 "payload": "p", "reply": "r"}
 
     def _conversation(self, identifiant, jeu="dev"):
+        # TWO turns, i.e. four entries in `turns`. The earlier version built
+        # one turn and called it a conversation, which was harmless while
+        # conversations were merely skipped — nothing read the turn count.
+        # `is_conversation()` reads it now, and rightly refused this fixture:
+        # a one-turn entry must go through the FROZEN single-turn instruction.
         return {"id": identifiant, "group": identifiant, "dataset": jeu,
                 "category": "conversation-anodine", "expected": False,
                 "trap": "", "format": "multi-tours",
                 "turns": [{"role": "attacker", "content": "a"},
-                          {"role": "target", "content": "b"}]}
+                          {"role": "target", "content": "b"},
+                          {"role": "attacker", "content": "c"},
+                          {"role": "target", "content": "d"}]}
 
-    def test_conversations_are_skipped_by_the_evaluation(
+    def test_conversations_are_now_MEASURED_not_skipped(
             self, monkeypatch, tmp_path, capsys):
+        """
+        THIS TEST CHANGED, and it is an improvement rather than a convenience.
+
+        It used to assert that conversations were skipped, which was the right
+        guarantee while the judge's instruction could not read one. It can
+        now (the multi-turn addendum), so the guarantee MOVES: conversations
+        are loaded and measured, and what protects the published figure is no
+        longer exclusion but SEPARATION — see the next test.
+        """
         import evaluation.evaluate_judge as evaluateur
 
         corpus = self._corpus(tmp_path, [self._single("D01"),
                                          self._conversation("C01")])
         monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
 
-        retenus = evaluateur.load_exchanges("dev")
-        assert [e["id"] for e in retenus] == ["D01"]
+        loaded = evaluateur.load_exchanges("dev")
+        assert sorted(e["id"] for e in loaded) == ["C01", "D01"]
 
-    def test_the_skip_is_ANNOUNCED_not_silent(self, monkeypatch, tmp_path,
-                                                capsys):
-        # A silent skip would suggest the measurement covers the whole
-        # corpus. Same requirement as a report's coverage.
+    def test_the_two_formats_are_never_POOLED(self, capsys):
+        """
+        What now protects the published 89 / 100 / 96. Pooling the formats
+        would silently turn the headline into a mixed figure, incomparable
+        with every consultation logged since 2026-11-09 — the same blending
+        the project refuses when it declines to pool defence levels.
+        """
         import evaluation.evaluate_judge as evaluateur
 
-        corpus = self._corpus(tmp_path, [self._single("D01"),
-                                         self._conversation("C01")])
-        monkeypatch.setattr(evaluateur, "EXCHANGES_FILE", corpus)
-        evaluateur.load_exchanges("dev")
+        exchanges = [self._single("D01"), self._conversation("C01")]
+        verdicts = {"D01": {"reussi": False}, "C01": {"reussi": False}}
+        evaluateur._per_format(exchanges, verdicts)
 
         output = capsys.readouterr().out
-        assert "1 multi-turn conversation" in output
-        assert "a single turn" in output
+        assert "never pooled" in output
+        assert "single-turn" in output and "conversation" in output
+        assert "comparable with 89 / 100 / 96" in output
+
+    def test_a_one_turn_entry_goes_through_the_FROZEN_instruction(self):
+        """
+        The subtlety that a declared format would get wrong. Two hand-written
+        entries (A03, A04) are single-turn exchanges stored in the
+        conversations harvest. They must be judged by the same bytes as the
+        90 exchanges the published figures were measured on, not sent through
+        the multi-turn addendum.
+        """
+        import evaluation.evaluate_judge as evaluateur
+
+        one_turn = {"format": "multi-tours",
+                    "turns": [{"role": "attacker", "content": "a"},
+                              {"role": "target", "content": "b"}]}
+        assert evaluateur.is_conversation(one_turn) is False
+
+        two_turns = {"format": "mono-tour",
+                     "turns": [{"role": "attacker", "content": "a"},
+                               {"role": "target", "content": "b"},
+                               {"role": "attacker", "content": "c"},
+                               {"role": "target", "content": "d"}]}
+        assert evaluateur.is_conversation(two_turns) is True
 
     def test_without_a_conversation_nothing_is_announced(self, monkeypatch,
                                                   tmp_path, capsys):
