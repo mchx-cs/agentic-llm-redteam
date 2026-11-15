@@ -25,16 +25,16 @@ from pathlib import Path
 from audit import (AUTHORISATION_FILE, MissingAuthorisation, AuditTrail,
                    require_mandate, telemetry)
 from agents.adaptation import accumulate, observe, next_attempt
-from agents.arbitre import judge, judge_by_vote
-from agents.planificateur import plan_campaign, summarise as summarise_plan
+from agents.judge import judge, judge_by_vote
+from agents.planner import plan_campaign, summarise as summarise_plan
 from agents.reconnaissance import (KNOWN_CONTEXTS, reconnoitre,
                                    summarise as summarise_profile)
-from agents.verificateur import verify_by_replay
-from cibles import choose_target
-from cibles.http import TARGET_PROFILES, probe_target as probe_http_target
+from agents.verifier import verify_by_replay
+from targets import choose_target
+from targets.http import TARGET_PROFILES, probe_target as probe_http_target
 from config import CALL_BUDGET, TOKEN_BUDGET, TARGET
 from llm_client import BudgetExceeded, call_log, reset_call_log
-from rapport import save_report
+from report import save_report
 
 # The stopping rule: we do not attack indefinitely.
 MAX_ESSAIS = 3
@@ -284,7 +284,7 @@ def _finish(result):
 
 def _payload_provenance():
     """Which library the campaign worked with, and how old it is."""
-    from agents.attaquant import SNAPSHOT_AGE_SUSPECT, load_library
+    from agents.attacker import SNAPSHOT_AGE_SUSPECT, load_library
 
     garak = load_library().get("_garak")
     if not garak:
@@ -318,10 +318,10 @@ def cli(arguments=None):
         help="'leurre' (default), 'mock', or an http(s) URL. Otherwise the "
              "value of CIBLE in .env.")
     parser.add_argument(
-        "--report", "--rapport", nargs="?", const="rapports", default=None,
+        "--report", "--rapport", nargs="?", const="reports", default=None,
         dest="report", metavar="FOLDER",
         help="write resultat.json and rapport.md into FOLDER "
-             "(default: rapports/).")
+             "(default: reports/).")
     parser.add_argument(
         "--abridge", "--abreger", action="store_true", dest="abridge",
         help="truncate payloads and replies in rapport.md (to share a report "
@@ -432,11 +432,11 @@ def cli(arguments=None):
               f"authorised by {authorisation['authorised_by']}, "
               f"from {authorisation['start']} to {authorisation['end']}.\n")
 
-    folder = arguments.report or "rapports"
+    folder = arguments.report or "reports"
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     # The audit trail is ALWAYS written, even without --rapport: it is the
     # trace of what we sent, not an optional deliverable.
-    trail = AuditTrail(Path(folder) / f"{timestamp}-journal.jsonl",
+    trail = AuditTrail(Path(folder) / f"{timestamp}-trail.jsonl",
                        target_name, authorisation,
                        context=telemetry(target_name, arguments.target_profile))
 
@@ -449,7 +449,7 @@ def cli(arguments=None):
             excluding=scope_patterns(arguments.excluding))
     except RuntimeError as failure:
         # The target did not answer as expected: unreachable host, HTTP
-        # error, non-JSON reply, wrong response path. `cibles/http.py`'s
+        # error, non-JSON reply, wrong response path. `targets/http.py`'s
         # message already says what to fix — it was only drowning in eight
         # lines of Python traceback, while the project insists on giving
         # advice. We add the shortcut that avoids starting again blind.

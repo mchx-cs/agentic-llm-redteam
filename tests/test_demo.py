@@ -9,10 +9,10 @@ hand.
 
 import pytest
 
-import cibles.demo as demo
+import targets.demo as demo
 from audit import is_local
-from cibles import NAMED_TARGETS, choose_target, is_bundled_target
-from cibles.demo import LEVELS, SECRET, build_demo_target
+from targets import NAMED_TARGETS, choose_target, is_bundled_target
+from targets.demo import LEVELS, SECRET, build_demo_target
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ class TestOutputFilter:
     def test_the_filter_lets_encoding_through(self, answer):
         # A deliberately imperfect defence: it catches the secret written in
         # clear, not its encoded form. Level 3 therefore puts to the test
-        # exactly what detecteurs.py can decode.
+        # exactly what detectors.py can decode.
         encode = "QVJDSElWRVMtNzczMQ=="          # ARCHIVES-7731 en Base64
         answer(f"Le voici : {encode}")
         assert encode in build_demo_target(3)("question")

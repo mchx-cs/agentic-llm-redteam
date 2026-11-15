@@ -2,7 +2,7 @@
 Tests for reconnaissance, with no call to a model at all.
 
 We do not test the QUALITY of the profile here — that is the job of
-`evaluation/tester_reconnaissance.py`, which needs a real model and simulated
+`evaluation/check_reconnaissance.py`, which needs a real model and simulated
 targets. We test what must be true whatever a model answers: the profile's
 normalisation, and above all the two TRI-STATES added on 2026-11-11.
 

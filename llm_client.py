@@ -10,7 +10,7 @@ This is the guard against hard-coded calls scattered everywhere.
 One precision, added in phase 8: the rule aims at the models WE use (judge,
 analyst, decoy), so they stay interchangeable from config.py. It does NOT aim
 at the attacked target, which is an arbitrary third-party system — often an
-application, not a bare model. `cibles/http.py` therefore calls it directly,
+application, not a bare model. `targets/http.py` therefore calls it directly,
 over urllib, and that is deliberate.
 """
 

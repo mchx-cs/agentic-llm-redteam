@@ -152,10 +152,10 @@ if _unknown_profiles:
 
 
 # >>> THE TARGET: WHICH SYSTEM WE TEST <<<
-# "leurre" (default) = the local toy chatbot; "mock" = deterministic, no
+# "decoy" (default) = the local toy chatbot; "mock" = deterministic, no
 # model; an http(s) URL = a real endpoint. Overridden by --cible on the
-# command line (see cibles/__init__.py).
-TARGET = _from_env("TARGET", "leurre")
+# command line (see targets/__init__.py).
+TARGET = _from_env("TARGET", "decoy")
 
 
 # >>> A CAMPAIGN'S BUDGET <<<

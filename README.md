@@ -61,7 +61,7 @@ Two design decisions worth calling out:
 judge, reconnaissance analyst, decoy — goes through `demander_au_llm()` in
 `llm_client.py`, so switching provider is a `.env` change and nothing else in the
 codebase moves. The system *under test* is deliberately outside that rule: it is a
-third-party application, reached through its own adapter in `cibles/`.
+third-party application, reached through its own adapter in `targets/`.
 
 **An explicit retry budget.** Because attacks are probabilistic, an adaptive agent will
 happily loop forever. `MAX_ESSAIS` bounds every campaign — a correctness concern as much
@@ -96,43 +96,43 @@ and coverage that states what was never attempted.
 .
 ├── config.py          # provider profiles and target selection, all driven by .env
 ├── llm_client.py      # the abstraction layer — every model call goes through here
-├── cibles/            # systems under test — one contract: interroger(message) -> str
+├── targets/            # systems under test — one contract: interroger(message) -> str
 │   ├── demo.py        # deliberately weak target, three defence levels
-│   ├── leurre.py      # local decoy chatbot holding a fake secret (default)
+│   ├── decoy.py      # local decoy chatbot holding a fake secret (default)
 │   ├── mock.py        # deterministic, no LLM: free end-to-end tests
 │   └── http.py        # a real endpoint, described in .env (urllib, no new dependency)
 ├── agents/
 │   ├── reconnaissance.py # probes the target with harmless questions, builds a profile
-│   ├── planificateur.py  # picks families, objectives and order from that profile (rules)
+│   ├── planner.py  # picks families, objectives and order from that profile (rules)
 │   ├── adaptation.py   # reorders the remaining attempts from the target's replies (rules)
-│   ├── attaquant.py   # supplies the building blocks: technique × objective × transformation
-│   ├── arbitre.py     # LLM-as-judge: rules on success or failure (JSON verdict)
-│   ├── detecteurs.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
-│   └── verificateur.py  # replay check: real leak or target hallucination?
+│   ├── attacker.py   # supplies the building blocks: technique × objective × transformation
+│   ├── judge.py     # LLM-as-judge: rules on success or failure (JSON verdict)
+│   ├── detectors.py  # deterministic decoding (spelled-out, Base64, hex) before the judge
+│   └── verifier.py  # replay check: real leak or target hallucination?
 ├── payloads/
-│   ├── bibliotheque.json      # attack techniques (by OWASP family) and objectives
+│   ├── library.json      # attack techniques (by OWASP family) and objectives
 │   ├── valider.py             # validates the library before a campaign uses it
-│   ├── source_garak.py        # inventories what garak offers, downloads nothing
-│   └── exporter_garak.py      # exports garak probes to a local, git-ignored snapshot
+│   ├── garak_source.py        # inventories what garak offers, downloads nothing
+│   └── garak_export.py      # exports garak probes to a local, git-ignored snapshot
 ├── tests/             # pytest, no LLM calls — runs in CI on every push
 ├── evaluation/        # measurements that DO need a model — run by hand
-│   ├── echanges_etiquetes.json  # hand-labelled exchanges (dev and frozen test sets)
-│   ├── evaluer_arbitre.py       # measures judge precision and recall
-│   ├── journal_test.jsonl       # timestamped log of every test-set run
-│   ├── tester_rejeu.py          # tests the replay check against simulated targets
-│   ├── tester_reconnaissance.py # tests profiling and planning against simulated targets
-│   ├── mesurer_adaptation.py    # adaptive vs static plan at equal budget (no LLM)
-│   ├── mesurer_adaptation_reelle.py # the same, against the real demo target
-│   ├── mesurer_multitours.py    # two turns vs one composed message, no judge needed
-│   ├── collecter_echanges.py    # records real target exchanges for blind hand-labelling
-│   ├── collecter_conversations.py # the same, multi-turn — no judge, no attacker model
-│   ├── conversations_a_la_main.py # the traps a harvest cannot produce, written by hand
-│   └── etiqueter.py             # command-line hand-labelling, one question at a time
-├── exemples/
-│   └── rapport-demo.md  # a committed example report, abridged, rendered by GitHub
+│   ├── labelled_exchanges.json  # hand-labelled exchanges (dev and frozen test sets)
+│   ├── evaluate_judge.py       # measures judge precision and recall
+│   ├── test_set_log.jsonl       # timestamped log of every test-set run
+│   ├── check_replay.py          # tests the replay check against simulated targets
+│   ├── check_reconnaissance.py # tests profiling and planning against simulated targets
+│   ├── measure_adaptation.py    # adaptive vs static plan at equal budget (no LLM)
+│   ├── measure_adaptation_real.py # the same, against the real demo target
+│   ├── measure_multiturn.py    # two turns vs one composed message, no judge needed
+│   ├── collect_exchanges.py    # records real target exchanges for blind hand-labelling
+│   ├── collect_conversations.py # the same, multi-turn — no judge, no attacker model
+│   ├── handwritten_conversations.py # the traps a harvest cannot produce, written by hand
+│   └── label.py             # command-line hand-labelling, one question at a time
+├── examples/
+│   └── demo-report.md  # a committed example report, abridged, rendered by GitHub
 ├── audit.py           # authorisation gate + append-as-you-go JSONL audit trail
-├── statistiques.py    # what a result bounds — and the refusal to bound dependent trials
-├── rapport.py         # resultat.json (source of truth) → rapport.md; rule-based severity
+├── stats.py    # what a result bounds — and the refusal to bound dependent trials
+├── report.py         # resultat.json (source of truth) → rapport.md; rule-based severity
 └── main.py            # orchestrator: runs the campaign loop
 ```
 
@@ -170,16 +170,16 @@ an empty string.
 `evaluation/` holds what needs a model, so it costs quota and runs by hand:
 
 ```bash
-python -m evaluation.evaluer_arbitre         # judge precision and recall on the dev set
-python -m evaluation.evaluer_arbitre --test  # frozen test set, never used for tuning
-python -m evaluation.tester_rejeu            # replay, against targets with known behaviour
-python -m evaluation.mesurer_adaptation      # adaptive vs static plan — needs no model
-PROFIL_ARBITRE=local python -m evaluation.mesurer_adaptation_reelle  # same, real target
+python -m evaluation.evaluate_judge         # judge precision and recall on the dev set
+python -m evaluation.evaluate_judge --test  # frozen test set, never used for tuning
+python -m evaluation.check_replay            # replay, against targets with known behaviour
+python -m evaluation.measure_adaptation      # adaptive vs static plan — needs no model
+PROFIL_ARBITRE=local python -m evaluation.measure_adaptation_real  # same, real target
 ```
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test set
 can't hold a reworded case the judge was tuned on. Every test-set run is timestamped in
-`evaluation/journal_test.jsonl`.
+`evaluation/test_set_log.jsonl`.
 
 That last command shows the real dividing line isn't "does it call a model". It needs
 none, and still doesn't belong in CI: it answers in *numbers to read* rather than
@@ -299,7 +299,7 @@ screenshot of the final report:
 Output is in French, like the code and commits; the README is the English entry point.
 The judge has been measured on English exchanges too, and classifies them as accurately.
 
-[An example report is committed here](exemples/rapport-demo.md), produced by that exact
+[An example report is committed here](examples/demo-report.md), produced by that exact
 command and abridged with `--abreger` — which is also how you'd share a report without
 a client's verbatim answers.
 
@@ -361,7 +361,7 @@ CIBLE_CHEMIN_REPONSE=choices.0.message.content
 advice — the campaign refuses to start without one.
 
 ```bash
-cp autorisation.example.json autorisation.json
+cp authorisation.example.json authorisation.json
 ```
 
 Fill it in: the target must be covered by it, and today must fall inside the window.
@@ -506,7 +506,7 @@ What it found already in place:
 
 | What the manual asks for | Where it lives here |
 |---|---|
-| Validate the scorer separately from the system under test | `evaluation/evaluer_arbitre.py`, hand-labelled corpus, frozen test set |
+| Validate the scorer separately from the system under test | `evaluation/evaluate_judge.py`, hand-labelled corpus, frozen test set |
 | Explicit oracles, including a *needs human adjudication* state | three criteria, and a split vote returning no verdict |
 | A missing trace must never be recorded as a defensive pass | truncated replies detected and warned about twice |
 | Record tested, untested and inconclusive cases, benign controls included | tested / touched-but-unjudged / skipped, plus the `controle` technique |
@@ -541,7 +541,7 @@ upkeep falls on one person forever. So the library is synced from
 for its templates: acquisition and use are separated in time.
 
 ```
-garak (throwaway venv)  ->  exporter_garak.py  ->  payloads/garak.json  ->  campaigns
+garak (throwaway venv)  ->  garak_export.py  ->  payloads/garak.json  ->  campaigns
    164 dependencies           once, offline          git-ignored          no network
 ```
 
@@ -551,10 +551,10 @@ payloads. The snapshot stays out of git: garak's probes pull in third-party data
 with their own terms, so the repository points at the source rather than republishing it.
 
 ```bash
-python -m payloads.source_garak --lister        # what garak offers; downloads nothing
+python -m payloads.garak_source --lister        # what garak offers; downloads nothing
 python -m venv venv-garak && venv-garak/bin/pip install garak
-venv-garak/bin/python payloads/exporter_garak.py
-python -m payloads.valider                      # check what you ended up with
+venv-garak/bin/python payloads/garak_export.py
+python -m payloads.validate                      # check what you ended up with
 ```
 
 Of garak's 191 probes, 173 expose static prompts (32,968 in total) and their tags
@@ -614,7 +614,7 @@ ageing rather than the target hardening. Detection is automated; the update deli
 is not:
 
 ```bash
-python -m payloads.source_garak --version   # one API call, no download
+python -m payloads.garak_source --version   # one API call, no download
 ```
 
 Auto-updating would destroy reproducibility — two identical campaigns must send
@@ -635,7 +635,7 @@ The legal note at the bottom of this README used to be just a note. It is now a
 precondition: against a remote target, the campaign refuses to start without a mandate.
 
 ```bash
-cp autorisation.example.json autorisation.json   # then fill it in
+cp authorisation.example.json authorisation.json   # then fill it in
 python main.py --cible https://chatbot.client.fr/api --rapport
 ```
 
@@ -647,7 +647,7 @@ one-command demo.
 The mandate is checked, not merely present: it must name the target actually being
 attacked (a mandate for one client does not cover another), and today must fall inside
 the agreed window. A refusal exits with code 2 and an instruction, not a stack trace.
-`autorisation.json` is git-ignored — it names a real client.
+`authorisation.json` is git-ignored — it names a real client.
 
 The mandate's scope is **enforced**, not just printed. If it excludes techniques, say
 so and they are not sent:

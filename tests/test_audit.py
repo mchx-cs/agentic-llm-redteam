@@ -31,7 +31,7 @@ MANDATE = {
 @pytest.fixture
 def mandate_file(tmp_path):
     def ecrire(contenu=MANDATE):
-        path = tmp_path / "autorisation.json"
+        path = tmp_path / "authorisation.json"
         path.write_text(json.dumps(contenu), encoding="utf-8")
         return path
     return ecrire
@@ -54,7 +54,7 @@ class TestLocalTarget:
     def test_a_remote_target_needs_one(self, name):
         assert not is_local(name)
         with pytest.raises(MissingAuthorisation):
-            require_mandate(name, "fichier-qui-n-existe-pas.json")
+            require_mandate(name, "no-such-file.json")
 
 
 class TestLoading:
@@ -62,8 +62,8 @@ class TestLoading:
         assert load_authorisation(mandate_file())["reference"] == "Convention 2026-042"
 
     def test_a_missing_file_explains_what_to_do(self):
-        with pytest.raises(MissingAuthorisation, match="autorisation.example"):
-            load_authorisation("fichier-qui-n-existe-pas.json")
+        with pytest.raises(MissingAuthorisation, match="authorisation.example"):
+            load_authorisation("no-such-file.json")
 
     @pytest.mark.parametrize("field", [
         "target", "authorised_by", "reference", "start", "end"])
@@ -73,7 +73,7 @@ class TestLoading:
             load_authorisation(mandate_file(incomplet))
 
     def test_broken_json_is_reported(self, tmp_path):
-        path = tmp_path / "autorisation.json"
+        path = tmp_path / "authorisation.json"
         path.write_text("{ pas du json", encoding="utf-8")
         with pytest.raises(MissingAuthorisation, match="JSON"):
             load_authorisation(path)
@@ -164,7 +164,7 @@ class TestAuditTrail:
 
 class TestMandateInTheReport:
     def test_the_report_cites_the_mandate(self):
-        from rapport import build_report, render_markdown
+        from report import build_report, render_markdown
         resultat = {"status": "no_finding", "profile": None,
                     "plan": {"attempts": [], "skipped": []}, "findings": [],
                     "call_log": {}, "authorisation": MANDATE}
@@ -173,7 +173,7 @@ class TestMandateInTheReport:
         assert "Convention 2026-042" in text
 
     def test_without_a_mandate_no_stray_section(self):
-        from rapport import build_report, render_markdown
+        from report import build_report, render_markdown
         resultat = {"status": "no_finding", "profile": None,
                     "plan": {"attempts": [], "skipped": []}, "findings": [],
                     "call_log": {}, "authorisation": None}
@@ -287,10 +287,10 @@ class TestTelemetry:
 
     def test_what_we_run_is_entirely_logged(self):
         t = telemetry("demo")
-        arbitre = t["our_models"]["judge"]
-        assert arbitre["temperature"] == 0
-        assert arbitre["votes_per_verdict"] >= 1
-        assert arbitre["model"]
+        judge = t["our_models"]["judge"]
+        assert judge["temperature"] == 0
+        assert judge["votes_per_verdict"] >= 1
+        assert judge["model"]
 
     def test_what_we_do_not_know_is_DECLARED_not_omitted(self):
         # L'omettre laisserait croire qu'on a fige les parametres de la cible.

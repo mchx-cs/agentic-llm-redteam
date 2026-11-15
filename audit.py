@@ -23,10 +23,18 @@ teach people to click without reading.
 import hashlib
 import json
 import re
+import sys
 from datetime import date, datetime
 from pathlib import Path
 
-AUTHORISATION_FILE = "autorisation.json"
+AUTHORISATION_FILE = "authorisation.json"
+
+# The name the mandate file carried until 2026-11-15. It is gitignored — it
+# names a real client — so nothing here can rename it on an operator's
+# machine, and unlike every other work file it CANNOT be regenerated: it is a
+# signed contract. Losing sight of it would make the tool refuse to start
+# against a target it is perfectly authorised to test.
+LEGACY_AUTHORISATION_FILE = "autorisation.json"
 
 REQUIRED_FIELDS = ("target", "authorised_by", "reference", "start", "end")
 
@@ -42,13 +50,13 @@ def is_local(target_name):
     """
     A target bundled with the project, or served from this machine.
 
-    The named targets of the `cibles` package are yours by construction: they
+    The named targets of the `targets` package are yours by construction: they
     run locally and hold nothing but fictional secrets. The list is asked of
-    `cibles` rather than copied here — otherwise it would drift, and a bundled
+    `targets` rather than copied here — otherwise it would drift, and a bundled
     target would end up demanding a mandate (which happened with `demo` on
     2026-11-11, breaking the one-command demonstration).
     """
-    from cibles import is_bundled_target
+    from targets import is_bundled_target
 
     if is_bundled_target(target_name):
         return True
@@ -68,10 +76,18 @@ def _date(value, field):
 def load_authorisation(path=AUTHORISATION_FILE):
     """Reads the authorisation file, or says exactly what is missing."""
     path = Path(path)
+    if not path.exists() and path.name == AUTHORISATION_FILE:
+        # Fall back to the French name, and say so: a mandate that is on disk
+        # must be found, whichever name it carries.
+        legacy = path.with_name(LEGACY_AUTHORISATION_FILE)
+        if legacy.exists():
+            print(f"Note: mandate read from {legacy}; rename it to "
+                  f"{path.name} when convenient.", file=sys.stderr)
+            path = legacy
     if not path.exists():
         raise MissingAuthorisation(
             f"No authorisation found ({path}).\n"
-            f"  Copy autorisation.example.json, fill it in, and run again.\n"
+            f"  Copy authorisation.example.json, fill it in, and run again.\n"
             f"  Testing a third-party system without a written mandate is an "
             f"offence."
         )
@@ -311,8 +327,8 @@ class AuditTrail:
 
 def telemetry(target_name, target_profile=None):
     """The test environment, known side and unknown side."""
-    from agents.arbitre import VOTE_COUNT
-    from agents.verificateur import REPLAY_COUNT
+    from agents.judge import VOTE_COUNT
+    from agents.verifier import REPLAY_COUNT
     from config import ACTIVE_PROFILE, JUDGE_PROFILE, PROFILES
 
     judge = PROFILES.get(JUDGE_PROFILE, {})

@@ -538,7 +538,7 @@ class TestStaticControl:
     order, but learning nothing from the replies.
 
     Why it exists: until now adaptation's gain was measured only on SIMULATED
-    targets (`evaluation/mesurer_adaptation.py`). Comparing on a real target
+    targets (`evaluation/measure_adaptation.py`). Comparing on a real target
     needs a control, and a control needs this flag.
     """
 

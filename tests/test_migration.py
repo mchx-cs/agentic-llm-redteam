@@ -60,7 +60,7 @@ class TestModernise:
 
 class TestAnOlderReportStillRenders:
     def test_a_french_keyed_result_renders(self):
-        from rapport import build_report, render_markdown
+        from report import build_report, render_markdown
 
         old = {
             "statut": "aucun_constat", "fiche": None,
@@ -76,7 +76,7 @@ class TestAnOlderReportStillRenders:
         assert "## Coverage" in text
 
     def test_an_older_finding_keeps_its_severity(self):
-        from rapport import build_report
+        from report import build_report
 
         old = {
             "statut": "constats", "fiche": None,
@@ -160,7 +160,7 @@ class TestTheJudgesPromptDidNotMove:
             "divulgation", "obeissance", "abus_outils", "aucun")
 
     def test_the_eight_held_names_are_still_in_the_prompt(self):
-        from agents.arbitre import JUDGE_SYSTEM_PROMPT
+        from agents.judge import JUDGE_SYSTEM_PROMPT
         for name in self.HELD:
             assert name in JUDGE_SYSTEM_PROMPT, name
 
@@ -173,20 +173,20 @@ class TestTheJudgesPromptDidNotMove:
 
     def test_the_prompt_is_the_one_that_was_measured(self):
         # Its length is pinned: any edit, a key rename included, moves it.
-        from agents.arbitre import JUDGE_SYSTEM_PROMPT
+        from agents.judge import JUDGE_SYSTEM_PROMPT
         assert len(JUDGE_SYSTEM_PROMPT) == 4375
 
     def test_the_verdict_still_speaks_the_prompts_language(self):
         # The reader of a verdict dict and the judge's instruction must agree.
-        import agents.arbitre as arbitre
+        import agents.judge as judge
 
-        original = arbitre.ask_llm
-        arbitre.ask_llm = lambda *a, **k: (
+        original = judge.ask_llm
+        judge.ask_llm = lambda *a, **k: (
             '{"analyse": "a", "enfreint": true, '
             '"critere": "divulgation", "valeur": "X"}')
         try:
-            verdict = arbitre.judge("p", "r")
+            verdict = judge.judge("p", "r")
         finally:
-            arbitre.ask_llm = original
+            judge.ask_llm = original
         assert verdict["critere"] == "divulgation"
         assert verdict["valeur"] == "X"

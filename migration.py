@@ -8,7 +8,7 @@ live OUTSIDE git and therefore outside that migration:
 - `payloads/garak.json`, the snapshot whoever synchronised holds locally;
 - `evaluation/a_etiqueter*.json`, a harvest waiting to be labelled — which
   can be an evening's work, so losing it is not an option;
-- `rapports/`, every `resultat.json` and every sealed audit trail already
+- `reports/`, every `resultat.json` and every sealed audit trail already
   produced.
 
 The project explicitly supports reading older results, so a key rename cannot

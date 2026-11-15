@@ -16,7 +16,7 @@ import pytest
 import llm_client
 from llm_client import (BudgetExceeded, ask_llm, call_log,
                         reset_call_log)
-from rapport import build_report, render_markdown
+from report import build_report, render_markdown
 
 
 @pytest.fixture(autouse=True)

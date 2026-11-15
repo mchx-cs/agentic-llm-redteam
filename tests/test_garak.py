@@ -10,11 +10,11 @@ import json
 
 import pytest
 
-import agents.attaquant
-from agents.attaquant import _technique_from_probe, load_library
-from payloads.exporter_garak import main as exporter
-from payloads.source_garak import OUT_OF_SCOPE
-from payloads.valider import valider
+import agents.attacker
+from agents.attacker import _technique_from_probe, load_library
+from payloads.garak_export import main as exporter
+from payloads.garak_source import OUT_OF_SCOPE
+from payloads.validate import validate
 
 
 def _probe(name="probes.dan.DanInTheWild", owasp_families=("owasp:llm01",),
@@ -32,14 +32,14 @@ def snapshot(monkeypatch, tmp_path):
         path.write_text(json.dumps({
             "garak_version": "0.17.1", "exported_at": "2026-11-10T00:00:00",
             "probes": probes, "skipped": []}), encoding="utf-8")
-        monkeypatch.setattr(agents.attaquant, "GARAK_FILE", path)
+        monkeypatch.setattr(agents.attacker, "GARAK_FILE", path)
         return path
     return installer
 
 
 @pytest.fixture
 def without_snapshot(monkeypatch, tmp_path):
-    monkeypatch.setattr(agents.attaquant, "GARAK_FILE",
+    monkeypatch.setattr(agents.attacker, "GARAK_FILE",
                         tmp_path / "absent.json")
 
 
@@ -135,7 +135,7 @@ class TestRelevancePerModule:
         # A dead entry removed on 2026-11-11: no probe in the snapshot
         # carries that tag. A mapping promising a family the source does not
         # supply suggests a coverage that does not exist.
-        from agents.attaquant import GARAK_FAMILIES
+        from agents.attacker import GARAK_FAMILIES
         assert "owasp:llm07" not in GARAK_FAMILIES
         technique = _technique_from_probe(_probe(owasp_families=["owasp:llm07"]))
         assert technique["owasp_family"] is None
@@ -155,7 +155,7 @@ class TestRelevancePerModule:
     def test_a_translated_probe_passes_the_validator(self):
         library = {"techniques": [_technique_from_probe(_probe())],
                         "objectives": [{"id": "o", "wording": "f"}]}
-        assert valider(library)[0] == []
+        assert validate(library)[0] == []
 
 
 class TestMerging:
@@ -185,7 +185,7 @@ class TestMerging:
     def test_the_merged_library_stays_valid(self, snapshot):
         snapshot([_probe(), _probe(name="probes.leakreplay.Guardrail",
                                      owasp_families=["owasp:llm02"])])
-        assert valider(load_library())[0] == []
+        assert validate(load_library())[0] == []
 
 
 class TestFreshness:
@@ -210,12 +210,12 @@ class TestFreshness:
 
     def test_a_recent_snapshot_triggers_nothing(self, snapshot):
         self._snapshot_dated(snapshot, 3)
-        avertissements = valider(load_library())[1]
+        avertissements = validate(load_library())[1]
         assert not any("vieux de" in a for a in avertissements)
 
     def test_an_old_snapshot_is_reported(self, snapshot):
         self._snapshot_dated(snapshot, 95)
-        avertissements = valider(load_library())[1]
+        avertissements = validate(load_library())[1]
         assert any("95 days old" in a for a in avertissements)
 
     def test_an_unreadable_date_does_not_bring_the_load_down(
@@ -240,7 +240,7 @@ class TestEmptyExport:
         import sys
         import types
 
-        import payloads.exporter_garak as module
+        import payloads.garak_export as module
         faux = types.ModuleType("garak")
         faux.__version__ = "0.17.1"
         monkeypatch.setitem(sys.modules, "garak", faux)
@@ -269,13 +269,13 @@ class TestVersionDetection:
     ])
     def test_being_behind_is_detected(self, monkeypatch, local, remote,
                                    expected):
-        import payloads.source_garak as source
+        import payloads.garak_source as source
         monkeypatch.setattr(source, "latest_version", lambda timeout=10: remote)
         assert source.compare_to_snapshot(local)[1] is expected
 
     def test_an_unavailable_network_blocks_nothing(self, monkeypatch):
         # A campaign must not depend on GitHub.
-        import payloads.source_garak as source
+        import payloads.garak_source as source
         monkeypatch.setattr(source, "_fetch",
                             lambda *a, **k: (_ for _ in ()).throw(
                                 RuntimeError("hors ligne")))
@@ -312,14 +312,14 @@ class TestRedundancyWithGarak:
         # The snapshot is BUILT for the test, as everywhere in this file: a
         # test reading the local snapshot would pass or not depending on
         # whether the exporter had been run.
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         snapshot([_probe(owasp_families=("owasp:llm01",)),
                     _probe(name="probes.leakreplay.Fake",
                            owasp_families=("owasp:llm02",))])
         assert redundant_techniques(load_library()) == []
 
     def test_a_probe_that_fills_the_hole_is_reported(self):
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         library = self._library(
             familles_garak=["LLM06:2025 Excessive Agency"],
             maison=[{"id": "abus-outils",
@@ -334,7 +334,7 @@ class TestRedundancyWithGarak:
         # The match is on `LLM06`, not on the full label: making the rule
         # depend on the vintage would break it at the Top 10's next
         # revision.
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         library = self._library(
             familles_garak=["LLM06:2027 Excessive Agency"],
             maison=[{"id": "abus-outils",
@@ -343,7 +343,7 @@ class TestRedundancyWithGarak:
         assert len(redundant_techniques(library)) == 1
 
     def test_another_family_triggers_nothing(self):
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         library = self._library(
             familles_garak=["LLM01:2025 Prompt Injection"],
             maison=[{"id": "abus-outils",
@@ -357,7 +357,7 @@ class TestRedundancyWithGarak:
         # URI, XSS, Jinja or SQL injection — not at tool calls. Counting them
         # here would announce a hole filled that is not, and would have four
         # payloads removed that test something else.
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         library = {"techniques": [
             {"id": "garak-web", "source": "garak",
              "owasp_family": "LLM02:2025 Sensitive Information Disclosure",
@@ -372,7 +372,7 @@ class TestRedundancyWithGarak:
         # `divulgation-information` is empty: there is nothing to remove,
         # and the planner already reports its lack of payload. Reporting it
         # here would drown the one case that needs a decision.
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         library = self._library(
             familles_garak=["LLM02:2025 Sensitive Information Disclosure"],
             maison=[{"id": "divulgation-information",
@@ -384,7 +384,7 @@ class TestRedundancyWithGarak:
     def test_the_harmless_control_is_never_redundant(self):
         # `controle` has no OWASP family: it is the control, and no
         # sonde offensive ne le remplace.
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         library = self._library(
             familles_garak=["LLM01:2025 Prompt Injection"],
             maison=[{"id": "controle", "owasp_family": None,
@@ -392,7 +392,7 @@ class TestRedundancyWithGarak:
         assert redundant_techniques(library) == []
 
     def test_a_garak_probe_is_not_a_hand_written_debt(self):
-        from payloads.source_garak import redundant_techniques
+        from payloads.garak_source import redundant_techniques
         library = self._library(
             familles_garak=["LLM01:2025 Prompt Injection",
                             "LLM01:2025 Prompt Injection"])
@@ -401,7 +401,7 @@ class TestRedundancyWithGarak:
 
 class TestProvenanceInTheReport:
     def _report(self, payloads):
-        from rapport import build_report, render_markdown
+        from report import build_report, render_markdown
         return render_markdown(build_report({
             "status": "no_finding", "profile": None,
             "plan": {"attempts": [], "skipped": []}, "findings": [],

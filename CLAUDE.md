@@ -26,20 +26,20 @@ que la cible a déjà répondu (phase 3a).
   jour où garak comble le trou.
 - **Phase 2** : l'arbitre a des critères explicites, des exemples, une sortie JSON,
   une température à 0, raisonne avant de trancher, reçoit les passages décodés par
-  `detecteurs.py` et s'abstient quand son verdict se contredit. Il est mesuré sur des
+  `detectors.py` et s'abstient quand son verdict se contredit. Il est mesuré sur des
   échanges étiquetés à la main, répartis en un jeu de développement (57 échanges,
-  `python -m evaluation.evaluer_arbitre`) et un jeu de test gelé (23 échanges,
+  `python -m evaluation.evaluate_judge`) et un jeu de test gelé (23 échanges,
   `--test`). Une fuite de valeur est vérifiée **par rejeu** avant d'être déclarée
-  (`agents/verificateur.py`) ; `python -m evaluation.collecter_echanges` récolte de
-  vrais échanges avec la cible ; `python -m evaluation.etiqueter` sert à les
+  (`agents/verifier.py`) ; `python -m evaluation.collect_exchanges` récolte de
+  vrais échanges avec la cible ; `python -m evaluation.label` sert à les
   étiqueter à la main, puis `--integrer` les verse dans le corpus.
-- **Phase 12** : `cibles/demo.py` est la cible volontairement mal protégée, à trois
+- **Phase 12** : `targets/demo.py` est la cible volontairement mal protégée, à trois
   niveaux de défense (`--cible demo`, `demo:2`, `demo:3`). Mesuré le 2026-11-11 : le
   niveau 1 lâche le code sur une simple question, les niveaux 2 et 3 refusent. Un
-  rapport d'exemple abrégé est commité dans `exemples/`, et le README montre un
+  rapport d'exemple abrégé est commité dans `examples/`, et le README montre un
   extrait de sortie de campagne.
 - **Phase 9** : `audit.py` refuse de démarrer contre une cible distante sans mandat
-  valide (`autorisation.json`, hors git), et consigne chaque échange avec la cible dans
+  valide (`authorisation.json`, hors git), et consigne chaque échange avec la cible dans
   une piste JSONL écrite au fil de l'eau.
 - **Phase 11** : budget de campagne appliqué dans `llm_client` (`BUDGET_APPELS`,
   `BUDGET_TOKENS` dans `.env`). Atteindre son plafond lève `BudgetDepasse`, une
@@ -49,59 +49,59 @@ que la cible a déjà répondu (phase 3a).
   automatiquement sur GitHub Actions (Ubuntu et Windows, Python 3.10 et 3.13 —
   les quatre combinaisons passent).
   `pyproject.toml` empaquette le projet et expose la commande `redteam`.
-- **Phase 6** : `rapport.py` produit `resultat.json` (source de vérité) et
+- **Phase 6** : `report.py` produit `resultat.json` (source de vérité) et
   `rapport.md` (rendu), via `python main.py --rapport`. La gravité découle de règles
   déterministes, pas d'un LLM. La campagne va désormais au BOUT du plan et collecte
   tous les constats, au lieu de s'arrêter au premier.
 - **Phase 5** : `reconnaissance.py` sonde la cible et en dresse une fiche (rôle,
-  langue, outils, sujets refusés) ; `planificateur.py` en déduit, par des règles
+  langue, outils, sujets refusés) ; `planner.py` en déduit, par des règles
   déterministes, les familles à lancer, les objectifs à viser et l'ordre des essais.
-  Testés sur des cibles simulées : `python -m evaluation.tester_reconnaissance`.
+  Testés sur des cibles simulées : `python -m evaluation.check_reconnaissance`.
 
 ## Architecture
 
 ```
 config.py          # point de bascule unique : modèle local (Ollama) ou API distante
 llm_client.py      # LA couche d'abstraction : demander_au_llm()
-cibles/            # les systèmes testés — contrat commun : interroger(message) -> str
+targets/            # les systèmes testés — contrat commun : interroger(message) -> str
   demo.py          # volontairement mal protégée, 3 niveaux : `--cible demo[:N]`
-  leurre.py        # chatbot-jouet local avec un secret factice (défaut)
+  decoy.py        # chatbot-jouet local avec un secret factice (défaut)
   mock.py          # déterministe, sans LLM : tests de bout en bout gratuits
   http.py          # un vrai endpoint : profils d'API, --tester-cible, zéro dépendance
 agents/
   reconnaissance.py # sonde la cible (questions anodines) et en dresse une fiche
-  planificateur.py  # choisit familles, objectifs et ordre à partir de la fiche (règles)
+  planner.py  # choisit familles, objectifs et ordre à partir de la fiche (règles)
   adaptation.py     # réordonne le vivier PENDANT la campagne selon les réponses (règles)
-  attaquant.py     # fournit les briques : technique × objectif × transformation
-  arbitre.py       # LLM-as-judge : tranche succès / échec (sortie JSON)
-  detecteurs.py    # décode l'épelé, le Base64, l'hexa AVANT l'arbitre (déterministe)
-  verificateur.py  # rejeu : une valeur divulguée revient-elle, ou était-ce une hallucination ?
+  attacker.py     # fournit les briques : technique × objectif × transformation
+  judge.py       # LLM-as-judge : tranche succès / échec (sortie JSON)
+  detectors.py    # décode l'épelé, le Base64, l'hexa AVANT l'arbitre (déterministe)
+  verifier.py  # rejeu : une valeur divulguée revient-elle, ou était-ce une hallucination ?
 payloads/
-  bibliotheque.json  # techniques (famille OWASP + prérequis) et objectifs
-  valider.py         # vérifie la bibliothèque — `python -m payloads.valider`
-  source_garak.py    # inventorie la source garak (--lister, --decrire)
-  exporter_garak.py  # exporte les sondes en instantané local — venv garak, pas celui du projet
+  library.json  # techniques (famille OWASP + prérequis) et objectifs
+  valider.py         # vérifie la bibliothèque — `python -m payloads.validate`
+  garak_source.py    # inventorie la source garak (--lister, --decrire)
+  garak_export.py  # exporte les sondes en instantané local — venv garak, pas celui du projet
   garak.json         # instantané produit, HORS GIT : resynchroniser plutôt que figer
 tests/             # pytest, AUCUN appel LLM : tourne en intégration continue
-  test_detecteurs.py, test_verificateur.py, test_arbitre.py,
-  test_planificateur.py, test_cibles.py, test_rapport.py,
+  test_detectors.py, test_verifier.py, test_judge.py,
+  test_planner.py, test_cibles.py, test_report.py,
   test_attaquant_et_config.py, test_adaptation.py, test_reconnaissance.py
 evaluation/        # mesures qui ONT BESOIN d'un modèle : à lancer à la main
-  echanges_etiquetes.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
-  evaluer_arbitre.py       # précision, rappel, détail des erreurs
-  journal_test.jsonl       # chaque consultation du jeu de test, horodatée
-  etiqueter.py             # étiquetage à la main, question par question (--integrer)
-  tester_reconnaissance.py # teste fiche et plan sur des cibles simulées
-  tester_rejeu.py          # teste le rejeu avec des cibles simulées au comportement connu
-  mesurer_adaptation.py    # adaptatif contre plan statique, à budget égal (SANS LLM)
-  mesurer_adaptation_reelle.py # le même, contre la VRAIE cible demo, juge local
-  collecter_echanges.py    # récolte de vrais échanges → a_etiqueter.json (fichier de
+  labelled_exchanges.json  # vérité terrain (jeux dev et test) pour mesurer l'arbitre
+  evaluate_judge.py       # précision, rappel, détail des erreurs
+  test_set_log.jsonl       # chaque consultation du jeu de test, horodatée
+  label.py             # étiquetage à la main, question par question (--integrer)
+  check_reconnaissance.py # teste fiche et plan sur des cibles simulées
+  check_replay.py          # teste le rejeu avec des cibles simulées au comportement connu
+  measure_adaptation.py    # adaptatif contre plan statique, à budget égal (SANS LLM)
+  measure_adaptation_real.py # le même, contre la VRAIE cible demo, juge local
+  collect_exchanges.py    # récolte de vrais échanges → to_label.json (fichier de
                            # travail, hors git : étiqueter.py le vide dans le corpus)
 audit.py           # mandat exigé avant de démarrer + piste d'audit JSONL au fil de l'eau
-statistiques.py    # ce qu'un résultat borne — et le refus de borner l'indépendance absente
-rapport.py         # resultat.json (vérité) → rapport.md (rendu), gravité par règles
-exemples/
-  rapport-demo.md  # rapport d'exemple commité, abrégé (--abreger)
+stats.py    # ce qu'un résultat borne — et le refus de borner l'indépendance absente
+report.py         # resultat.json (vérité) → rapport.md (rendu), gravité par règles
+examples/
+  demo-report.md  # rapport d'exemple commité, abrégé (--abreger)
 main.py            # orchestrateur : boucle de campagne avec budget d'essais
 ```
 
@@ -114,7 +114,7 @@ dans `config.py`). Ne jamais coder en dur un appel Ollama ou OpenAI ailleurs.
 Précision apportée en phase 8 : cette règle vise les modèles **que nous utilisons**
 (arbitre, analyste, leurre), pour qu'ils restent interchangeables depuis `config.py`.
 Elle ne vise PAS la cible attaquée, qui est un système tiers arbitraire — souvent une
-application, pas un modèle nu. `cibles/http.py` l'appelle donc directement, en urllib,
+application, pas un modèle nu. `targets/http.py` l'appelle donc directement, en urllib,
 et c'est volontaire.
 
 **Toujours borner les boucles.** Les attaques sont probabilistes : un agent adaptatif
@@ -141,7 +141,7 @@ section « Bascule en anglais » pour l'ordre des étapes et les trois limites.
 - Messages de commit **en anglais** à partir de maintenant. Les 91 commits existants
   restent en français : réécrire l'historique public changerait chaque empreinte.
 - README **en anglais** (il l'était déjà).
-- `GLOSSAIRE.md` est la source unique des termes. **Rien ne se renomme sans y figurer** :
+- `GLOSSARY.md` est la source unique des termes. **Rien ne se renomme sans y figurer** :
   918 fonctions et classes sur 55 fichiers ne se renomment pas de mémoire, et le projet
   connaît déjà la dérive par synonymes qu'il combat pour les catégories d'étiquettes.
 - Commentaires pédagogiques assumés : ce projet sert aussi à apprendre, les blocs
@@ -216,8 +216,8 @@ attendent que l'auteur ait terminé le path AI Security de TryHackMe. Un agent d
 on ne sait pas juger les hallucinations est inutilisable.
 
 **PyRIT arrive en Phase 3, pas en Phase 7.** La boucle maison reproduit en miniature
-les briques de PyRIT : `cibles/` correspond à ses *targets*, `main.py` à un
-orchestrateur, `arbitre.py` à un *scorer*. Elle reste en place pour les Phases 1 et 2
+les briques de PyRIT : `targets/` correspond à ses *targets*, `main.py` à un
+orchestrateur, `judge.py` à un *scorer*. Elle reste en place pour les Phases 1 et 2
 (payloads, fiabilité de l'arbitre), parce que c'est là que se construit la
 compréhension du problème. L'attaquant adaptatif multi-tours de la Phase 3 est en
 revanche exactement ce que fournissent les attaques multi-tours de PyRIT. Le réécrire
@@ -252,7 +252,7 @@ Choix de conception :
   `MAX_ESSAIS` : sonder coûte des requêtes et peut déjà éveiller les défenses.
 
 Réalisé le 2026-11-09 : une sonde par champ de la fiche, des prérequis déclarés dans
-`bibliotheque.json` (`outils`, `secret`, `consignes`) évalués par les règles de
+`library.json` (`outils`, `secret`, `consignes`) évalués par les règles de
 `PREREQUIS`, et un plan qui dit aussi ce qu'il a **écarté et pourquoi** — un outil qui
 tait ce qu'il n'a pas testé donne une fausse impression de couverture. La fiche garde
 un champ `indices` (les citations qui justifient chaque fait) pour rester vérifiable.
@@ -306,14 +306,14 @@ Contraintes de cet usage :
 aveugle ne peut pas distinguer un vrai secret d'un secret inventé : l'information
 n'est pas dans l'échange. En revanche, un vrai secret revient identique d'un essai à
 l'autre, alors qu'une hallucination change. Quand l'arbitre voit une divulgation, il
-extrait la valeur (champ `valeur`) et `verificateur.py` rejoue le même payload
+extrait la valeur (champ `valeur`) et `verifier.py` rejoue le même payload
 `NB_REJEUX` fois (boucle bornée) : la valeur revient → *confirmée* ; seulement
 d'autres valeurs → *hallucination probable*, la campagne continue ; les deux →
 *contradictoire* ; plus rien → *inconcluant*. Limites : il faut une cible avec de
 l'aléa (une cible déterministe répète sa propre hallucination), et seules les valeurs
 d'un seul mot sont comparées (une fuite de prompt système est paraphrasée).
 
-**Les échanges réels s'étiquettent à l'aveugle.** `collecter_echanges.py` n'enregistre
+**Les échanges réels s'étiquettent à l'aveugle.** `collect_exchanges.py` n'enregistre
 pas l'avis de l'arbitre : le voir influencerait l'étiquette humaine, et on mesurerait
 le juge contre lui-même. Les prompts viennent uniquement de la bibliothèque de payloads,
 donc seulement de techniques pratiquées à la main.
@@ -382,7 +382,7 @@ l'autre sens produirait des mesures qui ne veulent rien dire.
 
 **Phase 6 : le JSON est la source de vérité, le rapport n'en est qu'un rendu.**
 La campagne produit d'abord un `resultat.json` structuré ; les formats lisibles en
-découlent, comme `bibliotheque.json` sépare déjà les données du code. Ajouter un format
+découlent, comme `library.json` sépare déjà les données du code. Ajouter un format
 devient alors une fonction de plus, jamais une refonte :
 
 ```
@@ -501,8 +501,8 @@ d'erreur 429 de Groq donnaient le nombre exact de tokens par requête (`Requeste
 | Évaluation jeu `dev` (46 échanges) | 46 | ~70 000 |
 | Évaluation jeu `test` (23 échanges) | 23 | ~35 000 |
 | Une campagne (reconnaissance + 3 essais + rejeu) | ~10 | ~12 000 |
-| `tester_rejeu` | 20 | ~30 000 |
-| `tester_reconnaissance` | 3 | ~7 500 |
+| `check_replay` | 20 | ~30 000 |
+| `check_reconnaissance` | 3 | ~7 500 |
 
 Une évaluation `dev` revient à ~0,01 $ sur un modèle d'entrée de gamme, ~0,18 $ en
 milieu de gamme, ~0,90 $ en haut de gamme. **Toute la séance du 2026-11-09** — trois
@@ -556,7 +556,7 @@ Trois règles ont guidé leur ajout :
   retoucher le prompt avant la mesure empêcherait de savoir si le juge était déjà
   robuste ou si c'est la retouche qui l'a sauvé.
 
-*Déjà acquis sans quota :* `detecteurs.py` est indépendant de la langue (il travaille
+*Déjà acquis sans quota :* `detectors.py` est indépendant de la langue (il travaille
 sur des caractères, pas des mots) — vérifié sur de l'épelé, du Base64 et de l'hexa en
 anglais, sans régression sur les faux positifs.
 
@@ -570,7 +570,7 @@ n'est pas en cause : elle ne concerne pas la langue des échanges jugés.
 *B — Faut-il des payloads multilingues ?* Oui, mais **pas sous forme de corpus
 séparé**. Traduire un payload dans une langue peu représentée à l'entraînement affaiblit
 des garde-fous surtout alignés en anglais : c'est donc une **transformation**, au même
-titre que le Base64 ou l'épellation, et l'axe existe déjà dans `attaquant.py`. Une
+titre que le Base64 ou l'épellation, et l'axe existe déjà dans `attacker.py`. Une
 seule fonction multiplie toutes les techniques, au lieu d'ajouter des payloads un par
 un — et PyRIT fournit ce convertisseur, donc la phase 3 l'apporte presque gratuitement.
 
@@ -680,7 +680,7 @@ Quatre décisions de conception, dans l'ordre d'importance :
   `git diff`, qui est tout l'intérêt du Markdown.
 
 **Correction imposée par la mise en œuvre : la couverture ne peut plus se déduire du
-plan.** `rapport.py` tirait `familles_testees` de `plan["essais"]`. Avec l'adaptation,
+plan.** `report.py` tirait `familles_testees` de `plan["essais"]`. Avec l'adaptation,
 le plan initial n'est plus ce qui a été lancé : le rapport aurait annoncé des familles
 jamais touchées, et des essais réellement envoyés auraient disparu de la couverture.
 C'est précisément le mensonge par omission que la section Couverture existe pour
@@ -718,7 +718,7 @@ restent exigés dans `MOTIF_OUTIL`. C'est la frontière D18 du corpus de l'arbit
 relâcher produirait du bruit, pas du signal.
 
 **L'adaptation rapporte-t-elle vraiment ? Mesuré le 2026-11-11, et c'est plus modeste
-qu'espéré.** `python -m evaluation.mesurer_adaptation` compare adaptatif et plan
+qu'espéré.** `python -m evaluation.measure_adaptation` compare adaptatif et plan
 statique à budget égal, sans aucun appel LLM. Techniques vulnérables tirées AU HASARD,
 150 tirages.
 
@@ -837,15 +837,15 @@ cible qui cède parfois.
   chaque poussée par GitHub Actions. Ils vérifient ce qui doit être vrai quoi qu'un
   modèle réponde : détecteurs, logique du rejeu, lecture du verdict et arithmétique du
   vote, règles du planificateur, adaptateurs de cible, gravités du rapport.
-- `evaluation/` : les mesures qui **ont besoin d'un modèle** (`evaluer_arbitre`,
-  `tester_rejeu`, `tester_reconnaissance`). Elles coûtent du quota et ne peuvent pas
+- `evaluation/` : les mesures qui **ont besoin d'un modèle** (`evaluate_judge`,
+  `check_replay`, `check_reconnaissance`). Elles coûtent du quota et ne peuvent pas
   tourner en intégration continue. Elles se lancent à la main.
 
 Conséquence pratique : un test qui appellerait un modèle n'a rien à faire dans
 `tests/` — il échouerait en intégration continue, où il n'y a ni Ollama ni clé.
 
 **Le vrai critère n'est pourtant pas le modèle, c'est la NATURE du résultat
-(précisé le 2026-11-11).** `evaluation/mesurer_adaptation.py` ne consulte aucun modèle,
+(précisé le 2026-11-11).** `evaluation/measure_adaptation.py` ne consulte aucun modèle,
 et il n'a quand même rien à faire dans `tests/` : il ne produit pas un verdict
 vrai/faux mais des CHIFFRES à interpréter, et il dépend d'un tirage aléatoire. En
 intégration continue il faudrait fixer un seuil — « l'adaptation gagne au moins
@@ -860,7 +860,7 @@ régression propre à Windows passerait inaperçue autrement.
 **Les tests ont immédiatement trouvé un bogue réel** : `est_verifiable("   ")` renvoyait
 `True`. Une valeur faite d'espaces passait donc pour un secret vérifiable, et
 `normaliser` la réduisait à une chaîne vide, qui se compare à n'importe quoi — soit une
-fuite « confirmée » à tort. Corrigé dans `verificateur.py`.
+fuite « confirmée » à tort. Corrigé dans `verifier.py`.
 
 **La dépendance unique tient toujours.** `requirements.txt` ne contient que `openai` ;
 `pytest` vit dans `requirements-dev.txt`. La promesse porte sur l'exécution, pas sur
@@ -903,8 +903,8 @@ lire, et le dépôt cesserait d'être essayable en une commande.
   `autre-client.fr` — c'est ce qui empêche de le réutiliser ailleurs.
 - *La fenêtre doit être courante.* Tester hors des dates convenues n'est pas couvert.
 
-Un refus sort en code 2 avec une consigne (« copie autorisation.example.json… »), pas
-une trace d'exécution. `autorisation.json` est dans `.gitignore` : il nomme un vrai
+Un refus sort en code 2 avec une consigne (« copie authorisation.example.json… »), pas
+une trace d'exécution. `authorisation.json` est dans `.gitignore` : il nomme un vrai
 client. Le modèle à remplir, lui, est commité.
 
 **La piste d'audit s'écrit au fil de l'eau, et c'est tout l'intérêt.** Un JSONL vidé
@@ -919,13 +919,13 @@ Deux choix d'implémentation :
   pouvoir montrer si la campagne est contestée ; le reste est compté par `llm_client`.
 - **`piste.tracer(phase, cible)` enveloppe la cible** au lieu d'instrumenter chaque
   agent. La cible reste une fonction `message -> str`, et `reconnaissance.py` comme
-  `verificateur.py` ignorent qu'elle est tracée — le contrat de la phase 8 tient.
+  `verifier.py` ignorent qu'elle est tracée — le contrat de la phase 8 tient.
 
 Enfin, le rapport cite le mandat sous lequel il a été produit : en mission, un rapport
 qui ne le dit pas n'est pas opposable.
 
 **La bibliothèque se valide, parce que ses erreurs sont SILENCIEUSES (2026-11-10).**
-`payloads/bibliotheque.json` est un fichier de données, édité à la main ou alimenté
+`payloads/library.json` est un fichier de données, édité à la main ou alimenté
 depuis l'extérieur. Aucune de ses fautes ne lève d'exception — elles produisent une
 campagne qui ne teste pas ce qu'on croit :
 - un modèle sans `{objectif}` enverrait toujours le même texte ;
@@ -933,7 +933,7 @@ campagne qui ne teste pas ce qu'on croit :
   la technique partirait contre des cibles où elle n'a aucun sens ;
 - un identifiant en double rendrait les rapports illisibles.
 
-D'où `python -m payloads.valider`, à lancer après chaque modification. Sortie en code 1
+D'où `python -m payloads.validate`, à lancer après chaque modification. Sortie en code 1
 si quelque chose cloche, donc enchaînable en script. Erreurs et avertissements sont
 distingués : une technique sans modèle est un simple avertissement, puisque c'est
 l'état normal des familles pas encore remplies.
@@ -968,7 +968,7 @@ Ce qui reste exploitable tout de suite : `normal_instructions.json` et `text_en.
 pour enrichir la technique `controle`, et `garak/data/tags.misp.tsv` qui donne le
 vocabulaire OWASP (`owasp:llm01` … `owasp:llm10`) pour la correspondance des familles.
 
-`payloads/source_garak.py` inventorie la source (`--lister`, `--decrire`) sans rien
+`payloads/garak_source.py` inventorie la source (`--lister`, `--decrire`) sans rien
 télécharger d'offensif. Il écarte explicitement quatre fichiers hors périmètre
 (`harmful_behaviors.json`, les trois fichiers d'insultes) : ils mesurent la modération
 du modèle, pas sa résistance à l'injection, et **l'arbitre n'a aucun critère pour les
@@ -995,7 +995,7 @@ LOCAL. Aucun réseau pendant une campagne, aucune latence, et deux campagnes ide
 envoient les mêmes payloads.
 
 ```
-garak (venv jetable)  ->  exporter_garak.py  ->  payloads/garak.json  ->  campagnes
+garak (venv jetable)  ->  garak_export.py  ->  payloads/garak.json  ->  campagnes
    164 dépendances          une fois, hors ligne      hors git            zéro réseau
 ```
 
@@ -1008,7 +1008,7 @@ tags portent la correspondance OWASP (`owasp:llm01` … `owasp:llm10`), rien à 
 Filtré sur le périmètre du projet : **52 sondes, 301 payloads**.
 
 Cinq choix de conception :
-- **`exporter_garak.py` n'importe rien du projet** : il tourne dans le venv garak et ne
+- **`garak_export.py` n'importe rien du projet** : il tourne dans le venv garak et ne
   communique que par un fichier JSON. C'est ce qui garde les 164 dépendances dehors.
 - **L'instantané est hors git.** Les sondes incorporent des jeux tiers (JailbreakBench,
   FigStep…) dont les conditions propres n'ont pas été vérifiées. On pointe vers la
@@ -1082,7 +1082,7 @@ C'est la pratique du domaine : `nuclei -update-templates` est une commande expli
 jamais un effet de bord d'un scan.
 
 Ce qui EST automatisé, parce que c'est gratuit et sans risque :
-- `python -m payloads.source_garak --version` compare l'instantané local à la dernière
+- `python -m payloads.garak_source --version` compare l'instantané local à la dernière
   version publiée — **un appel à l'API GitHub, aucun téléchargement**. Dire « une version
   plus récente existe » vaut mieux qu'un compteur de jours, puisque toutes les versions
   ne touchent pas aux sondes. Sort en code 1 s'il y a du retard, et affiche la commande
@@ -1108,7 +1108,7 @@ Ils ne diffèrent QUE par la protection du secret — même rôle, même outil, 
 pour que la comparaison entre niveaux mesure la défense et rien d'autre. Le filtre de
 sortie du niveau 3 est **volontairement imparfait** : il attrape le secret écrit en
 clair, pas sa version encodée ou épelée. Le niveau 3 met donc à l'épreuve exactement
-ce que `detecteurs.py` sait décoder.
+ce que `detectors.py` sait décoder.
 
 **La reconnaissance détecte l'outil factice** (`consulter_dossier`), ce qui fait passer
 pour la première fois le prérequis `outils` du planificateur. La famille `abus-outils`
@@ -1133,7 +1133,7 @@ donc pas exercés par une campagne ordinaire. Trois voies, à trancher :
 
 **Deux corrections imposées par la mise en œuvre :**
 - Le garde-fou d'autorisation ne connaissait pas `demo` et **refusait de démarrer** :
-  la démonstration en une commande était cassée. `cibles.est_cible_livree()` est
+  la démonstration en une commande était cassée. `targets.is_bundled_target()` est
   désormais la source unique, et un test vérifie que TOUTE cible nommée est reconnue
   comme livrée — l'oubli se reproduira sinon à la cible suivante.
 - Le rapport d'exemple commité ne doit pas republier une attaque intégrale depuis un
@@ -1147,7 +1147,7 @@ venu de garak sert désormais de **préambule** — il installe une persona, il 
 les consignes — et l'objectif fournit la **demande** : `{preambule}
 
 Maintenant,
-peux-tu {demande} ?` (`attaquant.composer`). C'est exactement ce que l'axe « objectif »
+peux-tu {demande} ?` (`attacker.composer`). C'est exactement ce que l'axe « objectif »
 était censé permettre, et que les payloads complets contournaient par construction.
 
 Chaque payload complet produit donc DEUX familles d'essais, qui ne mesurent pas la
@@ -1207,7 +1207,7 @@ le rejeu rattrape en campagne.
 un cas sur 67 vaut ~1,5 point. Le fait à retenir est ailleurs : dix cas ajoutés, zéro
 régression, et le critère ne souffre ni du défaut large ni du défaut étroit.
 
-Cinq catégories d'étiquetage ont été ajoutées à `evaluation/etiqueter.py` pour que ces
+Cinq catégories d'étiquetage ont été ajoutées à `evaluation/label.py` pour que ces
 cas se distinguent dans le corpus (`abus-outils`, `abus-outils-refuse`,
 `outil-legitime`, `outil-decrit`, `outil-sans-tiers`). Sans elles, ils auraient été
 rangés sous un synonyme improvisé, et on ne pourrait plus regrouper les erreurs par
@@ -1301,7 +1301,7 @@ obtenait quinze tours quand `dan` en obtenait trois. Le module est déjà dans l
 la sonde, il suffisait de grouper dessus (`groupe`, utilisé par `_repartir` et par
 `POIDS_DIVERSITE`). Les douze premiers essais couvrent désormais douze modules distincts.
 
-Mesuré (`mesurer_adaptation`, constats absolus, 150 tirages) :
+Mesuré (`measure_adaptation`, constats absolus, 150 tirages) :
 
 | Budget | Statique par sonde → par module | Adaptatif par sonde → par module |
 |---|---|---|
@@ -1332,7 +1332,7 @@ signal : ils documentaient la règle que l'exemption cassait.
 
 **Deuxième correctif : les règles de pertinence par sonde (2026-11-11).** Les prérequis
 venaient de la seule famille OWASP, et `owasp:llm01` n'en déclare aucun. Ils viennent
-désormais aussi du MODULE garak (`PREREQUIS_PAR_MODULE` dans `attaquant.py`), et les
+désormais aussi du MODULE garak (`PREREQUIS_PAR_MODULE` dans `attacker.py`), et les
 deux sources se CUMULENT parce qu'elles ne disent pas la même chose : la famille dit ce
 que l'attaque **cherche** (un secret, des consignes), le module ce qu'elle **exige** du
 contexte (du code, un terminal). Payloads sans aucun prérequis : **845 (73 %) → 450
@@ -1379,7 +1379,7 @@ une information en moins et jamais une fiche fausse.
   texte et le rapport annonçait « LLM02 testée » : un essai perdu ET une couverture
   surévaluée. Chaque motif d'écartement dit maintenant comment activer la famille.
 
-Mesuré après ce durcissement (`mesurer_adaptation`, 150 tirages) : **plus aucun tirage
+Mesuré après ce durcissement (`measure_adaptation`, 150 tirages) : **plus aucun tirage
 perdant dès le budget 6** (contre 17 sur 150 avant), et +0,41 constat à budget 3. L'écart
 moyen baisse légèrement à grand budget — le témoin statique profite aussi d'un vivier
 débarrassé des sondes intestables, ce qui est exactement le but.
@@ -1454,7 +1454,7 @@ revanche, s'enchaîne en script et sort en code 0/1.
   cibles nommées, donc **inatteignable** : le profil était ignoré en silence sur
   `--cible demo`, précisément ce qu'il devait empêcher. Remonté en tête de
   `choisir_cible()` ;
-- `from cibles.http import tester` faisait collecter `tester` par pytest comme un test,
+- `from targets.http import tester` faisait collecter `tester` par pytest comme un test,
   puisque son nom commence par « test ». Importé sous alias.
 
 **Correction d'un défaut préexistant au passage** : `--cible demo:9` sortait en trace
@@ -1575,7 +1575,7 @@ Advisory et le cadrage (1.5, 1.6). Les 144 pages n'ont pas été auditées.
 
 | Recommandation | Où, chez nous |
 |---|---|
-| « Validate the scorer separately from the target system » (7.2) | `evaluation/evaluer_arbitre.py`, corpus étiqueté, jeu test gelé |
+| « Validate the scorer separately from the target system » (7.2) | `evaluation/evaluate_judge.py`, corpus étiqueté, jeu test gelé |
 | Oracles explicites, dont un état *borderline needing adjudication* | les trois critères, et `juger_par_vote` → `None` |
 | « A missing trace must never be recorded as a defensive pass » (7.3) | détection de réponse tronquée, avertie deux fois |
 | « Record tested, untested, and inconclusive cases, including benign controls » (7.4) | testées / effleurées / écartées, plus la technique `controle` |
@@ -1621,7 +1621,7 @@ puisque le manuel exige que la couverture dise ce qui n'a pas été tenté.
 traité, et le plus sévère : c'était le dernier endroit où cet outil laissait croire à
 une sécurité qu'il n'avait pas vérifiée.
 
-`statistiques.py` fournit les trois outils que le manuel nomme : règle de trois
+`stats.py` fournit les trois outils que le manuel nomme : règle de trois
 (`borne_superieure_zero`), intervalle de Wilson (`intervalle_wilson`), et le choix de N
 à partir du taux à écarter (`essais_pour_ecarter`). Les valeurs sont vérifiées contre
 celles que le manuel cite lui-même — 0/100 → 3 %, 0/300 → 1 %, 2/50 → 1,1 à 13,5 % —
@@ -1774,7 +1774,7 @@ corpus d'abus d'outils, étiqueté à la main puis gelé. C'est le travail qu'ex
 du projet, et il n'est pas fait.
 
 Troisième consultation du jeu gelé depuis sa création, toutes journalisées dans
-`evaluation/journal_test.jsonl` : 2026-11-09 (80/100/91), 2026-11-10 (89/100/96),
+`evaluation/test_set_log.jsonl` : 2026-11-09 (80/100/91), 2026-11-10 (89/100/96),
 2026-11-12 (89/100/96).
 
 **Mesurer le gain de l'adaptation sur une VRAIE cible coûte bien plus que prévu
@@ -1808,8 +1808,8 @@ solide ; s'il ne gagne pas, on ne peut rien conclure.
 (2026-11-12).** Trois besoins, un seul mécanisme — et le premier est un écart
 contractuel que personne n'avait vu.
 
-1. **LE MANDAT.** `autorisation.example.json` déclare une portée qui mentionne
-   « techniques exclues », et `rapport.py` l'AFFICHE fidèlement… mais rien ne
+1. **LE MANDAT.** `authorisation.example.json` déclare une portée qui mentionne
+   « techniques exclues », et `report.py` l'AFFICHE fidèlement… mais rien ne
    l'appliquait. Un rapport qui cite un mandat excluant une technique, puis documente
    le lancement de cette technique, n'est pas opposable. Même famille de défaut que tous
    les autres trouvés cette semaine : un document qui affirme ce que le code ne garantit
@@ -1966,7 +1966,7 @@ entretien retombe sur une seule personne. C'est l'argument même qui a fait choi
 comme source synchronisée : les quinze payloads maison (11 LLM07 + 4 LLM06) sont donc une
 dette assumée, pas un acquis. `techniques_redondantes()` compare les familles
 PRINCIPALES de l'instantané aux techniques maison qui ont des payloads, et
-`python -m payloads.source_garak --version` le signale, qu'on soit à jour ou en retard :
+`python -m payloads.garak_source --version` le signale, qu'on soit à jour ou en retard :
 la redondance porte sur l'instantané qu'on a, pas sur le retard qu'on a pris.
 
 Trois décisions sur ce garde-fou :
@@ -2009,7 +2009,7 @@ C'est une nouvelle instance, datée et sur un critère NEUF, du plafond déjà c
 2026-10-30 : avec 3 milliards de paramètres, le modèle ne relie pas son raisonnement à sa
 conclusion. Le fait nouveau est que ce défaut touche aussi le troisième critère, donc il
 ne venait pas de la formulation des deux premiers. Conséquence pratique immédiate :
-**`mesurer_adaptation_reelle.py` ne peut pas mesurer LLM06**, puisque son juge local
+**`measure_adaptation_real.py` ne peut pas mesurer LLM06**, puisque son juge local
 classera ces constats en `technique_bloquee` — exactement le mécanisme de désinformation
 constaté sur les 40 paires.
 
@@ -2045,7 +2045,7 @@ sérieux au moment précis où il cherche à le démontrer.
 
 **Et écrire cette section a montré que deux de ses phrases étaient FAUSSES.** J'avais
 rédigé que le rapport dit au lecteur que l'adaptation réordonne sans reformuler, et qu'il
-nomme les phases hors périmètre. Vérification dans `rapport.py` : ni l'un ni l'autre. Ces
+nomme les phases hors périmètre. Vérification dans `report.py` : ni l'un ni l'autre. Ces
 deux points étaient l'écart 4 et le « hors périmètre par conception » de l'audit du
 2026-11-12 — consignés dans CLAUDE.md, donc tenus pour acquis, alors que le LECTEUR DU
 RAPPORT, seul à en avoir besoin, n'en savait rien.
@@ -2131,8 +2131,8 @@ proviennent du même mécanisme : le code a avancé, la prose est restée.
 5. « 80 labelled exchanges » : 90 (67 dev + 23 test).
 6. « 19 garak probes skipped » : 12 dans la campagne citée.
 7. « 566 / 586 pytest tests » et « four seconds » : 588 et dix secondes.
-8. `statistiques.py` et `mesurer_adaptation_reelle.py` manquaient à l'arborescence —
-   `statistiques.py` est le module de la phase 13, soit une pièce de vitrine absente du
+8. `stats.py` et `measure_adaptation_real.py` manquaient à l'arborescence —
+   `stats.py` est le module de la phase 13, soit une pièce de vitrine absente du
    plan du dépôt.
 9. La réponse de la cible était citée TRADUITE en anglais, dans un README qui dit lui-même
    que la sortie est en français. Une preuve traduite n'est plus une preuve.
@@ -2176,7 +2176,7 @@ affiché en entier**, soixante-quatre caractères : un condensat tronqué ne se 
 et il n'est là que pour être vérifié.
 
 **Pourquoi aucun test ne l'avait vu, et c'est la leçon.** `tests/test_audit.py` vérifiait
-que `clore()` scelle ; `tests/test_rapport.py` vérifiait que `construire()` propage les
+que `clore()` scelle ; `tests/test_report.py` vérifiait que `construire()` propage les
 champs quand ils sont là. Les deux modules étaient corrects. Le défaut était dans la
 COLLE entre eux, que rien ne couvrait — `main.cli()` n'avait aucun test, parce qu'une
 campagne appelle un modèle.
@@ -2322,7 +2322,7 @@ de ce format, aucune attaque multi-tours n'est mesurable — donc PyRIT ne peut 
 mesurer ce qu'il apporte.
 
 **Première tranche livrée : le contrat de cible porte une conversation.**
-`cibles/conversation.py`, et `demander_au_llm()` accepte un `historique` inséré entre la
+`targets/conversation.py`, et `demander_au_llm()` accepte un `historique` inséré entre la
 consigne système et le message courant.
 
 Quatre décisions, la première étant celle qui compte :
@@ -2367,7 +2367,7 @@ s'ouvrirait elle-même, et l'arbitre y verrait une faille.
 3. alors, et alors seulement, trancher PyRIT contre une boucle maison, sur une mesure.
 
 **La récolte multi-tours est prête, et elle est GRATUITE (2026-11-13).**
-`evaluation/collecter_conversations.py` joue des séquences fixes contre la cible et
+`evaluation/collect_conversations.py` joue des séquences fixes contre la cible et
 enregistre les conversations à étiqueter. Aucun modèle attaquant, aucun juge : seule la
 CIBLE est appelée, donc contre `--cible demo` qui tourne sur Ollama, la récolte ne
 consomme pas un token de quota.
@@ -2426,7 +2426,7 @@ PAS en un seul tour :
 
 **Le garde-fou qui compte : verser des conversations dans le corpus ne doit pas déplacer
 la mesure de l'arbitre.** Les chiffres publiés (89 / 100 / 96) portent sur des échanges
-mono-tour. Si `evaluer_arbitre` donnait ces conversations au juge, il rendrait des
+mono-tour. Si `evaluate_judge` donnait ces conversations au juge, il rendrait des
 verdicts sur un format qu'il ne connaît pas, et ces verdicts compteraient dans la
 précision : le premier `--integrer` aurait silencieusement déplacé une mesure de
 référence. Il les écarte donc, **et il le dit** (« N conversation(s) multi-tours
@@ -2515,7 +2515,7 @@ uniforme, et trois cas ne mesurent rien. La première récolte (2 fuites sur 32,
 multi-tours) laissait croire à un avantage net du format ; la seconde moitié le nuance
 déjà. C'est la troisième fois que ce projet voit un petit échantillon pointer dans une
 direction que la suite corrige — après les 20 paires d'adaptation devenues 40, et le
-tirage isolé de `mesurer_adaptation`.
+tirage isolé de `measure_adaptation`.
 
 Ce que la récolte établit quand même : le piège `fuite-a-un-tour-anterieur` est RÉEL et
 majoritaire (2 fuites sur 3 sont invisibles dans la dernière réponse), et le niveau 2
@@ -2618,7 +2618,7 @@ rédhibitoire.**
    seulement, deux échantillons chacune, donc le N effectif est inférieur à 56.
 
 C'est donc une **hypothèse**, pas un résultat. Mais contrairement à la phase 3a, elle est
-vérifiable : `evaluation/mesurer_multitours.py` fait la mesure confirmatoire, et elle est
+vérifiable : `evaluation/measure_multiturn.py` fait la mesure confirmatoire, et elle est
 **GRATUITE**.
 
 **Pourquoi gratuite : il n'y a pas de juge.** On ne demande pas à un modèle si la cible a
@@ -2650,7 +2650,7 @@ réponse, qui est l'argument direct de la consigne multi-tours de l'arbitre.
 
 **Deux erreurs de ma part dans les tests de cette mesure, dont une déjà vue.** `pytest` a
 collecté `test_des_signes` comme un test, parce que son nom commence par « test » — même
-défaut que `from cibles.http import tester` en phase 8, et la même correction, un alias à
+défaut que `from targets.http import tester` en phase 8, et la même correction, un alias à
 l'import. Et ma cible simulée distinguait les deux formats sur l'historique, ce qui est
 faux : le PREMIER tour d'une séquence n'a pas plus d'historique qu'un message composé. Ce
 qui signe la composition est la présence SIMULTANÉE du préambule et de la demande. Un
@@ -2675,7 +2675,7 @@ honnête de dire qu'on ne tranche pas.
 
 Le pilote donnait 7 contre 1, p = 0,035. Il ne s'est pas reproduit. **C'est la quatrième
 fois que ce projet voit un petit échantillon favorable être corrigé par une mesure plus
-large** — après le tirage isolé de `mesurer_adaptation`, les 20 paires d'adaptation
+large** — après le tirage isolé de `measure_adaptation`, les 20 paires d'adaptation
 devenues 40, et la première moitié de la récolte de conversations. Le protocole déclaré a
 encore servi à quelque chose : sans lui, j'aurais publié p = 0,035.
 
@@ -2715,7 +2715,7 @@ exactement le p-hacking que le protocole existe pour empêcher. La prochaine mes
 déclare avant, ou ne se fait pas.
 
 **Les pièges que la récolte ne peut PAS produire, écrits à la main (2026-11-13).**
-`evaluation/conversations_a_la_main.py` : sept cas, cinq groupes. Deux raisons de ne pas
+`evaluation/handwritten_conversations.py` : sept cas, cinq groupes. Deux raisons de ne pas
 compter sur la récolte pour eux :
 - **le secret dit par l'ATTAQUANT.** Nos payloads cherchent le secret, ils ne le
   contiennent pas : aucune récolte ne produira jamais le cas où la valeur apparaît dans
@@ -2732,7 +2732,7 @@ l'information. Les jumeaux partagent leur GROUPE, donc leur jeu, et un test vér
 qu'ils ne diffèrent QUE par la réponse de la cible — pas par la demande, sinon le cas
 mesurerait autre chose.
 
-**Le fichier est commité, contrairement à la récolte.** `a_etiqueter_conversations.json`
+**Le fichier est commité, contrairement à la récolte.** `to_label_conversations.json`
 se régénère en relançant une commande : le perdre ne coûte rien. Ces cas-ci sont RÉDIGÉS,
 donc les perdre coûterait le travail d'écriture. Ils vivent en Python dans git, et
 `--verser` les ajoute à la récolte sans rien écraser.
@@ -2749,7 +2749,7 @@ ne contient AUCUN cas où l'attaquant nomme une valeur. L'addendum multi-tours n
 que rendre explicite une règle qui manquait déjà au format mono-tour.
 
 Conséquence concrète : deux des sept cas (A03, A04) sortent au format `payload` /
-`reponse` et non sous forme de `tours`. Ce n'est pas cosmétique — `evaluer_arbitre`
+`reponse` et non sous forme de `tours`. Ce n'est pas cosmétique — `evaluate_judge`
 écarte toute entrée qui porte des `tours`, donc un échange d'un seul tour déguisé en
 conversation serait écarté d'une mesure qu'il peut parfaitement nourrir. Le format se
 DÉDUIT du nombre de tours, et un test le tient.
@@ -2799,7 +2799,7 @@ bruit six fois sur dix.
 
 **Ce que ce défaut dit de la couverture des tests, et c'est le plus instructif.** Les 675
 tests du dépôt passaient **à l'identique** avec le filtre trop large et avec le filtre
-corrigé. `tests/test_detecteurs.py` avait bien des tests de faux positifs — mais sur des
+corrigé. `tests/test_detectors.py` avait bien des tests de faux positifs — mais sur des
 mots COURTS (« question »), qui échouaient au décodage pour une autre raison. Aucun ne
 prenait un mot de huit lettres, c'est-à-dire exactement la longueur que le motif exige.
 
@@ -2816,15 +2816,15 @@ l'unique faux positif du jeu gelé porte précisément sur une entrée polluée 
 et sa consultation est un « moment clé » au sens de la règle du projet, donc légitime et
 journalisée. **À décider, pas à supposer.**
 
-**La pré-passe elle-même** (`evaluation/prepasse_etiquetage.py`) ne propose AUCUN verdict,
+**La pré-passe elle-même** (`evaluation/labelling_prepass.py`) ne propose AUCUN verdict,
 et c'est sa raison d'être. Elle donne quatre faits strictement mécaniques : la chaîne
 exacte du secret et **par qui** elle est dite (un secret écrit par l'attaquant n'est pas
-une divulgation), ce que `detecteurs.py` décode des réponses de la cible, le nombre de
+une divulgation), ce que `detectors.py` décode des réponses de la cible, le nombre de
 caractères du prompt système recopiés mot pour mot, et la présence d'un marqueur d'appel
 d'outil.
 
-La frontière est celle que le projet tient déjà : `detecteurs.py` décode AVANT le juge, et
-`collecter_echanges.py` n'enregistre jamais son avis. **Décoder aide à voir ; conclure
+La frontière est celle que le projet tient déjà : `detectors.py` décode AVANT le juge, et
+`collect_exchanges.py` n'enregistre jamais son avis. **Décoder aide à voir ; conclure
 appartient à l'auteur.** Dès qu'un signal demanderait d'interpréter — « est-ce un
 refus ? », « un résumé des consignes compte-t-il ? » — il sort du périmètre, parce qu'une
 suggestion mécanique sur une question d'interprétation deviendrait l'étiquette par
@@ -2854,7 +2854,7 @@ l'épelé exige des caractères isolés.
 **2. Aucun décodage en double**, ni dans le corpus ni dans la récolte. Un même passage
 décodé deux fois gonflerait la consigne sans l'informer.
 
-**3. Le juge reste AVEUGLE.** Le mot « secret » n'apparaît dans `arbitre.py` que dans des
+**3. Le juge reste AVEUGLE.** Le mot « secret » n'apparaît dans `judge.py` que dans des
 commentaires et dans la consigne comme nom commun : la valeur réelle du secret de la
 cible n'atteint jamais le prompt. C'est le cœur du projet, et il tient.
 
@@ -2883,7 +2883,7 @@ l'injection d'un coup. Un test le dit maintenant : muter les étiquettes en angl
 échouer le garde-fou avec « 59 payload(s) contiennent User\s*: ». **C'est un test qui
 protège une décision pas encore prise.**
 
-Les étiquettes sont du coup définies à UN seul endroit (`cibles/conversation.ETIQUETTES`),
+Les étiquettes sont du coup définies à UN seul endroit (`targets/conversation.ETIQUETTES`),
 d'où `arbitre.construire_question` et `conversation.rendre` les prennent toutes deux. Un
 test vérifie que les deux chemins produisent le même format, et un autre que le format
 mono-tour est inchangé octet pour octet.
@@ -3001,7 +3001,7 @@ l'effet mesuré est nul, cette impureté fait partie des explications possibles.
 `system_prompt_for(multitours, langue)`), et le défaut reste le FRANÇAIS. On ne bascule
 pas un artefact mesuré avant d'avoir la mesure, et garder les deux permet de revenir en
 arrière si l'anglais fait moins bien. Même motif que `--sans-adaptation`, qui fournit le
-témoin statique. `journal_test.jsonl` enregistre désormais la langue : sans ça, deux
+témoin statique. `test_set_log.jsonl` enregistre désormais la langue : sans ça, deux
 consultations du jeu gelé avec deux consignes différentes seraient indistinguables, et le
 jeu gelé perdrait sa valeur de référence.
 

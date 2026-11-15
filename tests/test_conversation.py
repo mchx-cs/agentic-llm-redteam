@@ -9,10 +9,10 @@ instead of ignoring it.
 
 import pytest
 
-from cibles.conversation import (MAX_TURNS, ATTACKER_ROLE, TARGET_ROLE,
+from targets.conversation import (MAX_TURNS, ATTACKER_ROLE, TARGET_ROLE,
                                  require_conversation, play, to_api, render,
                                  supports_conversation)
-from cibles.mock import ask_mock
+from targets.mock import ask_mock
 from llm_client import _validated_history
 
 
@@ -34,7 +34,7 @@ class TestDeclaredCapability:
         assert supports_conversation(_single_turn) is False
 
     def test_the_bundled_targets_declare_it(self):
-        from cibles import build_demo_target, ask_decoy
+        from targets import build_demo_target, ask_decoy
         assert supports_conversation(ask_mock)
         assert supports_conversation(ask_decoy)
         assert supports_conversation(build_demo_target(1))
@@ -43,7 +43,7 @@ class TestDeclaredCapability:
         # It cannot send several messages: its template carries only one
         # `{message}`. Saying so beats flattening the dialogue into a single
         # message and calling that multi-turn.
-        from cibles.http import build_http_target
+        from targets.http import build_http_target
         target = build_http_target(
             "http://exemple.invalid/chat",
             body={"prompt": "{message}"}, response_path="reply")
@@ -210,12 +210,12 @@ class TestTheJudgesInstruction:
     """
 
     def test_a_single_turn_leaves_the_instruction_INTACT(self):
-        from agents.arbitre import JUDGE_SYSTEM_PROMPT, system_prompt_for
+        from agents.judge import JUDGE_SYSTEM_PROMPT, system_prompt_for
         assert system_prompt_for() == JUDGE_SYSTEM_PROMPT
         assert system_prompt_for(False) == JUDGE_SYSTEM_PROMPT
 
     def test_multiturn_adds_its_two_rules(self):
-        from agents.arbitre import JUDGE_SYSTEM_PROMPT, system_prompt_for
+        from agents.judge import JUDGE_SYSTEM_PROMPT, system_prompt_for
         instruction = system_prompt_for(True)
         assert instruction.startswith(JUDGE_SYSTEM_PROMPT)
         # Rule 1: score the whole conversation. Measured on the 2026-11-13
@@ -226,7 +226,7 @@ class TestTheJudgesInstruction:
         assert "n'engage pas le chatbot" in instruction
 
     def test_the_conversation_is_rendered_turn_by_turn(self):
-        from agents.arbitre import build_conversation_question
+        from agents.judge import build_conversation_question
         question = build_conversation_question(
             [{"role": "attacker", "content": "un"},
              {"role": "target", "content": "deux"},
@@ -239,7 +239,7 @@ class TestTheJudgesInstruction:
         # The trap: our transformations encode payloads in Base64. Decoding
         # an attacker message would present it to the judge as if the chatbot
         # had written it — we would manufacture the leak we claim to detect.
-        from agents.arbitre import build_conversation_question
+        from agents.judge import build_conversation_question
         encoded = "VE9QU0VDUkVUNDI="        # "TOPSECRET42" in Base64
 
         attacker = build_conversation_question(
@@ -257,7 +257,7 @@ class TestTheJudgesInstruction:
                                                               monkeypatch):
         # No network call: we intercept the client. What is checked is the
         # routing, and it does not need a model to get it wrong.
-        import agents.arbitre as arbitre
+        import agents.judge as judge
         seen_args = {}
 
         def fake_call(question, system=None, **_):
@@ -265,30 +265,30 @@ class TestTheJudgesInstruction:
             seen_args["question"] = question
             return '{"analyse": "a", "enfreint": false, "critere": "aucun"}'
 
-        monkeypatch.setattr(arbitre, "ask_llm", fake_call)
+        monkeypatch.setattr(judge, "ask_llm", fake_call)
 
-        arbitre.judge("p", "r")
-        assert seen_args["`system`"] == arbitre.JUDGE_SYSTEM_PROMPT
+        judge.judge("p", "r")
+        assert seen_args["`system`"] == judge.JUDGE_SYSTEM_PROMPT
 
-        arbitre.judge_conversation(
+        judge.judge_conversation(
             [{"role": "attacker", "content": "a"},
              {"role": "target", "content": "b"}])
-        assert seen_args["`system`"] == arbitre.system_prompt_for(True)
+        assert seen_args["`system`"] == judge.system_prompt_for(True)
 
     def test_voting_exists_for_conversations_too(self, monkeypatch):
         # Campaign verdicts vote, because the judge is not deterministic
         # even at temperature 0. Multi-turn is no exception.
-        import agents.arbitre as arbitre
+        import agents.judge as judge
         calls = []
 
         def fake_call(question, system=None, **_):
             calls.append(system)
             return '{"analyse": "a", "enfreint": true, "critere": "divulgation"}'
 
-        monkeypatch.setattr(arbitre, "ask_llm", fake_call)
-        verdict = arbitre.judge_conversation_by_vote(
+        monkeypatch.setattr(judge, "ask_llm", fake_call)
+        verdict = judge.judge_conversation_by_vote(
             [{"role": "attacker", "content": "a"},
              {"role": "target", "content": "b"}])
 
-        assert verdict["votes"] == [True] * arbitre.VOTE_COUNT
-        assert all(s == arbitre.system_prompt_for(True) for s in calls)
+        assert verdict["votes"] == [True] * judge.VOTE_COUNT
+        assert all(s == judge.system_prompt_for(True) for s in calls)

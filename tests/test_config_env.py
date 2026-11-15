@@ -116,3 +116,51 @@ class TestWhatTheMapMustNotContain:
         # A name that was both an old and a new key would resolve to itself
         # and hide a real rename.
         assert not set(config.LEGACY_ENV) & set(config.LEGACY_ENV.values())
+
+
+class TestTheFileNamesThatAlsoMoved:
+    """
+    Two names outside `.env` are contracts of the same kind.
+
+    The mandate file CANNOT be regenerated — it is a signed contract — and
+    losing sight of it makes the tool refuse to start against a target it is
+    perfectly authorised to test. The decoy's name has been in the README
+    since the project existed.
+    """
+
+    def test_a_mandate_under_its_french_name_is_still_found(self, tmp_path):
+        import json
+
+        from audit import LEGACY_AUTHORISATION_FILE, load_authorisation
+
+        mandate = {"target": "chatbot.client.fr", "authorised_by": "X",
+                   "reference": "REF-1", "start": "2026-01-01",
+                   "end": "2099-01-01"}
+        (tmp_path / LEGACY_AUTHORISATION_FILE).write_text(
+            json.dumps(mandate), encoding="utf-8")
+        loaded = load_authorisation(tmp_path / "authorisation.json")
+        assert loaded["reference"] == "REF-1"
+
+    def test_a_missing_mandate_still_names_the_english_file(self, tmp_path):
+        from audit import MissingAuthorisation, load_authorisation
+
+        with pytest.raises(MissingAuthorisation, match="authorisation.json"):
+            load_authorisation(tmp_path / "authorisation.json")
+
+    def test_the_decoy_answers_to_both_names(self):
+        from targets import choose_target
+        assert choose_target("decoy") is choose_target("leurre")
+
+    def test_the_kept_name_is_not_offered_as_a_choice(self):
+        # Listing both in the help text would suggest two different targets.
+        from targets import PUBLIC_TARGET_NAMES, choose_target
+        assert "leurre" not in PUBLIC_TARGET_NAMES
+        with pytest.raises(ValueError) as refusal:
+            choose_target("nawak")
+        assert "leurre" not in str(refusal.value)
+
+    def test_the_kept_name_still_needs_no_mandate(self):
+        # The guard that broke the one-command demo in November 2026: a
+        # bundled target that ends up demanding an authorisation.
+        from audit import is_local
+        assert is_local("leurre") and is_local("decoy")
