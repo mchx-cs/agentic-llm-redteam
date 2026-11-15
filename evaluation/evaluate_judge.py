@@ -271,6 +271,21 @@ def evaluate(dataset="dev", language="fr"):
     print(f"Judge: profile {JUDGE_PROFILE}, "
           f"model {PROFILES[JUDGE_PROFILE]['model']}\n")
 
+    # Where the ground truth came from. The project's rule is that labels are
+    # the AUTHOR's; a figure measured against a model's labels says "the judge
+    # agrees with another model", which is a different claim and must not be
+    # quoted as the first. Said at the TOP, before the figures, so it cannot
+    # be read past.
+    by_model = [e for e in exchanges if e.get("labelled_by") == "model"]
+    if by_model:
+        print(f"!!! {len(by_model)} of {len(exchanges)} label(s) were decided "
+              f"by a MODEL, not by the author.\n"
+              f"    The figures below therefore measure AGREEMENT BETWEEN "
+              f"MODELS on those entries,\n"
+              f"    not correctness. Relabel them by hand "
+              f"(`python -m evaluation.label`) to make them\n"
+              f"    ground truth; labelling overwrites the provenance.\n")
+
     if dataset == "test":
         print("!!! FROZEN test set: do not tune the judge from these "
               "results. This consultation is logged.\n")

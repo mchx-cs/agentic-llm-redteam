@@ -64,6 +64,7 @@ each with its reason.
 | lancés | launched | the attempts actually sent |
 | langue (d'un échange) | language pair | a FACT on every corpus entry, `fr->fr`, `en->fr`… |
 | tour fautif | breach turn | a LABEL: which turn the chatbot gave way on. `null` on a negative |
+| étiqueté par | labelled by | `author` or `model`: whose judgement this label is |
 | écourtée | cut short | the budget stopped the campaign |
 | clôture | fence | the report's code-block delimiter |
 
@@ -174,6 +175,21 @@ The example report cost no second call: `result.json` IS the built report, so
 re-rendering it abridged is a function call. That is the fourth time the "JSON
 is the source of truth, Markdown is only a view" choice has paid for itself in
 cash.
+
+## Who decided a label
+
+`labelled_by` is on every corpus entry: `author` or `model`.
+
+The project's rule is that labels are the AUTHOR's ground truth, never a model's. That
+rule was set aside on explicit request for the 119 multi-turn entries (2026-11-16), so
+the data records it rather than leaving it to be discovered. A measurement against
+model-decided labels says "two models agree", not "the judge is right".
+
+| Where | What it does |
+|---|---|
+| the data | `labelled_by` on all 209 entries, made total so a missing field is never read as "probably the author" |
+| `evaluate_judge` | warns ABOVE the figures, not below |
+| `label.py` | overwrites the provenance to `author` — relabelling by hand makes it ground truth |
 
 ## Deliberately NOT translated
 

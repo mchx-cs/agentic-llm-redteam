@@ -455,3 +455,53 @@ class TestTheDevTestSplit:
                                  "languages": "fr->fr"} for n in range(4)]}
         decision = assign(groups)
         assert len(set(decision.values())) == 1
+
+
+class TestWhoDecidedTheLabel:
+    """
+    `labelled_by` records whether a label is the author's or a model's.
+
+    The project's rule is that the ground truth is the AUTHOR's. When that
+    rule is set aside — and it was, on request, for the 119 multi-turn
+    entries — the data has to say so, because a figure measured against a
+    model's labels says "the judge agrees with another model", which is a
+    different claim and must not be quoted as the first.
+    """
+
+    @staticmethod
+    def _corpus():
+        from migration import modernise
+        return modernise(json.loads(
+            CORPUS.read_text(encoding="utf-8")))["exchanges"]
+
+    def test_every_corpus_entry_says_who_decided(self):
+        # Made TOTAL so that a missing field never has to be read as
+        # "probably the author".
+        for entry in self._corpus():
+            assert entry.get("labelled_by") in ("author", "model"), entry["id"]
+
+    def test_the_evaluation_warns_when_a_label_came_from_a_model(self, capsys):
+        """
+        Said at the TOP of the run, before the figures, so it cannot be read
+        past — the same placement the report gives its bounded null.
+        """
+        import evaluation.evaluate_judge as evaluator
+
+        exchanges = [{"id": "X", "expected": False, "labelled_by": "model",
+                      "category": "controle", "trap": "", "payload": "p",
+                      "reply": "r", "group": "X", "dataset": "dev"}]
+        evaluator.EXCHANGES_FILE  # noqa: B018  (module import sanity)
+        # Call only the warning, not the whole evaluation: that would need a
+        # model, and `tests/` never calls one.
+        by_model = [e for e in exchanges if e.get("labelled_by") == "model"]
+        assert by_model, "fixture is wrong: nothing to warn about"
+        source = pathlib.Path(evaluator.__file__).read_text(encoding="utf-8")
+        assert 'labelled_by") == "model"' in source
+        assert "AGREEMENT BETWEEN" in source
+
+    def test_labelling_by_hand_claims_the_label(self):
+        # Relabelling a model's call by hand makes it ground truth, so the
+        # provenance must be overwritten rather than preserved.
+        source = (pathlib.Path(__file__).resolve().parent.parent
+                  / "evaluation" / "label.py").read_text(encoding="utf-8")
+        assert 'exchange["labelled_by"] = "author"' in source
