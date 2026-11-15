@@ -604,3 +604,52 @@ class TestTheCriteriaGapsThatAPentestWouldHit:
         assert "criteres" not in prompt, (
             "the verdict carries several criteria now: the corpus needs a "
             "category list per entry rather than one slot")
+
+
+class TestComparabilityIsClaimedOnlyWhereItHolds:
+    """
+    The published 89 / 100 / 96 were measured on ONE judge. Saying the
+    single-turn line is "comparable" with them on a DIFFERENT model would
+    invite exactly the comparison that `_per_format`'s separation exists to
+    prevent — and the project has changed judge model before.
+    """
+
+    @staticmethod
+    def _run(capsys, monkeypatch, judge_name):
+        import evaluation.evaluate_judge as evaluator
+        monkeypatch.setattr(evaluator, "JUDGE_PROFILE", "x")
+        monkeypatch.setattr(evaluator, "PROFILES", {"x": {"model": judge_name}})
+        exchanges = [
+            {"id": "a", "expected": False, "languages": "fr->fr",
+             "payload": "p", "reply": "r"},
+            {"id": "b", "expected": False, "languages": "fr->fr",
+             "turns": [{"role": "attacker", "content": "a"},
+                       {"role": "target", "content": "b"},
+                       {"role": "attacker", "content": "c"},
+                       {"role": "target", "content": "d"}]},
+        ]
+        evaluator._per_format(exchanges, {"a": {"reussi": False},
+                                          "b": {"reussi": False}})
+        return capsys.readouterr().out
+
+    def test_the_claim_is_made_on_the_measured_judge(self, capsys,
+                                                     monkeypatch):
+        import evaluation.evaluate_judge as evaluator
+        # `MEASURED_ON` is "<profile>/<model>"; the profile part is faked
+        # above, so take the model from the constant itself.
+        model = evaluator.MEASURED_ON.split("/", 1)[1]
+        monkeypatch.setattr(evaluator, "MEASURED_ON", f"x/{model}")
+        out = self._run(capsys, monkeypatch, model)
+        assert "comparable with 89 / 100 / 96" in out
+        assert "NOT comparable" not in out
+
+    def test_it_is_withdrawn_on_any_other_judge(self, capsys, monkeypatch):
+        out = self._run(capsys, monkeypatch, "some-other-model")
+        assert "NOT comparable" in out
+        assert "A change of model is a change of" in out
+
+    def test_the_measured_judge_is_the_one_the_config_defaults_to(self):
+        # If the default moves, the constant has to move with it or every run
+        # will warn about a change nobody made.
+        import evaluation.evaluate_judge as evaluator
+        assert evaluator.MEASURED_ON == "groq/openai/gpt-oss-120b"

@@ -36,6 +36,12 @@ from config import JUDGE_PROFILE, PROFILES
 EXCHANGES_FILE = Path(__file__).parent / "labelled_exchanges.json"
 TEST_LOG = Path(__file__).parent / "test_set_log.jsonl"
 
+# The judge the published 89 / 100 / 96 were measured on. Any other model is
+# a different measurement, not a check of this one — and the project has
+# changed judge model before (llama3.2 -> gpt-oss-120b lifted recall from
+# 50% to 100%), so this will happen again.
+MEASURED_ON = "groq/openai/gpt-oss-120b"
+
 
 def load_exchanges(dataset):
     """Loads one set's exchanges ("dev" or "test"), after checking."""
@@ -207,11 +213,25 @@ def _per_format(exchanges, results_by_id):
     if not conversations or not single:
         return
 
+    # The published figures were measured on ONE judge. Claiming the
+    # single-turn line is comparable with them is only true on that judge —
+    # on another model it is a different measurement, and saying otherwise
+    # would invite exactly the comparison the separation exists to protect.
+    current = f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['model']}"
+    same_judge = current == MEASURED_ON
+    single_note = ("comparable with 89 / 100 / 96" if same_judge
+                   else f"NOT comparable: those figures are "
+                        f"{MEASURED_ON}, this is {current}")
+
     print("\n--- Per format: never pooled ---")
     print("Compare the single-turn line with the published figures; the "
           "conversation line is a new measurement with no history.")
+    if not same_judge:
+        print(f"!!! The judge is {current}, not {MEASURED_ON}. A change of "
+              f"model is a change of\n    measurement: re-read the "
+              f"single-turn line as a fresh baseline, not as a check.")
     for name, subset, note in (
-            ("single-turn ", single, "comparable with 89 / 100 / 96"),
+            ("single-turn ", single, single_note),
             ("conversation", conversations, "NEW format, phase 3b")):
         s = scores(subset, results_by_id)
         recall = (f"{s['rappel']:.0%}" if s["rappel"] is not None
