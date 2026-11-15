@@ -241,7 +241,7 @@ def plan_campaign(profile, budget, only=(), excluding=()):
         for template in technique["templates"]:
             for objective in objectives:
                 for name, transform in TRANSFORMATIONS.items():
-                    text = template.format(objectif=objective["wording"])
+                    text = template.format(objective=objective["wording"])
                     attempts.append({
                         "technique": technique["id"],
                         "owasp_family": technique["owasp_family"],

@@ -384,12 +384,12 @@ def build_http_target(url, headers=None, body=None, response_path=None,
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as reponse:
-                brut = reponse.read().decode("utf-8")
+            with urllib.request.urlopen(request, timeout=timeout) as reply:
+                brut = reply.read().decode("utf-8")
                 # What the target DECLARES its format to be. Never used to
                 # change reading mode — only to explain a failure better.
                 # See `_diagnose`.
-                declared_type = reponse.headers.get("Content-Type", "")
+                declared_type = reply.headers.get("Content-Type", "")
         except urllib.error.HTTPError as error:
             # The body of an HTTP error often holds the useful explanation
             # (rejected key, invalid format, quota): we surface it.
@@ -516,14 +516,14 @@ def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
                                        chemin_final, timeout, profile=None)
     show(f"Sending  : {PROBE_MESSAGE}")
     try:
-        reponse = interroger(PROBE_MESSAGE)
+        reply = interroger(PROBE_MESSAGE)
     except RuntimeError as error:
         show(f"\nFAILED — {error}")
         _suggest(url, entetes_finaux, corps_final, timeout, show)
         return False
 
-    show(f"Reply    : {reponse[:300]}"
-         + (" […]" if len(reponse) > 300 else ""))
+    show(f"Reply    : {reply[:300]}"
+         + (" […]" if len(reply) > 300 else ""))
     show("\nWiring VALID: the target answers and the text reads correctly.")
     return True
 
@@ -535,8 +535,8 @@ def _suggest(url, headers, body, timeout, show):
         method="POST",
         headers={"Content-Type": "application/json", **headers})
     try:
-        with urllib.request.urlopen(request, timeout=timeout or 60) as reponse:
-            data = json.loads(reponse.read().decode("utf-8"))
+        with urllib.request.urlopen(request, timeout=timeout or 60) as reply:
+            data = json.loads(reply.read().decode("utf-8"))
     except Exception:
         # La suggestion est un bonus : si elle échoue, l'error d'origine
         # reste affichée et c'est elle qui compte.

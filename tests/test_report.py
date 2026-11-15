@@ -278,9 +278,9 @@ class TestTouchedFamilies:
 
     @staticmethod
     def _launched(family="LLM01", effleurees=()):
-        essai = _payload(family=family)
-        essai["families_not_scorable"] = list(effleurees)
-        return essai
+        attempt = _payload(family=family)
+        attempt["families_not_scorable"] = list(effleurees)
+        return attempt
 
     def test_a_touched_family_is_not_counted_tested(self):
         report = build_report(_result(
@@ -320,23 +320,23 @@ class TestTouchedFamilies:
 
 class TestFalseHoleInTheReport:
     def test_an_empty_technique_whose_family_is_covered_says_so(self):
-        ecartee = {"technique": "divulgation-information",
+        skipped_entry = {"technique": "divulgation-information",
                    "owasp_family": "LLM02", "reasons": ["no payload template"],
                    "family_covered_elsewhere": True}
-        rendered = render_markdown(build_report(_result(skipped=[ecartee])))
+        rendered = render_markdown(build_report(_result(skipped=[skipped_entry])))
         assert "the family is covered by other probes" in rendered
 
     def test_a_real_hole_does_not_get_that_notice(self):
-        ecartee = {"technique": "abus-outils", "owasp_family": "LLM06",
+        skipped_entry = {"technique": "abus-outils", "owasp_family": "LLM06",
                    "reasons": ["no payload template"],
                    "family_covered_elsewhere": False}
-        rendered = render_markdown(build_report(_result(skipped=[ecartee])))
+        rendered = render_markdown(build_report(_result(skipped=[skipped_entry])))
         assert "couverte par d'autres sondes" not in rendered
 
     def test_an_older_result_without_the_field_does_not_raise(self):
-        ecartee = {"technique": "x", "owasp_family": "LLM06",
+        skipped_entry = {"technique": "x", "owasp_family": "LLM06",
                    "reasons": ["no payload template"]}
-        render_markdown(build_report(_result(skipped=[ecartee])))
+        render_markdown(build_report(_result(skipped=[skipped_entry])))
 
 
 class TestBoundedNull:
@@ -514,23 +514,23 @@ class TestAtlasMapping:
         assert atlas_for("") == []
 
     def test_the_report_cites_the_identifiers(self):
-        essai = _payload(family="LLM01:2025 Prompt Injection")
-        rendered = render_markdown(build_report(_result(launched=[essai])))
+        attempt = _payload(family="LLM01:2025 Prompt Injection")
+        rendered = render_markdown(build_report(_result(launched=[attempt])))
         assert "AML.T0051" in rendered
         assert "AML.T0054" in rendered
 
     def test_the_report_NAMES_what_is_not_mapped(self):
         # Une case vide passerait pour un oubli ; la nommer dit que c'est un
         # choix, et pourquoi.
-        essai = _payload(family="LLM02:2025 Sensitive Information Disclosure")
-        rendered = render_markdown(build_report(_result(launched=[essai])))
+        attempt = _payload(family="LLM02:2025 Sensitive Information Disclosure")
+        rendered = render_markdown(build_report(_result(launched=[attempt])))
         assert "No verified mapping" in rendered
         assert "worse than an empty cell" in rendered
 
     def test_the_source_is_cited(self):
         # Un identifiant sans source n'est pas verifiable par le lecteur.
-        essai = _payload(family="LLM01:2025 Prompt Injection")
-        rendered = render_markdown(build_report(_result(launched=[essai])))
+        attempt = _payload(family="LLM01:2025 Prompt Injection")
+        rendered = render_markdown(build_report(_result(launched=[attempt])))
         assert "GenAI Red Teaming Manual" in rendered
 
     def test_every_identifier_has_the_right_format(self):
@@ -768,7 +768,7 @@ class TestChainOfCustody:
 
 class TestTheDataSchemaIsPINNED:
     """
-    The keys of `resultat.json` are a CONTRACT, not identifiers.
+    The keys of `result.json` are a CONTRACT, not identifiers.
 
     They are persisted in 18 sealed audit trails, in the committed example
     report and in the README excerpt. They move only in the coordinated pass
@@ -811,7 +811,7 @@ class TestTheDataSchemaIsPINNED:
                              "successes", "rate"}
 
     def test_the_scorable_states_keep_their_names(self):
-        # They drive the ASR and are written into every resultat.json.
+        # They drive the ASR and are written into every result.json.
         import stats
         assert set(stats.STATES) == {
             "vulnerability", "resisted", "hallucination", "judge_undecided",

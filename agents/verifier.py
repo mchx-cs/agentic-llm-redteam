@@ -24,7 +24,7 @@ Known limits:
 
 NOTE ON NAMING (2026-11-13). The returned status values ("confirmee",
 "hallucination_probable"…) and the dictionary keys stay French: they are
-persisted in `resultat.json`, drive the report's severity rules and appear in
+persisted in `result.json`, drive the report's severity rules and appear in
 sealed trails. They move with the coordinated data-key pass.
 """
 

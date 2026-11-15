@@ -239,5 +239,5 @@ class TestDenominator:
     def test_every_state_carries_a_readable_explanation(self):
         # Elles vont au rapport : un etat sans libelle serait un code brut
         # affiche a un lecteur.
-        for state, (_, _, libelle) in STATES.items():
-            assert libelle.strip(), state
+        for state, (_, _, wording) in STATES.items():
+            assert wording.strip(), state

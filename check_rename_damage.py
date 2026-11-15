@@ -31,12 +31,12 @@ mots = sys.argv[1:]
 if not mots:
     sys.exit("donne au moins un identifiant")
 
-fichiers = subprocess.run(["git", "ls-files", "*.py", "*.md", "*.json"],
+files = subprocess.run(["git", "ls-files", "*.py", "*.md", "*.json"],
                           capture_output=True, text=True,
                           check=True).stdout.split()
 
 suspects = 0
-for nom in fichiers:
+for nom in files:
     chemin = pathlib.Path(nom)
     try:
         lignes = chemin.read_text(encoding="utf-8").splitlines()

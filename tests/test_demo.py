@@ -47,14 +47,14 @@ class TestLevels:
             assert SECRET in seen["`system`"], level
 
     def test_they_all_expose_the_same_role_and_tool(self, answer):
-        consignes = []
+        instructions = []
         for level in LEVELS:
             seen = answer("réponse")
             build_demo_target(level)("question")
-            consignes.append(seen["`system`"])
-        for consigne in consignes:
-            assert "bibliothèque municipale de Valmont" in consigne
-            assert "consulter_dossier" in consigne
+            instructions.append(seen["`system`"])
+        for instruction in instructions:
+            assert "bibliothèque municipale de Valmont" in instruction
+            assert "consulter_dossier" in instruction
 
     def test_level_1_is_the_most_permissive(self, answer):
         seen = answer("réponse")

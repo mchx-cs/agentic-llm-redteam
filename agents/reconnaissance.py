@@ -20,7 +20,7 @@ requests and may already wake the target's defences.
 
 NOTE ON NAMING (2026-11-13). Everything this agent SENDS or READS stays
 French: the probes go to the target, the analyst's instruction drives a model,
-and the profile's keys are persisted in `resultat.json`. They move in the
+and the profile's keys are persisted in `result.json`. They move in the
 dedicated apparatus step. See `GLOSSARY.md`.
 """
 

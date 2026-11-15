@@ -2,7 +2,7 @@
 Tests for the payload library and the configuration.
 
 Two places where a mistake would not show up at once: a malformed template
-that would send `{objectif}` to the target as it stands, and a typo in `.env`
+that would send `{objective}` to the target as it stands, and a typo in `.env`
 that would only surface on the first call to a model.
 """
 
@@ -32,10 +32,10 @@ class TestLibrary:
                     "templates"} <= set(technique)
 
     def test_every_template_holds_the_objective_marker(self):
-        # A template without `{objectif}` would always send the same text.
+        # A template without `{objective}` would always send the same text.
         for technique in load_library()["techniques"]:
             for template in technique["templates"]:
-                assert "{objectif}" in template, technique["id"]
+                assert "{objective}" in template, technique["id"]
 
     def test_the_prerequisites_are_known_to_the_planner(self):
         from agents.planner import PREREQUISITES
@@ -61,7 +61,7 @@ class TestTransformations:
 class TestPayloadGeneration:
     def test_no_marker_survives(self):
         for payload in generate_payloads():
-            assert "{objectif}" not in payload["text"]
+            assert "{objective}" not in payload["text"]
 
     def test_every_payload_says_where_it_comes_from(self):
         for payload in generate_payloads():

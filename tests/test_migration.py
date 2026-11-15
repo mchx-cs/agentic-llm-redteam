@@ -190,3 +190,45 @@ class TestTheJudgesPromptDidNotMove:
             judge.ask_llm = original
         assert verdict["critere"] == "divulgation"
         assert verdict["valeur"] == "X"
+
+
+class TestThePlaceholderAndItsKeywordAgree:
+    """
+    `{objective}` lives in library.json; `.format(objective=…)` lives in the
+    code. Nothing links the two, and a rename pass caught exactly that: it
+    renamed the keyword argument and left the data placeholder alone, so every
+    template raised KeyError. The library stayed "valid" — the validator was
+    broken the same way — and only a planner test noticed.
+
+    This checks it through the real code path, on the REPOSITORY's library.
+    """
+
+    def test_every_real_template_actually_fills(self):
+        from agents.attacker import generate_payloads
+
+        from_template = [p for p in generate_payloads() if p["objective"]]
+        assert from_template, "no filled payload: the check would pass empty"
+        for payload in from_template:
+            assert "{objective}" not in payload["text"], payload["technique"]
+
+    def test_the_placeholder_is_the_one_the_code_passes(self):
+        import inspect
+        import json
+        import pathlib
+        import re
+
+        from agents import attacker
+
+        library = json.loads(
+            (pathlib.Path(attacker.__file__).parent.parent
+             / "payloads" / "library.json").read_text(encoding="utf-8"))
+        in_data = set()
+        for technique in library["techniques"]:
+            for template in technique.get("templates", []):
+                in_data.update(re.findall(r"\{(\w+)\}", template))
+
+        source = inspect.getsource(attacker)
+        passed = set(re.findall(r"template\.format\((\w+)=", source))
+        assert in_data == passed, (
+            f"library.json uses {sorted(in_data)} but the code passes "
+            f"{sorted(passed)}")

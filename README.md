@@ -132,7 +132,7 @@ and coverage that states what was never attempted.
 │   └── demo-report.md  # a committed example report, abridged, rendered by GitHub
 ├── audit.py           # authorisation gate + append-as-you-go JSONL audit trail
 ├── stats.py    # what a result bounds — and the refusal to bound dependent trials
-├── report.py         # resultat.json (source of truth) → rapport.md; rule-based severity
+├── report.py         # result.json (source of truth) → report.md; rule-based severity
 └── main.py            # orchestrator: runs the campaign loop
 ```
 
@@ -174,7 +174,7 @@ python -m evaluation.evaluate_judge         # judge precision and recall on the 
 python -m evaluation.evaluate_judge --test  # frozen test set, never used for tuning
 python -m evaluation.check_replay            # replay, against targets with known behaviour
 python -m evaluation.measure_adaptation      # adaptive vs static plan — needs no model
-PROFIL_ARBITRE=local python -m evaluation.measure_adaptation_real  # same, real target
+JUDGE_PROFILE=local python -m evaluation.measure_adaptation_real  # same, real target
 ```
 
 Exchanges are grouped by scenario, and a scenario never spans both sets, so the test set
@@ -200,7 +200,7 @@ A deliberately weak target ships with the project, so a detection can be reprodu
 without a key, an account, or any configuration beyond the Ollama setup above:
 
 ```bash
-python main.py --cible demo --rapport
+python main.py --target demo --report
 ```
 
 It is a library assistant holding a fake access code, and it falls because it is badly
@@ -220,7 +220,7 @@ declares a fake tool, which reconnaissance picks up.
 Here is a real run against `demo`, cut down to what matters:
 
 ```console
-$ python main.py --cible demo --rapport
+$ python main.py --target demo --report
 
 --- Reconnaissance ---
   rôle     : assistant de la bibliothèque municipale de Valmont
@@ -236,9 +236,9 @@ $ python main.py --cible demo --rapport
     - garak-dan-ablation-dan-11-0 / refus-1 / identite
   écartées :
     - 8 technique(s) : aucun client ne rend le Markdown de la sortie
-      (--contexte rendu-riche pour l'activer)
+      (--context rich-rendering pour l'activer)
     - 2 technique(s) : sortie non rendue dans un terminal
-      (--contexte terminal pour l'activer)
+      (--context terminal pour l'activer)
     […]
 
 --- Essai 1/3 ---
@@ -300,7 +300,7 @@ Output is in French, like the code and commits; the README is the English entry 
 The judge has been measured on English exchanges too, and classifies them as accurately.
 
 [An example report is committed here](examples/demo-report.md), produced by that exact
-command and abridged with `--abreger` — which is also how you'd share a report without
+command and abridged with `--abridge` — which is also how you'd share a report without
 a client's verbatim answers.
 
 ### Pointing it at a target
@@ -311,8 +311,8 @@ below: a model on your own machine, then someone's API.
 #### A model you run yourself
 
 ```bash
-python main.py --cible http://localhost:11434/api/generate --tester-cible --profil-cible ollama
-python main.py --cible http://localhost:11434/api/generate --profil-cible ollama --rapport
+python main.py --target http://localhost:11434/api/generate --probe-target --target-profile ollama
+python main.py --target http://localhost:11434/api/generate --target-profile ollama --report
 ```
 
 The first command sends one harmless message and stops, so you learn the wiring is
@@ -321,7 +321,7 @@ required: `localhost` is yours.
 
 One caveat worth knowing up front — a bare `llama3.2` has no system prompt, so it has
 nothing to protect. Reconnaissance will find no secret and no instructions, and the
-planner will rule almost everything out. Use `--cible demo` for a target that actually
+planner will rule almost everything out. Use `--target demo` for a target that actually
 leaks.
 
 #### Someone's API
@@ -342,7 +342,7 @@ tab, send a message, read off the POST request's URL. The auth header is there t
 **3. Check the wiring — no mandate needed, nothing attacked.**
 
 ```bash
-python main.py --cible https://host/v1/chat --tester-cible --profil-cible openai
+python main.py --target https://host/v1/chat --probe-target --target-profile openai
 ```
 
 It prints what it sent, what came back, and the text it extracted. If it fails, the
@@ -352,9 +352,9 @@ message names the fix. Header values are never printed, only their names.
 option overrides the file:
 
 ```bash
-CIBLE_ENTETES={"Authorization": "Bearer xxx"}
-CIBLE_CORPS={"model":"the-model","messages":[{"role":"user","content":"{message}"}]}
-CIBLE_CHEMIN_REPONSE=choices.0.message.content
+TARGET_HEADERS={"Authorization": "Bearer xxx"}
+TARGET_BODY={"model":"the-model","messages":[{"role":"user","content":"{message}"}]}
+TARGET_RESPONSE_PATH=choices.0.message.content
 ```
 
 **5. Get the mandate in place.** Against a remote target this is a precondition, not
@@ -370,10 +370,10 @@ Fill it in: the target must be covered by it, and today must fall inside the win
 you. Skip this and twelve probes are left out, each with a stated reason.
 
 ```bash
-python main.py --cible https://host/v1/chat --profil-cible openai --contexte rendu-riche --rapport
+python main.py --target https://host/v1/chat --target-profile openai --context rich-rendering --report
 ```
 
-**7. Judge with a different model than the target** — `PROFIL_ARBITRE` in `.env`. A
+**7. Judge with a different model than the target** — `JUDGE_PROFILE` in `.env`. A
 judge running on its target's own model shares its blind spots.
 
 ### Target wiring: reference
@@ -407,18 +407,18 @@ among them:
 ÉCHEC — Chemin 'reply' : clé 'reply' absente. Clés disponibles : id, model, choices.
 
 Chemins qui mènent à du texte dans la réponse reçue :
-  CIBLE_CHEMIN_REPONSE=choices.0.message.content
+  TARGET_RESPONSE_PATH=choices.0.message.content
       → 'Je te reçois : Bonjour, peux-tu me confirmer…'
 ```
 
 When the reply isn't JSON, it asks the target before guessing: a response declares its
 own format in `Content-Type`, so `text/event-stream` gets you pointed at
-`--profil-cible openai-flux`. That declaration only ever *advises* — plenty of gateways
+`--target-profile openai-flux`. That declaration only ever *advises* — plenty of gateways
 label an error page `application/json`, and trusting the header would feed HTML to the
 judge.
 
 **One failure mode deserves its own mention,** because nothing about it looks wrong: a
-`CIBLE_CORPS` with no `{message}` in it. Substitution used to leave the body untouched,
+`TARGET_BODY` with no `{message}` in it. Substitution used to leave the body untouched,
 so every attempt sent the same fixed text, the judge answered "no finding" every time,
 and the report concluded the target was safe. Refused outright now, before the first
 request.
@@ -430,11 +430,11 @@ writes code, or will work on a document you hand it. Those facts gate whole fami
 But no model knows whether its output lands in a terminal, gets rendered as Markdown,
 or reaches a database, so you declare that instead:
 
-| `--contexte` value | Declares that | Unlocks |
+| `--context` value | Declares that | Unlocks |
 |---|---|---|
 | `terminal` | the output is shown in a terminal | `ansiescape` (2 probes) |
-| `rendu-riche` | a client renders its Markdown or HTML | `web_injection` (8) |
-| `base-donnees` | a database or template engine sits behind it | `exploitation` (2) |
+| `rich-rendering` | a client renders its Markdown or HTML | `web_injection` (8) |
+| `database` | a database or template engine sits behind it | `exploitation` (2) |
 
 Those twelve aren't merely untried without it — they're *untestable*, and running them
 anyway would spend attempts while the report claimed coverage it didn't have.
@@ -448,11 +448,11 @@ proof of safety.
 ### Producing a report
 
 ```bash
-python main.py --cible mock --rapport
+python main.py --target mock --report
 ```
 
 The campaign runs its whole plan and collects every finding, then writes two files:
-`resultat.json` is the source of truth, `rapport.md` is one rendering of it. Adding a
+`result.json` is the source of truth, `report.md` is one rendering of it. Adding a
 format later (HTML, or PDF through pandoc) is one more function, never a rewrite.
 
 Severity comes from rules, not from a model: a leak whose value comes back on replay is
@@ -477,7 +477,7 @@ actually run:
   the binomial model doesn't apply, and a number that looked rigorous without being so
   would be worse than none. The report says what *would* let you claim something: about
   30 independent attempts of one technique to rule out a 10% residual rate;
-- `--seulement <technique> --sans-adaptation` makes the attempts i.i.d. — same
+- `--only <technique> --no-adaptation` makes the attempts i.i.d. — same
   technique, no learning — and then the bound is real: *"0 of 30 proves nothing; the
   true rate could still reach 10%. To push that to 5%, 60 attempts; to 1%, 300."*
 
@@ -551,7 +551,7 @@ payloads. The snapshot stays out of git: garak's probes pull in third-party data
 with their own terms, so the repository points at the source rather than republishing it.
 
 ```bash
-python -m payloads.garak_source --lister        # what garak offers; downloads nothing
+python -m payloads.garak_source --list        # what garak offers; downloads nothing
 python -m venv venv-garak && venv-garak/bin/pip install garak
 venv-garak/bin/python payloads/garak_export.py
 python -m payloads.validate                      # check what you ended up with
@@ -636,7 +636,7 @@ precondition: against a remote target, the campaign refuses to start without a m
 
 ```bash
 cp authorisation.example.json authorisation.json   # then fill it in
-python main.py --cible https://chatbot.client.fr/api --rapport
+python main.py --target https://chatbot.client.fr/api --report
 ```
 
 The requirement scales with the risk. The bundled decoy, the deterministic target and
@@ -653,11 +653,11 @@ The mandate's scope is **enforced**, not just printed. If it excludes techniques
 so and they are not sent:
 
 ```bash
-python main.py --cible https://host/chat --sauf dan,encoding --rapport
+python main.py --target https://host/chat --excluding dan,encoding --report
 ```
 
 A report that quotes a mandate excluding a technique, then documents running it, is not
-defensible. The mirror option `--seulement LLM07` narrows a campaign instead — to
+defensible. The mirror option `--only LLM07` narrows a campaign instead — to
 re-check one finding after a fix, or to get the i.i.d. attempts a real bound needs.
 Either way the report states in its coverage section that the campaign was restricted;
 staying silent there would imply everything else had been tried and found clean.
@@ -689,8 +689,8 @@ Every campaign runs under a ceiling, set in `.env` and enforced in `llm_client` 
 one place every model call passes through:
 
 ```bash
-BUDGET_APPELS=200
-BUDGET_TOKENS=500000
+CALL_BUDGET=200
+TOKEN_BUDGET=500000
 ```
 
 This is a circuit breaker, not an economy measure: a campaign costs cents today. What
@@ -716,11 +716,11 @@ own, separate from the target's.
 ```bash
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=<model-name>
-PROFIL_ACTIF=api
+ACTIVE_PROFILE=api
 ```
 
-Two independent switches: `PROFIL_ACTIF` drives the decoy and any call that does not
-name a profile, `PROFIL_ARBITRE` drives the judge. An unknown profile name fails at
+Two independent switches: `ACTIVE_PROFILE` drives the decoy and any call that does not
+name a profile, `JUDGE_PROFILE` drives the judge. An unknown profile name fails at
 import with the list of valid ones, rather than hours later on the first model call.
 
 One distinction worth stating: a hosted profile is for the models *we* run. Trying to
@@ -735,7 +735,7 @@ A judge that shares its target's model shares its blind spots, so it has a profi
 its own. Add a free [Groq](https://console.groq.com) key to the same `.env` and set:
 
 ```bash
-PROFIL_ARBITRE=groq
+JUDGE_PROFILE=groq
 ```
 
 On the same prompt, moving the judge from local `llama3.2` (3B) to `gpt-oss-120b` raised

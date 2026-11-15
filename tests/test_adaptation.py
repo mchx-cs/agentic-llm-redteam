@@ -24,9 +24,9 @@ LLM02 = "LLM02:2025 Sensitive Information Disclosure"
 LLM06 = "LLM06:2025 Excessive Agency"
 
 
-def candidate(technique, text, priorite=0, famille=None, objectif=None):
-    return {"technique": technique, "text": text, "priority": priorite,
-            "owasp_family": famille, "objective": objectif,
+def candidate(technique, text, priority=0, family=None, objective=None):
+    return {"technique": technique, "text": text, "priority": priority,
+            "owasp_family": family, "objective": objective,
             "transformation": "identity"}
 
 
@@ -214,8 +214,8 @@ def test_a_mentioned_secret_moves_the_disclosure_families_up():
     observations = observe(candidate("dan", "x"),
                             "Je ne peux pas livrer ce secret.",
                             {"reussi": True})
-    pool = [candidate("neutre", "1", priorite=0),
-              candidate("fuite", "2", priorite=1, famille=LLM02)]
+    pool = [candidate("neutre", "1", priority=0),
+              candidate("fuite", "2", priority=1, family=LLM02)]
     assert next_attempt(pool)["text"] == "1"                      # sans rien su
     assert next_attempt(pool, observations)["text"] == "2"        # LLM02 remonte
 
@@ -223,8 +223,8 @@ def test_a_mentioned_secret_moves_the_disclosure_families_up():
 def test_a_triggered_tool_moves_tool_abuse_up():
     observations = observe(candidate("dan", "x"), "[OUTIL: lookup(z)]",
                             {"reussi": True})
-    pool = [candidate("neutre", "1", priorite=0),
-              candidate("tools", "2", priorite=1, famille=LLM06)]
+    pool = [candidate("neutre", "1", priority=0),
+              candidate("tools", "2", priority=1, family=LLM06)]
     assert next_attempt(pool)["text"] == "1"
     assert next_attempt(pool, observations)["text"] == "2"
 
@@ -235,7 +235,7 @@ def test_a_family_signal_does_not_move_the_other_families_up():
     observations = observe(candidate("dan", "x"),
                             "Je ne peux pas livrer ce secret.",
                             {"reussi": True})
-    delta, reasons = adjust(candidate("tools", "y", famille=LLM06),
+    delta, reasons = adjust(candidate("tools", "y", family=LLM06),
                              observations)
     assert (delta, reasons) == (0, [])
 
@@ -332,17 +332,17 @@ def test_the_scores_net_is_returned():
     # An attempt can carry both a bonus and a penalty: without the net, the
     # two reasons displayed look contradictory and the choice looks
     # arbitrary.
-    pool = [candidate("b", "1", priorite=5), candidate("b", "2", priorite=5)]
+    pool = [candidate("b", "1", priority=5), candidate("b", "2", priority=5)]
     observations = observe(candidate("b", "1"), "Le code est X.",
                             {"reussi": True})
     chosen = next_attempt(pool, observations, [pool[0]])
     assert chosen["adaptation_score"] == (BONUS_TECHNIQUE_WORKS
                                           + DIVERSITY_WEIGHT)
-    assert chosen["priority"] == 5          # la priorite de depart est intacte
+    assert chosen["priority"] == 5          # la priority de depart est intacte
 
 
 def test_having_learned_nothing_the_net_is_zero():
-    assert next_attempt([candidate("a", "1", priorite=3)])["adaptation_score"] == 0
+    assert next_attempt([candidate("a", "1", priority=3)])["adaptation_score"] == 0
 
 
 class TestRealObservedReplies:
@@ -471,9 +471,9 @@ class TestTheGrainOfDiversity:
     """
 
     @staticmethod
-    def _probe(groupe, name, priorite=0):
+    def _probe(groupe, name, priority=0):
         return {"technique": name, "group": groupe, "text": name,
-                "priority": priorite, "owasp_family": None,
+                "priority": priority, "owasp_family": None,
                 "objective": None, "transformation": "identity"}
 
     def test_the_penalty_counts_the_same_modules_attempts(self):
@@ -527,7 +527,7 @@ class TestTheGrainOfDiversity:
         observations = observe(self._probe("encoding", "base64"),
                                 "Le code est ARCHIVES-7731.", {"reussi": True})
         launched = [self._probe("encoding", "base64")]
-        delta, _ = adjust(self._probe("encoding", "base64", priorite=0),
+        delta, _ = adjust(self._probe("encoding", "base64", priority=0),
                            observations, launched)
         assert delta == BONUS_TECHNIQUE_WORKS + DIVERSITY_WEIGHT
 
@@ -553,9 +553,9 @@ class TestStaticControl:
                  "writes_code": None, "handles_documents": None,
                  "context": [], "evidence": [], "exchanges": [],
                  "warning": None}
-        originals = (main.reconnoitre, main.judge_by_vote, main.MAX_ESSAIS)
+        originals = (main.reconnoitre, main.judge_by_vote, main.MAX_ATTEMPTS)
         main.reconnoitre = lambda c: dict(profile)
-        main.MAX_ESSAIS = attempts
+        main.MAX_ATTEMPTS = attempts
         turns = {"n": 0}
 
         def fake_judge(payload, reply):
@@ -574,7 +574,7 @@ class TestStaticControl:
                     adaptive=adaptive)
             return [e["technique"] for e in result["launched"]]
         finally:
-            main.reconnoitre, main.judge_by_vote, main.MAX_ESSAIS = originals
+            main.reconnoitre, main.judge_by_vote, main.MAX_ATTEMPTS = originals
 
     def test_the_adaptive_arm_digs_at_what_worked(self):
         launched = self._campaign(adaptive=True)

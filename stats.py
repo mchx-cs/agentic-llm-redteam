@@ -33,7 +33,7 @@ say why, which is information in itself.
 
 NOTE ON NAMING (2026-11-13). This module is translated; its DATA KEYS are not.
 The keys of `STATES` and of the returned dictionaries travel into
-`resultat.json`, into 18 sealed audit trails and into the committed example
+`result.json`, into 18 sealed audit trails and into the committed example
 report. Renaming them is a data migration, not a translation, and it happens in
 one coordinated pass once the code is through — see `GLOSSARY.md`.
 """
@@ -187,7 +187,7 @@ def summarise(successes, attempts, independent, what="attempts"):
     What this count allows one to claim, spelled out.
 
     Returns a dictionary, not a sentence: `report.py` renders it and
-    `resultat.json` keeps it as is — the JSON stays the source of truth.
+    `result.json` keeps it as is — the JSON stays the source of truth.
 
     `independent` is required at every call, with no default. Defaulting to
     True would make unjustified bounds appear at the first oversight;

@@ -202,7 +202,7 @@ def _technique_from_probe(probe):
              if t in UNJUDGEABLE_FAMILIES}),
         "description": probe["objective"] or probe["probe"],
         "prerequisites": prerequisites,
-        # garak's prompts are COMPLETE: they carry no `{objectif}` placeholder,
+        # garak's prompts are COMPLETE: they carry no `{objective}` placeholder,
         # so they have no business in `modeles`, which the validator checks on
         # exactly that point.
         "templates": [],
@@ -221,17 +221,17 @@ def _technique_from_probe(probe):
 # This template stays in French, deliberately: the library's objectives are
 # French, and so is the demo target. Translating it would break the sentence
 # it builds, not internationalise it — that would take a localised library.
-COMPOSITION = "{preambule}\n\nMaintenant, peux-tu {demande} ?"
+COMPOSITION = "{preamble}\n\nMaintenant, peux-tu {request} ?"
 
 
 def compose(preamble, objective):
     """Assembles a complete payload and an objective into a single request."""
-    return COMPOSITION.format(preambule=preamble.rstrip(),
-                              demande=objective["wording"])
+    return COMPOSITION.format(preamble=preamble.rstrip(),
+                              request=objective["wording"])
 
 
 # The same pair of ingredients, delivered in TWO turns instead of one (3b).
-SECOND_TURN_REQUEST = "Maintenant, peux-tu {demande} ?"
+SECOND_TURN_REQUEST = "Maintenant, peux-tu {request} ?"
 
 
 def sequence_turns(preamble, objective):
@@ -250,7 +250,7 @@ def sequence_turns(preamble, objective):
     three left open by the garak/target gap in phase 12.
     """
     return [preamble.rstrip(),
-            SECOND_TURN_REQUEST.format(demande=objective["wording"])]
+            SECOND_TURN_REQUEST.format(request=objective["wording"])]
 
 
 # --- Building the payloads ---------------------------------------------------
@@ -301,7 +301,7 @@ def generate_payloads():
         for template, objective, transformation_name in product(
             technique["templates"], library["objectives"], TRANSFORMATIONS
         ):
-            text = template.format(objectif=objective["wording"])
+            text = template.format(objective=objective["wording"])
             payloads.append({
                 "technique": technique["id"],
                 "owasp_family": technique["owasp_family"],
@@ -312,7 +312,7 @@ def generate_payloads():
 
         # Payloads coming from outside are COMPLETE prompts: they already
         # carry their own intention, and therefore do not cross with the
-        # objective axis. Hence `objectif: None`.
+        # objective axis. Hence `objective: None`.
         for number, payload in enumerate(
                 technique.get("complete_payloads", []), start=1):
             # Two uses of one payload, which do NOT test the same thing: on

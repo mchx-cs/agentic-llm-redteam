@@ -2,7 +2,7 @@
 payloads/validate.py — Checks the library before a campaign is launched.
 
 The library is a DATA file, edited by hand or fed from an outside source
-(garak, phase 7). A mistake in it is silent: a forgotten `{objectif}` would
+(garak, phase 7). A mistake in it is silent: a forgotten `{objective}` would
 always send the same text, a misspelled prerequisite would never be
 evaluated, and a duplicate identifier would make the reports unreadable. None
 of that raises an exception — it just produces a campaign that does not test
@@ -97,21 +97,21 @@ def validate(library):
         for template in technique["templates"]:
             if not isinstance(template, str) or not template.strip():
                 errors.append(f"{name}: a template is empty.")
-            elif "{objectif}" not in template:
+            elif "{objective}" not in template:
                 # Without the marker, the technique would always send the same
                 # text, whatever we are trying to obtain.
                 errors.append(
                     f"{name}: the template {template[:40]!r} does not hold "
-                    f"'{{objectif}}' — it would ignore the objective.")
+                    f"'{{objective}}' — it would ignore the objective.")
             else:
                 try:
-                    template.format(objectif="X")
+                    template.format(objective="X")
                 except (KeyError, IndexError) as error:
                     errors.append(
                         f"{name}: unescaped brace in {template[:40]!r} "
                         f"({error}). Double any literal braces.")
 
-        # Complete payloads (from garak) carry NO `{objectif}`: they are whole
+        # Complete payloads (from garak) carry NO `{objective}`: they are whole
         # prompts. They therefore have no business in `modeles`, and we only
         # check that they are text.
         for payload in technique.get("complete_payloads", []):
@@ -128,7 +128,7 @@ def validate(library):
     # --- Objectives ---------------------------------------------------------
     seen = set()
     for number, objective in enumerate(objectives, start=1):
-        name = objective.get("id") or f"objectif n°{number}"
+        name = objective.get("id") or f"objective no. {number}"
         if not objective.get("wording"):
             errors.append(f"{name}: empty wording.")
         if objective.get("id") in seen:

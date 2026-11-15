@@ -223,10 +223,10 @@ class TestChainOfCustody:
 
     def test_the_trail_is_sealed_at_the_close(self, tmp_path):
         trail = AuditTrail(tmp_path / "j.jsonl", "mock")
-        sceau = trail.close("no_finding", {"calls": 1, "tokens": 10})
+        seal = trail.close("no_finding", {"calls": 1, "tokens": 10})
         derniere = self._lines(trail.path)[-1]
         assert derniere["type"] == "seal"
-        assert derniere["digest"] == sceau
+        assert derniere["digest"] == seal
         assert derniere["algorithm"] == "sha256"
 
     def test_an_intact_trail_is_recognised(self, tmp_path):

@@ -141,7 +141,7 @@ class TestRelevancePerModule:
         assert technique["owasp_family"] is None
 
     def test_the_prompts_go_in_payloads_complets_not_in_modeles(self):
-        # These are whole prompts: without `{objectif}` they would fail
+        # These are whole prompts: without `{objective}` they would fail
         # validation if they landed in `modeles`.
         technique = _technique_from_probe(_probe())
         assert technique["templates"] == []
@@ -296,10 +296,10 @@ class TestRedundancyWithGarak:
     resynchronisation. Rien n'est retiré tout seul.
     """
 
-    def _library(self, familles_garak=(), maison=()):
+    def _library(self, garak_families=(), maison=()):
         techniques = [{"id": f"garak-{i}", "source": "garak",
                        "owasp_family": family, "complete_payloads": ["x"]}
-                      for i, family in enumerate(familles_garak)]
+                      for i, family in enumerate(garak_families)]
         techniques += list(maison)
         return {"techniques": techniques}
 
@@ -321,7 +321,7 @@ class TestRedundancyWithGarak:
     def test_a_probe_that_fills_the_hole_is_reported(self):
         from payloads.garak_source import redundant_techniques
         library = self._library(
-            familles_garak=["LLM06:2025 Excessive Agency"],
+            garak_families=["LLM06:2025 Excessive Agency"],
             maison=[{"id": "abus-outils",
                      "owasp_family": "LLM06:2025 Excessive Agency",
                      "templates": ["a", "b"]}])
@@ -336,7 +336,7 @@ class TestRedundancyWithGarak:
         # revision.
         from payloads.garak_source import redundant_techniques
         library = self._library(
-            familles_garak=["LLM06:2027 Excessive Agency"],
+            garak_families=["LLM06:2027 Excessive Agency"],
             maison=[{"id": "abus-outils",
                      "owasp_family": "LLM06:2025 Excessive Agency",
                      "templates": ["a"]}])
@@ -345,7 +345,7 @@ class TestRedundancyWithGarak:
     def test_another_family_triggers_nothing(self):
         from payloads.garak_source import redundant_techniques
         library = self._library(
-            familles_garak=["LLM01:2025 Prompt Injection"],
+            garak_families=["LLM01:2025 Prompt Injection"],
             maison=[{"id": "abus-outils",
                      "owasp_family": "LLM06:2025 Excessive Agency",
                      "templates": ["a"]}])
@@ -374,7 +374,7 @@ class TestRedundancyWithGarak:
         # here would drown the one case that needs a decision.
         from payloads.garak_source import redundant_techniques
         library = self._library(
-            familles_garak=["LLM02:2025 Sensitive Information Disclosure"],
+            garak_families=["LLM02:2025 Sensitive Information Disclosure"],
             maison=[{"id": "divulgation-information",
                      "owasp_family": "LLM02:2025 Sensitive Information "
                                       "Disclosure",
@@ -386,7 +386,7 @@ class TestRedundancyWithGarak:
         # sonde offensive ne le remplace.
         from payloads.garak_source import redundant_techniques
         library = self._library(
-            familles_garak=["LLM01:2025 Prompt Injection"],
+            garak_families=["LLM01:2025 Prompt Injection"],
             maison=[{"id": "controle", "owasp_family": None,
                      "templates": ["bonjour"]}])
         assert redundant_techniques(library) == []
@@ -394,7 +394,7 @@ class TestRedundancyWithGarak:
     def test_a_garak_probe_is_not_a_hand_written_debt(self):
         from payloads.garak_source import redundant_techniques
         library = self._library(
-            familles_garak=["LLM01:2025 Prompt Injection",
+            garak_families=["LLM01:2025 Prompt Injection",
                             "LLM01:2025 Prompt Injection"])
         assert redundant_techniques(library) == []
 

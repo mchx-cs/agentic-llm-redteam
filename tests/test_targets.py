@@ -302,14 +302,14 @@ class TestTargetFailureDuringACampaign:
         """`cli()` avec une cible qui leve, sans toucher au reseau."""
         import main
 
-        def cible_cassee(*a, **k):
+        def broken_target(*a, **k):
             def interroger(message):
                 raise RuntimeError(
                     "Target http://exemple.invalid/x: unreachable (test).\n"
                     "  Verifie l'URL, le reseau, et que la cible est demarree.")
             return interroger
 
-        monkeypatch.setattr(main, "choose_target", cible_cassee)
+        monkeypatch.setattr(main, "choose_target", broken_target)
         return main
 
     def test_the_failure_exits_with_code_1(self, failing_campaign, tmp_path,

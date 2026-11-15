@@ -3,8 +3,8 @@ report.py — From a campaign result to a readable report.
 
 Two levels, deliberately kept apart:
 
-    campaign → resultat.json   (the SOURCE OF TRUTH, machine-readable)
-                 └→ rapport.md (a RENDERING, human-readable)
+    campaign → result.json   (the SOURCE OF TRUTH, machine-readable)
+               └→ report.md (a RENDERING, human-readable)
 
 It is the same separation as `library.json`: data on one side, code on
 the other. Adding a format then becomes one more function, never a rewrite —
@@ -106,7 +106,7 @@ def build_report(result, target="unknown"):
     # initial plan is therefore no longer what was launched, and coverage must
     # be derived from the REAL attempts. Falls back to the plan for
     # resultat.json files produced before adaptation.
-    lances = result.get("launched") or plan["attempts"]
+    launched = result.get("launched") or plan["attempts"]
     findings = []
 
     for number, raw in enumerate(result.get("findings", []), start=1):
@@ -140,7 +140,7 @@ def build_report(result, target="unknown"):
             "target": target,
             "status": result["status"],
             "attempts_planned": len(plan["attempts"]),
-            "attempts_sent": len(lances),
+            "attempts_sent": len(launched),
             # Non-empty = the campaign stopped before the end of its plan.
             "cut_short": result.get("cut_short"),
             # The mandate the campaign was run under. None for a local
@@ -160,15 +160,15 @@ def build_report(result, target="unknown"):
         # nothing at all.
         "coverage": {
             "families_tested": sorted({e["owasp_family"] or e["technique"]
-                                        for e in lances}),
+                                        for e in launched}),
             # TOUCHED, not tested: the probes launched also reach these
             # families, but the judge has no criterion to score them.
             # Announcing them tested would be false; keeping quiet would
             # suggest they were not approached at all. A reader who sees
             # "LLM06 touched, not judged" knows exactly where they stand.
             "families_touched": sorted(
-                {family for essai in lances
-                 for family in (essai.get("families_not_scorable") or [])}),
+                {family for attempt in launched
+                 for family in (attempt.get("families_not_scorable") or [])}),
             "families_skipped": plan["skipped"],
         },
         # What the campaign learned about the target along the way, and
@@ -184,7 +184,7 @@ def build_report(result, target="unknown"):
         # and run without adaptation produces i.i.d. attempts, and its "no
         # finding" can then be bounded for real.
         "bounds": stats.summarise(
-            len(findings), len(lances),
+            len(findings), len(launched),
             independent=bool(result.get("independent_attempts")),
             what="attempts of the same technique"
                  if result.get("independent_attempts")
@@ -233,12 +233,12 @@ ATLAS_SOURCE = ("identifiers cited by the GenAI Red Teaming Manual v1.0 "
                 "(OWASP, October 2026)")
 
 
-def atlas_for(famille_owasp):
+def atlas_for(owasp_family):
     """The sourced ATLAS techniques for an OWASP family, or []."""
-    if not famille_owasp:
+    if not owasp_family:
         return []
     for prefix, techniques in ATLAS_BY_FAMILY.items():
-        if famille_owasp.startswith(prefix):
+        if owasp_family.startswith(prefix):
             return techniques
     return []
 
@@ -271,7 +271,7 @@ def _atlas_block(families):
     return lines
 
 
-def _scope_block(perimetre):
+def _scope_block(scope):
     """
     Says that a campaign was restricted, and by what.
 
@@ -281,9 +281,9 @@ def _scope_block(perimetre):
     this section exists to prevent — the same fault as a "no finding" with no
     bound.
     """
-    if not perimetre:
+    if not scope:
         return []
-    only, excluding = perimetre.get("only"), perimetre.get("excluding")
+    only, excluding = scope.get("only"), scope.get("excluding")
     if not only and not excluding:
         return []
 
@@ -506,7 +506,7 @@ def _excerpt(text, abridge):
         return [text]
     return [text[:EXCERPT_LENGTH].rstrip(),
             f"[… abridged, {len(text)} characters in all — "
-            f"full content in resultat.json]"]
+            f"full content in result.json]"]
 
 
 def _finding_block(finding, abridge=False):
@@ -604,7 +604,7 @@ def render_markdown(report, abridge=False):
     `abridge` truncates payloads and replies. Two real uses: sharing a report
     without a client's verbatim replies, and publishing an example without
     republishing a whole attack. The source of truth keeps everything —
-    `resultat.json` is never abridged.
+    `result.json` is never abridged.
     """
     campaign = report["campaign"]
     findings = report["findings"]
@@ -819,7 +819,7 @@ def render_markdown(report, abridge=False):
 
 def save_report(result, target="unknown", folder="reports", abridge=False):
     """
-    Writes `resultat.json` and `rapport.md`, and returns their paths.
+    Writes `result.json` and `report.md`, and returns their paths.
 
     The JSON first: it is the source of truth, the Markdown only a view of it.
     """

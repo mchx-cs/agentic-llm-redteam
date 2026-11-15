@@ -42,7 +42,7 @@ from statistics import mean
 import agents.adaptation as adaptation
 from agents.planner import plan_campaign
 
-NB_TIRAGES = 150
+DRAW_COUNT = 150
 BUDGETS = (3, 6, 10, 20, 40)
 # Share of techniques that give way. 20%: a target neither armoured nor wide
 # open.
@@ -116,7 +116,7 @@ def campaign(pool, budget, adaptive, giving_way, signals=None):
     return findings
 
 
-def measure(pool, techniques, budget, signals=None, draws=NB_TIRAGES):
+def measure(pool, techniques, budget, signals=None, draws=DRAW_COUNT):
     """Mean gap adaptive − static, and the distribution of draws."""
     how_many = max(1, int(len(techniques) * VULNERABLE_SHARE))
     gaps = []
@@ -140,7 +140,7 @@ def measure_overall(pool, techniques):
     print("Adaptive against static plan, at an equal budget.")
     print(f"Vulnerable techniques drawn AT RANDOM "
           f"({int(VULNERABLE_SHARE * 100)}% of {len(techniques)}), "
-          f"{NB_TIRAGES} draws.")
+          f"{DRAW_COUNT} draws.")
     print("PESSIMISTIC hypothesis: garak's OWASP mapping predicts nothing")
     print("about the target's behaviour.\n")
 

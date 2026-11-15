@@ -29,9 +29,9 @@ CHAMPS_ATTENDUS = {"role", "language", "tools", "refused_subjects",
 @pytest.fixture
 def analyst(monkeypatch):
     """Replaces the call to the analyst model with a chosen output."""
-    def installer(sortie):
+    def installer(output):
         monkeypatch.setattr(reconnaissance, "ask_llm",
-                            lambda *a, **k: sortie)
+                            lambda *a, **k: output)
     return installer
 
 

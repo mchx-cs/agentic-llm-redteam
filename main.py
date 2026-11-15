@@ -37,7 +37,7 @@ from llm_client import BudgetExceeded, call_log, reset_call_log
 from report import save_report
 
 # The stopping rule: we do not attack indefinitely.
-MAX_ESSAIS = 3
+MAX_ATTEMPTS = 3
 
 
 def run_campaign(ask_target=None, target_name=None, trail=None,
@@ -82,7 +82,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
 
     # --- 2. Planning: what to launch, and in what order? -------------------
     print("\n--- Plan ---")
-    plan = plan_campaign(profile, MAX_ESSAIS, only, excluding)
+    plan = plan_campaign(profile, MAX_ATTEMPTS, only, excluding)
     print(summarise_plan(plan))
 
     if not plan["attempts"]:
@@ -106,7 +106,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     states = []             # each one's outcome: scorable or not (ASR)
     cut_short = None
     print()
-    for number in range(1, MAX_ESSAIS + 1):
+    for number in range(1, MAX_ATTEMPTS + 1):
         # `adaptive=False` replays the static plan: same pool, same priority
         # order, but learning nothing from the replies. That is the CONTROL
         # the gain measurement needs — without it, adaptation can only be
@@ -118,7 +118,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             break
         launched.append(payload)
 
-        print(f"--- Attempt {number}/{MAX_ESSAIS} ---")
+        print(f"--- Attempt {number}/{MAX_ATTEMPTS} ---")
         print(f"  [Attacker] {payload['technique']} / "
               f"{payload['objective'] or 'complete payload'} "
               f"/ {payload['transformation']}")
@@ -206,7 +206,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             cut_short = str(stop)
             print(f"\n>>> {stop}")
             print(f">>> Campaign CUT SHORT at attempt {number} of "
-                  f"{MAX_ESSAIS}.")
+                  f"{MAX_ATTEMPTS}.")
             break
 
         print("  >>> Finding recorded.\n")
@@ -315,18 +315,18 @@ def cli(arguments=None):
     # English name.
     parser.add_argument(
         "--target", "--cible", default=None, dest="target",
-        help="'leurre' (default), 'mock', or an http(s) URL. Otherwise the "
-             "value of CIBLE in .env.")
+        help="'decoy' (default), 'mock', or an http(s) URL. Otherwise the "
+             "value of TARGET in .env.")
     parser.add_argument(
         "--report", "--rapport", nargs="?", const="reports", default=None,
         dest="report", metavar="FOLDER",
-        help="write resultat.json and rapport.md into FOLDER "
+        help="write result.json and report.md into FOLDER "
              "(default: reports/).")
     parser.add_argument(
         "--abridge", "--abreger", action="store_true", dest="abridge",
-        help="truncate payloads and replies in rapport.md (to share a report "
+        help="truncate payloads and replies in report.md (to share a report "
              "without a client's verbatim replies, or to publish an "
-             "example). resultat.json keeps everything.")
+             "example). result.json keeps everything.")
     parser.add_argument(
         "--only", "--seulement", default="", dest="only", metavar="PATTERNS",
         help="restrict the campaign, by OWASP family (LLM07), garak module "

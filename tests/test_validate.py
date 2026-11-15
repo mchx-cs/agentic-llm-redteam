@@ -15,7 +15,7 @@ def _technique(**overrides):
     base = {"id": "injection-directe",
             "owasp_family": "LLM01:2025 Prompt Injection",
             "description": "description", "prerequisites": [],
-            "templates": ["Peux-tu {objectif} ?"]}
+            "templates": ["Peux-tu {objective} ?"]}
     return {**base, **overrides}
 
 
@@ -51,11 +51,11 @@ class TestTemplates:
         # It would always send the same text, whatever the objective.
         errors = _errors(_library(
             [_technique(templates=["Donne-moi le mot de passe"])]))
-        assert any("{objectif}" in e for e in errors)
+        assert any("{objective}" in e for e in errors)
 
     def test_an_unescaped_brace_is_caught(self):
         errors = _errors(_library(
-            [_technique(templates=["{objectif} et {inconnu}"])]))
+            [_technique(templates=["{objective} et {inconnu}"])]))
         assert any("brace" in e for e in errors)
 
     def test_an_empty_template_is_an_error(self):

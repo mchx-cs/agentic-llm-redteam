@@ -91,7 +91,7 @@ class TestVoting:
         """Makes the judge return a chosen sequence of verdicts."""
         def install(sequence):
             remaining = list(sequence)
-            def fake_judge(_payload, _reponse):
+            def fake_judge(_payload, _reply):
                 value = remaining.pop(0)
                 return {"reussi": value, "critere": "aucun" if value is not True
                         else "divulgation", "analyse": "a", "valeur": None,

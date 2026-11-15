@@ -58,14 +58,14 @@ def _campaign(adaptive, budget):
     import main
     from targets import choose_target
 
-    initial_budget = main.MAX_ESSAIS
-    main.MAX_ESSAIS = budget
+    initial_budget = main.MAX_ATTEMPTS
+    main.MAX_ATTEMPTS = budget
     try:
         with contextlib.redirect_stdout(io.StringIO()):
             return main.run_campaign(choose_target(TARGET), TARGET,
                                         adaptive=adaptive)
     finally:
-        main.MAX_ESSAIS = initial_budget
+        main.MAX_ATTEMPTS = initial_budget
 
 
 def _measures(result):

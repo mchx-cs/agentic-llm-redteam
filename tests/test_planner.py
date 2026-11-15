@@ -129,7 +129,7 @@ class TestAttemptShape:
 
     def test_no_template_marker_survives(self):
         for attempt in plan_campaign(profile(refused=["un secret"]), budget=5)["attempts"]:
-            assert "{objectif}" not in attempt["text"]
+            assert "{objective}" not in attempt["text"]
 
 
 class TestCandidatePool:
@@ -180,8 +180,8 @@ class TestFalseCoverageHoles:
         par_nom = {e["technique"]: e for e in plan["skipped"]}
         # `divulgation-information` est vide, mais LLM02 est couverte par
         # garak — sauf si l'instantane est absent, d'ou la garde.
-        familles_testees = {c["owasp_family"] for c in plan["candidates"]}
-        if "LLM02:2025 Sensitive Information Disclosure" in familles_testees:
+        families_tested = {c["owasp_family"] for c in plan["candidates"]}
+        if "LLM02:2025 Sensitive Information Disclosure" in families_tested:
             assert par_nom["divulgation-information"][
                 "family_covered_elsewhere"] is True
 
@@ -235,7 +235,7 @@ class TestSystemPromptLeak:
 
     def test_its_payloads_are_complete_not_templates(self):
         # Une demande d'instructions porte sa propre intention : elle n'a pas
-        # d'emplacement `{objectif}` a remplir.
+        # d'emplacement `{objective}` a remplir.
         from agents.attacker import load_library
         technique = next(t for t in load_library(with_garak=False)
                          ["techniques"] if t["id"] == "fuite-prompt-systeme")
@@ -265,7 +265,7 @@ class TestToolAbuse:
 
     Leur particularite : le nom de l'outil ne peut pas etre dans la
     bibliotheque, puisqu'il varie d'une cible a l'autre. Il vient de la
-    reconnaissance, par l'axe `{objectif}`.
+    reconnaissance, par l'axe `{objective}`.
     """
 
     def test_a_discovered_tool_becomes_an_objective(self):
@@ -320,7 +320,7 @@ class TestToolAbuse:
         technique = next(t for t in load_library(with_garak=False)
                          ["techniques"] if t["id"] == "abus-outils")
         assert technique["templates"]
-        assert all("{objectif}" in m for m in technique["templates"])
+        assert all("{objective}" in m for m in technique["templates"])
 
     def test_the_payloads_cover_several_registers(self):
         from agents.attacker import load_library
@@ -442,8 +442,8 @@ class TestRelevanceRules:
 
     def test_the_skipped_families_state_their_reason(self):
         plan = plan_campaign(profile(instructions=True), budget=5)
-        for ecartee in plan["skipped"]:
-            assert ecartee["reasons"], ecartee["technique"]
+        for skipped_entry in plan["skipped"]:
+            assert skipped_entry["reasons"], skipped_entry["technique"]
 
     def test_a_target_with_no_context_keeps_some_attempts(self):
         # Le durcissement ne doit pas vider le plan : les modules universels
@@ -465,9 +465,9 @@ class TestCoveredElsewhereNotice:
     def test_a_skip_for_irrelevance_does_not_carry_the_notice(self):
         plan = plan_campaign(profile(instructions=True), budget=3)
         par_nom = {e["technique"]: e for e in plan["skipped"]}
-        for name, ecartee in par_nom.items():
+        for name, skipped_entry in par_nom.items():
             if name.startswith("garak-"):
-                assert ecartee["family_covered_elsewhere"] is False, name
+                assert skipped_entry["family_covered_elsewhere"] is False, name
 
     def test_a_technique_with_no_payload_still_carries_it(self):
         plan = plan_campaign(profile(instructions=True, refused=["le code"]), budget=3)
