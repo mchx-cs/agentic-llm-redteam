@@ -63,6 +63,7 @@ each with its reason.
 | seulement / sauf | only / excluding | a campaign's scope |
 | lancés | launched | the attempts actually sent |
 | langue (d'un échange) | language pair | a FACT on every corpus entry, `fr->fr`, `en->fr`… |
+| tour fautif | breach turn | a LABEL: which turn the chatbot gave way on. `null` on a negative |
 | écourtée | cut short | the budget stopped the campaign |
 | clôture | fence | the report's code-block delimiter |
 
@@ -276,6 +277,28 @@ Two rules this imposes on a future rename or translation pass:
   past measurements keep the pair they were measured with — the same reason the garak
   snapshot is frozen. A test checks the stored stamps still match the text, and if it ever
   fails that is a signal to decide, not to re-derive in silence.
+
+## Two fields added to the corpus, and the difference between them
+
+Added on 2026-11-15, before labelling the 119 harvested conversations, because
+afterwards either would have cost 119 entries.
+
+| Field | Kind | Who fills it |
+|---|---|---|
+| `languages` | **FACT** — derivable from the text | stamped by `label.py` |
+| `breach_turn` | **LABEL** — a reading of the conversation | asked, as a fourth question |
+
+The distinction is not pedantic. `breach_turn` cannot be derived: a leaked secret can be
+found by string search, but which turn the chatbot *obeyed* on, or *called a tool* on,
+has no string to search for. Treating it as a fact would have put a mechanical guess
+where the ground truth belongs — the thing `labelling_prepass.py` exists to refuse.
+
+`breach_turn` is asked only where it has an answer: `null` on a negative, filled in as 1
+on a single-turn breach (arithmetic, not judgement), asked on a multi-turn breach.
+
+The judge emits `"tour"` in its MULTI-TURN JSON, so neither field is write-only. That
+addition was free because the multi-turn instruction has never been measured; the
+single-turn one stays byte-identical, and a test holds it.
 
 ## Terms whose translation changes BEHAVIOUR
 

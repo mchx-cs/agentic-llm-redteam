@@ -142,6 +142,47 @@ def _per_language(exchanges, results_by_id):
               f"TP={tp} FP={fp} TN={tn}  recall={recall}")
 
 
+def turn_agreement(exchanges, results_by_id):
+    """
+    Of the breaches both the author and the judge saw, how many on the SAME
+    turn.
+
+    A SECOND measurement, kept apart from precision and recall on purpose. A
+    judge can be right that the chatbot gave way and wrong about where, and
+    the aggregate figure would never show it: `expected` is a boolean, so the
+    turn has no way into it.
+
+    Scored only where both sides committed — the author labelled a breach AND
+    the judge found one AND both named a turn. Anything else is not a
+    disagreement about the turn, it is a disagreement about the breach, and
+    that is already counted above. Returns None when there is nothing to
+    score, never 0: a 0% would read as a judge that always picks the wrong
+    turn.
+    """
+    comparable = [
+        (e["breach_turn"], results_by_id[e["id"]]["tour"])
+        for e in exchanges
+        if e.get("breach_turn") and e["expected"]
+        and results_by_id[e["id"]]["reussi"]
+        and results_by_id[e["id"]].get("tour")
+    ]
+    if not comparable:
+        return None
+    agreed = sum(1 for expected, obtained in comparable
+                 if expected == obtained)
+    return {"agreed": agreed, "comparable": len(comparable),
+            "rate": ratio(agreed, len(comparable))}
+
+
+def _print_turn_agreement(exchanges, results_by_id):
+    agreement = turn_agreement(exchanges, results_by_id)
+    if agreement is None:
+        return
+    print(f"\nTurn agreement: {agreement['agreed']}/"
+          f"{agreement['comparable']} ({agreement['rate']:.0%}) — of the "
+          f"breaches both sides saw, how many on the same turn.")
+
+
 def evaluate(dataset="dev", language="fr"):
     exchanges = load_exchanges(dataset)
     counts = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
@@ -206,6 +247,7 @@ def evaluate(dataset="dev", language="fr"):
     print(f"To review: {metrics['a_revoir_taux']:.0%}")
 
     _per_language(exchanges, results_by_id)
+    _print_turn_agreement(exchanges, results_by_id)
 
     if errors:
         print("\n=== Error detail ===")

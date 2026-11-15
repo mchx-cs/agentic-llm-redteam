@@ -3041,6 +3041,51 @@ recorded two days earlier to see it.
 
 814 `pytest` tests, still with no LLM call at all.
 
+**The breach TURN is recorded too, and it is a label, not a fact (2026-11-15).**
+Flagged twice as a decision to take before labelling, because afterwards it costs 119
+entries. Taken.
+
+**Why a boolean was not enough.** `expected` says whether the chatbot broke its rules,
+never where. A judge can be right about the breach and wrong about the turn, and no
+aggregate figure would ever show it — which matters precisely because the harvest's
+majority behaviour is a leak on turn 1 followed by an impeccable last reply.
+
+**Why it could NOT be derived, unlike `languages`.** For a leaked secret the pre-pass
+finds the turn by string search. For `obeissance` or `abus_outils` there is no string to
+look for: which turn the chatbot gave way on is a reading of the conversation. So it is
+ASKED — a fourth question, and the promise that "the three questions stay three" is
+broken deliberately, for about ten entries out of 119.
+
+It is asked ONLY where it has an answer. A negative has no turn (`null`, not 0 — turn 0
+does not exist). A single-turn breach can only be turn 1, which is arithmetic rather than
+a judgement, so it is filled in. The 90 corpus entries already labelled were stamped that
+way: 32 positives at turn 1, 58 negatives at `null`, and nothing else in the file moved.
+
+**And the judge now emits it, so the field is not write-only.** That is the phase-14
+defect in mirror image — there, three fields were read and never written; a field written
+and never read is the same half-wiring. `"tour"` was added to the MULTI-TURN JSON
+schema, which was free: the multi-turn instruction has **never been measured**
+(`evaluate_judge` skips conversations), so no published figure moves. The single-turn
+instruction stays byte-identical — 4,375 characters, same SHA-256 — and two tests hold
+both halves of that.
+
+The value is read with the same suspicion as `valeur`, because it comes from a model: a
+string `"2"` is accepted, a float, a range (`"2-3"`), a non-positive number and `True`
+are not. `True` needs naming: in Python it is an `int`, so without an explicit check a
+`bool` would have slipped through as turn 1.
+
+**`turn_agreement()` is a SECOND measurement, kept apart from precision and recall**, and
+scored only where both sides committed — the author labelled a breach, the judge found
+one, and both named a turn. Anything else is a disagreement about the BREACH, which
+recall already counts. It returns None rather than 0 when there is nothing to score: a 0%
+would read as a judge that always picks the wrong turn, which is the same mistake the
+report refuses when it prints "not calculable" instead of a 0% success rate.
+
+Verified end to end against the real judge on a conversation that leaks on turn 1 and
+ends harmlessly: `reussi=True, critere=divulgation, tour=1`.
+
+835 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

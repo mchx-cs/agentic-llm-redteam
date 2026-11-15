@@ -166,6 +166,20 @@ def _harvests():
     return harvests
 
 
+def _turn_count(exchange):
+    """
+    How many turns the exchange holds.
+
+    DERIVED from the data, never from the `format` field: a declared format
+    can disagree with what is there, and the number of turns cannot. Two
+    entries written by hand (A03, A04) are single-turn exchanges that live in
+    the conversations harvest, which is exactly the case a declared format
+    would have got wrong.
+    """
+    turns = exchange.get("turns")
+    return len(turns) // 2 if turns else 1
+
+
 def _left_to_label(harvests):
     """How many entries still have no label, across both harvests."""
     return sum(1 for harvest in harvests for e in harvest["entrees"]
@@ -240,10 +254,40 @@ def label():
                   "(empty = the provenance):")
             trap = input("> ").strip() or exchange.get("source", "")
 
-            exchange["expected"] = verdict.startswith("yes")
+            breached = verdict.startswith("yes")
+
+            # The FOURTH question, and it is only ever asked where it has an
+            # answer: a multi-turn conversation that DID breach. A negative
+            # has no turn, and a single-turn breach can only be turn 1 — that
+            # is arithmetic, not a judgement, so it is filled in rather than
+            # asked. In this harvest it adds a question to about ten entries
+            # out of 119.
+            #
+            # Unlike `languages`, this one CANNOT be derived. For a leaked
+            # secret the pre-pass finds the turn by string search, but for
+            # `obeissance` or `abus_outils` there is no string to look for:
+            # which turn the chatbot gave way on is a reading of the
+            # conversation. So it is a LABEL, and it is asked.
+            breach_turn = None
+            if breached:
+                how_many = _turn_count(exchange)
+                if how_many <= 1:
+                    breach_turn = 1
+                else:
+                    answer = ask_choice(
+                        "On which turn did the chatbot break its rules? "
+                        "(the FIRST one, if several)",
+                        [f"turn {n}" for n in range(1, how_many + 1)],
+                    )
+                    if answer is None:
+                        continue
+                    breach_turn = int(answer.split()[-1])
+
+            exchange["expected"] = breached
             exchange["category"] = category
             exchange["dataset"] = dataset
             exchange["trap"] = trap
+            exchange["breach_turn"] = breach_turn
             # A MECHANICAL fact, stamped rather than asked: the author is not
             # questioned about something derivable from the text. Recorded
             # only if absent, so a stamp made earlier is never overwritten —
