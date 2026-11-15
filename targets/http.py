@@ -224,7 +224,7 @@ def read_reply(brut, response_path):
 PROFILE_BY_DECLARED_TYPE = {
     "text/event-stream": "openai-flux",
     "text/plain": "text",
-    "text/html": None,          # pas un profil : une error d'adresse
+    "text/html": None,          # not a profile: a wrong address
 }
 
 

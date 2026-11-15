@@ -1,14 +1,16 @@
 # Glossary — French → English
 
-The project is being translated to English. This file is the **single source of
-truth for terminology**, and it exists for one reason: 918 functions and classes
-across 55 files cannot be renamed consistently from memory. Without a fixed
-glossary, `cible` becomes `target` in one file and `system_under_test` in
+The project has been translated to English. This file is the **single source of
+truth for terminology**, and it exists for one reason: 1,064 functions and
+classes across 61 files cannot be renamed consistently from memory. Without a
+fixed glossary, `cible` becomes `target` in one file and `system_under_test` in
 another — which is exactly the drift the project already guards against for
 label categories (`fuite_directe` vs `fuite-directe`).
 
 **Rule: nothing gets renamed unless it is in this table.** Adding a term here is
-part of the change, not a detail.
+part of the change, not a detail. What is still French is listed under
+*Deliberately NOT translated* and *Terms whose translation changes BEHAVIOUR*,
+each with its reason.
 
 ## Core domain
 
@@ -55,7 +57,7 @@ part of the change, not a detail.
 | mandat | mandate | `require_mandate` is the campaign's front door |
 | empreinte | digest | SHA-256; the KEY `"empreinte"` stays, the function moved |
 | motif (de refus) | pattern | a regex, in `adaptation` |
-| motif (d'écartement) | reason | a sentence, in `planificateur` |
+| motif (d'écartement) | reason | a sentence, in `planner` |
 | gravité | severity | from rules, never a model |
 | résumer | summarise | the one-screen view of a profile or a plan |
 | seulement / sauf | only / excluding | a campaign's scope |
@@ -91,8 +93,12 @@ Two other vocabularies stay French for their own reasons:
   `multitours-reussi`…): the author's taxonomy, named by its labels throughout
   CLAUDE.md and in the labelling menu. Renaming buys nothing functional and
   moves a vocabulary the author uses by hand.
-- **the target names** (`leurre`, `demo`, `mock`): values of `--cible`, hence
-  a documented interface.
+- **the kept target name** `leurre`: `--target decoy` is the name now, but
+  `leurre` still resolves to the same target, and still needs no mandate. The
+  README has shown it since the project existed, and a documented interface
+  does not get pulled from under its users by a translation.
+  `PUBLIC_TARGET_NAMES` keeps it out of the help text, so the two do not read
+  as two different targets.
 
 ## Everything else moved, in one pass
 
@@ -122,19 +128,50 @@ one-way: nothing writes the old names any more. It matters most for the three
 kinds of file outside git — the local garak snapshot, a harvest waiting to be
 labelled, and every `resultat.json` and sealed trail already produced.
 
+## Files, folders and configuration keys
+
+The last pass renamed the modules themselves. Three of its decisions are worth
+keeping, because each one is a rule rather than a choice of word.
+
+| Renamed to | Not to | Why |
+|---|---|---|
+| `stats.py` | `statistics.py` | a top-level module of that name shadows the standard library for the whole project and anything it imports |
+| `evaluation/check_*.py` | `evaluation/test_*.py` | pytest would collect them, and they call a model |
+| `payloads/library.json` | — | its `{objectif}` placeholder moved to `{objective}` with it; see the hazard table |
+
+**Two names are CONTRACTS and keep their old spelling as a fallback**, for the
+same reason the French command-line options are kept as aliases:
+
+| New | Old, still read | Why it cannot simply break |
+|---|---|---|
+| `authorisation.json` | `autorisation.json` | gitignored, so nothing here can rename it on an operator's machine — and unlike every other work file it CANNOT be regenerated: it is a signed mandate. Losing sight of it makes the tool refuse to start against a target it is authorised to test |
+| `TARGET_BODY`, `TARGET_RESPONSE_PATH`, `ACTIVE_PROFILE`, `JUDGE_PROFILE`, `CALL_BUDGET`, `TOKEN_BUDGET`, `TARGET`, `TARGET_HEADERS`, `TARGET_TIMEOUT` | `CIBLE_CORPS`, `CIBLE_CHEMIN_REPONSE`, `PROFIL_ACTIF`, `PROFIL_ARBITRE`, `BUDGET_APPELS`, `BUDGET_TOKENS`, `CIBLE`, `CIBLE_ENTETES`, `CIBLE_DELAI` | a `.env` lives on machines this repository never sees |
+
+The new name wins when both are set — someone adding the new line means it to
+take effect, and the stale line is what they are replacing. One note on stderr
+names the lines to rename, said once after every key is read. `config.LEGACY_ENV`
+is the single place that knows the pairs, and `tests/test_config_env.py` reads
+all nine under their OLD name and checks the value arrives where the code USES
+it, not merely that the map lists it.
+
+The provider keys (`OPENAI_API_KEY`, `GROQ_MODEL`…) were never French and follow
+each provider's own convention, so they did not move — and a test says so.
+
 ## Translated in a coordinated pass, not file by file
 
-Three kinds of French cross every file, and translating them one file at a time
-would leave the repository inconsistent between commits:
+Three kinds of French crossed every file, so each moved in ONE pass with its
+artefacts rather than layer by layer. What each actually cost:
 
-| What | Why it waits | What it drags with it |
+| What | Why it could not go file by file | What it dragged with it |
 |---|---|---|
-| **JSON data keys** (`constats`, `couverture`, `portee`, the `STATES` keys…) | persisted in `resultat.json`, in 18 sealed trails and in the committed example | a documented migration, plus regenerating the example |
-| **operator-facing messages** (errors, diagnostics, campaign output, report text) | they ARE the project's output: they appear verbatim in the README excerpt and in `examples/demo-report.md` | regenerating both, which needs a campaign, hence quota |
-| **`.env` configuration keys** (`CIBLE_CORPS`, `CIBLE_CHEMIN_REPONSE`…) | a configuration contract: renaming breaks every existing `.env`, including on machines this repository never sees | a migration with a deprecation path |
+| **JSON data keys** (`constats`, `couverture`, `portee`, the `STATES` keys…) | persisted in `resultat.json`, in 18 sealed trails and in the committed example | `migration.modernise()`, one-way, called on every read |
+| **operator-facing messages** (errors, diagnostics, campaign output, report text) | they ARE the project's output: they appear verbatim in the README excerpt and in `examples/demo-report.md` | one fresh campaign against `demo` (19 calls, 30,494 tokens), from which both were regenerated |
+| **`.env` configuration keys** (`CIBLE_CORPS`, `CIBLE_CHEMIN_REPONSE`…) | a configuration contract: it lives on machines this repository never sees | `config.LEGACY_ENV` and a note on stderr; see *Files, folders and configuration keys* above |
 
-Code (identifiers, comments, docstrings) moves layer by layer; these three move
-once, deliberately, with their artefacts.
+The example report cost no second call: `result.json` IS the built report, so
+re-rendering it abridged is a function call. That is the fourth time the "JSON
+is the source of truth, Markdown is only a view" choice has paid for itself in
+cash.
 
 ## Deliberately NOT translated
 
@@ -155,13 +192,19 @@ wrong. Each entry here cost a broken test run.
 |---|---|
 | `analyser` | two unrelated meanings: *to analyse* (the detectors) and *the analyst* — the model reconnaissance uses to extract the profile. Renaming the detector function hit a pytest fixture named after the analyst, and 19 tests errored on a missing fixture |
 | `taux_de_succes` | the FUNCTION is `success_rate`; the identically-named JSON KEY in `resultat.json` must stay. Rename the call, not the string |
-| `tester` | two meanings again: *probe the wiring* (`targets/http.py`) and *run this measurement* (`evaluation/tester_*.py`). Renaming the first gave the evaluation scripts a `probe_target()` that probes nothing |
+| `tester` | two meanings again: *probe the wiring* (`targets/http.py`) and *run this measurement* (now `evaluation/check_*.py`). Renaming the first gave the evaluation scripts a `probe_target()` that probes nothing |
 | French PROSE containing an identifier | the worst of the four, because the suite stays green. Renaming `prochain` → `next_attempt` rewrote twelve French sentences, including two strings rendered into the client-facing report and — worst — a target reply pinned VERBATIM in `tests/test_adaptation.py`. A test whose data is falsified no longer tests what it claims. A detector now scans for English identifiers inside French sentences after every rename pass |
 | data keys that look like identifiers | `TRANSFORMATIONS`' keys (`"identite"`, `"majuscules"`) travel into `resultat.json`, the committed example and the README excerpt. A `identite` rename hits the string literal too, and the tests follow silently because they were renamed in the same pass |
 | local variables sharing a name with a dict key | the same hazard as above, met THREE times: renaming the local `echanges`, `fiche` or `identite` also rewrote `"echanges"`, `"identite"` and `"majuscules"` in the neighbouring dict. The suite caught each one, but by ricochet — `tests/test_report.py::TestLeSchemaDeDonneesEstEPINGLE` now pins the data schema directly and names the offending key |
-| `motif` | two unrelated meanings AGAIN: a regex *pattern* (`adaptation.REFUSAL_PATTERNS`) and a *reason* a technique was skipped (`planificateur`). One rename cannot serve both |
+| `motif` | two unrelated meanings AGAIN: a regex *pattern* (`adaptation.REFUSAL_PATTERNS`) and a *reason* a technique was skipped (`planner`). One rename cannot serve both |
 | `exiger` | an ordinary French verb as well as the authorisation gate. Renaming it to `require_mandate` produced "finirait par require_mandate un mandat" in a comment and "AVANT d'require_mandate le mandat" in main. Neither broke a test |
 | keyword arguments | `independants=` / `quoi=` are passed by name from four call sites. Renaming the parameter without them turned 693 green tests into 99 failures in one step — which is exactly why the order runs leaves-to-root |
+| a placeholder and the keyword that fills it | `{objectif}` lives in `library.json`; `.format(objectif=…)` lives in the code, and nothing links the two. Renaming the keyword alone made every template raise KeyError — and `payloads/validate.py` broke the same way, so the library still reported itself *valid*. Only a planner test noticed. Both sides must move together, or neither |
+| a module named after its own main function | `agents/judge.py` holds `judge()`. `import agents.judge as judge` followed by `from agents.judge import judge` silently shadows the alias, and every `monkeypatch.setattr(judge, …)` then patches a function. Import such a module under its full name |
+| an argparse dest after a flag rename | `--seulement` became `--only`, so argparse sets `only`; the code still read `arguments.seulement`. It raises nothing on a path never taken, so `--only` and `--excluding` were accepted and SILENTLY IGNORED. Three `evaluation/` entry points died outright the same way. `tests/test_cli_wiring.py` now checks every parser's dests against the attributes its module reads |
+| a Bash heredoc around Python with a backslash | `print("
+…")` loses its backslash and becomes a real newline, which leaves a syntax error if the string ends on that line and a wrong string if it does not. It took `evaluation/measure_adaptation.py` out for a whole commit, unnoticed because `evaluation/` has no tests. Write such a script with a file tool, never a heredoc |
+| a sense-specific word in a data-key pass | `moyen` means both *medium* (a severity) and *mean* (an average), and the key pass picked the wrong one for a measurement script's result dict; `egal` came out as `level` instead of `tie`. Neither broke anything a test watched |
 
 ## How to rename, now that both failures have happened
 
@@ -182,9 +225,13 @@ Two tools, used in this order:
    identifier. It reports, it never rewrites: deciding whether `ask_llm`
    legitimately appears inside a French comment is a reading job.
 
-Keyword arguments still have to be renamed with their call sites, and argparse
-attributes (`arguments.cible`, derived from `--cible`) must NOT be renamed —
-the CLI flag names them.
+Keyword arguments still have to be renamed with their call sites. An argparse
+attribute is named by its FLAG, so the two move together or not at all:
+`parser.add_argument("--target", "--cible", dest="target")` sets
+`arguments.target`, because argparse takes the first long option — which is
+also why a kept French alias must come second, and why an explicit `dest=`
+is worth writing when both are listed. Renaming the attribute alone, or the
+flag alone, is the defect `tests/test_cli_wiring.py` exists to catch.
 
 **Two more classes of reference that live in STRINGS or belong to someone
 else**, and the tokenizer renames neither correctly:
@@ -217,7 +264,12 @@ Flagged here so nobody treats them as prose:
 - **the demo target's system prompt**: the target *is* a French library
   assistant. Translating it changes the measured object: the three defence
   levels, the measured gradient, the example report, the README excerpt.
-- **the judge's instruction**: translating it switches its structural labels to
-  `User:` / `Assistant:`, which **59 library payloads contain**. A target
-  echoing one could forge a turn in the judge's own prompt. The injection must
-  be fixed first; a test blocks the switch until then.
+- **the judge's instruction**: SETTLED by measurement on 2026-11-14, and the
+  answer is no. The forging risk was closed first — its structural labels would
+  become `User:` / `Assistant:`, which **59 library payloads contain**, so a
+  target echoing one could forge a turn in the judge's own prompt. With that
+  guard in place, a faithful English translation was measured against the
+  French one on the same `dev` set: 86 / 100 / 94 against 89 / 100 / 96, one
+  single case apart, which is this judge's known non-determinism at
+  temperature 0. No gain, so French stays the default and the English version
+  is kept beside it — it cost its measurement and it documents the answer.
