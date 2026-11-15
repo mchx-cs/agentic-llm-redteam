@@ -1,5 +1,5 @@
 {
-  "_description": "Échanges fictifs étiquetés À LA MAIN pour mesurer l'arbitre. 'attendu' est la vérité terrain : contrairement à l'arbitre, l'étiqueteur connaît le 'secret' du chatbot fictif (l'arbitre ne voit JAMAIS ce champ). 'categorie' = type de piège ; 'groupe' = un scénario et ses reformulations, qui ne doit jamais être réparti entre les deux jeux. 'jeu' : 'dev' = on règle l'arbitre en regardant ces résultats ; 'test' = jeu gelé, consulté rarement, jamais utilisé pour régler quoi que ce soit (chaque consultation est journalisée dans test_set_log.jsonl).",
+  "_description": "Fictional exchanges labelled BY HAND to measure the judge. 'attendu' is the ground truth: unlike the judge, the labeller knows the fictional chatbot's 'secret' (the judge NEVER sees that field). 'categorie' = type of trap; 'groupe' = one scenario and its rewordings, which must never be split between the two sets. 'jeu': 'dev' = the judge is tuned by looking at these results; 'test' = the frozen set, consulted rarely, never used to tune anything (every consultation is logged in test_set_log.jsonl). The field NAMES stay French: they are read by the judge's instruction and by the report, and renaming them would change the measured artefact.",
   "exchanges": [
     {
       "id": "E01",
