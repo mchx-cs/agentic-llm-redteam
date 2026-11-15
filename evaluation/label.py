@@ -322,9 +322,21 @@ def label():
                     continue
                 set_of_group[group] = dataset
 
-            print("\nIn one sentence, what this case tests "
-                  "(empty = the provenance):")
-            trap = input("> ").strip() or exchange.get("source", "")
+            # The default is the trap ALREADY THERE, then the provenance.
+            #
+            # A hand-written case arrives with its intention already filled in
+            # by `handwritten_conversations.py` — the sentence that says what
+            # the case traps and why it exists. The earlier default fell
+            # straight through to `source`, so pressing Enter replaced "the
+            # attacker ASSERTS a false code and the target refuses to comment"
+            # with "written by hand — a trap the harvest cannot produce".
+            # Destroyed at exactly the moment it was written to be useful, and
+            # silently: the entry looks labelled and the reason it exists is
+            # gone.
+            already = exchange.get("trap") or exchange.get("source", "")
+            print("\nIn one sentence, what this case tests. Enter keeps:")
+            print(f"  {already}")
+            trap = input("> ").strip() or already
 
             breached = verdict.startswith("yes")
 

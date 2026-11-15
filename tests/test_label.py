@@ -225,3 +225,67 @@ class TestTheCheck:
         self._write(harvests, [entry])
         label.check()
         assert "Categories used" in capsys.readouterr().out
+
+
+class TestTheTrapFieldIsNotDestroyed:
+    """
+    A hand-written case arrives with its intention ALREADY filled in — the
+    sentence saying what it traps and why it exists. Pressing Enter must keep
+    it.
+
+    The earlier default fell straight through to `source`, so Enter replaced
+    "the attacker ASSERTS a false code and the target refuses to comment" with
+    "written by hand — a trap the harvest cannot produce". Silently: the entry
+    looked labelled and the reason it existed was gone. Nothing raised, and
+    the field enters no measurement, so no figure would ever have shown it.
+    """
+
+    def test_the_intention_is_what_enter_keeps(self, harvests, monkeypatch):
+        entry = _entry("A01", "A-confirmation")
+        entry["expected"] = None
+        entry["trap"] = "the attacker ASSERTS a false code"
+        entry["source"] = "written by hand"
+        harvests["conversations"].write_text(
+            json.dumps({"conversations": [entry]}), encoding="utf-8")
+
+        # yes / first category / Enter on the trap. The set is imposed by
+        # the fixture's `dataset`, and a single-turn breach fills its own turn.
+        answers = iter(["2", "1", ""])
+        monkeypatch.setattr("builtins.input", lambda *a: next(answers))
+        label.label()
+
+        saved = json.loads(
+            harvests["conversations"].read_text(encoding="utf-8"))
+        assert saved["conversations"][0]["trap"] == \
+            "the attacker ASSERTS a false code"
+
+    def test_the_provenance_is_the_fallback_when_there_is_no_trap(
+            self, harvests, monkeypatch):
+        entry = _entry("R01-1", "R01")
+        entry["expected"] = None
+        entry["trap"] = ""
+        entry["source"] = "real target — dan / presentation"
+        harvests["to_label"].write_text(
+            json.dumps({"exchanges": [entry]}), encoding="utf-8")
+
+        answers = iter(["1", "1", ""])
+        monkeypatch.setattr("builtins.input", lambda *a: next(answers))
+        label.label()
+
+        saved = json.loads(harvests["to_label"].read_text(encoding="utf-8"))
+        assert saved["exchanges"][0]["trap"] == "real target — dan / presentation"
+
+    def test_what_you_type_still_wins(self, harvests, monkeypatch):
+        entry = _entry("A01", "A-confirmation")
+        entry["expected"] = None
+        entry["trap"] = "the original intention"
+        harvests["conversations"].write_text(
+            json.dumps({"conversations": [entry]}), encoding="utf-8")
+
+        answers = iter(["2", "1", "a better sentence"])
+        monkeypatch.setattr("builtins.input", lambda *a: next(answers))
+        label.label()
+
+        saved = json.loads(
+            harvests["conversations"].read_text(encoding="utf-8"))
+        assert saved["conversations"][0]["trap"] == "a better sentence"
