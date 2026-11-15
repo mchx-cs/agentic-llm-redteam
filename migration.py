@@ -205,6 +205,23 @@ ENUM_FIELDS = frozenset({
 # tally of `success_rate`. A dict of counts, keyed by state name.
 ENUM_KEYED_FIELDS = frozenset({"counts"})
 
+# Values that LEGACY_VALUES CANNOT hold, because the same word is also a key.
+#
+# `cible` is both the trail's target-name KEY and a conversation turn's role
+# VALUE. Putting it in LEGACY_VALUES would break the no-overlap invariant that
+# `test_the_two_maps_do_not_overlap` protects — and that invariant is right in
+# general, because a word renamed differently depending on where it appears is
+# a trap. So the ambiguous ones get an explicit per-field map.
+#
+# Leaving `cible` out was a silent bug: a harvested conversation's turns came
+# back with `role: "attacker"` and `role: "cible"`, so every
+# `turn["role"] == "target"` check failed. The labelling pre-pass reported
+# "secret said by the target: 0 / 119" where the answer is 10, and the
+# detectors never ran on a single target reply. Nothing raised, no test broke.
+VALUES_BY_FIELD = {
+    "role": {"utilisateur": "attacker", "cible": "target"},
+}
+
 
 def modernise(data, _field=None):
     """
@@ -221,6 +238,8 @@ def modernise(data, _field=None):
                 for k, v in data.items()}
     if isinstance(data, list):
         return [modernise(v, _field) for v in data]
+    if isinstance(data, str) and _field in VALUES_BY_FIELD:
+        return VALUES_BY_FIELD[_field].get(data, data)
     if isinstance(data, str) and _field in ENUM_FIELDS:
         return LEGACY_VALUES.get(data, data)
     return data
