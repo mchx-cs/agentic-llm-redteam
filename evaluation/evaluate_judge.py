@@ -269,6 +269,14 @@ def _per_format(exchanges, results_by_id):
     for name, subset, note in (
             ("single-turn ", single, single_note),
             ("conversation", conversations, "NEW format, phase 3b")):
+        if not subset:
+            # A restricted run empties one arm. Printing `precision=0%` over
+            # nothing -- and beside "comparable with 89 / 100 / 96" -- would
+            # read as a judge that gets everything wrong, which is the same
+            # mistake the report refuses when it prints "not calculable"
+            # rather than a 0% success rate.
+            print(f"  {name}   not measured in this run")
+            continue
         s = scores(subset, results_by_id)
         recall = (f"{s['rappel']:.0%}" if s["rappel"] is not None
                   else "n/a (no vulnerability)")
@@ -318,8 +326,28 @@ def _print_turn_agreement(exchanges, results_by_id):
           f"breaches both sides saw, how many on the same turn.")
 
 
-def evaluate(dataset="dev", language="fr"):
+def evaluate(dataset="dev", language="fr", only=None):
+    """
+    Measures the judge, optionally on ONE format only.
+
+    `only` ("conversations" or "single-turn") is a DIAGNOSTIC, added while
+    tuning the multi-turn addendum: that work needs several passes over the
+    45 conversations, and re-judging the 109 single-turn entries each time
+    would pay ~3x for an answer about the other population.
+
+    It is deliberately not a measurement. A restricted run announces itself
+    and caches under its own scope, so it can never serve verdicts to a full
+    run -- reuse between two different runs would be repeating a measurement,
+    not resuming one, which is the line `resume.discard()` exists to hold.
+
+    What it does NOT change is the comparability note: that note is about the
+    single-turn LINE, which is the same population restricted or not, so
+    suppressing it would be suppressing something true.
+    """
     exchanges = load_exchanges(dataset)
+    if only:
+        wanted = only == "conversations"
+        exchanges = [e for e in exchanges if is_conversation(e) is wanted]
     counts = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
     errors = []
     results_by_id = {}
@@ -332,6 +360,13 @@ def evaluate(dataset="dev", language="fr"):
     # agrees with another model", which is a different claim and must not be
     # quoted as the first. Said at the TOP, before the figures, so it cannot
     # be read past.
+    if only:
+        print(f"!!! RESTRICTED to {only}: {len(exchanges)} of "
+              f"{len(load_exchanges(dataset))} entries in `{dataset}`.")
+        print(f"    This is a diagnostic, NOT the `{dataset}` "
+              f"measurement, and it must not be quoted as one.")
+        print()
+
     by_model = [e for e in exchanges if e.get("labelled_by") == "model"]
     if by_model:
         print(f"!!! {len(by_model)} of {len(exchanges)} label(s) were decided "
@@ -350,7 +385,8 @@ def evaluate(dataset="dev", language="fr"):
     # the judge, the instruction's language AND the question's digest, so a
     # cache can never blend two judges or serve a verdict about text that has
     # since changed. See evaluation/resume.py.
-    cache = Cache(dataset, judge_identity(), language)
+    cache = Cache(f"{dataset}+{only}" if only else dataset,
+                  judge_identity(), language)
     if len(cache):
         print(f"Resuming: {len(cache)} verdict(s) already obtained by an "
               f"interrupted run will not be asked again.\n")
@@ -423,7 +459,9 @@ def evaluate(dataset="dev", language="fr"):
                   f"{exchange['trap']}")
             print(f"  Judge: {result['analyse']}")
 
-    if dataset == "test":
+    # A slice of the frozen set is not a consultation of it: logging one
+    # would put a figure in the journal that no later run can reproduce.
+    if dataset == "test" and not only:
         log_test_consultation(counts, metrics, language)
 
     # The run reached its end, so there is nothing to resume — and keeping
@@ -449,5 +487,10 @@ if __name__ == "__main__":
     parser.add_argument("--test", action="store_true",
                         help="evaluate on the frozen test set (the "
                              "consultation is logged)")
+    parser.add_argument("--only", choices=("conversations", "single-turn"),
+                        help="judge ONE format only. A diagnostic for tuning "
+                             "the multi-turn addendum, not a measurement: "
+                             "the run says so and claims no comparability.")
     arguments = parser.parse_args()
-    evaluate("test" if arguments.test else "dev", arguments.language)
+    evaluate("test" if arguments.test else "dev", arguments.language,
+             arguments.only)

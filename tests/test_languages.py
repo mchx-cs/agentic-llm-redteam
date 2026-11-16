@@ -637,6 +637,118 @@ class TestTheCriteriaGapsThatAPentestWouldHit:
             "category list per entry rather than one slot")
 
 
+class TestTheRestrictedRunIsADiagnosticNotAMeasurement:
+    """
+    `--only conversations` was added while tuning the multi-turn addendum:
+    that work needs several passes over the 45 conversations of `dev`, and
+    re-judging the 109 single-turn entries each time would pay about three
+    times over for an answer about the other population.
+
+    A restriction is dangerous for one reason: its figure LOOKS like the
+    set's figure. These tests hold the three properties that keep the two
+    apart.
+    """
+
+    @staticmethod
+    def _run(monkeypatch, only=None, dataset="dev"):
+        import evaluation.evaluate_judge as evaluator
+
+        exchanges = [
+            {"id": "M", "expected": False, "payload": "p", "reply": "r",
+             "group": "M", "dataset": dataset, "category": "controle",
+             "trap": "", "languages": "fr->fr", "labelled_by": "author"},
+            {"id": "C", "expected": False, "group": "C", "dataset": dataset,
+             "category": "conversation-anodine", "trap": "",
+             "languages": "fr->fr", "labelled_by": "author",
+             "turns": [{"role": "attacker", "content": "a"},
+                       {"role": "target", "content": "b"},
+                       {"role": "attacker", "content": "c"},
+                       {"role": "target", "content": "d"}]},
+        ]
+        monkeypatch.setattr(evaluator, "load_exchanges", lambda d: exchanges)
+        judged = []
+
+        def fake(exchange, language):
+            judged.append(exchange["id"])
+            return {"reussi": False, "critere": "aucun", "analyse": "",
+                    "valeur": None, "tour": None}
+
+        monkeypatch.setattr(evaluator, "ask_the_judge", fake)
+        evaluator.evaluate(dataset, "fr", only)
+        return judged
+
+    def test_conversations_only_judges_the_conversations(self, monkeypatch,
+                                                         tmp_path):
+        import evaluation.resume
+        monkeypatch.setattr(evaluation.resume, "FOLDER", tmp_path)
+        assert self._run(monkeypatch, "conversations") == ["C"]
+
+    def test_single_turn_only_judges_the_single_turn_entries(self, monkeypatch,
+                                                             tmp_path):
+        import evaluation.resume
+        monkeypatch.setattr(evaluation.resume, "FOLDER", tmp_path)
+        assert self._run(monkeypatch, "single-turn") == ["M"]
+
+    def test_an_unrestricted_run_judges_everything(self, monkeypatch,
+                                                   tmp_path):
+        import evaluation.resume
+        monkeypatch.setattr(evaluation.resume, "FOLDER", tmp_path)
+        assert sorted(self._run(monkeypatch)) == ["C", "M"]
+
+    def test_it_SAYS_it_is_restricted(self, monkeypatch, tmp_path, capsys):
+        # The figure of a restricted run looks exactly like the set's figure.
+        # Saying so is the only thing that keeps a reader from quoting it.
+        import evaluation.resume
+        monkeypatch.setattr(evaluation.resume, "FOLDER", tmp_path)
+        self._run(monkeypatch, "conversations")
+        out = capsys.readouterr().out
+        assert "RESTRICTED to conversations" in out
+        assert "NOT the `dev` measurement" in out
+
+    def test_a_SLICE_of_the_frozen_set_is_never_logged(self, monkeypatch,
+                                                       tmp_path):
+        """
+        The journal records consultations of the whole frozen set. A slice
+        put there would be a figure no later run could reproduce, and the
+        frozen set would lose its value as a reference.
+        """
+        import evaluation.evaluate_judge as evaluator
+        import evaluation.resume
+        monkeypatch.setattr(evaluation.resume, "FOLDER", tmp_path)
+        logged = []
+        monkeypatch.setattr(evaluator, "log_test_consultation",
+                            lambda *a, **k: logged.append(a))
+
+        self._run(monkeypatch, "conversations", dataset="test")
+        assert logged == [], "a restricted run logged a frozen-set consultation"
+
+        self._run(monkeypatch, None, dataset="test")
+        assert len(logged) == 1, "a full consultation must still be logged"
+
+    def test_it_caches_under_its_OWN_scope(self, monkeypatch, tmp_path):
+        """
+        A restricted run must not serve verdicts to a full one. Reuse between
+        two DIFFERENT runs is repeating a measurement, not resuming one --
+        the line `discard()` exists to hold, the judge not being
+        deterministic.
+        """
+        import evaluation.evaluate_judge as evaluator
+        import evaluation.resume
+        monkeypatch.setattr(evaluation.resume, "FOLDER", tmp_path)
+
+        scopes = []
+        real = evaluation.resume.Cache
+
+        def spy(dataset, judge, language):
+            scopes.append(dataset)
+            return real(dataset, judge, language)
+
+        monkeypatch.setattr(evaluator, "Cache", spy)
+        self._run(monkeypatch, "conversations")
+        self._run(monkeypatch, None)
+        assert scopes == ["dev+conversations", "dev"], scopes
+
+
 class TestExistenceIsNotAFinding:
     """
     The 2026-11-16 principle, applied to the WHOLE corpus rather than to the
