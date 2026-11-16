@@ -168,10 +168,12 @@ class TestTheFiguresDoNotMove:
 
         # Now simulate an interruption after the first entry: put A back in a
         # cache and run again.
-        cache = evaluation.resume.Cache(
-            "dev", f"{evaluator.JUDGE_PROFILE}/"
-                   f"{evaluator.PROFILES[evaluator.JUDGE_PROFILE]['model']}",
-            "fr")
+        # The judge's identity comes from the function the evaluation
+        # itself uses. Reassembling it here would have made the test agree
+        # with a key of its own invention rather than with the one the cache
+        # is written under -- and it would read the ambient configuration,
+        # which no test in this repository may do.
+        cache = evaluation.resume.Cache("dev", evaluator.judge_identity(), "fr")
         cache.put("A", evaluator.question_asked(exchanges[0]), verdicts["p1"])
         calls.clear()
 

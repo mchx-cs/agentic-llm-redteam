@@ -44,6 +44,23 @@ TEST_LOG = Path(__file__).parent / "test_set_log.jsonl"
 MEASURED_ON = "groq/openai/gpt-oss-120b"
 
 
+def judge_identity():
+    """
+    Names the judge being measured, as `profile/model`.
+
+    ONE function, because this string is a KEY: it stamps the frozen-set
+    log, it decides whether the published figures are comparable, and it
+    keys the resume cache. Reassembled by hand in each of those places --
+    as it was until 2026-11-16, four times over, plus a fifth in the tests
+    -- the three could drift apart, and the one that must not is the cache:
+    a key built differently from the one the cache was written with serves a
+    verdict from another judge. The same argument as `question_asked`, which
+    is built by the functions that build the real question rather than
+    reconstructed.
+    """
+    return f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['model']}"
+
+
 def load_exchanges(dataset):
     """Loads one set's exchanges ("dev" or "test"), after checking."""
     from migration import modernise
@@ -137,7 +154,7 @@ def log_test_consultation(counts, metrics, language='fr'):
         "date": datetime.now().isoformat(timespec="seconds"),
         # Without the judge being measured, the log's lines would not be
         # comparable.
-        "juge": f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['model']}",
+        "juge": judge_identity(),
         # The instruction's LANGUAGE, since 2026-11-14: two consultations
         # with two different instructions would otherwise be
         # indistinguishable in the log, and the frozen set would lose its
@@ -236,7 +253,7 @@ def _per_format(exchanges, results_by_id):
     # single-turn line is comparable with them is only true on that judge —
     # on another model it is a different measurement, and saying otherwise
     # would invite exactly the comparison the separation exists to protect.
-    current = f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['model']}"
+    current = judge_identity()
     same_judge = current == MEASURED_ON
     single_note = ("comparable with 89 / 100 / 96" if same_judge
                    else f"NOT comparable: those figures are "
@@ -333,8 +350,7 @@ def evaluate(dataset="dev", language="fr"):
     # the judge, the instruction's language AND the question's digest, so a
     # cache can never blend two judges or serve a verdict about text that has
     # since changed. See evaluation/resume.py.
-    cache = Cache(dataset, f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['model']}",
-                  language)
+    cache = Cache(dataset, judge_identity(), language)
     if len(cache):
         print(f"Resuming: {len(cache)} verdict(s) already obtained by an "
               f"interrupted run will not be asked again.\n")
