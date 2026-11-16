@@ -11,6 +11,7 @@ silently dropped attempts would announce a coverage it does not have —
 exactly the fault this project works to make loud.
 """
 
+import json
 import pytest
 
 from agents.adaptation import (BONUS_FAMILY_NAMED,
@@ -534,13 +535,45 @@ class TestTheGrainOfDiversity:
 
 class TestStaticControl:
     """
-    `--sans-adaptation` replays the static plan: same pool, same priority
+    `--no-adaptation` replays the static plan: same pool, same priority
     order, but learning nothing from the replies.
 
     Why it exists: until now adaptation's gain was measured only on SIMULATED
     targets (`evaluation/measure_adaptation.py`). Comparing on a real target
     needs a control, and a control needs this flag.
+
+    THE POOL IS SUPPLIED, and that is what makes these tests mean anything.
+    They used to run on whatever `attacker.load_library()` happened to find,
+    which on a development machine includes the garak snapshot — 52 probes,
+    so "four attempts, four distinct techniques" was easy. The snapshot is
+    gitignored, so continuous integration has only the repository's own
+    library: two usable techniques for this profile, where repetition is
+    forced and proves nothing about learning. Green here, RED there, and red
+    for six days before anyone pushed again.
+
+    The fixture below is the same one `test_garak.py` uses, with a pool large
+    enough for the property to be observable. CLAUDE.md promised that the
+    tests do not depend on the snapshot; this file was the one that did.
     """
+
+    @pytest.fixture(autouse=True)
+    def pool(self, monkeypatch, tmp_path):
+        import agents.attacker
+
+        path = tmp_path / "garak.json"
+        path.write_text(json.dumps({
+            "garak_version": "0.17.1",
+            "exported_at": "2026-11-10T00:00:00",
+            "probes": [
+                {"probe": f"probes.fam{n}.Probe{n}",
+                 "objective": "disregard the system prompt",
+                 "owasp_families": ["owasp:llm01"], "language": "en",
+                 "doc": "", "payloads": [f"payload {n}"],
+                 "payloads_available": 1}
+                for n in range(1, 7)
+            ],
+            "skipped": []}), encoding="utf-8")
+        monkeypatch.setattr(agents.attacker, "GARAK_FILE", path)
 
     @staticmethod
     def _campaign(adaptive, attempts=4):

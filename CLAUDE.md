@@ -3234,6 +3234,54 @@ is not a money problem, but it is a run to redo. Verdicts written as they come, 
 finished entries skipped — the same shape as the audit trail's line-by-line flush — would
 fix it, and it needs no quota to build.
 
+**CI was red for six days, and the cause was the garak snapshot (2026-11-16).**
+Diagnosed without the Actions logs, which the API refuses unauthenticated, by reproducing
+what continuous integration has and this machine does not.
+
+Two causes, found in that order.
+
+**1. A test read the ambient judge.** `test_the_two_formats_are_never_POOLED` asserted the
+"comparable with 89 / 100 / 96" note unconditionally. That morning's comparability guard
+had made the note conditional on the judge matching `MEASURED_ON`. Here `.env` sets the
+judge to groq, so the note printed; in CI there is no `.env`, so the judge is local, the
+note is withdrawn, and the test failed. The guard was right and stays; the test was wrong.
+
+**2. And the real one, which predated it: `payloads/garak.json` is GITIGNORED.**
+`tests/test_adaptation.py` was the only test file that did not pin `GARAK_FILE`. Its
+`TestStaticControl` runs a real campaign over whatever pool `load_library()` finds — 52
+probes on a development machine, and the repository's bare library in CI, which leaves
+TWO usable techniques for its profile. "Four attempts, four distinct techniques" is then
+impossible, and the repetition proves nothing about learning either way.
+
+CLAUDE.md has promised since phase 7 that "the tests do not depend on the snapshot".
+Three files honoured it by pointing `GARAK_FILE` at an absent path; this one did not, and
+the promise was false for six days. It now installs a six-probe fixture, so the pool is
+KNOWN rather than ambient — pointing it at an absent path would have been determinism
+without a measurable property.
+
+**Verified both ways**: the suite is green with `.env` and the snapshot, and green with
+neither. That second run is the one that matters, and it is the one that had never been
+done.
+
+**A guard was written for this and then WITHDRAWN**, which is worth recording. It flagged
+any test file naming a pool builder without pinning `GARAK_FILE`, and found four more.
+Checked one by one: `test_collect_conversations` already passes `with_garak=False`, and
+`test_report` REPLACES `run_campaign` rather than calling it — two false positives out of
+four. A guard that cries wrong twice in four teaches people to ignore it, so it was
+removed rather than shipped half-right.
+
+What it did find stands, and is left as a known weakness rather than a fix: `test_judge`
+and `test_migration` read the pool WITH garak. They pass either way, but in CI they check
+seventeen hand-written payloads where they claim to check 1,160 — so the anti-forgery
+count ("59 payloads contain `User:`") is a development-machine figure, not a CI one.
+
+**The method note, and it is the third time this exact lesson is recorded here**: a
+development environment richer than continuous integration hides what has just been
+added. After the collector's tests that called a model because Ollama runs here, and the
+fixture that hid a tautological test — this time it was a gitignored data file. The
+reproduction that found both took two commands: run the suite with `.env` moved aside,
+then with the snapshot moved aside too.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

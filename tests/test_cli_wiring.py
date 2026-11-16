@@ -201,3 +201,4 @@ class TestNoTestReadsTheAmbientJudge:
         unpinned = "if JUDGE_PROFILE == 'groq': assert ..."
         assert '"JUDGE_PROFILE"' in pinned
         assert '"JUDGE_PROFILE"' not in unpinned
+
