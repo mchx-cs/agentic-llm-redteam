@@ -678,16 +678,26 @@ def integrate():
                                    if e["expected"] is None]
         save(path, harvest["donnees"])
 
-    multiturn = sum(1 for e in corpus["exchanges"] if e.get("turns"))
+    # Counted with the function that DECIDES which instruction the judge
+    # receives, not by "does it carry turns". The two differ -- 64 against
+    # 120 on 2026-11-16 -- because an entry stored as `turns` may hold a
+    # single exchange, which `is_conversation` exists to catch. Counting
+    # the other way told the author a number no measurement would use.
+    from evaluation.evaluate_judge import is_conversation
+
+    multiturn = sum(1 for e in corpus["exchanges"] if is_conversation(e))
     print(f"{added} exchange(s) added to the corpus "
           f"({len(corpus['exchanges'])} in all, {multiturn} of them "
           f"conversation(s)).")
     if multiturn:
-        # The judge cannot read a conversation yet: saying so here avoids
-        # believing the evaluation took them into account.
-        print("The conversations are NOT measured yet: the judge's "
-              "instruction expects a single turn. `evaluate_judge` skips "
-              "them and says so.")
+        # They ARE measured, since the multi-turn instruction landed. The
+        # thing worth saying is what the figure means: the two formats are
+        # never pooled, so a conversation does not move the single-turn
+        # line the published 89 / 100 / 96 is compared against.
+        print("Conversations are judged with the multi-turn instruction "
+              "and reported on their OWN line:")
+        print("  the two formats are never pooled, so these do not move "
+              "the single-turn figure.")
 
     # Counted AFTER the harvests were rewritten, so it reflects what is left.
     # This line used to read `restants`, a local of `label()`: `--integrer`

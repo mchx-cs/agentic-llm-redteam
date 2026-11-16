@@ -98,18 +98,56 @@ class TestIntegration:
         assert [e["id"] for e in corpus["exchanges"]] == ["R01-1"]
         assert "Skipped" in capsys.readouterr().out
 
-    def test_a_conversation_is_flagged_as_not_measured(self, harvests,
-                                                       capsys):
-        """
-        A corpus that grows without the measurement changing needs explaining.
-        """
+    @staticmethod
+    def _integrate_with(harvests, turns):
         conversation = _entry("C-01-1", "C-01")
-        conversation["turns"] = [{"role": "attacker", "content": "a"},
-                                 {"role": "target", "content": "b"}]
+        conversation["turns"] = turns
         harvests["conversations"].write_text(
             json.dumps({"conversations": [conversation]}), encoding="utf-8")
         label.integrate()
-        assert "are NOT measured yet" in capsys.readouterr().out
+
+    def test_a_conversation_is_flagged_as_judged_on_its_OWN_line(
+            self, harvests, capsys):
+        """
+        This test previously asserted "are NOT measured yet", and it was
+        right when it was written. It changed because the BEHAVIOUR improved:
+        the multi-turn instruction landed, `evaluate_judge` judges
+        conversations with `judge_conversation` and reports them separately.
+        Left as it was, it would have kept telling the author that the cases
+        they just integrated enter no measurement.
+
+        What has to be said instead is what the figure MEANS: the two formats
+        are never pooled, so a conversation does not move the single-turn
+        line the published 89 / 100 / 96 is compared against.
+        """
+        self._integrate_with(harvests, [
+            {"role": "attacker", "content": "a"},
+            {"role": "target", "content": "b"},
+            {"role": "attacker", "content": "c"},
+            {"role": "target", "content": "d"}])
+        out = capsys.readouterr().out
+        assert "never pooled" in out
+        assert "NOT measured" not in out, (
+            "the old message said conversations are not measured; they are")
+
+    def test_a_SINGLE_exchange_stored_as_turns_is_not_one(self, harvests,
+                                                          capsys):
+        """
+        The count must come from `is_conversation`, not from "does it carry
+        turns". Two hand-written entries (A03, A04) are single-turn exchanges
+        living in the conversations harvest -- exactly the case a
+        `turns`-based count gets wrong, and the reason that function exists.
+
+        Counting the other way reported 120 conversations on 2026-11-16 where
+        64 would be judged as such: a number no measurement would ever use.
+        """
+        self._integrate_with(harvests, [
+            {"role": "attacker", "content": "a"},
+            {"role": "target", "content": "b"}])
+        out = capsys.readouterr().out
+        assert "0 of them conversation" in out, out
+        assert "never pooled" not in out, (
+            "a single exchange was announced as a conversation")
 
 
 class TestWhatIsLeftToLabel:
