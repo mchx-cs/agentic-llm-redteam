@@ -158,3 +158,46 @@ class TestTheCheckItself:
         # If the discovery ever returned nothing, every parametrized case
         # would vanish and the file would pass by being empty.
         assert len(modules_with_a_parser()) >= 5
+
+
+class TestNoTestReadsTheAmbientJudge:
+    """
+    A test must not let the configured judge decide what output it expects.
+
+    This cost a red CI: `test_the_two_formats_are_never_POOLED` asserted the
+    "comparable with 89 / 100 / 96" note unconditionally. That note is
+    withdrawn on any judge other than the one the figures were measured on —
+    so it passed here, where `.env` sets the judge to groq, and failed in
+    continuous integration, which has no `.env` and therefore the local judge.
+    Green locally, red remotely, and the TEST was the thing that was wrong.
+
+    The check is static: a test file may name `JUDGE_PROFILE` only if it also
+    monkeypatches it. Reading it to build a fixture is fine; reading it to
+    decide an assertion is what breaks.
+    """
+
+    def test_a_test_naming_the_judge_profile_also_pins_it(self):
+        import subprocess
+
+        listed = subprocess.run(["git", "ls-files", "tests/*.py"], cwd=ROOT,
+                                capture_output=True, text=True,
+                                check=True).stdout.split()
+        offenders = []
+        for name in listed:
+            source = (ROOT / name).read_text(encoding="utf-8")
+            if "JUDGE_PROFILE" not in source:
+                continue
+            if '"JUDGE_PROFILE"' not in source:
+                # Named but never passed to monkeypatch.setattr as a string.
+                offenders.append(name)
+        assert not offenders, (
+            f"{offenders} read JUDGE_PROFILE without pinning it: the ambient "
+            f"configuration will decide what the test expects, so it passes "
+            f"where `.env` exists and fails in CI.")
+
+    def test_the_check_would_catch_an_unpinned_read(self):
+        # The check is a string search, so prove it discriminates.
+        pinned = 'monkeypatch.setattr(m, "JUDGE_PROFILE", "x")'
+        unpinned = "if JUDGE_PROFILE == 'groq': assert ..."
+        assert '"JUDGE_PROFILE"' in pinned
+        assert '"JUDGE_PROFILE"' not in unpinned

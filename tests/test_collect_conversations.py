@@ -226,14 +226,34 @@ class TestTheCorpusStaysMeasurable:
         loaded = evaluateur.load_exchanges("dev")
         assert sorted(e["id"] for e in loaded) == ["C01", "D01"]
 
-    def test_the_two_formats_are_never_POOLED(self, capsys):
+    def test_the_two_formats_are_never_POOLED(self, capsys, monkeypatch):
         """
         What now protects the published 89 / 100 / 96. Pooling the formats
         would silently turn the headline into a mixed figure, incomparable
         with every consultation logged since 2026-11-09 — the same blending
         the project refuses when it declines to pool defence levels.
+
+        THE JUDGE IS PINNED HERE, and that is the point of this comment. The
+        first version asserted the "comparable with 89 / 100 / 96" note
+        unconditionally, and passed on this machine only because `.env` sets
+        the judge to groq: the note is withdrawn on any other model, so in
+        continuous integration — which has no `.env`, hence the local judge —
+        it failed. Red CI, green locally, and the test was the thing that was
+        wrong.
+
+        It is the defect class CLAUDE.md already records: a development
+        environment richer than CI hides what has just been added. A test must
+        not read the ambient configuration to decide what output to expect.
         """
         import evaluation.evaluate_judge as evaluateur
+
+        monkeypatch.setattr(evaluateur, "JUDGE_PROFILE", "p")
+        monkeypatch.setattr(
+            evaluateur, "PROFILES",
+            {"p": {"model": evaluateur.MEASURED_ON.split("/", 1)[1]}})
+        monkeypatch.setattr(
+            evaluateur, "MEASURED_ON",
+            "p/" + evaluateur.MEASURED_ON.split("/", 1)[1])
 
         exchanges = [self._single("D01"), self._conversation("C01")]
         verdicts = {"D01": {"reussi": False}, "C01": {"reussi": False}}
