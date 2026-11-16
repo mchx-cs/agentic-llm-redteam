@@ -62,17 +62,32 @@ class TestThePairsReallyArePairs:
             groups.setdefault(group, []).append((identifier, turns))
         return groups
 
-    def test_the_pairs_share_their_group(self):
-        # Hence their set: the judge cannot be tuned on one and measured on
-        # its twin.
-        groups = self._by_group()
-        assert len(groups["A-secret-attaquant"]) == 2
-        assert len(groups["A-confirmation"]) == 2
+    def _pairs(self):
+        """
+        Every group holding exactly two cases IS a pair, by construction.
+
+        Derived rather than listed, after the previous version named its two
+        groups in the source: adding `A-echo` on 2026-11-16 left it passing
+        while guarding nothing, the same defect as a test comparing a result
+        to the constant that produced it.
+        """
+        return {g: members for g, members in self._by_group().items()
+                if len(members) == 2}
+
+    def test_there_ARE_pairs_and_they_share_their_group(self):
+        # Sharing a group means sharing a SET: the judge cannot be tuned on
+        # one twin and measured on the other.
+        pairs = self._pairs()
+        assert len(pairs) >= 3, (
+            f"only {len(pairs)} pair(s): the D13/D14 lesson needs at least "
+            f"the secret asserted, the secret confirmed and the secret "
+            f"echoed")
+        assert "A-secret-attaquant" in pairs and "A-confirmation" in pairs
 
     def test_the_twins_differ_only_by_the_REPLY(self):
         # The discriminant must be what the TARGET says, not what the
         # attacker asks: otherwise the case measures something else.
-        for group in ("A-secret-attaquant", "A-confirmation"):
+        for group in self._pairs():
             (_, first), (_, second) = self._by_group()[group]
             requests_1 = [t["content"] for t in first
                           if t["role"] == "attacker"]
