@@ -24,6 +24,9 @@ import json
 from pathlib import Path
 
 from evaluation.languages import language_pair
+# The hand-written rule is READ from where it is defined, never restated
+# here: one place, for the same reason as `judge_identity()`.
+from evaluation.split_sets import DEV, defence_level
 
 FOLDER = Path(__file__).parent
 TO_LABEL_FILE = FOLDER / "to_label.json"
@@ -273,7 +276,7 @@ def _left_to_label(harvests):
                if e["expected"] is None)
 
 
-def label():
+def label(ids=None):
     harvests = _harvests()
     if not harvests:
         names = ", ".join(p.name for p, _ in SOURCES)
@@ -285,7 +288,40 @@ def label():
         return
 
     exchanges = [e for harvest in harvests for e in harvest["entrees"]]
-    remaining = [e for e in exchanges if e["expected"] is None]
+
+    # An entry whose id is ALREADY in the corpus is not labellable here:
+    # `integrate()` skips it, so labelling it achieves nothing. Offering
+    # it anyway cost real work -- on 2026-11-16 the conversations harvest
+    # held ten hand-written cases of which seven were already integrated,
+    # so labelling ten would have added three. The way to change a corpus
+    # entry is `--revise`, which the message names rather than leaving to
+    # be guessed.
+    integrated = {e["id"] for e in load(CORPUS_FILE)["exchanges"]}
+    remaining = [e for e in exchanges
+                 if e["expected"] is None and e["id"] not in integrated]
+
+    if ids:
+        wanted = list(dict.fromkeys(ids))
+        by_id = {e["id"]: e for e in remaining}
+        unknown = [i for i in wanted if i not in by_id]
+        if unknown:
+            print(f"Not labellable: {', '.join(unknown)}")
+            print("  Either they are not in a harvest, or they are "
+                  "already labelled, or they are already in the corpus "
+                  "(then: --revise).")
+            return
+        # The order asked for, not the harvest's: labelling a pair means
+        # reading its two members one after the other.
+        remaining = [by_id[i] for i in wanted]
+    done = [e for e in exchanges
+            if e["expected"] is None and e["id"] in integrated]
+    if done:
+        print(f"{len(done)} entry(ies) of the harvest are already in the "
+              f"corpus and are skipped:")
+        print(f"  {', '.join(sorted(e['id'] for e in done))}")
+        print("  To re-decide one of those: "
+              "python -m evaluation.label --revise <ID>")
+        print()
 
     if not remaining:
         print("Every exchange is already labelled. "
@@ -329,6 +365,25 @@ def label():
             if group in set_of_group:
                 dataset = set_of_group[group]
                 print(f"\nSet: {dataset} (imposed by group {group}).")
+            elif defence_level(group) == "hand-written":
+                # NOT a question. `split_sets` calls this rule ABSOLUTE,
+                # and its own comment records why: letting the striping
+                # run over the hand-written stratum once sent the
+                # A03/A04 twins into the FROZEN set, where a pair
+                # written to pin one specific trap is unusable for the
+                # only job it exists for.
+                #
+                # The rule lived in `split_sets` while the question
+                # lived here, and nothing connected them: a human
+                # answering "test" would have reintroduced exactly that
+                # defect. The same shape as the three chain-of-custody
+                # fields nobody filled -- two modules correct on their
+                # own, the junction uncovered.
+                dataset = DEV
+                print(f"\nSet: {dataset} (imposed: {group} is "
+                      f"hand-written, and those never go to the frozen "
+                      f"set).")
+                set_of_group[group] = dataset
             else:
                 dataset = ask_choice(
                     "Which set? (dev = to tune the judge, "
@@ -657,9 +712,14 @@ if __name__ == "__main__":
     parser.add_argument("--revise", nargs="+", metavar="ID",
                         help="re-decide entries ALREADY in the corpus, by id. "
                              "Use it on what the evaluation disputes.")
+    parser.add_argument("--ids", nargs="+", metavar="ID",
+                        help="label only these entries of the harvest, in "
+                             "this order. The harvest can hold tens of "
+                             "thousands of entries; three new cases should "
+                             "not mean walking all of them.")
     arguments = parser.parse_args()
     if arguments.check:
         raise SystemExit(check())
     if arguments.revise:
         raise SystemExit(revise(arguments.revise))
-    integrate() if arguments.integrate else label()
+    integrate() if arguments.integrate else label(arguments.ids)

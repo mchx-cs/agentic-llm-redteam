@@ -227,6 +227,189 @@ class TestTheCheck:
         assert "Categories used" in capsys.readouterr().out
 
 
+class TestLabellingNamedEntries:
+    """
+    `--ids`, the gesture `--revise` already offered for the CORPUS.
+
+    Without it, labelling three new hand-written cases meant walking the
+    18,515 unlabelled entries an unbounded `collect_exchanges` sweep had
+    left in `to_label.json`. The three were real work; the 18,515 were not
+    asked for.
+    """
+
+    @staticmethod
+    def _harvest(harvests, ids):
+        entries = []
+        for identifier in ids:
+            entry = _entry(identifier, f"G-{identifier}")
+            entry["expected"] = None
+            entry["dataset"] = None
+            entries.append(entry)
+        harvests["conversations"].write_text(
+            json.dumps({"conversations": entries}), encoding="utf-8")
+
+    @staticmethod
+    def _answers(monkeypatch, answers):
+        supplied = iter(answers)
+        monkeypatch.setattr("builtins.input", lambda *a: next(supplied))
+
+    def test_only_the_named_entries_are_offered(self, harvests, monkeypatch):
+        self._harvest(harvests, ["X1", "X2", "X3"])
+        # One entry: no / first category / dev / Enter.
+        self._answers(monkeypatch, ["1", "1", "1", ""])
+        label.label(["X2"])
+        saved = json.loads(
+            harvests["conversations"].read_text(encoding="utf-8"))
+        decided = {e["id"]: e["expected"] for e in saved["conversations"]}
+        assert decided == {"X1": None, "X2": False, "X3": None}
+
+    def test_the_order_asked_for_is_the_order_shown(self, harvests,
+                                                    monkeypatch, capsys):
+        # Labelling a PAIR means reading its two members one after the other,
+        # so the harvest's own order must not win.
+        self._harvest(harvests, ["X1", "X2", "X3"])
+        self._answers(monkeypatch, ["1", "1", "1", ""] * 2)
+        label.label(["X3", "X1"])
+        out = capsys.readouterr().out
+        assert out.index("X3") < out.index("X1")
+
+    def test_an_unknown_id_labels_NOTHING(self, harvests, monkeypatch):
+        """
+        It stops rather than silently labelling the ids it did recognise. A
+        typo in one id of three would otherwise leave the author believing
+        all three were decided -- the family of defect this project keeps
+        finding: nothing raises, and the result is not the one you think.
+        """
+        self._harvest(harvests, ["X1", "X2"])
+
+        def never(*a, **k):
+            raise AssertionError("it asked a question despite an unknown id")
+
+        monkeypatch.setattr("builtins.input", never)
+        label.label(["X1", "nope"])
+        saved = json.loads(
+            harvests["conversations"].read_text(encoding="utf-8"))
+        assert all(e["expected"] is None for e in saved["conversations"])
+
+    def test_without_ids_everything_unlabelled_is_offered(self, harvests,
+                                                          monkeypatch):
+        self._harvest(harvests, ["X1", "X2"])
+        self._answers(monkeypatch, ["1", "1", "1", ""] * 2)
+        label.label()
+        saved = json.loads(
+            harvests["conversations"].read_text(encoding="utf-8"))
+        assert all(e["expected"] is False for e in saved["conversations"])
+
+
+class TestAnEntryAlreadyInTheCorpusIsNotOffered:
+    def test_it_is_skipped_and_revise_is_named(self, harvests, monkeypatch,
+                                               capsys):
+        """
+        `integrate()` skips an id already in the corpus, so labelling it
+        achieves nothing. Offering it anyway cost real work: the
+        conversations harvest held ten hand-written cases of which seven were
+        already integrated, so labelling ten would have added three.
+        """
+        # The fixture's corpus starts EMPTY, so one entry is put in it.
+        known = "R01-1"
+        integrated = _entry(known, "R01")
+        integrated["expected"] = True
+        harvests["corpus"].write_text(
+            json.dumps({"exchanges": [integrated]}), encoding="utf-8")
+
+        entry = _entry(known, "R01")
+        entry["expected"] = None
+        fresh = _entry("ZZ1", "G-fresh")
+        fresh["expected"] = None
+        fresh["dataset"] = None
+        harvests["conversations"].write_text(
+            json.dumps({"conversations": [entry, fresh]}), encoding="utf-8")
+
+        supplied = iter(["1", "1", "1", ""])
+        monkeypatch.setattr("builtins.input", lambda *a: next(supplied))
+        label.label()
+
+        out = capsys.readouterr().out
+        assert "already in the corpus" in out
+        assert known in out
+        assert "--revise" in out
+        saved = json.loads(
+            harvests["conversations"].read_text(encoding="utf-8"))
+        by_id = {e["id"]: e["expected"] for e in saved["conversations"]}
+        assert by_id[known] is None, "it labelled an entry integrate() skips"
+        assert by_id["ZZ1"] is False
+
+
+class TestAHandWrittenGroupIsNeverOFFEREDToTheFrozenSet:
+    """
+    `split_sets` calls this rule ABSOLUTE and its comment records why: the
+    striping once ran over the hand-written stratum and sent the A03/A04
+    twins into the FROZEN set, where a pair written to pin one specific trap
+    is unusable for the only job it exists for.
+
+    But the rule lived in `split_sets` while the question lived in
+    `label.py`, and nothing connected them -- so a human answering "test"
+    would have put it back. The same shape as the three chain-of-custody
+    fields nobody filled: two modules correct on their own, the junction
+    uncovered. Found on 2026-11-16, one command before the labelling that
+    would have hit it.
+    """
+
+    @staticmethod
+    def _label_one(harvests, monkeypatch, group, answers):
+        entry = _entry("A08", group)
+        entry["expected"] = None
+        entry["dataset"] = None
+        entry["trap"] = "the target echoes the attacker's value"
+        harvests["conversations"].write_text(
+            json.dumps({"conversations": [entry]}), encoding="utf-8")
+        supplied = iter(answers)
+        asked = []
+
+        def fake_input(prompt=""):
+            asked.append(prompt)
+            return next(supplied)
+
+        monkeypatch.setattr("builtins.input", fake_input)
+        label.label()
+        saved = json.loads(
+            harvests["conversations"].read_text(encoding="utf-8"))
+        return saved["conversations"][0], asked
+
+    def test_a_hand_written_group_goes_to_dev_without_being_asked(
+            self, harvests, monkeypatch, capsys):
+        # no / first category / Enter on the trap -- and NO set question, so
+        # three answers are enough. A fourth would mean it still asks.
+        entry, _ = self._label_one(harvests, monkeypatch, "A-echo",
+                                   ["1", "1", ""])
+        assert entry["dataset"] == "dev"
+        out = capsys.readouterr().out
+        assert "Which set?" not in out, (
+            "a hand-written group was OFFERED the frozen set")
+        assert "hand-written" in out, (
+            "the imposition must be stated, not silent: the author has to "
+            "know why they were not asked")
+
+    def test_an_ordinary_group_IS_still_asked(self, harvests, monkeypatch,
+                                              capsys):
+        # The contrast that makes the test above mean something: without it,
+        # imposing `dev` on EVERY new group would pass just as well.
+        entry, _ = self._label_one(harvests, monkeypatch, "C-demo3-99",
+                                   ["1", "1", "2", ""])
+        assert entry["dataset"] == "test"
+        assert "Which set?" in capsys.readouterr().out
+
+    def test_the_rule_is_read_from_split_sets_not_restated(self):
+        # One place, for the same reason as `judge_identity()`: a rule copied
+        # into a second module drifts from the first.
+        import inspect
+        source = inspect.getsource(label)
+        assert "from evaluation.split_sets import" in source
+        assert source.count('"hand-written"') == 1, (
+            "the hand-written literal appears more than once in label.py: "
+            "the rule is being restated rather than read")
+
+
 class TestTheTrapFieldIsNotDestroyed:
     """
     A hand-written case arrives with its intention ALREADY filled in — the

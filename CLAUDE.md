@@ -3521,6 +3521,50 @@ backwards: a contradiction between code and documentation raises nothing and bre
 
 894 `pytest` tests, still with no LLM call at all.
 
+**Labelling three cases was blocked by three defects, all found by trying to do it
+(2026-11-16).** The three hand-written cases for the addendum's rule 2 were written; the
+command to label them did not work, and the reasons were worth more than the cases.
+
+**1. `label.py` ASKED for the set on a hand-written group, and `split_sets.py` forbids
+it.** The rule "a group named `A-…` always goes to `dev`" is called ABSOLUTE there, and its
+comment records why: letting the striping run over the hand-written stratum once sent the
+A03/A04 twins into the FROZEN set, where a pair written to pin one specific trap is unusable
+for the only job it exists for. But the rule lived in `split_sets` while the question lived
+in `label.py`, and **nothing connected them** — a human answering "test" would have put the
+defect straight back. The same shape as the three chain-of-custody fields nobody filled, as
+`_inject` and as the unreachable profile guard: two modules correct on their own, the
+junction uncovered. It is now imposed, stated rather than silent, and the rule is READ from
+`split_sets` rather than restated — one place, for the same reason as `judge_identity()`. A
+test holds both halves, including the contrast that makes it mean something: an ORDINARY new
+group is still asked.
+
+**2. The harvest offered entries already IN the corpus.** `integrate()` skips those, so
+labelling them achieves nothing — and the conversations harvest held ten hand-written cases
+of which **seven were already integrated**, so labelling ten would have added three. They
+are skipped now, named, and the message points at `--revise`, which is the only way to
+change a corpus entry.
+
+**3. And the blocker: `to_label.json` holds 18,546 entries, 33 MB.** A whole-catalogue
+`collect_exchanges` sweep, unbounded — the multi-turn collector has `MAX_SEQUENCES`, the
+single-turn one has nothing. So `label.py` opened on entry 25 of 18,515 and the three new
+cases sat at position 18,542. Hence `--ids A08 A09 A10`: the gesture `--revise` already
+offered for the corpus, missing for the harvest. It labels the named entries **in the order
+asked for** — labelling a pair means reading its two members one after the other — and an
+unknown id labels NOTHING rather than silently deciding the ids it did recognise. A typo in
+one of three would otherwise leave the author believing all three were decided.
+
+**What is NOT fixed, and is flagged rather than patched: `collect_exchanges` has no bound.**
+A harvest nobody will ever label is not a harvest, and 18,515 unlabelled entries are exactly
+that. Bounding it is a decision about the sampling — which payloads, how many per technique
+— not a line of code, and it belongs with whoever chooses what the corpus should contain.
+
+The method note is the one this file keeps recording: none of the three showed up by reading
+code or by a test. They showed up by **running the command for real**, in the order a user
+would — the same way the template with no `{message}`, the precedence order documented
+backwards, and the harvest that skipped its own new objectives were all found.
+
+902 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
