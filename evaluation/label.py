@@ -514,6 +514,74 @@ def check():
     return 1 if problems else 0
 
 
+def revise(identifiers):
+    """
+    Re-decides entries ALREADY in the corpus, by id.
+
+    Why it exists: `label()` only ever sees the harvest, so once an entry is
+    integrated there is no way back to it short of editing the JSON by hand.
+    That was fine while every label was the author's. It stopped being fine
+    the day 119 of them were decided by a MODEL: reviewing one of those is
+    exactly the gesture that turns it into ground truth, and the tool offered
+    no way to make it.
+
+    The evaluation points straight at the cases worth revising — the entries
+    where the judge disagrees. Those are the ones to settle, not the corpus
+    at large.
+    """
+    corpus = load(CORPUS_FILE)
+    by_id = {e["id"]: e for e in corpus["exchanges"]}
+
+    unknown = [i for i in identifiers if i not in by_id]
+    if unknown:
+        print(f"Not in the corpus: {', '.join(unknown)}")
+        return 1
+
+    for position, identifier in enumerate(identifiers, start=1):
+        exchange = by_id[identifier]
+        print(f"\nCurrently: "
+              f"{'VULNERABILITY' if exchange['expected'] else 'no vulnerability'}"
+              f" / {exchange['category']}"
+              f" (decided by {exchange.get('labelled_by', '?')})")
+        show_exchange(exchange, position, len(identifiers),
+                      [e for e in corpus["exchanges"]
+                       if e["group"] == exchange["group"]])
+
+        verdict = ask_choice("Did the chatbot break its rules?",
+                             ["no — no vulnerability", "yes — vulnerability"])
+        if verdict is None:
+            continue
+        category = ask_choice("Category of trap?", CATEGORIES)
+        if category is None:
+            continue
+
+        breached = verdict.startswith("yes")
+        breach_turn = None
+        if breached:
+            how_many = _turn_count(exchange)
+            if how_many <= 1:
+                breach_turn = 1
+            else:
+                answer = ask_choice(
+                    "On which turn did the chatbot break its rules? "
+                    "(the FIRST one, if several)",
+                    [f"turn {n}" for n in range(1, how_many + 1)])
+                if answer is None:
+                    continue
+                breach_turn = int(answer.split()[-1])
+
+        exchange["expected"] = breached
+        exchange["category"] = category
+        exchange["breach_turn"] = breach_turn
+        # The SET is never touched here: moving an entry between dev and test
+        # after it has been measured would be the leak the whole group rule
+        # exists to prevent.
+        exchange["labelled_by"] = "author"
+        save(CORPUS_FILE, corpus)
+        print(f"-> {identifier} is now yours.")
+    return 0
+
+
 def integrate():
     """Pours the labelled exchanges into labelled_exchanges.json."""
     harvests = _harvests()
@@ -586,7 +654,12 @@ if __name__ == "__main__":
     parser.add_argument("--check", action="store_true",
                         help="check what is already labelled, and stop. "
                              "Reports, never corrects.")
+    parser.add_argument("--revise", nargs="+", metavar="ID",
+                        help="re-decide entries ALREADY in the corpus, by id. "
+                             "Use it on what the evaluation disputes.")
     arguments = parser.parse_args()
     if arguments.check:
         raise SystemExit(check())
+    if arguments.revise:
+        raise SystemExit(revise(arguments.revise))
     integrate() if arguments.integrate else label()
