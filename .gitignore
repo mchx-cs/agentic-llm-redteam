@@ -38,3 +38,6 @@ evaluation/a_etiqueter_conversations.json
 evaluation/prepasse.md
 rapports/
 autorisation.json
+
+# Resume cache for an interrupted evaluation: regenerable, per-run.
+evaluation/.verdicts-*.jsonl

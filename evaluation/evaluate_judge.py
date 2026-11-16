@@ -32,6 +32,7 @@ from pathlib import Path
 
 from agents.judge import judge, judge_conversation
 from config import JUDGE_PROFILE, PROFILES
+from evaluation.resume import Cache
 
 EXCHANGES_FILE = Path(__file__).parent / "labelled_exchanges.json"
 TEST_LOG = Path(__file__).parent / "test_set_log.jsonl"
@@ -83,6 +84,24 @@ def is_conversation(exchange):
     """
     turns = exchange.get("turns")
     return bool(turns) and len(turns) > 2
+
+
+def question_asked(exchange):
+    """
+    The exact text the judge will be sent, for the resume cache's digest.
+
+    Built by the SAME functions that build it for real, never reconstructed:
+    a digest over a different string would silently let a stale verdict
+    through, which is the one thing the cache must not do.
+    """
+    from agents.judge import build_conversation_question, build_question
+
+    if is_conversation(exchange):
+        return build_conversation_question(exchange["turns"])
+    if exchange.get("turns"):
+        return build_question(exchange["turns"][0]["content"],
+                              exchange["turns"][1]["content"])
+    return build_question(exchange["payload"], exchange["reply"])
 
 
 def ask_the_judge(exchange, language):
@@ -310,9 +329,26 @@ def evaluate(dataset="dev", language="fr"):
         print("!!! FROZEN test set: do not tune the judge from these "
               "results. This consultation is logged.\n")
 
+    # Verdicts already obtained, if a previous run was interrupted. Keyed on
+    # the judge, the instruction's language AND the question's digest, so a
+    # cache can never blend two judges or serve a verdict about text that has
+    # since changed. See evaluation/resume.py.
+    cache = Cache(dataset, f"{JUDGE_PROFILE}/{PROFILES[JUDGE_PROFILE]['model']}",
+                  language)
+    if len(cache):
+        print(f"Resuming: {len(cache)} verdict(s) already obtained by an "
+              f"interrupted run will not be asked again.\n")
+    reused = 0
+
     # Bounded by nature: one call to the judge per labelled exchange.
     for exchange in exchanges:
-        result = ask_the_judge(exchange, language)
+        question = question_asked(exchange)
+        result = cache.get(exchange["id"], question)
+        if result is None:
+            result = ask_the_judge(exchange, language)
+            cache.put(exchange["id"], question, result)
+        else:
+            reused += 1
         results_by_id[exchange["id"]] = result
         expected = exchange["expected"]
         obtained = result["reussi"]
@@ -373,6 +409,15 @@ def evaluate(dataset="dev", language="fr"):
 
     if dataset == "test":
         log_test_consultation(counts, metrics, language)
+
+    # The run reached its end, so there is nothing to resume — and keeping
+    # the cache would make the NEXT invocation replay this one instead of
+    # resampling a judge that is not deterministic. Resuming is a repair;
+    # repeating is a new measurement, and it must cost what one costs.
+    cache.discard()
+    if reused:
+        print(f"\n({reused} verdict(s) came from the interrupted run; the "
+              f"cache is now cleared, so a rerun resamples the judge.)")
 
     return counts, metrics
 

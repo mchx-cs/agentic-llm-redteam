@@ -3282,6 +3282,48 @@ fixture that hid a tautological test — this time it was a gitignored data file
 reproduction that found both took two commands: run the suite with `.env` moved aside,
 then with the snapshot moved aside too.
 
+**The evaluation can resume, and the decision that shaped it is about
+non-determinism (2026-11-16).** A full consultation is ~301,000 tokens over several
+hundred sequential calls: a blip on call 150 of 154 lost the run. Verdicts are now
+appended to a JSONL and flushed, exactly as the audit trail is, for the same reason — if
+the thing dies, what already happened survives.
+
+**A cache is for RESUMING an interrupted run, never for REPEATING a finished one.**
+The judge is not deterministic even at temperature 0 — measured here on 2026-11-10, where
+E10-b gave `[True, True, True, True, False]` and `seed` changed nothing. A cache that
+outlived a completed run would make every rerun reproduce the first instead of
+resampling, and the variance the project went to the trouble of measuring would quietly
+vanish from every figure after it. Hence `discard()` on a normal finish: resuming is a
+repair, repeating is a new measurement and must cost what one costs.
+
+**Three things invalidate a cached verdict**, and each answers a way the figure could be
+corrupted rather than merely stale:
+- the **judge** (`profile/model`) — resuming across a change of judge would blend two
+  models in one figure, the blending the project already refuses for defence levels, for
+  formats and for languages;
+- the **instruction's language** — `--language fr` and `--language en` are the two arms of
+  a comparison;
+- the **question's digest** — a verdict is a function of the instruction and the question,
+  so if the exchange's text changed the cached verdict is about something else. The id
+  alone would not have caught that.
+
+A label change invalidates nothing, deliberately: the verdict is about the exchange, not
+about what the author decided it means.
+
+**The digest is taken over the REAL question**, built by the same functions that build it
+for the judge (`question_asked`), never reconstructed — a digest over a reconstruction
+would let a stale verdict through, which is the one thing this must not do.
+
+**The property that makes a cache acceptable on a measurement** is that it is invisible
+in the result, and that is the test that matters: an interrupted-then-resumed run and an
+uninterrupted one produce identical counts and identical metrics. Without it the cache
+would be a second source of truth. Three mutations bite: dropping the judge check,
+dropping the digest from the key, and removing `discard()`.
+
+A half-written last line is skipped rather than fatal — that is exactly what an
+interruption leaves behind, and it is why the format is JSONL: one broken line costs one
+verdict, not the run.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
