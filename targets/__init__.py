@@ -9,10 +9,14 @@ is now an ADAPTER, and they all honour the same deliberately minimal contract:
 That contract is what lets `reconnaissance.py` and `verifier.py` receive
 the target as a parameter, and lets tests use simulated targets in a few lines.
 
-Four adapters:
+Five adapters:
 - `demo`   : deliberately badly protected, with three defence levels. It gives
   in FOR REAL, and serves as much for the demonstration as for measuring how
-  far the tool can go.
+  far the tool can go. What it protects is a SECRET STRING.
+- `records`: the other half of what a deployed application actually is — an
+  assistant over a reader DATABASE it has already read, with no tool at all.
+  What it protects is THIRD-PARTY DATA, which is a different asset with a
+  different defence, hence its own levels rather than three more on `demo`.
 - `decoy`  : the local toy chatbot, with a fictional secret to protect. It is
   the default target, so the repository runs with no configuration.
 - `mock`   : deterministic, with no LLM at all. Instant, free, always
@@ -27,6 +31,8 @@ model — so the `http` adapter calls it directly. That is deliberate.
 """
 
 from targets.demo import LEVELS, build_demo_target
+from targets.records import LEVELS as RECORDS_LEVELS
+from targets.records import build_records_target
 from targets.http import build_http_target
 from targets.decoy import ask_decoy
 from targets.mock import ask_mock
@@ -48,6 +54,17 @@ NAMED_TARGETS = {
 # help text that listed both would suggest two different targets.
 PUBLIC_TARGET_NAMES = ("decoy", "mock")
 
+# The targets that carry a defence level in their name, and the builder for
+# each. A mapping rather than two branches: `is_bundled_target` and
+# `choose_target` both have to answer for every one of them, and the project
+# has already paid for that being two places -- the authorisation guard did
+# not know about `demo` and REFUSED TO START, breaking the one-command
+# demonstration. A test checks every named target is recognised as bundled.
+LEVELLED_TARGETS = {
+    "demo": (build_demo_target, LEVELS),
+    "records": (build_records_target, RECORDS_LEVELS),
+}
+
 
 def is_bundled_target(name):
     """
@@ -56,7 +73,9 @@ def is_bundled_target(name):
     These targets run locally and hold nothing but fictional secrets:
     `audit.py` uses this to require a mandate only against a third party.
     """
-    return name in NAMED_TARGETS or name == "demo" or name.startswith("demo:")
+    return (name in NAMED_TARGETS
+            or any(name == base or name.startswith(f"{base}:")
+                   for base in LEVELLED_TARGETS))
 
 
 def choose_target(name=None, profile=None):
@@ -64,7 +83,7 @@ def choose_target(name=None, profile=None):
     Return the asking function matching `name`.
 
     - a known name ("decoy", "mock");
-    - "demo", or "demo:N" to pick the defence level (1, 2 or 3);
+    - "demo" or "records", with ":N" to pick the defence level (1, 2 or 3);
     - a URL (http:// or https://) → the HTTP adapter configured from `.env`,
       or from `profil` (see targets.http.TARGET_PROFILES) for a known API shape:
       describing the JSON body by hand is the most tedious part of wiring a
@@ -88,17 +107,19 @@ def choose_target(name=None, profile=None):
     if name in NAMED_TARGETS:
         return NAMED_TARGETS[name]
 
-    # The demo target carries its level in its name: "demo:3". No new
-    # command-line option for a setting that concerns one target out of four.
-    if name == "demo" or name.startswith("demo:"):
-        _, _, level = name.partition(":")
+    # A levelled target carries its level in its name: "demo:3",
+    # "records:2". No new command-line option for a setting that concerns two
+    # targets out of five.
+    base, _, level = name.partition(":")
+    if base in LEVELLED_TARGETS:
+        build, levels = LEVELLED_TARGETS[base]
         try:
-            return build_demo_target(int(level) if level else 1)
+            return build(int(level) if level else 1)
         except ValueError as error:
             raise ValueError(
-                f"Invalid demo level in '{name}': {error}\n"
-                f"  Expected: demo, or demo:N with N in "
-                f"{{{', '.join(str(n) for n in LEVELS)}}}."
+                f"Invalid {base} level in '{name}': {error}\n"
+                f"  Expected: {base}, or {base}:N with N in "
+                f"{{{', '.join(str(n) for n in levels)}}}."
             ) from error
 
     if name.startswith(("http://", "https://")):
@@ -106,5 +127,7 @@ def choose_target(name=None, profile=None):
 
     raise ValueError(
         f"Unknown target: '{name}'. Expected: "
-        f"{', '.join(PUBLIC_TARGET_NAMES)}, demo[:N], or an http(s) URL."
+        f"{', '.join(PUBLIC_TARGET_NAMES)}, "
+        f"{', '.join(f'{base}[:N]' for base in LEVELLED_TARGETS)}, "
+        f"or an http(s) URL."
     )
