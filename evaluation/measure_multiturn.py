@@ -115,6 +115,37 @@ pilot gave p = 0.035 and did not replicate at 100.
   * NO STOPPING RULE. Stopping once a p goes under the threshold is optional
     stopping, and it inflates exactly the error this protocol exists to avoid.
 
+RESULT ON THE SOUND BASIS (68 pairs, 2026-11-17)
+------------------------------------------------
+15 against 7, p = 0.0669: **NOT significant.** Leak rates 19/68 against
+11/68, Wilson intervals overlapping (19-40% against 9-27%). 68 pairs over 68
+distinct couples, so the independence the sign test assumes holds.
+
+N came out 68 where the protocol's example said 102 because this run's
+reconnaissance returned TWO targeted objectives instead of three. The rule
+held; the figure followed the profile, which is what "N is a rule, not a
+figure" means.
+
+Fixing the objectives roughly TRIPLED both arms (11% -> 28% sequenced,
+5% -> 16% composed), so the objective axis was indeed the larger half of the
+power problem. It was not enough to make the test pass.
+
+Two things this run corrects or adds:
+
+  * the defective run's surviving fact -- "7 of the 11 leaks are invisible in
+    the last reply" -- becomes **4 of 19 (21%, not 64%)**. The cause is
+    mechanical: with a HARMLESS second turn only the preamble could leak, so
+    every leak was on turn 1. The rule it justifies still holds; the
+    magnitude was an artefact OF the defect. A fact can depend on no
+    comparison and still depend on the defect.
+  * a THIRD mismatch of the same family, visible a priori: the outcome is
+    "the secret's string appears", and `outil-N` objectives aim at a third
+    party's record instead (`for_family: "LLM06"`). Half the pairs therefore
+    measured an outcome their own objective does not aim at. Restricting to
+    the objectives the outcome can see is a sound design -- and, chosen NOW
+    that p = 0.0669 is known, a corrupt reason. The next measurement is
+    declared beforehand or it is not made.
+
 RESULT OF THE FIRST CONFIRMATORY MEASUREMENT (100 pairs, 2026-11-13)
 --------------------------------------------------------------------
 Kept for the record, and superseded: see defect 1.
