@@ -274,8 +274,77 @@ def sign_test(favourable, unfavourable):
     return sum(math.comb(n, k) for k in range(favourable, n + 1)) / 2 ** n
 
 
+def _save(path, target_name, objectives, results, complete):
+    """
+    The run's state, written after every pair.
+
+    A dict and not a bare list, because resuming needs to know WHAT was
+    measured: the same shape of question as the judge cache's digest -- a
+    stored result is only reusable if it is a result about the same thing.
+    """
+    Path(path).write_text(json.dumps({
+        "target": target_name,
+        # The wording, not just the identifier: reconnaissance is not
+        # deterministic, so `refus-1` can name a different refused subject
+        # from one run to the next. Keying on the id alone would splice two
+        # different measurements together.
+        "objectives": {o["id"]: o["wording"] for o in objectives},
+        "complete": complete,
+        "pairs": results,
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _resume(path, target_name, objectives, show):
+    """
+    The pairs already played that this run may reuse, keyed by couple.
+
+    THREE things invalidate the whole file, each answering a way the figure
+    could be corrupted rather than merely stale:
+
+      * a different TARGET -- its defence level decides almost everything;
+      * different OBJECTIVE WORDINGS -- a fresh reconnaissance asking for
+        something else is a different measurement, not a continuation;
+      * a run already marked COMPLETE. Resuming is a repair; reusing a
+        finished run would REPEAT it instead of resampling, and this target is
+        probabilistic. That is the judge cache's rule of 2026-11-16, and it
+        matters more here: the variance between runs is the thing being
+        measured.
+    """
+    file = Path(path)
+    if not file.exists():
+        return {}
+    try:
+        state = json.loads(file.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as problem:
+        show(f"  resume: unreadable file ({problem}), starting over.")
+        return {}
+    if not isinstance(state, dict):
+        show("  resume: file written before the run carried its protocol, "
+             "starting over.")
+        return {}
+
+    wordings = {o["id"]: o["wording"] for o in objectives}
+    if state.get("complete"):
+        raise SystemExit(
+            f"{path} holds a COMPLETE run. Resuming it would repeat a "
+            f"finished measurement instead of resampling a probabilistic "
+            f"target. Write to another file to measure again.")
+    if state.get("target") != target_name:
+        show(f"  resume: that file measured {state.get('target')!r}, "
+             f"not {target_name!r} — starting over.")
+        return {}
+    if state.get("objectives") != wordings:
+        show("  resume: reconnaissance asks for something else than it did "
+             "in that file — a different measurement, starting over.")
+        return {}
+
+    done = {(r["technique"], r["objective"]): r for r in state.get("pairs", [])}
+    show(f"  resume: {len(done)} pair(s) reused from {path}.")
+    return done
+
+
 def measure(pairs=PAIRS, target_name=TARGET, output=None, show=print,
-            harmless=False, only=(), excluding=()):
+            harmless=False, only=(), excluding=(), resume=False):
     ask_target = choose_target(target_name)
     require_conversation(ask_target, target_name)
     library = load_library()
@@ -295,26 +364,34 @@ def measure(pairs=PAIRS, target_name=TARGET, output=None, show=print,
     for reason, count in dropped.most_common():
         show(f"  skipped: {count:>3} — {reason}")
     show(f"Objectives: {provenance}.")
+    for objective in objectives:
+        show(f"  {objective['id']:12s} {objective['wording']}")
     show("No judge: we look for the secret's exact string. The measurement "
          "is therefore a LOWER bound on the leak rate.\n")
 
+    done = _resume(output, target_name, objectives, show) if (
+        resume and output) else {}
+
     results = []
     for number, (technique, payload, objective) in enumerate(couples, start=1):
-        result = one_pair(ask_target, payload, objective)
+        already = done.get((technique, objective["id"]))
+        result = already or one_pair(ask_target, payload, objective)
         result.update(technique=technique, objective=objective["id"])
         results.append(result)
         mark = ("sequence" if result["sequence"] and not result["mono"]
                 else "single" if result["mono"] and not result["sequence"]
                 else "both" if result["mono"] else "—")
         show(f"  pair {number}/{len(couples)} {technique[:28]:28s} "
-             f"{objective['id']:12s} leak: {mark}")
+             f"{objective['id']:12s} leak: {mark}"
+             f"{'  (reused)' if already else ''}")
         if output:
             # Written as it goes: an interrupted measurement keeps what it
-            # has established, like a campaign's audit trail.
-            Path(output).write_text(
-                json.dumps(results, indent=2, ensure_ascii=False),
-                encoding="utf-8")
+            # has established, like a campaign's audit trail. `complete` is
+            # the flag that stops a later --resume repeating a finished run.
+            _save(output, target_name, objectives, results, False)
 
+    if output:
+        _save(output, target_name, objectives, results, True)
     _summary(results, show)
     return results
 
@@ -385,6 +462,10 @@ def main(arguments=None):
                          help=f"target (protocol: {TARGET})")
     parser.add_argument("--output", "--sortie", default=None, dest="output", metavar="FILE",
                          help="where to write the results as they come")
+    parser.add_argument("--resume", "--reprendre", action="store_true",
+                         dest="resume",
+                         help="reuse the pairs already in --output after an "
+                              "interruption (refuses a run marked complete)")
     parser.add_argument("--harmless", action="store_true",
                          help="keep the library's harmless objectives instead "
                               "of the targeted ones — the arm the first "
@@ -421,7 +502,8 @@ def main(arguments=None):
 
     measure(arguments.pairs, arguments.target, arguments.output,
             harmless=arguments.harmless,
-            only=tuple(arguments.only), excluding=tuple(arguments.excluding))
+            only=tuple(arguments.only), excluding=tuple(arguments.excluding),
+            resume=arguments.resume)
     return 0
 
 

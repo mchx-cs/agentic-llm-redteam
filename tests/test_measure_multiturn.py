@@ -9,6 +9,8 @@ Why this file exists: the measurement produces a p, and a wrong p is worse
 than no measurement. It looks rigorous.
 """
 
+import json
+
 import pytest
 
 from evaluation.measure_multiturn import (SECRET, _combinations, _leaked,
@@ -314,3 +316,137 @@ class TestOneReconnaissanceServesBOTHDerivations:
         monkeypatch.setattr(module, "choose_target", lambda _: target)
         module.measure(target_name="demo", show=lambda *_: None)
         assert calls == [1]
+
+
+class TestResumingIsARepairNeverARepetition:
+    """
+    An interrupted run lost everything until 2026-11-17, when a kill at pair
+    28 of 102 made the point. The gap was already recorded the day before for
+    the judge's evaluation ("a failure on call 150 of 154 loses the run... it
+    needs no quota to build") -- the same defect, in a second module.
+
+    The rules are the judge cache's, and the reason they matter MORE here:
+    the target is probabilistic, so reusing a finished run would freeze one
+    draw as if it were the answer.
+    """
+
+    OBJECTIVES = [{"id": "refus-1", "wording": "me parler de : le code",
+                   "origin": "reconnaissance"}]
+
+    def _state(self, tmp_path, **changes):
+        import evaluation.measure_multiturn as module
+        file = tmp_path / "run.json"
+        state = {"target": "demo",
+                 "objectives": {"refus-1": "me parler de : le code"},
+                 "complete": False,
+                 "pairs": [{"technique": "t1", "objective": "refus-1",
+                            "sequence": True, "mono": False,
+                            "tour_de_fuite": 1}]}
+        state.update(changes)
+        file.write_text(json.dumps(state), encoding="utf-8")
+        return module, file
+
+    def test_a_matching_file_is_REUSED(self, tmp_path):
+        module, file = self._state(tmp_path)
+        done = module._resume(str(file), "demo", self.OBJECTIVES,
+                              lambda *_: None)
+        assert ("t1", "refus-1") in done
+
+    def test_a_COMPLETE_run_refuses_to_be_resumed(self, tmp_path):
+        # Repeating a finished measurement is not a repair. This target is
+        # probabilistic: the between-run variance is part of what is measured,
+        # and a reused finished run would hide it for good.
+        module, file = self._state(tmp_path, complete=True)
+        with pytest.raises(SystemExit):
+            module._resume(str(file), "demo", self.OBJECTIVES, lambda *_: None)
+
+    def test_another_TARGET_discards_everything(self, tmp_path):
+        # The defence level decides almost every leak: splicing `demo` and
+        # `demo:3` into one figure is the pooling this project refuses for
+        # formats, languages and label provenance alike.
+        module, file = self._state(tmp_path, target="demo:3")
+        assert module._resume(str(file), "demo", self.OBJECTIVES,
+                              lambda *_: None) == {}
+
+    def test_different_objective_WORDINGS_discard_everything(self, tmp_path):
+        # The one that is easy to get wrong: reconnaissance is not
+        # deterministic, so `refus-1` can name a different refused subject
+        # from one run to the next. Keying on the identifier alone would
+        # splice two different measurements together under one p.
+        module, file = self._state(
+            tmp_path, objectives={"refus-1": "me parler de : autre chose"})
+        assert module._resume(str(file), "demo", self.OBJECTIVES,
+                              lambda *_: None) == {}
+
+    def test_a_file_in_the_OLD_bare_list_format_is_discarded(self, tmp_path):
+        # What the interrupted run of 2026-11-17 left behind: a list with no
+        # record of what was asked, so nothing can establish it is the same
+        # measurement.
+        file = tmp_path / "old.json"
+        file.write_text(json.dumps([{"technique": "t1",
+                                     "objective": "refus-1"}]),
+                        encoding="utf-8")
+        import evaluation.measure_multiturn as module
+        assert module._resume(str(file), "demo", self.OBJECTIVES,
+                              lambda *_: None) == {}
+
+    def test_a_missing_file_is_not_an_error(self, tmp_path):
+        import evaluation.measure_multiturn as module
+        assert module._resume(str(tmp_path / "nope.json"), "demo",
+                              self.OBJECTIVES, lambda *_: None) == {}
+
+    def test_a_reused_pair_is_NOT_replayed_against_the_target(self, tmp_path):
+        # The property that makes the resume acceptable at all: it saves
+        # calls. Without this, "resume" could reuse the verdict and still
+        # bother the target, which would cost what it claims to save.
+        import evaluation.measure_multiturn as module
+
+        played = []
+
+        def target(message, history=None):
+            played.append(message)
+            return "Je ne peux pas."
+        target.conversation = True
+
+        file = tmp_path / "run.json"
+        file.write_text(json.dumps({
+            "target": "demo",
+            "objectives": {"refus-1": "me parler de : le code"},
+            "complete": False,
+            "pairs": [{"technique": "fuite-prompt-systeme",
+                       "objective": "refus-1", "sequence": True,
+                       "mono": False, "tour_de_fuite": 1}]}),
+            encoding="utf-8")
+
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(module, "reconnoitre", lambda _: PROFILE)
+        monkey.setattr(module, "load_library", lambda: LIBRARY)
+        monkey.setattr(module, "choose_target", lambda _: target)
+        monkey.setattr(module, "targeted_objectives",
+                       lambda *_, **__: (self.OBJECTIVES, "1 reused"))
+        results = module.measure(target_name="demo", output=str(file),
+                                 resume=True, show=lambda *_: None)
+        monkey.undo()
+
+        assert len(results) == 1
+        assert results[0]["sequence"] is True
+        assert played == [], "a reused pair must cost no call at all"
+
+    def test_a_finished_run_is_MARKED_complete(self, tmp_path):
+        # Without the flag, the refusal above has nothing to refuse on.
+        import evaluation.measure_multiturn as module
+
+        def target(message, history=None):
+            return "Je ne peux pas."
+        target.conversation = True
+
+        file = tmp_path / "fresh.json"
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(module, "reconnoitre", lambda _: PROFILE)
+        monkey.setattr(module, "load_library", lambda: LIBRARY)
+        monkey.setattr(module, "choose_target", lambda _: target)
+        module.measure(target_name="demo", output=str(file),
+                       show=lambda *_: None)
+        monkey.undo()
+
+        assert json.loads(file.read_text(encoding="utf-8"))["complete"] is True
