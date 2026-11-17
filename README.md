@@ -6,10 +6,13 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 
 > **Status: the pipeline and the payload library are complete; the attacker is single-turn.**
 > Reconnaissance → planning → attack → judgement → replay verification runs end to end,
-> against the bundled decoy or any HTTP endpoint. The judge is measured on 90
-> hand-labelled exchanges and scores 96% accuracy on the frozen subset it has never been
-> tuned against; it classifies translated cases in English as accurately as their French
-> originals.
+> against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
+> 212 labelled exchanges — 95 labelled by the author, 117 by a model, and every entry
+> records which, because a figure measured against model-decided labels says that two
+> models agree, not that the judge is right. On the 23 author-labelled entries of a
+> frozen subset it has never been tuned against, it misses no vulnerability at all
+> (recall 100%), and it classifies translated cases in English as accurately as their
+> French originals.
 > Attack content comes from a local [garak](https://github.com/NVIDIA/garak) snapshot —
 > 52 probes, 1,143 payloads — plus 15 hand-written ones for the two families garak ships
 > no probe for.
@@ -157,7 +160,7 @@ python main.py
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 776 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 909 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -551,7 +554,7 @@ What it found already in place:
 | A missing trace must never be recorded as a defensive pass | truncated replies detected and warned about twice |
 | Record tested, untested and inconclusive cases, benign controls included | tested / touched-but-unjudged / skipped, plus the `controle` technique |
 | Report effort alongside success — tokens expended | call and token journal, budget as a circuit breaker |
-| Avoid an all-malicious corpus, where false positives are nil by construction | 43 of the 67 dev exchanges are negatives — controls and near-misses the judge must not flag |
+| Avoid an all-malicious corpus, where false positives are nil by construction | 106 of the 157 dev exchanges are negatives — controls, failed attacks and near-misses the judge must not flag |
 
 And seven gaps, which became phases 13 and 14. The severe one was the first: a campaign
 that found nothing said so honestly but **bounded nothing**, and with `MAX_ATTEMPTS=3` the
@@ -823,9 +826,11 @@ Phases 9, 10 and 11 can proceed in parallel.
 Phase 3 is split because "adaptive attacker" hides two very different price tags. 3a
 reorders an existing plan from what the target just said — deterministic, cheap, and
 something PyRIT does not do for you. 3b is genuine multi-turn conversation, and its real
-cost is not the orchestrator but the judge: its prompt takes exactly one exchange today,
-and all 90 labelled exchanges are single-turn, so the corpus has to be rebuilt and
-relabelled by hand before any figure means anything again.
+cost was never the orchestrator but the judge. That cost has now been paid: the judge's
+instruction reads a conversation and names the turn a breach happened on, the corpus
+holds 64 of them, and the format has been measured on its own line — the two formats are
+never pooled, so a conversation cannot move the single-turn figure. What has NOT moved is
+the orchestrator: a campaign still sends one isolated message per attempt.
 
 ## Stack
 
