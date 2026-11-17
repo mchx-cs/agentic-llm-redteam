@@ -56,7 +56,7 @@ _INSTALL = (
     "  .venv-pyrit/Scripts/python -m pip install -r requirements-pyrit.txt\n"
     "\n"
     "It needs Python >= 3.11 (since PyRIT 1.2.0), where this project supports "
-    "3.10. Multi-turn via PyRIT is simply unavailable on 3.10 — a single-turn "
+    "3.10. Multi-turn via PyRIT is simply unavailable on 3.10; a single-turn "
     "campaign still works everywhere: python main.py --target demo")
 
 

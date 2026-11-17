@@ -36,6 +36,14 @@ _API_ROLE = {ATTACKER_ROLE: "user", TARGET_ROLE: "assistant"}
 # and CLAUDE.md still describes them that way, so writing them from memory
 # produced `juge_indecis` for a key the code calls `judge_undecided`. A
 # contradiction between code and prose raises nothing and breaks no test.
+# The multi-turn attacks the bridge exposes, declared HERE because this
+# module imports no PyRIT: `main` needs the names to build `--help`, which
+# has to work on Python 3.10 where PyRIT cannot be installed. One list, so
+# the CLI and the bridge cannot drift -- `campaign.py` asserts its own
+# catalogue matches it.
+ATTACK_NAMES = ("redteaming", "crescendo")
+DEFAULT_ATTACK = "redteaming"
+
 UNDECIDED = "judge_undecided"
 BREACHED = "vulnerability"
 HELD = "resisted"

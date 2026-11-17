@@ -314,3 +314,71 @@ class TestTelemetry:
     def test_the_telemetry_is_serialisable(self):
         import json
         json.dumps(telemetry("demo", "openai"))
+
+
+class TestTheTrailCarriesTheCONVERSATION:
+    """
+    `trace` took `message` alone until 2026-11-17, so wrapping a target for a
+    multi-turn attack SILENTLY DROPPED the history: the orchestrator would
+    believe it was holding a dialogue while the target saw isolated messages.
+
+    That is the defect family this project keeps finding — nothing raises,
+    nothing breaks, and the result is not the one you think. And it mattered
+    for the one kind of target where the trail is MANDATORY: a remote one,
+    under mandate. Without this, multi-turn was impossible there.
+    """
+
+    @staticmethod
+    def _target(seen, *, conversation=True):
+        def ask(message, history=None):
+            seen.append((message, history))
+            return "Je ne peux pas."
+        ask.conversation = conversation
+        return ask
+
+    def _trail(self, tmp_path):
+        return AuditTrail(tmp_path / "t.jsonl", "demo", None)
+
+    def test_the_history_reaches_the_target(self, tmp_path):
+        seen = []
+        traced = self._trail(tmp_path).trace("attaque", self._target(seen))
+        traced("deuxieme tour", history=[{"role": "user", "content": "un"}])
+        assert seen == [("deuxieme tour",
+                         [{"role": "user", "content": "un"}])]
+
+    def test_a_single_turn_call_still_works(self, tmp_path):
+        # The old contract: reconnaissance and replay call `ask(message)`.
+        seen = []
+        self._trail(tmp_path).trace("reconnaissance",
+                                    self._target(seen))("bonjour")
+        assert seen == [("bonjour", None)]
+
+    def test_the_conversation_capability_is_CARRIED(self, tmp_path):
+        # Without this, `require_conversation` refuses a traced target, and
+        # multi-turn becomes impossible exactly where the trail is required.
+        traced = self._trail(tmp_path).trace("attaque", self._target([]))
+        assert traced.conversation is True
+
+    def test_and_NOT_invented_for_a_target_that_cannot_converse(self,
+                                                                tmp_path):
+        # Silence means refusal, never permission: wrapping a single-turn
+        # target must not make it look multi-turn capable.
+        traced = self._trail(tmp_path).trace(
+            "attaque", self._target([], conversation=False))
+        assert traced.conversation is False
+
+    def test_each_turn_is_recorded_ONCE(self, tmp_path):
+        # The history is not re-recorded: logging it again on every turn
+        # would repeat the same exchange N times and make the trail
+        # unreadable at the exact moment it matters.
+        path = tmp_path / "t.jsonl"
+        trail = AuditTrail(path, "demo", None)
+        traced = trail.trace("attaque", self._target([]))
+        traced("un")
+        traced("deux", history=[{"role": "user", "content": "un"}])
+        rows = [json.loads(line) for line
+                in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()]
+        sent = [row["sent"] for row in rows
+                if row.get("type") == "exchange"]
+        assert sent == ["un", "deux"]

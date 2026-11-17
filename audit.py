@@ -301,11 +301,31 @@ class AuditTrail:
 
         The target stays a `message -> str` function: the agents that receive
         it do not even know it is being traced.
+
+        AND IT CARRIES THE CONVERSATION THROUGH (2026-11-17). The first
+        version took `message` alone, so wrapping a target for a multi-turn
+        attack silently dropped the history: the orchestrator would believe it
+        was holding a dialogue while the target saw isolated messages. The
+        capability flag is copied over for the same reason — without it
+        `require_conversation` refuses a traced target, which fails loudly
+        rather than silently, but it also made multi-turn impossible against
+        the one kind of target where the trail is MANDATORY: a remote one,
+        under mandate.
+
+        The history is not re-recorded: each turn is logged as it is sent, so
+        logging the whole history again on every turn would repeat the same
+        exchange N times and make the trail unreadable at the exact moment it
+        matters.
         """
-        def ask(message):
-            reply = ask_target(message)
+        def ask(message, history=None):
+            reply = (ask_target(message, history=history) if history
+                     else ask_target(message))
             self.record_exchange(phase, message, reply)
             return reply
+
+        # Declared, not guessed: a target that cannot converse must not look
+        # as though it can just because it was wrapped.
+        ask.conversation = bool(getattr(ask_target, "conversation", False))
         return ask
 
 

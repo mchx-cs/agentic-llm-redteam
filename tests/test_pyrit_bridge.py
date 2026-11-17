@@ -18,6 +18,8 @@ import builtins
 
 import pytest
 
+import main
+
 import stats
 from pyrit_bridge import REQUIRED, require_pyrit
 from pyrit_bridge.convert import (BREACHED, HELD, UNDECIDED, api_from_turns,
@@ -232,3 +234,78 @@ class TestAbsentPyritSaysWhatToDo:
         # on each minor release, and a reader cannot do that without knowing
         # which version was checked.
         assert REQUIRED == "1.2.1"
+
+
+class TestTheMultiturnEntryPoint:
+    """
+    Phase 3b's orchestrator entry point, checked WITHOUT PyRIT — which is the
+    state of continuous integration, and the only state possible on Python
+    3.10, where PyRIT cannot be installed at all.
+    """
+
+    def test_an_unknown_attack_name_exits_with_an_INSTRUCTION(self, capsys):
+        # Checked before the mandate, because it sends no request. The
+        # alternative is a KeyError in the middle of a campaign, after the
+        # budget is armed and an audit trail opened against a client's
+        # system — the lesson of `--target demo:9`.
+        with pytest.raises(SystemExit) as stop:
+            main.cli(["--target", "mock", "--multiturn", "fictif"])
+        assert stop.value.code == 2
+        err = capsys.readouterr().err
+        assert "Unknown multi-turn attack" in err
+        assert "redteaming" in err
+
+    def test_an_absent_PyRIT_exits_with_the_command_to_run(self, capsys,
+                                                           monkeypatch):
+        import builtins
+        real = builtins.__import__
+
+        def refuse(name, *args, **kwargs):
+            if name == "pyrit" or name.startswith("pyrit."):
+                raise ModuleNotFoundError(name)
+            return real(name, *args, **kwargs)
+        monkeypatch.setattr(builtins, "__import__", refuse)
+
+        with pytest.raises(SystemExit) as stop:
+            main.cli(["--target", "mock", "--multiturn"])
+        assert stop.value.code == 2
+        assert "requirements-pyrit.txt" in capsys.readouterr().err
+
+    def test_the_help_works_WITHOUT_the_extra(self, capsys):
+        # Building the parser must not require PyRIT: `--help` has to work on
+        # Python 3.10, where the extra cannot be installed.
+        with pytest.raises(SystemExit):
+            main.cli(["--help"])
+        out = capsys.readouterr().out
+        assert "--multiturn" in out
+        assert "--max-turns" in out
+
+    def test_the_help_WARNS_that_the_payload_text_is_not_sent(self, capsys):
+        # The surprising part of the mode, said where it is chosen rather
+        # than only in the report afterwards.
+        with pytest.raises(SystemExit):
+            main.cli(["--help"])
+        assert "NOT sent" in capsys.readouterr().out
+
+    def test_the_attack_names_are_READ_not_restated(self):
+        # They live in `pyrit_bridge.convert`, which imports no PyRIT, so the
+        # CLI can offer them on a machine that cannot install the extra. A
+        # second copy of a catalogue drifts on the first attack added.
+        from pyrit_bridge.convert import ATTACK_NAMES, DEFAULT_ATTACK
+        assert main.MULTITURN_ATTACKS is ATTACK_NAMES
+        assert main.MULTITURN_DEFAULT == DEFAULT_ATTACK
+
+    def test_main_is_IMPORTABLE_with_PyRIT_unavailable(self):
+        # The promise that must survive the extra: the default path needs
+        # nothing. Checked on the SOURCE, because `main` is already imported
+        # here -- a top-level `import pyrit` anywhere in it would break every
+        # single-turn campaign on Python 3.10.
+        import pathlib as _pathlib
+        lines = _pathlib.Path(main.__file__).read_text(
+            encoding="utf-8").splitlines()
+        tops = [line for line in lines
+                if line.startswith(("import ", "from "))]
+        offenders = [line for line in tops
+                     if "pyrit" in line.lower()
+                     and "pyrit_bridge.convert" not in line]
+        assert not offenders, offenders

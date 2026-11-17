@@ -39,9 +39,25 @@ from report import save_report
 # The stopping rule: we do not attack indefinitely.
 MAX_ATTEMPTS = 3
 
+# Turns per multi-turn attempt (phase 3b). Bounded like every loop here, and
+# separate from MAX_ATTEMPTS because it multiplies it: a campaign of three
+# attempts at three turns is nine exchanges with the target, and each turn
+# carries the whole history forward.
+MULTITURN_TURNS = 3
+
+# The attack names, read from `pyrit_bridge.convert` -- which imports no
+# PyRIT, so this costs nothing on a machine that cannot install the extra and
+# `--help` keeps working on Python 3.10. Read rather than restated: a second
+# copy of a catalogue drifts on the first attack added, and the same reason
+# makes the bridge read `stats.STATES` instead of spelling out the denominator
+# states.
+from pyrit_bridge.convert import (ATTACK_NAMES as MULTITURN_ATTACKS,
+                                  DEFAULT_ATTACK as MULTITURN_DEFAULT)
+
 
 def run_campaign(ask_target=None, target_name=None, trail=None,
-                 context=(), adaptive=True, only=(), excluding=()):
+                 context=(), adaptive=True, only=(), excluding=(),
+                 multiturn=None, max_turns=None):
     """
     Runs a campaign against `ask_target`.
 
@@ -106,6 +122,28 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     states = []             # each one's outcome: scorable or not (ASR)
     cut_short = None
     print()
+
+    # --- 3 bis. Multi-turn, through PyRIT (phase 3b) -----------------------
+    # Only the ATTACK stage is delegated. Reconnaissance and planning above,
+    # and the replay, the trail, the budget and the report around, stay ours:
+    # PyRIT covers neither reconnaissance nor planning, which is the project's
+    # own added value, and it has no notion of our mandate or our denominator.
+    #
+    # The import is LAZY on purpose. PyRIT is an extra, absent from continuous
+    # integration and not installable on Python 3.10; importing it at module
+    # level would make `main` unimportable there, so a single-turn campaign —
+    # which needs nothing — would stop working for want of an optional
+    # dependency.
+    if multiturn:
+        from pyrit_bridge.campaign import attack as multiturn_attack
+        findings, launched, states, observations, cut_short = multiturn_attack(
+            plan, ask_target, target_name=target_name, profile=profile,
+            trail=trail, adaptive=adaptive, attempts=MAX_ATTEMPTS,
+            max_turns=max_turns or MULTITURN_TURNS, attack_name=multiturn)
+        return _finish(_campaign_result(
+            profile, plan, findings, launched, states, observations,
+            cut_short, adaptive, only, excluding, multiturn=multiturn))
+
     for number in range(1, MAX_ATTEMPTS + 1):
         # `adaptive=False` replays the static plan: same pool, same priority
         # order, but learning nothing from the replies. That is the CONTROL
@@ -225,7 +263,22 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     if not cut_short:
         print(f">>> Attempt budget exhausted: {len(findings)} finding(s).")
 
-    return _finish({
+    return _finish(_campaign_result(
+        profile, plan, findings, launched, states, observations, cut_short,
+        adaptive, only, excluding))
+
+
+def _campaign_result(profile, plan, findings, launched, states, observations,
+                     cut_short, adaptive, only, excluding, multiturn=None):
+    """
+    The campaign's result, for BOTH attack stages.
+
+    One builder and not two: the single-turn path built this inline, and a
+    second copy for the multi-turn one would have drifted on the first field
+    added — while `report.py` reads every one of them. The same reason
+    `stats.STATES` is read rather than restated.
+    """
+    return {
         # A plan cut short must NEVER present itself as a finished plan:
         # "no finding" does not mean the same thing in the two cases.
         "status": ("budget_exhausted" if cut_short
@@ -255,8 +308,14 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             not adaptive
             and len({a["technique"] for a in launched}) <= 1
             and len(launched) > 0),
+        # How the attempts were DELIVERED. The report must say it: a
+        # multi-turn attempt does not send the library's payload text, its
+        # attacker model writes each turn from an objective. Coverage by
+        # family still holds; "payload X was sent" would not.
+        "delivery": "pyrit-multiturn" if multiturn else "single-turn",
+        "multiturn_attack": multiturn,
         "cut_short": cut_short,
-    })
+    }
 
 
 def _finish(result):
@@ -339,6 +398,22 @@ def cli(arguments=None):
         help="skip techniques, same patterns as --only. Serves to respect a "
              "mandate scope that excludes techniques; wins over --only.")
     parser.add_argument(
+        "--multiturn", "--multi-tours", nargs="?", const=MULTITURN_DEFAULT,
+        default=None, dest="multiturn", metavar="ATTACK",
+        help="attack over SEVERAL turns, through PyRIT: its attacker model "
+             "reads each reply and writes the next turn. "
+             f"{' or '.join(MULTITURN_ATTACKS)} (default "
+             f"{MULTITURN_DEFAULT}). Needs the extra: pip install -r "
+             "requirements-pyrit.txt, and Python >= 3.11. NOTE: the "
+             "library's payload text is NOT sent — it chooses the objective, "
+             "and PyRIT writes the words. The report says so.")
+    parser.add_argument(
+        "--max-turns", "--tours-max", type=int, default=None,
+        dest="max_turns", metavar="N",
+        help=f"turns per multi-turn attempt (default {MULTITURN_TURNS}). "
+             f"Each turn carries the whole history forward, so this "
+             f"multiplies the cost of an attempt.")
+    parser.add_argument(
         "--no-adaptation", "--sans-adaptation", action="store_true",
         dest="no_adaptation",
         help="follow the static plan, learning nothing from the replies. "
@@ -386,6 +461,28 @@ def cli(arguments=None):
     except (ValueError, RuntimeError) as refusal:
         print(f"Target unusable.\n{refusal}", file=sys.stderr)
         raise SystemExit(2)
+
+    # An unknown attack name is a TYPO too, and it is checked HERE — with the
+    # target's name, before the mandate — because it sends no request. The
+    # alternative is a KeyError in the middle of a campaign, after the budget
+    # has been armed and an audit trail opened against a client's system. The
+    # same lesson as `--target demo:9`, which used to exit with a traceback.
+    if arguments.multiturn and arguments.multiturn not in MULTITURN_ATTACKS:
+        print(f"Unknown multi-turn attack: {arguments.multiturn}.\n"
+              f"Accepted values: {', '.join(MULTITURN_ATTACKS)}.",
+              file=sys.stderr)
+        raise SystemExit(2)
+
+    # And the EXTRA is checked here as well, for the same reason: discovering
+    # that PyRIT is not installed must not cost a client's audit trail entry.
+    # The message says what to install and that Python 3.10 cannot.
+    if arguments.multiturn:
+        try:
+            from pyrit_bridge import require_pyrit
+            require_pyrit()
+        except RuntimeError as absent:
+            print(absent, file=sys.stderr)
+            raise SystemExit(2)
 
     # An unknown context name is a TYPO, not an absent context: accepting it
     # silently would skip whole families without anyone understanding why.
@@ -446,7 +543,9 @@ def cli(arguments=None):
             target_name, trail, context,
             adaptive=not arguments.no_adaptation,
             only=scope_patterns(arguments.only),
-            excluding=scope_patterns(arguments.excluding))
+            excluding=scope_patterns(arguments.excluding),
+            multiturn=arguments.multiturn,
+            max_turns=arguments.max_turns)
     except RuntimeError as failure:
         # The target did not answer as expected: unreachable host, HTTP
         # error, non-JSON reply, wrong response path. `targets/http.py`'s
