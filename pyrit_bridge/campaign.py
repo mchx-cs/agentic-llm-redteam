@@ -156,6 +156,25 @@ async def _one(attack_name, ask_target, target_name, goal, max_turns,
     return result, judge
 
 
+def _component(problem):
+    """
+    Which piece gave up, in two words.
+
+    PyRIT names it in its error ("Component: adversarial_chat"), and the
+    distinction matters to whoever reads the line: OUR attacker model failing
+    is not THE TARGET failing — and the orchestrator's generic handler treats
+    a RuntimeError as a target-wiring failure and advises `--probe-target`,
+    which is the wrong advice in the first case.
+    """
+    text = str(problem)
+    for component, said in (("adversarial_chat", "our attacker model"),
+                            ("objective_scorer", "our judge"),
+                            ("objective_target", "the target")):
+        if component in text:
+            return said
+    return type(problem).__name__
+
+
 def _budget_stop(problem):
     """
     Was this failure our budget circuit breaker, wrapped by PyRIT?
@@ -246,12 +265,36 @@ def attack(plan, ask_target, *, target_name, profile=None, trail=None,
             break
         except Exception as problem:
             stop = _budget_stop(problem)
-            if stop is None:
-                raise
-            cut_short = str(stop)
-            show(f"\n>>> {stop}")
-            show(f">>> Campaign CUT SHORT at attempt {number} of {attempts}.")
-            break
+            if stop is not None:
+                cut_short = str(stop)
+                show(f"\n>>> {stop}")
+                show(f">>> Campaign CUT SHORT at attempt {number} of "
+                     f"{attempts}.")
+                break
+
+            # ONE attempt failed, and the campaign goes on. Measured on the
+            # first run against a real HTTP endpoint: the local attacker
+            # model exhausted PyRIT's retries emitting invalid JSON (a 3B
+            # model returning a JSON *schema* instead of an instance), and
+            # the whole campaign died on attempt 2 of 3 -- losing the attempt
+            # that had already succeeded.
+            #
+            # It is recorded as `judge_undecided`, NOT as a resistance: no
+            # verdict was reached, so it is a MISSING measurement and it
+            # leaves the ASR denominator. Counting it as "the target held"
+            # is the seventeen-point error of 2026-11-12, and counting the
+            # campaign as crashed would throw away what it had established.
+            #
+            # And the cause is NAMED. The orchestrator's generic handler
+            # treats a RuntimeError as a target-wiring failure and advises
+            # `--probe-target`, which is the wrong advice when it is OUR
+            # attacker model that gave up.
+            states.append("judge_undecided")
+            show(f"  /!\\        attempt FAILED ({_component(problem)}): "
+                 f"{str(problem).splitlines()[0][:160]}")
+            show("             no verdict, so this attempt leaves the ASR "
+                 "denominator. The campaign continues.\n")
+            continue
 
         truncated = len(call_log()["truncated_replies"]) > truncated_before
         if truncated:

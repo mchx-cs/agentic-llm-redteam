@@ -832,7 +832,9 @@ holds 64 of them, and the format has been measured on its own line — the two f
 never pooled, so a conversation cannot move the single-turn figure. And the orchestrator has now moved
 too: `--multiturn` replaces the attack stage with a PyRIT conversation whose attacker
 model reads each reply and writes the next turn, with the mandate guard, the audit
-trail, the budget ceiling and the report unchanged around it.
+trail, the budget ceiling and the report unchanged around it — against the bundled
+targets and against a real endpoint, provided its body template is a list of turns
+(`--probe-target` says whether it is).
 
 **PyRIT is integrated as an extra, and the gain it would amplify is still not
 demonstrated** — both halves matter. `--multiturn` runs it; what it finds has not been

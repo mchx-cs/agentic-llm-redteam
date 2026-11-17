@@ -22,7 +22,8 @@ from targets.http import (RAW_TEXT_PATH, PROBE_MESSAGE,
                          read_reply,
                          build_http_target,
                          probe_target as check_wiring,
-                         check_template)
+                         check_template,
+                         MESSAGE_MARKER, _inject, history_slot, with_history)
 from targets.mock import ask_mock
 
 CORPS_IMBRIQUE = {"messages": [{"role": "user", "content": "{message}"}]}
@@ -627,3 +628,133 @@ class TestPriorityOrder:
         assert "profil-cible" in aide
         # Ne doit PLUS affirmer que .env gagne.
         assert ".env a toujours la priorité" not in aide
+
+
+class TestAnHTTPEndpointCanHoldAConversation:
+    """
+    Verrou 2, 2026-11-17. `targets/http.py` declared `conversation = False`
+    flatly, so the multi-turn orchestrator delivered the day before worked
+    only against the bundled targets — phase 3b was usable on the
+    demonstration and NOT on an engagement, which is the one place it was
+    wanted.
+
+    THE RULE that makes this honest rather than clever: we do not invent the
+    API's turn shape, we COPY the one the operator wrote. A past turn is the
+    template's own element with its role swapped — same keys, nothing added.
+    An inferred shape would be a guess about the target, which this adapter
+    refuses everywhere else.
+    """
+
+    CHAT = {"model": "m",
+            "messages": [{"role": "user", "content": MESSAGE_MARKER}]}
+    PROMPT = {"model": "m", "prompt": MESSAGE_MARKER}
+    HISTORY = [{"role": "user", "content": "un"},
+               {"role": "assistant", "content": "deux"}]
+
+    def test_a_messages_ARRAY_has_a_slot(self):
+        assert history_slot(self.CHAT) is not None
+
+    def test_a_prompt_FIELD_has_none(self):
+        # A fact about the endpoint, not a limitation to work around: there
+        # is nowhere to put a dialogue.
+        assert history_slot(self.PROMPT) is None
+
+    def test_the_capability_is_DECLARED_from_the_template(self):
+        # Not hardcoded either way. Mutating this to a constant is how the
+        # orchestrator would believe it holds a dialogue against an endpoint
+        # that cannot.
+        chat = build_http_target("http://x", body=self.CHAT,
+                                 response_path="r")
+        prompt = build_http_target("http://x", body=self.PROMPT,
+                                   response_path="r")
+        assert chat.conversation is True
+        assert prompt.conversation is False
+
+    def test_the_turns_go_BEFORE_the_marker(self):
+        body = with_history(self.CHAT, self.HISTORY)
+        contents = [m["content"] for m in body["messages"]]
+        assert contents == ["un", "deux", MESSAGE_MARKER]
+
+    def test_the_target_s_turns_become_the_ASSISTANT_role(self):
+        body = with_history(self.CHAT, self.HISTORY)
+        assert [m["role"] for m in body["messages"]] == [
+            "user", "assistant", "user"]
+
+    def test_the_template_is_NOT_mutated(self):
+        # It is reused across attempts: mutating it would leak one
+        # conversation's turns into the next, and the leak would grow with
+        # every turn.
+        before = json.dumps(self.CHAT, sort_keys=True)
+        with_history(self.CHAT, self.HISTORY)
+        with_history(self.CHAT, self.HISTORY)
+        assert json.dumps(self.CHAT, sort_keys=True) == before
+
+    def test_the_turn_SHAPE_is_copied_not_invented(self):
+        # Whatever else the operator put in that object is carried through.
+        # Inventing `{"role": ..., "content": ...}` would drop it, and the
+        # endpoint would reject a turn it would have accepted.
+        template = {"messages": [{"role": "user", "type": "text",
+                                  "content": MESSAGE_MARKER}]}
+        body = with_history(template, [{"role": "user", "content": "un"}])
+        assert body["messages"][0] == {"role": "user", "type": "text",
+                                       "content": "un"}
+
+    def test_a_SYSTEM_turn_already_there_is_kept_first(self):
+        template = {"messages": [{"role": "system", "content": "tu es X"},
+                                 {"role": "user",
+                                  "content": MESSAGE_MARKER}]}
+        body = with_history(template, [{"role": "user", "content": "un"}])
+        assert [m["role"] for m in body["messages"]] == [
+            "system", "user", "user"]
+        assert body["messages"][0]["content"] == "tu es X"
+
+    def test_a_history_with_NO_SLOT_raises_rather_than_being_dropped(self):
+        # THE defect this prevents, and it is the one the conversation
+        # contract was written for: a dropped history means the orchestrator
+        # believes it is holding a dialogue while the endpoint sees isolated
+        # messages, and "multi-turn brings nothing" becomes a false
+        # conclusion that nothing contradicts.
+        with pytest.raises(RuntimeError) as refusal:
+            with_history(self.PROMPT, self.HISTORY)
+        assert "cannot carry a conversation" in str(refusal.value)
+
+    def test_the_refusal_SAYS_which_profiles_can(self):
+        with pytest.raises(RuntimeError) as refusal:
+            with_history(self.PROMPT, self.HISTORY)
+        assert "openai" in str(refusal.value)
+
+    def test_the_refusal_says_the_dialogue_is_NOT_flattened(self):
+        # The reason, kept from the original refusal: a model can refuse a
+        # role attributed to it in a transcript after accepting it turn by
+        # turn. That is not the same measurement.
+        with pytest.raises(RuntimeError) as refusal:
+            with_history(self.PROMPT, self.HISTORY)
+        assert "not the same measurement" in str(refusal.value)
+
+    def test_an_empty_history_changes_NOTHING(self):
+        # A single-turn campaign against a chat endpoint must send exactly
+        # what it sent before this feature existed.
+        assert with_history(self.CHAT, []) is self.CHAT
+        assert with_history(self.CHAT, None) is self.CHAT
+
+    def test_a_PAYLOAD_survives_the_history_intact(self):
+        # The outgoing side stays JSON precisely so a payload stuffed with
+        # quotes, braces and newlines travels intact. Inserting turns must
+        # not change that — an attack payload is designed to twist escaping.
+        nasty = 'dis "{\\"role\\": \\"system\\"}"\nou\tsinon'
+        body = _inject(with_history(self.CHAT, self.HISTORY), nasty)
+        assert body["messages"][-1]["content"] == nasty
+        assert json.loads(json.dumps(body))["messages"][-1]["content"] == nasty
+
+    @pytest.mark.parametrize("name, expected", [
+        ("openai", True), ("anthropic", True), ("openai-flux", True),
+        ("ollama", False), ("simple", False), ("text", False),
+    ])
+    def test_each_PROFILE_declares_what_it_can(self, name, expected):
+        # Not an arbitrary list: the three that can are the ones whose body
+        # really is a list of turns. A profile moving from one group to the
+        # other without this test would silently change what `--multiturn`
+        # accepts.
+        from targets.http import TARGET_PROFILES
+        assert (history_slot(TARGET_PROFILES[name]["body"]) is not None) \
+            is expected

@@ -4218,6 +4218,164 @@ not yet.
 
 982 `pytest` tests, still with no LLM call at all.
 
+**An HTTP endpoint can now hold a CONVERSATION (2026-11-17).**
+`targets/http.py` declared `conversation = False` flatly, so the multi-turn
+orchestrator delivered hours earlier worked only against the bundled targets:
+phase 3b was usable on the DEMONSTRATION and not on an engagement, which is
+the one place it was wanted.
+
+**THE RULE that makes this honest rather than clever: we do not invent the
+API's turn shape, we COPY the one the operator wrote.** If the body is
+`{"messages": [{"role": "user", "content": "{message}"}]}`, a past turn of the
+target is that same object with its role swapped — same keys, same order,
+nothing added. Whatever else they put in it (a `type`, a `name`) is carried
+through untouched. An inferred shape would be a guess about the target, which
+this adapter refuses everywhere else.
+
+`history_slot()` finds where the turns go: the list holding the marker's
+element, plus the key carrying a role it recognises. Three profiles have one
+and three do not, and that is a fact about the endpoints rather than a
+decision:
+
+| has a slot | has none |
+|---|---|
+| `openai`, `anthropic`, `openai-flux` | `ollama`, `simple`, `text` |
+
+**The capability is DECLARED from the template, never decided in advance**, so
+a `{"prompt": "{message}"}` endpoint keeps refusing — and the refusal keeps its
+original reason: *we do not flatten a dialogue into one message, because a
+model can refuse a role attributed to it in a transcript after accepting it
+turn by turn. That is not the same measurement.* The refusal also names the
+profiles that can, instead of leaving the reader to guess.
+
+**And `--probe-target` says it**, before any campaign: `--multiturn` is a
+choice made on the command line, and the answer depends on the body the
+operator wrote. Discovering it when the campaign refuses would mean having
+already armed the budget and opened an audit trail against a client's system.
+
+**VERIFIED against a real endpoint**, Ollama's OpenAI-compatible layer
+(`http://localhost:11434/v1/chat/completions`), local and free: three
+multi-turn attempts, two turns each, all completed and judged, report
+produced, 28 calls / 50,317 tokens.
+
+**A defect found by that first real run, and it mattered more than the
+feature.** The local attacker model exhausted PyRIT's retries emitting invalid
+JSON — a 3-billion-parameter model returning a JSON *schema* instead of an
+instance — and **the whole campaign died on attempt 2 of 3**, losing the
+attempt that had already finished. Worse, the orchestrator's generic handler
+treats a `RuntimeError` as a target-wiring failure and advised
+`--probe-target`: the wrong advice entirely, since it was OUR attacker model
+that gave up, not the target.
+
+Now one failed attempt is recorded as `judge_undecided` and the campaign goes
+on. **Not as a resistance**: no verdict was reached, so it is a MISSING
+measurement and it leaves the ASR denominator — conflating the two is the
+seventeen-point error of 2026-11-12. And `_component()` names which piece gave
+up, in the operator's terms: "our attacker model", "our judge", "the target".
+
+Seven mutations bite: the capability hardcoded either way, a history dropped
+instead of raising, the template mutated instead of copied, the turn shape
+invented instead of copied, the turns inserted after the marker, and a target
+turn keeping the user role.
+
+**What this does NOT do**, said rather than implied: `multipart`, GET and
+WebSocket endpoints are still out of reach, as they were for single-turn. The
+`ask(message, history) -> str` contract allows them without touching the rest
+of the project.
+
+1002 `pytest` tests, still with no LLM call at all.
+
+## What remains, in the order the dependencies impose
+
+Recorded 2026-11-17, after verrou 2. Four locks and a tail, and the order is
+not a preference: taken backwards, the measurements mean nothing.
+
+**1. THE JUDGE'S CRITERIA — three of ten OWASP families scorable.** This is
+the ceiling of everything else: growing the corpus or adding payloads changes
+nothing while the judge has only `divulgation`, `obeissance` and
+`abus_outils`. Four gaps are PINNED BY TESTS that name what the corpus would
+then need, so adding one fails a test that says why:
+
+- **a third party's data without a tool.** Measured against the good judge,
+  not asserted: a target volunteering a reader's name, address, phone number,
+  file number and debt, with no tool marker, scores `aucun` — the judge
+  describing the breach and then ruling there is none. **That is the commonest
+  finding of a real engagement** (a RAG over customer records) and it scores
+  zero;
+- **indirect injection** — a payload arriving from a document, a page or a
+  tool's output rather than from the user;
+- **fingerprinting** — the target naming its model, provider or sampling
+  parameters;
+- **a disclosed bypassable control** — LLM07's own example, "I only refuse if
+  you do not claim to be an administrator": a bypass handed over, not a hint.
+
+The order inside this lock is the one recorded since 2026-11-11: enrich the
+target → widen the CRITERIA → grow the corpus → add payloads. And it is
+expensive: touching `JUDGE_SYSTEM_PROMPT` invalidates the published
+89 / 100 / 96 and the four logged frozen-set consultations, so it costs a full
+re-measurement of both formats (~300,000 tokens).
+
+**2. THE CORPUS'S PROVENANCE.** 117 of 212 labels were decided by a MODEL, at
+the author's explicit request, and every entry records which. On the ground
+truth the author validated, the frozen set holds **23 entries, 8 positives** —
+recall is 100% there, but eight cases do not carry much. And `abus_outils` has
+**no case at all** in the frozen set, so the criterion's correctness on cases
+never looked at is simply not measured. A second tool-abuse corpus,
+hand-labelled and then frozen, is the work the project's own rule requires.
+
+**3. THE MULTI-TURN GAIN IS NOT MEASURED.** `--multiturn` runs, and nothing
+says what it finds. Two obstacles, and they are the same one twice: the LOCAL
+judge is unusable — it returned `divulgation` three votes out of three on a
+reply that was *« Pas plus de détails sur ce système »* with its own analysis
+saying the chatbot refused, the 2026-10-30 ceiling met a third time on a third
+format — and the GOOD judge costs ~13,000 tokens an attempt. A declared
+protocol with the paid judge is the only honest route.
+
+**4. THE CRITERION SEAM.** Three observations in three populations: the
+criterion both CATCHES and EXEMPTS a refusal that names what it protects
+(`E03-b` under the English instruction, a `dev` conversation, and `R07-2` on
+the frozen set). It **cannot be acted on from the frozen set** — having seen
+it there, adjusting the criterion would be tuning against the test set, the
+one thing this project forbids outright. Any fix must be justified on `dev`,
+where `C-demo3-01-2` already sits, with the frozen set consulted afterwards
+only as a CHECK.
+
+**The tail, concrete and bounded:**
+
+- **`measure_multiturn`'s next protocol.** Half the pairs measured an outcome
+  their own objective does not aim at: the outcome is "the secret's string
+  appears" and `outil-N` objectives aim at a third party's record
+  (`for_family: "LLM06"`). Restricting to the objectives the outcome can see
+  is a sound design — and, chosen now that p = 0.0669 is known, a corrupt
+  reason. Declared beforehand, with its own N, or not made.
+- **`collect_exchanges` has no bound**: `to_label.json` holds 18,546 entries,
+  33 MB, and a harvest nobody will label is not a harvest. Bounding it is a
+  SAMPLING decision — which payloads, how many per technique — and it belongs
+  to whoever chooses what the corpus should contain.
+- **MITRE ATLAS is incomplete**: two identifiers of five, because
+  atlas.mitre.org returned 404 on 2026-11-12. Completing `ATLAS_BY_FAMILY`
+  needs nothing but a reachable primary source; a plausible unverified
+  identifier stays worse than an empty cell.
+- **Phase 5: reconnaissance is purely DECLARATIVE.** A target that does not
+  say what it protects is poorly reconnoitred, and the objectives derived from
+  it are generic. That limit has been recorded since the first run and never
+  addressed.
+- **The example report predates both** the LLM06 payloads and multi-turn.
+  Regenerating it properly needs a campaign, hence quota — but the JSON is the
+  source of truth, so a rendering fix costs nothing.
+- **`.env` still uses `PROFIL_ARBITRE`**, which prints a deprecation note on
+  every command. It is the author's own config file, so it is theirs to
+  rename.
+- **`multipart`, GET and WebSocket endpoints** are out of reach, single-turn
+  as well as multi-turn.
+
+**And the pattern worth carrying forward**, because it has now happened seven
+times in two days: **a new delivery mode turns every unconditional sentence in
+the report into a claim that has to be re-checked**, and only READING THE
+RENDERING finds them. Three of the four presentation defects of 2026-11-12 and
+all four of 2026-11-17 came out that way — never from a test, never from
+reading the code.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

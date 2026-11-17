@@ -23,6 +23,7 @@ move with the coordinated data-key pass, with a documented migration. See
 `GLOSSARY.md`.
 """
 
+import copy
 import json
 import urllib.error
 import urllib.request
@@ -311,6 +312,123 @@ def _contains_marker(template):
     return template == MESSAGE_MARKER
 
 
+# The role names we recognise in a body template, and the counterpart to use
+# for the target's own turns. The USER name is what we look for -- it is the
+# one the operator wrote beside the marker -- and the ASSISTANT name is what a
+# past reply of the target becomes.
+#
+# Deliberately short: these two pairs cover the OpenAI-compatible APIs, the
+# Anthropic Messages API and the gateways that imitate them, which is what
+# `TARGET_PROFILES` already describes. An API using other names is not
+# guessed at: no slot is found, `conversation` stays False, and the refusal
+# says what is missing. Silence means refusal, never permission.
+ROLE_PAIRS = {"user": "assistant", "human": "ai"}
+
+
+def history_slot(template):
+    """
+    Where a conversation's past turns can go, or None.
+
+    Returns `(path, index, role_key, role_names)`: the list that holds the
+    marker's element, that element's position in it, the key carrying the
+    role, and the pair of role names to use.
+
+    THE RULE, and it is the reason this is honest rather than clever: we do
+    not invent the API's turn shape, we COPY the one the operator wrote. If
+    the body is `{"messages": [{"role": "user", "content": "{message}"}]}`,
+    then a past turn of the target is that same object with its role swapped
+    -- same keys, same order, nothing added. An inferred shape would be a
+    guess about the target, which this adapter refuses everywhere else.
+
+    No list, or no recognisable role beside the marker, means no slot: the
+    `{"prompt": "{message}"}` shape of the `ollama` and `simple` profiles has
+    nowhere to put a dialogue, and that is a fact about the endpoint, not a
+    limitation to work around by pasting a transcript into one message.
+    """
+    def walk(node, path):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                found = walk(value, path + [key])
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for index, element in enumerate(node):
+                # The element itself must be a dict holding the marker as one
+                # of its own values, beside a role we recognise.
+                if isinstance(element, dict) and _contains_marker(element):
+                    for key, value in element.items():
+                        names = ROLE_PAIRS.get(str(value).lower())
+                        if names:
+                            return (path, index, key,
+                                    (str(value), names))
+                found = walk(element, path + [index])
+                if found:
+                    return found
+        return None
+
+    return walk(template, [])
+
+
+def _at(structure, path):
+    """The node `path` names, inside `structure`."""
+    for piece in path:
+        structure = structure[piece]
+    return structure
+
+
+def with_history(template, history):
+    """
+    The body template with the past turns inserted before the marker.
+
+    Returns a NEW structure: the template is reused across attempts, and
+    mutating it would leak one conversation's turns into the next.
+
+    A history with no slot to go in RAISES rather than being dropped. Dropping
+    it is exactly the defect this whole contract exists to prevent: the
+    orchestrator would believe it was holding a dialogue while the endpoint
+    saw isolated messages, and "multi-turn brings nothing" would be a false
+    conclusion that nothing contradicts.
+    """
+    if not history:
+        return template
+
+    slot = history_slot(template)
+    if slot is None:
+        raise RuntimeError(
+            f"This endpoint's body template cannot carry a conversation: the "
+            f'marker "{MESSAGE_MARKER}" is not inside a list of turns.\n'
+            f"  Template read: {json.dumps(template, ensure_ascii=False)}\n"
+            f"  A template that CAN: "
+            f'{{"messages": [{{"role": "user", "content": '
+            f'"{MESSAGE_MARKER}"}}]}}\n'
+            f"  Profiles with one: "
+            f"{', '.join(n for n, s in TARGET_PROFILES.items() if history_slot(s['body']))}.\n"
+            f"  Otherwise, run a single-turn campaign: the dialogue is NOT "
+            f"flattened into one message, because a model can refuse a role "
+            f"attributed to it in a transcript after accepting it turn by "
+            f"turn. That is not the same measurement.")
+
+    path, index, role_key, (user_name, assistant_name) = slot
+    body = copy.deepcopy(template)
+    turns = _at(body, path)
+    shape = turns[index]
+
+    past = []
+    for turn in history:
+        # The template's own element, with the role swapped and the marker
+        # replaced by this turn's text. Same keys: whatever else the operator
+        # put in that object (a name, a type) is carried through untouched.
+        api_role = (assistant_name if turn.get("role") == "assistant"
+                    else user_name)
+        past.append({key: (turn["content"] if value == MESSAGE_MARKER
+                           else api_role if key == role_key
+                           else value)
+                     for key, value in shape.items()})
+
+    turns[index:index] = past
+    return body
+
+
 def check_template(body):
     """
     Reject a body template with nowhere to put the payload.
@@ -376,8 +494,9 @@ def build_http_target(url, headers=None, body=None, response_path=None,
     # conclude "no finding" without having sent any of what we believed.
     check_template(body)
 
-    def interroger(message):
-        data = json.dumps(_inject(body, message)).encode("utf-8")
+    def interroger(message, history=None):
+        data = json.dumps(
+            _inject(with_history(body, history), message)).encode("utf-8")
         request = urllib.request.Request(
             url, data=data, method="POST",
             headers={"Content-Type": "application/json", **headers},
@@ -424,11 +543,17 @@ def build_http_target(url, headers=None, body=None, response_path=None,
         return texte
 
 
-    # Single-turn, and declared as such (see targets/conversation.py): the
-    # `TARGET_BODY` template carries a single `{message}`, so we cannot yet
-    # send several messages to an endpoint. A flat refusal beats a flattened
-    # transcript that would later be taken for real multi-turn.
-    interroger.conversation = False
+    # DECLARED from the template, not decided in advance (verrou 2,
+    # 2026-11-17). This was a flat `False`, which made the multi-turn
+    # orchestrator usable on the bundled targets and NOT on a real endpoint --
+    # the one place phase 3b was wanted.
+    #
+    # It is still a declaration and never a guess: True only when the body
+    # really has somewhere to put the turns, so a `{"prompt": "{message}"}`
+    # endpoint keeps refusing. And the refusal keeps its reason: we do not
+    # flatten a dialogue into one message, because a model can refuse a role
+    # attributed to it in a transcript after accepting it turn by turn.
+    interroger.conversation = history_slot(body) is not None
 
     return interroger
 
@@ -504,6 +629,18 @@ def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
     # faire dans une sortie de terminal qu'on colle dans un rapport ou un chat.
     show(f"Headers  : {', '.join(entetes_finaux) or 'none'}"
          + (" (values hidden)" if entetes_finaux else ""))
+    # Said HERE, before any campaign, because `--multiturn` is a choice the
+    # operator makes on the command line and the answer depends on the body
+    # THEY wrote. Discovering it when the campaign refuses would mean having
+    # already armed the budget and opened an audit trail.
+    if history_slot(corps_final) is not None:
+        show("Multiturn: yes — the turns go in the list holding the marker, "
+             "so `--multiturn` works against this endpoint.")
+    else:
+        show("Multiturn: NO — the marker is not inside a list of turns, so "
+             "there is nowhere to put a dialogue. A single-turn campaign "
+             "works; `--multiturn` will refuse rather than flatten the "
+             "conversation into one message.")
     show("")
 
     try:
