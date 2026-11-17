@@ -846,6 +846,108 @@ class TestExistenceIsNotAFinding:
         assert not split, f"these categories carry both verdicts: {split}"
 
 
+class TestComparabilityAlsoNeedsTheSAMEPOPULATION:
+    """
+    The second condition, missing until 2026-11-17.
+
+    The published figures were taken on one JUDGE **and** on one POPULATION:
+    entries the author labelled. `MEASURED_ON` guarded the judge. Nothing
+    guarded the population, so once 119 model-labelled entries joined the
+    corpus the single-turn line covered 109 entries on `dev` where the
+    figure came from 67 -- and still called itself comparable.
+
+    I relayed that false comparison in conversation ("single-turn 90/100/96
+    = no regression"). A line that LOOKS like the reference and is not is
+    exactly the defect this whole split exists to prevent.
+    """
+
+    @staticmethod
+    def _run(capsys, monkeypatch, provenances):
+        import evaluation.evaluate_judge as evaluator
+        model = evaluator.MEASURED_ON.split("/", 1)[1]
+        monkeypatch.setattr(evaluator, "JUDGE_PROFILE", "x")
+        monkeypatch.setattr(evaluator, "PROFILES", {"x": {"model": model}})
+        monkeypatch.setattr(evaluator, "MEASURED_ON", f"x/{model}")
+
+        exchanges = []
+        for position, provenance in enumerate(provenances):
+            exchanges.append({"id": f"s{position}", "expected": False,
+                              "languages": "fr->fr", "payload": "p",
+                              "reply": "r", "labelled_by": provenance})
+        # One conversation, so the format split has both arms.
+        exchanges.append({"id": "c", "expected": False, "languages": "fr->fr",
+                          "labelled_by": "author",
+                          "turns": [{"role": "attacker", "content": "a"},
+                                    {"role": "target", "content": "b"},
+                                    {"role": "attacker", "content": "c"},
+                                    {"role": "target", "content": "d"}]})
+        results = {e["id"]: {"reussi": False} for e in exchanges}
+        evaluator._per_format(exchanges, results)
+        return capsys.readouterr().out
+
+    def test_a_purely_author_labelled_line_stays_comparable(self, capsys,
+                                                            monkeypatch):
+        out = self._run(capsys, monkeypatch, ["author", "author"])
+        assert "comparable with 89 / 100 / 96" in out
+        assert "NOT comparable" not in out
+
+    def test_ONE_model_labelled_entry_withdraws_the_claim(self, capsys,
+                                                          monkeypatch):
+        out = self._run(capsys, monkeypatch, ["author", "model"])
+        assert "NOT comparable" in out
+        assert "1 of these 2 entries are model-labelled" in out
+
+    def test_the_withdrawal_says_where_to_look_instead(self, capsys,
+                                                       monkeypatch):
+        # A withdrawal that only says "no" leaves the reader with nothing.
+        # The provenance split is the answer, so the note names it.
+        out = self._run(capsys, monkeypatch, ["author", "model"])
+        assert "provenance split" in out
+
+
+class TestTheProvenanceSplit:
+    """
+    Author-labelled and model-labelled answer DIFFERENT questions: the first
+    measures whether the judge is right, the second whether two models
+    agree. Pooling them averages a measurement with an agreement rate.
+
+    It matters most on the FROZEN set, whose every consultation is logged:
+    one run has to answer both questions, because consulting twice to get
+    two views costs two consultations of a reference that is only valuable
+    while it stays untouched.
+    """
+
+    @staticmethod
+    def _run(capsys, provenances):
+        import evaluation.evaluate_judge as evaluator
+        exchanges = [{"id": f"e{n}", "expected": False, "languages": "fr->fr",
+                      "payload": "p", "reply": "r", "labelled_by": p}
+                     for n, p in enumerate(provenances)]
+        results = {e["id"]: {"reussi": False} for e in exchanges}
+        evaluator._per_provenance(exchanges, results)
+        return capsys.readouterr().out
+
+    def test_both_lines_are_printed_when_the_corpus_is_mixed(self, capsys):
+        out = self._run(capsys, ["author", "model", "model"])
+        assert "Per label provenance" in out
+        assert "author" in out and "model" in out
+        assert "1 exchange(s)" in out and "2 exchange(s)" in out
+
+    def test_nothing_is_printed_when_the_corpus_is_HOMOGENEOUS(self, capsys):
+        # No split to make, so no section: a lone line labelled "author"
+        # beside nothing would suggest a comparison that does not exist.
+        assert self._run(capsys, ["author", "author"]) == ""
+        assert self._run(capsys, ["model", "model"]) == ""
+
+    def test_a_missing_provenance_counts_as_the_AUTHOR(self, capsys):
+        # The field was made total for this reason: a missing value must
+        # never be read as "probably the author" by a human, and must never
+        # silently join the model column either. Absent means the 90 entries
+        # that predate the field, which are the author's.
+        out = self._run(capsys, [None, "model"])
+        assert "1 exchange(s)" in out
+
+
 class TestComparabilityIsClaimedOnlyWhereItHolds:
     """
     The published 89 / 100 / 96 were measured on ONE judge. Saying the

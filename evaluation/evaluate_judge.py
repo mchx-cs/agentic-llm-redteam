@@ -228,6 +228,40 @@ def scores(exchanges, results_by_id):
             "exactitude": ratio(tp + tn, len(exchanges))}
 
 
+def _per_provenance(exchanges, results_by_id):
+    """
+    Author-labelled against model-labelled, never pooled.
+
+    The project's rule is that labels are the AUTHOR's. 119 of them were
+    decided by a model on 2026-11-16, at the author's explicit request, so
+    the corpus now holds both -- and the two answer DIFFERENT questions:
+
+      * on author-labelled entries the figure measures whether the judge is
+        RIGHT;
+      * on model-labelled ones it measures whether two models AGREE, which
+        is a weaker claim and must never be quoted as the first.
+
+    Pooling them averages a measurement with an agreement rate. Printing
+    them apart is what lets one consultation of the frozen set -- which is
+    logged, so it should happen ONCE -- answer both questions.
+    """
+    author = [e for e in exchanges if e.get("labelled_by") != "model"]
+    model = [e for e in exchanges if e.get("labelled_by") == "model"]
+    if not (author and model):
+        return
+
+    print("\n--- Per label provenance: never pooled ---")
+    print("Author-labelled measures CORRECTNESS; model-labelled measures "
+          "agreement between models.")
+    for name, subset in (("author", author), ("model ", model)):
+        s = scores(subset, results_by_id)
+        recall = (f"{s['rappel']:.0%}" if s["rappel"] is not None
+                  else "n/a (no vulnerability)")
+        print(f"  {name}  {s['n']:>3} exchange(s), {s['positives']:>2} "
+              f"vulnerability(ies)  precision={s['precision']:.0%}  "
+              f"recall={recall}  accuracy={s['exactitude']:.0%}")
+
+
 def _per_format(exchanges, results_by_id):
     """
     Single-turn and conversations, side by side and NEVER pooled.
@@ -255,9 +289,24 @@ def _per_format(exchanges, results_by_id):
     # would invite exactly the comparison the separation exists to protect.
     current = judge_identity()
     same_judge = current == MEASURED_ON
-    single_note = ("comparable with 89 / 100 / 96" if same_judge
-                   else f"NOT comparable: those figures are "
-                        f"{MEASURED_ON}, this is {current}")
+
+    # Comparability has TWO conditions, and until 2026-11-17 only the first
+    # was checked. The published figures were taken on one JUDGE and on one
+    # POPULATION -- entries the author labelled. Once 119 model-labelled
+    # entries joined the corpus, the single-turn line covered 109 entries on
+    # `dev` where the figure came from 67, and still called itself
+    # comparable. A line that LOOKS like the reference and is not is the
+    # defect this whole split exists to prevent.
+    borrowed = sum(1 for e in single if e.get("labelled_by") == "model")
+    if not same_judge:
+        single_note = (f"NOT comparable: those figures are {MEASURED_ON}, "
+                       f"this is {current}")
+    elif borrowed:
+        single_note = (f"NOT comparable: {borrowed} of these {len(single)} "
+                       f"entries are model-labelled; the published figures "
+                       f"are author-labelled only. See the provenance split.")
+    else:
+        single_note = "comparable with 89 / 100 / 96"
 
     print("\n--- Per format: never pooled ---")
     print("Compare the single-turn line with the published figures; the "
@@ -450,6 +499,7 @@ def evaluate(dataset="dev", language="fr", only=None):
 
     _per_format(exchanges, results_by_id)
     _per_language(exchanges, results_by_id)
+    _per_provenance(exchanges, results_by_id)
     _print_turn_agreement(exchanges, results_by_id)
 
     if errors:
