@@ -1,6 +1,11 @@
 # Virtual environment
 .venv/
 venv/
+# PyRIT's environment, kept BESIDE the project and never inside it:
+# 53 unconditional packages have no business in a venv whose promise
+# is one dependency, and a conflict in that tree must not be able to
+# break `pytest`. Same arrangement as garak's.
+.venv-pyrit/
 
 # Python caches
 __pycache__/

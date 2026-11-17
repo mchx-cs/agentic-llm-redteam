@@ -18,6 +18,13 @@ dependencies = ["openai>=1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# PyRIT supplies the multi-turn attack algorithms (phase 3b). An EXTRA, so
+# that `pip install .` stays one dependency and the repository keeps running
+# with nothing. NOTE: PyRIT requires Python >= 3.11 since its 1.2.0, while
+# this project declares >= 3.10 -- so on 3.10 this extra is not installable,
+# and pip says so. Dropping 3.10 is a published promise, not broken for an
+# optional feature. See requirements-pyrit.txt for the full reasoning.
+pyrit = ["pyrit>=1.2.1,<1.3"]
 
 [project.urls]
 Repository = "https://github.com/mchx-cs/agentic-llm-redteam"
@@ -31,7 +38,7 @@ redteam = "main:cli"
 py-modules = ["main", "config", "llm_client", "report", "stats", "audit", "migration"]
 
 [tool.setuptools.packages.find]
-include = ["agents*", "targets*", "payloads*", "evaluation*"]
+include = ["agents*", "targets*", "payloads*", "evaluation*", "pyrit_bridge*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json"]

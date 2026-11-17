@@ -1,4 +1,4 @@
-# Outils de développement UNIQUEMENT. L'exécution du projet, elle, ne demande
-# que requirements.txt — la promesse de dépendance unique tient.
+# Development tooling ONLY. Running the project needs requirements.txt
+# and nothing else -- the single-dependency promise holds.
 -r requirements.txt
 pytest>=8.0

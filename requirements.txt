@@ -1,4 +1,8 @@
-# Une seule dépendance pour la Phase 0 : le SDK openai.
-# Il parle aussi bien à Ollama (en local) qu'aux API distantes —
-# c'est ce qui rend la bascule local <-> API indolore.
+# A single dependency: the openai SDK.
+# It talks to Ollama (locally) just as well as to remote APIs -- that is
+# what makes switching local <-> API painless.
+#
+# The promise is about EXECUTION. Development tooling lives in
+# requirements-dev.txt, and PyRIT -- needed only for multi-turn attacks
+# -- in requirements-pyrit.txt.
 openai>=1.0

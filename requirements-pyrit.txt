@@ -1,0 +1,38 @@
+# PyRIT: an EXTRA, never a base dependency.
+#
+# Unlike garak, PyRIT is needed DURING a campaign, so it cannot live in a
+# throwaway venv and communicate through a JSON snapshot. It therefore has to
+# be installable alongside the project -- and that is the whole reason it is
+# kept out of requirements.txt: `pip install -r requirements.txt` must stay
+# one package, so that cloning and running the repository costs nothing.
+#
+# TWO CONSTRAINTS TO KNOW BEFORE INSTALLING, both measured on 2026-11-17.
+#
+# 1. PYTHON 3.11 MINIMUM. PyRIT raised its floor in 1.2.0 (published
+#    2026-11-13); it had been 3.10 since 0.9.0. This project declares
+#    `requires-python = ">=3.10"` and its continuous integration runs 3.10 and
+#    3.13, so on 3.10 this file is NOT installable and pip will say so. That
+#    is deliberate: dropping 3.10 is a published promise, and it is not broken
+#    for an optional feature. Multi-turn via PyRIT is simply unavailable
+#    there.
+#
+# 2. 53 UNCONDITIONAL PACKAGES, among them a web server (fastapi, uvicorn,
+#    starlette), ODBC drivers (pyodbc, aioodbc, which also need a system
+#    driver to function) and native extensions (transformers, scipy, numpy,
+#    av). `torch` is NOT unconditional -- it arrives with the huggingface,
+#    gcg or all extras, which we do not ask for.
+#
+# RECOMMENDED: install it in a SEPARATE environment (`.venv-pyrit`, which is
+# gitignored), exactly as garak's is kept beside the repository rather than
+# inside it. The project's own venv then stays at one dependency, and a
+# dependency conflict in PyRIT's tree cannot break `pytest`.
+#
+#     py -3.11 -m venv .venv-pyrit
+#     .venv-pyrit/Scripts/python -m pip install -r requirements-pyrit.txt
+#
+# PyRIT is MIT-licensed and classified "Development Status :: 3 - Alpha". The
+# floor is pinned at the version whose API this integration was written
+# against: 1.x removed `PromptChatTarget` and renamed Orchestrator away, so an
+# unpinned upgrade is a real risk, not a theoretical one.
+-r requirements.txt
+pyrit>=1.2.1,<1.3
