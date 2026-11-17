@@ -181,7 +181,7 @@ trails and the 91 commits.
 | 1 | A library of real prompt injection payloads | **Done** (via garak + 15 by hand) |
 | 2 | Judge reliability: measure and reduce false positives / negatives | In progress |
 | 3a | **Reorder the plan from the target's reply** (deterministic, extends phase 5) | **Done** |
-| 3b | Adaptive multi-turn attacker: evaluate PyRIT as a replacement for the hand-built orchestrator | In progress — tooling ready, **campaigns are still single-turn** |
+| 3b | Adaptive multi-turn attacker: evaluate PyRIT as a replacement for the hand-built orchestrator | In progress — **PyRIT declined on 2026-11-17** (gain undemonstrated, Python floor above our CI matrix); tooling ready, **campaigns are still single-turn** |
 | 4 | Decouple the judge from the target model | **Done** |
 | 5 | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | 6 | Reporting: JSON as the source of truth, Markdown rendering by default | **Done** |
@@ -3805,6 +3805,124 @@ and the threshold declared, and there is no stopping rule — but it is said
 rather than left out.
 
 931 `pytest` tests, still with no LLM call at all.
+
+**PyRIT is NOT adopted, and the decision stands on grounds of its own
+(2026-11-17).** The prerequisite that deferred it on 2026-11-13 is lifted: the
+judge reads a conversation, names the turn a breach happened on, and has been
+measured on both populations — `dev` conversations 93 / 93 / 96 with turn
+agreement 14/14, and 16 conversations of the frozen set at 100 / 100 / 100.
+PyRIT can therefore now be EVALUATED rather than only installed, which is
+exactly what that deferral said was missing.
+
+That deferral was recorded as "not a postponement". A NO must therefore stand
+on its own, not on a missing prerequisite. Five grounds, in order of weight.
+
+**1. The gain PyRIT would buy is undemonstrated, three times over.** What it
+supplies is adaptive multi-turn attacks (Crescendo, TAP, RedTeamingAttack).
+The SIMPLEST multi-turn form — two turns, the same ingredients as a composed
+message — has now been measured three times against the demonstration target
+and has never reached significance: p = 0.035 (56-pair pilot, exploratory),
+0.073 (100 pairs, defective objectives), 0.067 (68 pairs, sound). Buying an
+orchestrator for an effect the trivial case does not demonstrate inverts this
+project's method.
+
+To be precise about what that does NOT say: it is not "multi-turn does not
+work". The direction is favourable every time and spreads over 13 techniques.
+It is "we cannot yet say that it does", and an undemonstrated gain is not a
+reason to take on 53 dependencies.
+
+**2. And PyRIT's value is, BY CONSTRUCTION, only measurable with the judge in
+the loop — the expensive configuration.** This is the sharpest point, and it
+is new. `measure_multiturn` is free because there is no judge: we look for the
+secret's exact string. An ADAPTIVE attacker cannot have that property, because
+it must READ a verdict in order to adapt. So:
+
+  * with the LOCAL judge, the project has already measured what happens — the
+    40-pair adaptation series. A 50%-recall judge does not merely deprive
+    adaptation of signal, it **MISINFORMS** it: a missed flaw becomes
+    `technique_bloquee`, so the attacker moves AWAY from a technique that was
+    working. That mechanism is enough to explain an unfavourable result while
+    saying nothing about the attacker;
+  * with the GOOD judge, ~13,000 tokens per attempt, so ~520,000 per
+    adaptive/static pair — the figure that left phase 3a undemonstrated, and
+    multi-turn is worse, each turn carrying the whole history forward.
+
+So PyRIT is not merely more expensive to evaluate than the sequenced form: it
+is structurally harder, and for a reason that no budget fixes.
+
+**3. The facts recorded on 2026-11-13 were stale within hours**, which turns
+the "alpha, and an API that renames its central abstractions" worry into a
+measured rate of change:
+
+| | recorded 2026-11-13 | checked 2026-11-17 |
+|---|---|---|
+| version | 1.1.0 (2026-09-04) | **1.2.1 (2026-11-16)** |
+| `requires_python` | >= 3.10, < 3.15 | **>= 3.11**, < 3.15 |
+| unconditional dependencies | 44 | **53** |
+| status | Alpha | Alpha |
+
+**1.2.0 was published on 2026-11-13 — the day those facts were verified** —
+and it is the release that raised the Python floor. The floor had been >= 3.10
+since 0.9.0 (2025-05-09) and moved on the one day this project wrote it down.
+
+**That floor is a hard constraint, not a preference.** This project declares
+`requires-python = ">=3.10"` and its continuous integration runs **3.10 and
+3.13**. PyRIT 1.2.1 cannot be installed on half that matrix. Adopting it means
+either dropping 3.10 — a published promise — or confining PyRIT to an extra
+that half the matrix cannot import, so cannot test.
+
+**4. The comparison the roadmap asks for does not exist yet.** The recorded
+order says "settling PyRIT against a hand-built loop, on a measurement".
+There is no hand-built multi-turn loop: `main.py` still sends
+`ask_target(payload)`, one isolated message per attempt. Today the choice is
+PyRIT against NOTHING, which is not a comparison and cannot be settled on a
+measurement. The pieces for the hand-built side all exist and are tested —
+`attacker.sequence_turns`, `conversation.play`, `judge_conversation`, the
+audit trail, the report — and wiring them costs no quota.
+
+**5. The dependency facts got worse, and one of them touches a decision
+already taken.** 53 unconditional packages, and the base install includes
+**`fastapi`, `uvicorn` and `starlette`** — a web server. This project refused
+a web interface on the ground that it "would itself be an attack surface on a
+red-teaming tool"; adopting PyRIT pulls a web framework into the tree
+unconditionally, whether or not we serve anything. Also unconditional:
+`pyodbc` and `aioodbc`, which need a system ODBC driver to function, plus
+`transformers`, `scipy`, `numpy` and `av` — native extensions, a different
+install-risk class from pure Python, on Windows, which is this project's
+development platform.
+
+The 2026-11-13 note that "the *it is too heavy* objection does not hold here,
+contrary to what I assumed" stays true as stated — 53 is not garak's 164, and
+`torch` is still not unconditional. What was wrong was treating weight as the
+only question: WHAT is in the tree matters as much as how much.
+
+**What would change this decision**, stated as conditions rather than as
+"later", so the question is not reopened from scratch:
+
+- the sequenced form demonstrated at the CAMPAIGN level under a protocol
+  declared beforehand — that is the gain PyRIT would amplify, and it has to
+  exist before it is worth amplifying;
+- a judge configuration in which adaptation is not misinformed and the cost is
+  bearable. Today those two are mutually exclusive;
+- PyRIT reaching beta, or its Python floor returning inside this project's
+  matrix. Either removes the tracking cost; neither is in our hands.
+
+**And one reservation about this very decision, because it is the kind this
+file exists to record.** The API facts — `pyrit.executor.attack`, the removal
+of `PromptChatTarget`, `_send_prompt_to_target_async`, the mandatory state
+store — were read on the 1.1.0 documentation and have NOT been re-read on
+1.2.1. I do not restate them as current. That is not laziness: it is the
+argument itself. An integration whose central abstractions must be re-verified
+on every release, published a minor version every few weeks, carries a cost
+that falls on one person — the very argument that made garak a SYNCED source
+rather than a vendored one, and it cuts the other way here, because a
+published attack algorithm does not rot the way a payload does.
+
+**The next step is therefore the hand-built side, not PyRIT**: let a campaign
+send the sequenced form it already owns. That is free, it makes the roadmap's
+comparison possible for the first time, and it has value whatever PyRIT turns
+out to be worth — findings in the format the judge now scores, with the trail,
+the coverage and the report around them.
 
 ## Legal framing
 

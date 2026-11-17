@@ -801,7 +801,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
-| **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/microsoft/PyRIT) as a replacement for the hand-built orchestrator | In progress — targets, judge and harvest handle conversations; **campaigns are still single-turn** |
+| **3b** | Adaptive multi-turn attacker — evaluate [PyRIT](https://github.com/microsoft/PyRIT) as a replacement for the hand-built orchestrator | In progress — targets, judge and harvest handle conversations; **PyRIT declined for now**, and **campaigns are still single-turn** |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | **Done** |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
@@ -831,6 +831,17 @@ instruction reads a conversation and names the turn a breach happened on, the co
 holds 64 of them, and the format has been measured on its own line — the two formats are
 never pooled, so a conversation cannot move the single-turn figure. What has NOT moved is
 the orchestrator: a campaign still sends one isolated message per attempt.
+
+**PyRIT is declined for now, on two checkable grounds.** The gain it would amplify is
+not demonstrated: the simplest multi-turn form — two turns carrying the same
+ingredients as one composed message — has been measured three times against the
+bundled target and has never reached significance (p = 0.067 on the soundest run of
+68 pairs, the direction favourable each time, spread over 13 techniques). And PyRIT
+1.2.1 requires Python 3.11, where this project supports 3.10 and tests it in CI, so
+half the matrix could not even import it. The full reasoning, including why an
+adaptive attacker is *structurally* harder to measure than a sequenced one — it must
+read a verdict to adapt, so the judge is back in the loop and the measurement stops
+being free — is in `CLAUDE.md`.
 
 ## Stack
 
