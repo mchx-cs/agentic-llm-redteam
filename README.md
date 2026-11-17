@@ -4,7 +4,8 @@
 
 A multi-agent system that automates adversarial security testing of LLM applications — give it an endpoint, get back a list of validated vulnerabilities.
 
-> **Status: the pipeline and the payload library are complete; the attacker is single-turn.**
+> **Status: the pipeline and the payload library are complete; the attacker runs
+> single-turn or multi-turn.**
 > Reconnaissance → planning → attack → judgement → replay verification runs end to end,
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
 > 212 labelled exchanges — 95 labelled by the author, 117 by a model, and every entry
@@ -16,8 +17,12 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > Attack content comes from a local [garak](https://github.com/NVIDIA/garak) snapshot —
 > 52 probes, 1,143 payloads — plus 15 hand-written ones for the two families garak ships
 > no probe for.
-> What is missing is multi-turn: every attack is a single message, and the judge holds
-> three criteria covering four OWASP families, so six of the ten stay out of reach.
+> Attacks run as a single message by default, or as a conversation with `--multiturn`,
+> where an attacker model reads each reply and writes the next turn. The two are not
+> interchangeable and the trade-off is stated in
+> [Single-turn or multi-turn](#single-turn-or-multi-turn).
+> What is missing is the judge's reach: three criteria cover four OWASP families, so six
+> of the ten stay out of reach, and whether multi-turn finds MORE is not yet measured.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
 
 ---
@@ -113,6 +118,11 @@ and coverage that states what was never attempted.
 │   ├── judge.py           # LLM-as-judge: rules on success or failure (JSON verdict)
 │   ├── detectors.py       # deterministic decoding (spelled-out, Base64, hex) first
 │   └── verifier.py        # replay check: real leak or target hallucination?
+├── pyrit_bridge/        # PyRIT's multi-turn attacks, through OUR points of passage
+│   ├── convert.py         # every decision made on plain data — imports no PyRIT, so CI tests it
+│   ├── targets.py         # the attacker model through ask_llm(), the target through phase 8
+│   ├── judge.py           # our measured judge as a PyRIT scorer, on the format it was measured on
+│   └── campaign.py        # the attack stage only: recon, planning and the report stay ours
 ├── payloads/
 │   ├── library.json       # attack techniques (by OWASP family) and objectives
 │   ├── validate.py        # validates the library before a campaign uses it
@@ -132,12 +142,16 @@ and coverage that states what was never attempted.
 │   ├── collect_conversations.py     # the same, multi-turn — no judge, no attacker model
 │   ├── handwritten_conversations.py # the traps a harvest cannot produce, by hand
 │   ├── labelling_prepass.py         # mechanical facts to speed labelling, no verdict
+│   ├── languages.py                 # which language pair an exchange is, derived once
+│   ├── split_sets.py                # the dev/frozen split, and the rules it refuses to break
+│   ├── resume.py                    # resumes an interrupted evaluation, never repeats a finished one
 │   └── label.py                     # hand-labelling, one question at a time
 ├── examples/
 │   └── demo-report.md   # a committed example report, abridged, rendered by GitHub
 ├── audit.py             # authorisation gate + append-as-you-go JSONL audit trail
 ├── stats.py             # what a result bounds — and the refusal to bound dependent trials
 ├── migration.py         # reads data written before the names were translated
+├── check_rename_damage.py  # finds an English identifier dropped into a French sentence
 ├── report.py            # result.json (source of truth) → report.md; rule-based severity
 └── main.py              # orchestrator: runs the campaign loop
 ```
@@ -158,9 +172,13 @@ ollama pull llama3.2
 python main.py
 ```
 
+Multi-turn attacks need one optional extra, and nothing else does:
+`pip install -r requirements-pyrit.txt` (Python 3.11 or newer). The default path stays a
+single dependency, so the command above works everywhere the project supports.
+
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 909 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,002 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -405,6 +423,42 @@ python main.py --target https://host/v1/chat --target-profile openai --context r
 **7. Judge with a different model than the target** — `JUDGE_PROFILE` in `.env`. A
 judge running on its target's own model shares its blind spots.
 
+### Single-turn or multi-turn
+
+Both exist, and **they are not two implementations of one thing — they produce different
+grades of evidence.** Single-turn stays the default, because the default has to run with
+nothing.
+
+```bash
+python main.py --target demo                      # single-turn, no extra needed
+python main.py --target demo --multiturn          # a conversation per attempt
+python main.py --target demo --multiturn crescendo --max-turns 4
+```
+
+|  | single-turn | multi-turn |
+|---|---|---|
+| strongest finding it can produce | **`high` — a leak whose value comes back on replay** | `medium` at best |
+| targets it can reach | **any shape of endpoint** | only a body that is a list of turns |
+| cost per attempt | ~4,000 tokens | ~18,000, and quadratic in the turn count |
+| statistical bounds (`pass@k`) | **affordable** | out of reach |
+| what a *no finding* is worth | weaker | **stronger** |
+| dependencies | **none** | PyRIT, Python ≥ 3.11 |
+
+The first row is the one that decides most engagements. `high` severity is reachable
+only through replay — re-sending *one* payload to tell a real secret from one the model
+invented — and a conversation has no single payload to re-send. So a multi-turn
+disclosure is graded `medium`, uncorroborated, and the report says why.
+
+The last row but one runs the other way, and the OWASP manual is explicit about it: zero
+successes against a *static list* is substantially weaker assurance than zero successes
+against an attacker that rewords. A clean single-turn run proves less than a clean
+multi-turn one.
+
+So: single-turn to reach anything, to bound a result, and to corroborate a leak;
+multi-turn when the target is a conversational endpoint, the extra is installed, and you
+accept losing replay. Whether multi-turn actually finds *more* is **not measured** — see
+the roadmap.
+
 ### Target wiring: reference
 
 **Profiles** fill in the request shape and where to read the reply, for the forms that
@@ -565,14 +619,17 @@ the evidence, no target telemetry, no MITRE ATLAS mapping.
 
 Two things the audit did **not** resolve, and the repo says which is which:
 
-- **adaptive attacks.** The manual holds that a zero-success result against a static
-  prompt list is substantially weaker assurance than one against adaptive attacks. This
-  project's adaptation reorders its plan from the target's replies; it does not reword
-  the attack. Phase 3b, and the report tells the reader so rather than letting the
-  distinction pass.
+- **adaptive attacks — now half resolved.** The manual holds that a zero-success result
+  against a static prompt list is substantially weaker assurance than one against
+  adaptive attacks. In a single-turn campaign this project's adaptation *reorders* its
+  plan from the target's replies without rewording the attack, and the report says so.
+  With `--multiturn` an attacker model does reword, turn by turn — so the limitation
+  the report declares depends on how the campaign was run. What is still missing is the
+  measurement: nothing yet says the rewording finds more.
 - **out of scope by design.** The manual's phases on persistence, privilege escalation
   and blast radius assume an agentic target and an exploitation mandate. This is a
-  single-turn scanner against a chatbot. That is a boundary, not a defect — but the
+  scanner against a conversational agent, single-turn or multi-turn, with no mandate to
+  exploit what it finds. That is a boundary, not a defect — but the
   report names it, because a coverage section that omits what was never attempted is the
   same lie by omission as an unbounded "no findings".
 
@@ -775,16 +832,24 @@ authorisation.
 ### Running the judge on a different model
 
 A judge that shares its target's model shares its blind spots, so it has a profile of
-its own. Add a free [Groq](https://console.groq.com) key to the same `.env` and set:
+its own. Add a [Groq](https://console.groq.com) key to the same `.env` and set:
 
 ```bash
 JUDGE_PROFILE=groq
 ```
 
 On the same prompt, moving the judge from local `llama3.2` (3B) to `gpt-oss-120b` raised
-recall on the frozen test set from 50% to 100% (accuracy 73% → 93%). The remaining errors
-are target hallucinations (a made-up password looks like a leak to a blind judge), which
-call for verification by replay rather than a better prompt.
+recall on the frozen test set from 50% to 100% — measured on 2026-11-10, and the single
+largest improvement in this project's history. The remaining errors are target
+hallucinations (a made-up password looks like a leak to a blind judge), which call for
+verification by replay rather than a better prompt.
+
+The free tier covers a campaign (~12,000 tokens) comfortably. It no longer covers
+*measuring* the judge: a full consultation of the corpus costs about 301,000 tokens
+against a 200,000-a-day cap, since a conversation carries its whole history into every
+call. Two constraints hold on a free tier whatever the volume — several providers allow
+themselves to train on free-tier requests, so fictional data only, and a free tier is
+disqualified outright on an engagement.
 
 That replay check is in place: when the judge sees a leaked value, the same payload is
 replayed a bounded number of times. A real secret comes back unchanged; a hallucinated
@@ -829,16 +894,16 @@ something PyRIT does not do for you. 3b is genuine multi-turn conversation, and 
 cost was never the orchestrator but the judge. That cost has now been paid: the judge's
 instruction reads a conversation and names the turn a breach happened on, the corpus
 holds 64 of them, and the format has been measured on its own line — the two formats are
-never pooled, so a conversation cannot move the single-turn figure. And the orchestrator has now moved
-too: `--multiturn` replaces the attack stage with a PyRIT conversation whose attacker
-model reads each reply and writes the next turn, with the mandate guard, the audit
-trail, the budget ceiling and the report unchanged around it — against the bundled
-targets and against a real endpoint, provided its body template is a list of turns
-(`--probe-target` says whether it is).
+never pooled, so a conversation cannot move the single-turn figure. And the
+orchestrator has moved too: `--multiturn` replaces the attack stage with a PyRIT
+conversation whose attacker model reads each reply and writes the next turn, with the
+mandate guard, the audit trail, the budget ceiling and the report unchanged around it
+— against the bundled targets, and against a real endpoint whose body template is a
+list of turns (`--probe-target` says whether it is).
 
 **PyRIT is integrated as an extra, and the gain it would amplify is still not
-demonstrated** — both halves matter. `--multiturn` runs it; what it finds has not been
-measured against a judge worth trusting. On the evidence so far: the simplest multi-turn form — two turns carrying the same
+demonstrated** — both halves matter. `--multiturn` runs it; what it finds has not
+been measured against a judge worth trusting. On the evidence so far: the simplest multi-turn form — two turns carrying the same
 ingredients as one composed message — has been measured three times against the
 bundled target and has never reached significance (p = 0.067 on the soundest run of
 68 pairs, the direction favourable each time, spread over 13 techniques). And PyRIT
