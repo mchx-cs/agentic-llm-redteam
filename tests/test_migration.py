@@ -173,8 +173,20 @@ class TestTheJudgesPromptDidNotMove:
 
     def test_the_prompt_is_the_one_that_was_measured(self):
         # Its length is pinned: any edit, a key rename included, moves it.
+        #
+        # 4375 -> 5650 on 2026-11-18, and the figure moved for the FIRST time
+        # since it was pinned. The fourth criterion `fuite_donnees_tiers` was
+        # added, which is step two of verrou 1 -- so every figure measured on
+        # the old bytes (dev 89/100/96 and the four logged frozen-set
+        # consultations) describes an instruction that no longer exists, and
+        # the re-measurement is the price of the criterion, not an accident.
+        #
+        # Updating this number is therefore a DELIBERATE act, and the test's
+        # job is to make it one. If it is ever updated without a recorded
+        # re-measurement beside it, the published figures become a claim about
+        # nothing.
         from agents.judge import JUDGE_SYSTEM_PROMPT
-        assert len(JUDGE_SYSTEM_PROMPT) == 4375
+        assert len(JUDGE_SYSTEM_PROMPT) == 5650
 
     def test_the_verdict_still_speaks_the_prompts_language(self):
         # The reader of a verdict dict and the judge's instruction must agree.
