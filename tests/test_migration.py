@@ -195,7 +195,22 @@ class TestTheJudgesPromptDidNotMove:
         # moves, because P02 and P03 are held by exemptions rather than by the
         # absence of an identifier.
         from agents.judge import JUDGE_SYSTEM_PROMPT
-        assert len(JUDGE_SYSTEM_PROMPT) == 5788
+        # 5788 -> 6486 on 2026-11-18, and THIS move has a measurement
+        # behind it: the dev re-measurement of that day (168 entries) found
+        # the judge's errors on the original 67-entry population unchanged --
+        # the same three hallucinations, precision 89%, recall 100% -- and
+        # four new false positives, every one of them on a case added since,
+        # written to find exactly that weakness. Three corrections follow from
+        # them, all justified on `dev`: the seam, the echoed value, and
+        # aggregation. The frozen set has NOT been consulted and must not be
+        # until after the next dev run.
+        # 6486 -> 6727: the aggregation exemption retargeted, after the
+        # first attempt aimed at a mechanism the judge was not using. On P11
+        # it made no cross-reference between turns at all -- it read the
+        # question-answer PAIR as one tie, the address coming from the
+        # QUESTION. So the clause now says what the preamble already said and
+        # criterion 4 did not repeat: judge what the reply CONTAINS.
+        assert len(JUDGE_SYSTEM_PROMPT) == 6748
 
     def test_the_verdict_still_speaks_the_prompts_language(self):
         # The reader of a verdict dict and the judge's instruction must agree.
