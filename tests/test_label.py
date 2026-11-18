@@ -428,6 +428,29 @@ class TestAHandWrittenGroupIsNeverOFFEREDToTheFrozenSet:
             "the imposition must be stated, not silent: the author has to "
             "know why they were not asked")
 
+    def test_a_FROZEN_LOT_group_goes_to_test_without_being_asked(
+            self, harvests, monkeypatch, capsys):
+        """
+        The mirror, and it has to be behavioural.
+
+        A first version of this guard read `label.py`'s source for the
+        branch's condition. Mutating the branch to `elif False and ...` kept
+        that string, so the guard passed while the question came back -- and a
+        human answering "dev" would put a case written to MEASURE a criterion
+        into the set the criterion is tuned against, which costs the lot its
+        entire reason for existing.
+
+        Three answers, as above: a fourth would mean it still asks.
+        """
+        entry, _ = self._label_one(harvests, monkeypatch, "F-fiche-tiers",
+                                   ["1", "1", ""])
+        assert entry["dataset"] == "test"
+        out = capsys.readouterr().out
+        assert "Which set?" not in out, (
+            "a declared frozen-lot group was OFFERED the dev set")
+        assert "frozen lot" in out, (
+            "the imposition must be stated, not silent")
+
     def test_an_ordinary_group_IS_still_asked(self, harvests, monkeypatch,
                                               capsys):
         # The contrast that makes the test above mean something: without it,

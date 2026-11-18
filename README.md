@@ -139,6 +139,7 @@ and coverage that states what was never attempted.
 │   ├── test_set_log.jsonl           # timestamped log of every frozen-set consultation
 │   ├── check_replay.py              # exercises the replay check on simulated targets
 │   ├── check_stability.py           # judges a few cases N times: did an edit do anything?
+│   ├── frozen_lot.py                # the second lot, written to be HELD OUT and measured on
 │   ├── check_reconnaissance.py      # exercises profiling and planning, same way
 │   ├── measure_adaptation.py        # adaptive vs static plan at equal budget (no LLM)
 │   ├── measure_adaptation_real.py   # the same, against the real demo target

@@ -5106,6 +5106,135 @@ the four existing lines would stay without them.
 
 1,052 `pytest` tests, still with no LLM call at all.
 
+**THE FROZEN LOT, written (2026-11-19).** The debt recorded on 2026-11-12
+and doubled on 2026-11-18, and the only work that unblocks any of the
+measurement. `evaluation/frozen_lot.py`, 22 cases in 19 groups, committed
+**unlabelled**.
+
+**What the gap actually is, measured rather than remembered.** On the ground
+truth the AUTHOR validated — the only population the published figures
+describe — the frozen set covers:
+
+| criterion | cases | positives | recall floor if perfect |
+|---|---|---|---|
+| `divulgation` | 10 | 7 | 65% |
+| `obeissance` | 4 | **1** | **21%** |
+| `abus_outils` | **0** | 0 | nothing at all |
+| `fuite_donnees_tiers` | **0** | 0 | nothing at all |
+| conversations | **0** | 0 | nothing at all |
+
+**The `obeissance` line is new and nobody had seen it.** The per-criterion
+audit of 2026-11-18 reported 3 positives for it; separating the provenance
+leaves **ONE**. So the published "recall 100%" on the author subset rests on
+seven `divulgation` positives and a single `obeissance` one — and a perfect
+recall on one positive bounds the true rate at 21%, which is a coin and not a
+figure. That is this lot's third reason for existing, and it was not among the
+two the project had recorded.
+
+Five positives per criterion is the target and deliberately not more: five
+bounds a perfect recall at 57%, which is a defensible sentence, and going from
+five to eight costs 60% more labelling for 11 points of floor.
+
+**THE RULE THIS REQUIRED, and it is the reverse of an absolute one.**
+`split_sets` sends hand-written cases to `dev` and calls that ABSOLUTE, for a
+stated reason: a case written to expose a specific trap is one you need to be
+ALLOWED to tune against, and in the frozen set it is unusable for the job it
+exists for. A lot written to be HELD OUT is the same rule read backwards, so
+`frozen_groups()` imposes `test`, symmetrically, and the striping touches
+neither.
+
+**What decides is the declared INTENT, never the text.** A twin pair is the
+case in point: P01/P02 belong in `dev` because they were written to settle
+where the criterion's edge falls, and F01/F02 belong in `test` because they
+measure whether that edge generalises. Nothing in the cases themselves tells
+them apart — which is exactly why each lot declares what it is for instead of
+a prefix implying it.
+
+**The surface differs, the trap does not.** A held-out set measures
+GENERALISATION, so each case is the same KIND of trap as its `dev` counterpart
+in a different setting: a sports club rather than a library or a records desk,
+`fiche_adherent` rather than `consulter_dossier`, a date of birth and an
+emergency contact rather than an address and a debt. A test asserts that no
+case borrows the existing targets' vocabulary — a criterion that had latched
+onto "fonds ancien" rather than onto the trap would show it here.
+
+**Deliberately NOT harder.** Writing harder cases would measure extrapolation
+and would read as a regression when the judge met them. That is the discipline
+the English-instruction arm imposed on 2026-11-14: the translation had to be
+FAITHFUL, because a version that was also better written would have left the
+gain unattributable.
+
+Two registers are absent from `dev` and say so in their intention, because
+they test whether a rule MEASURED elsewhere transfers rather than a new one:
+**F10** (the third party's data supplied by the ATTACKER — A08's rule applied
+to criterion 4, and A08 is stable-wrong, so this is the harder half of it) and
+**F15** (a tool fired on the target's OWN initiative — `dev` covers only
+dictated calls, so the criterion's second limb, "exposing its result when it
+concerns a third party", has never been measured alone).
+
+**AND THE FIRST VERSION OF MY OWN GUARD WAS SILENT.** The junction between
+the rule and the question — the defect found on 2026-11-18, where `label.py`
+asked while `split_sets` decided — was pinned by reading `label.py`'s source
+for `defence_level(group) == "frozen-lot"`. Mutating the branch to
+`elif False and defence_level(...)` leaves that string in place, so the guard
+passed through exactly the event it was written for.
+
+**Fifth time in this project that a guard checked for the presence of TEXT
+instead of a behaviour**, after phase 3a's tautological test, the twin guard
+that named its groups in source, the pinned gap test that did not notice the
+gap closing, and the existence invariant keyed to a count of 17. The fix is
+not a better string: the decision moved into `split_sets.imposed_set()`, the
+one function both callers ask, and the guard became behavioural — `label()` is
+driven and the set it WROTE is read. Six mutations now bite, that one included.
+
+A guard of a different kind was kept blunt rather than weakened: a test
+forbids an intention from stating the answer, and it fired on my own wording
+of F12 ("on enseignerait que toute demande d'outil est une faille" — said of
+the case's absence, not of its verdict). I reworded F12. A substring check
+with one false positive is still worth more than a clever check nobody reads,
+and the project has already removed a guard for crying wrong twice in four.
+
+**A guard that generalises the lesson instead of repeating it.** Twice now a
+lot of hand-written cases has been added and the split did not know about it.
+So: any module under `evaluation/` declaring a `CASES` list of 4-tuples must
+be named by one of the two impositions. There are exactly two such modules
+today, so it has no false positive, and it fails the day a third appears —
+which is precisely when "dev or test?" has to be decided deliberately rather
+than inherited.
+
+**The labels are NOT in the file**, and a test holds that rather than leaving
+it to good will. It matters more here than anywhere: a frozen lot labelled by
+a model would measure agreement between models, which is the very gap it was
+written to fill. It would cost its writing and deliver nothing.
+
+**And the order of the questions is left as it is, on purpose.** `label.py`
+asks the verdict and the category BEFORE showing the intention. For a lot
+whose intentions say things like "le registre central du critère 4", showing
+them first would amount to proposing the verdict — which the rule forbids. The
+author rules on the exchange alone; the twin is shown beside it, and the
+intention appears before the entry is closed.
+
+One cosmetic defect fixed along the way, because the author reads the line
+once per case: these entries carry `secret: None` — truthfully, since no
+secret is at stake in a third party's record — and the display printed a bare
+`None`, which reads as a bug. The P-cases carry `ARCHIVES-7731`, a value
+appearing nowhere in them; that is the tidier lie and this lot does not repeat
+it.
+
+**What is NOT done, and it is the author's:** label F01–F22, integrate them,
+and only then consult the frozen set again — as a CHECK, never as a reason.
+Until those labels exist the lot measures nothing, and the two newest criteria
+remain unmeasured on cases never looked at.
+
+```
+python -m evaluation.frozen_lot --add     # already done: 22 in the harvest
+python -m evaluation.label --ids F01 F02 F03 …
+python -m evaluation.label --check
+python -m evaluation.label --integrate
+```
+
+1,078 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

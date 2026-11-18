@@ -26,6 +26,18 @@ THE RULES, in order of precedence:
    you need to be ALLOWED to tune against. In the frozen set it would be
    unusable for the job it exists for.
 
+2b. **A declared FROZEN LOT goes to `test`**, which is the same rule read
+   backwards rather than an exception to it. `evaluation/frozen_lot.py` is
+   written to be held out — never looked at while a criterion is adjusted,
+   consulted afterwards as a check — so its groups are imposed `test` and the
+   striping never touches them either.
+
+   The two impositions are opposite and both absolute, because what decides is
+   the declared INTENT and not the text: a twin pair written to settle where a
+   criterion's edge falls belongs in `dev`, and a twin pair written to measure
+   whether that edge generalises belongs in `test`. Nothing in the cases
+   themselves tells them apart, which is why each lot declares what it is for.
+
 3. **Stratify on the axes that are genuinely different populations**, so that
    neither set is a skewed sample:
    - the defence LEVEL (`demo`, `demo:2`, `demo:3`). The project already
@@ -94,6 +106,22 @@ def handwritten_groups():
     return frozenset(group for _, group, _, _ in CASES)
 
 
+def frozen_groups():
+    """
+    The groups of the DECLARED frozen lot, read from the module that declares
+    them — the mirror of `handwritten_groups`, and for the opposite reason.
+
+    Same lazy, non-fatal import: a split must not depend on a sibling module
+    importing cleanly, and this module is also used on corpora that predate
+    the lot.
+    """
+    try:
+        from evaluation.frozen_lot import CASES
+    except Exception:
+        return frozenset()
+    return frozenset(group for _, group, _, _ in CASES)
+
+
 def defence_level(group):
     """
     The target the group was harvested against, read from its name.
@@ -113,8 +141,36 @@ def defence_level(group):
     # loses a case the other does not catch.
     if group in handwritten_groups() or group.startswith("A-"):
         return "hand-written"
+    # Declared only: there is deliberately NO prefix convention here. `A-`
+    # earned one by predating the declaration; a new lot has no such history,
+    # and a second convention would be a second thing to break.
+    if group in frozen_groups():
+        return "frozen-lot"
     match = re.match(r"C-demo(\d?)", group)
     return f"demo{match.group(1) or '1'}" if match else "other"
+
+
+def imposed_set(group):
+    """
+    The set a group's STRUCTURE imposes, or None when the striping decides.
+
+    THE ONE PLACE. The two impositions are opposite -- hand-written cases to
+    `dev`, a declared frozen lot to `test` -- and both are absolute, so a
+    caller that re-implemented either would be a second source of truth for a
+    rule whose whole point is that nobody gets to answer it.
+
+    `label.py` asked the question while this module held the rule, and nothing
+    connected them until 2026-11-18: a human answering "test" put the rule
+    straight back. Pinning that junction by reading `label.py`'s source for a
+    string then failed to catch the branch being disabled, which is why the
+    decision lives here and is called rather than copied.
+    """
+    level = defence_level(group)
+    if level == "hand-written":
+        return DEV
+    if level == "frozen-lot":
+        return TEST
+    return None
 
 
 def attacker_language(entries):
@@ -156,8 +212,15 @@ def assign(groups):
         # it sent `A-confirmation` — the A03/A04 twins, written to pin one
         # specific trap — into the frozen set, where they would be unusable
         # for the only job they exist for.
-        if defence_level(name) == "hand-written":
-            decision[name] = DEV
+        # Both impositions, from the one place that states them. They come
+        # BEFORE the striping and are absolute: a hand-written case needs to
+        # be tunable against, and a lot written to be held out has nothing to
+        # gain from the striping and everything to lose if a quarter of it
+        # landed in `dev` -- the criterion would then be tuned against a case
+        # written to measure it.
+        imposed = imposed_set(name)
+        if imposed is not None:
+            decision[name] = imposed
             continue
         strata.setdefault(stratum(name, entries), []).append(name)
 

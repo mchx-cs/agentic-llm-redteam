@@ -26,7 +26,7 @@ from pathlib import Path
 from evaluation.languages import language_pair
 # The hand-written rule is READ from where it is defined, never restated
 # here: one place, for the same reason as `judge_identity()`.
-from evaluation.split_sets import DEV, defence_level
+from evaluation.split_sets import defence_level, imposed_set
 
 FOLDER = Path(__file__).parent
 TO_LABEL_FILE = FOLDER / "to_label.json"
@@ -231,7 +231,11 @@ def show_exchange(exchange, position, total, siblings=()):
     print("\n" + "=" * 70)
     print(f"[{position}/{total}]  {exchange['id']}   "
           f"(groupe {exchange['group']}, {exchange.get('languages', '?')})")
-    print(f"Secret du chatbot : {exchange['secret']}")
+    # `None` means there is no secret at stake -- a third party's record,
+    # a tool call. Printing the bare None reads as a bug, and the author
+    # sees this line once per case.
+    print(f"Secret du chatbot : "
+          f"{exchange['secret'] or 'aucun (pas de secret en jeu)'}")
     print(f"Provenance        : {exchange.get('source', '—')}")
     print("-" * 70)
     for line in _exchange_lines(exchange):
@@ -456,24 +460,28 @@ def label(ids=None):
             if group in set_of_group:
                 dataset = set_of_group[group]
                 print(f"\nSet: {dataset} (imposed by group {group}).")
-            elif defence_level(group) == "hand-written":
-                # NOT a question. `split_sets` calls this rule ABSOLUTE,
-                # and its own comment records why: letting the striping
-                # run over the hand-written stratum once sent the
-                # A03/A04 twins into the FROZEN set, where a pair
-                # written to pin one specific trap is unusable for the
-                # only job it exists for.
+            elif imposed_set(group) is not None:
+                # NOT a question, and the rule is READ rather than
+                # restated: `split_sets.imposed_set` is the one place
+                # that decides. Its own comment records why -- letting
+                # the striping run over the hand-written stratum once
+                # sent the A03/A04 twins into the FROZEN set, where a
+                # pair written to pin one specific trap is unusable for
+                # the only job it exists for. The frozen lot is the same
+                # rule read backwards: a case written to MEASURE a
+                # criterion must never land in the set it is tuned
+                # against.
                 #
-                # The rule lived in `split_sets` while the question
-                # lived here, and nothing connected them: a human
-                # answering "test" would have reintroduced exactly that
-                # defect. The same shape as the three chain-of-custody
-                # fields nobody filled -- two modules correct on their
-                # own, the junction uncovered.
-                dataset = DEV
-                print(f"\nSet: {dataset} (imposed: {group} is "
-                      f"hand-written, and those never go to the frozen "
-                      f"set).")
+                # The imposition is STATED and never silent: the author
+                # has to know why they were not asked.
+                dataset = imposed_set(group)
+                why = {
+                    "hand-written": "hand-written, and those never go "
+                                    "to the frozen set",
+                    "frozen-lot": "part of the declared frozen lot, "
+                                  "written to be held out",
+                }[defence_level(group)]
+                print(f"{chr(10)}Set: {dataset} (imposed: {group} is {why}).")
                 set_of_group[group] = dataset
             else:
                 dataset = ask_choice(
