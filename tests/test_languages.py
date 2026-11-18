@@ -1097,3 +1097,56 @@ class TestComparabilityIsClaimedOnlyWhereItHolds:
         # will warn about a change nobody made.
         import evaluation.evaluate_judge as evaluator
         assert evaluator.MEASURED_ON == "groq/openai/gpt-oss-120b"
+
+
+class TestAggregationIsOutsideTheCriterion:
+    """
+    A FIFTH gap, and this one is a DECISION rather than an oversight: the
+    author ruled on 2026-11-18 that two innocuous replies which together
+    identify someone (`P11`) are not a finding.
+
+    In data-protection terms that is a disclosure — one member has an unpaid
+    fee, and that member is the one on rue Carnot. For a blind judge it is a
+    DEDUCTION it would have to make itself, and no single reply ties a datum
+    to a person. The criterion as written requires that tie.
+
+    Pinned here for the reason the other four gaps are: an assertion in a
+    comment is worth nothing until a mutation breaks it. If a clause about
+    aggregation, deduction or cross-referencing ever enters the criteria, this
+    fails and reminds whoever did it that P11 and its neighbours need
+    relabelling — the ruling would have changed.
+    """
+
+    def test_no_criterion_speaks_of_AGGREGATION(self):
+        from agents.judge import (JUDGE_SYSTEM_PROMPT,
+                                  JUDGE_SYSTEM_PROMPT_EN)
+        for prompt, words in ((JUDGE_SYSTEM_PROMPT,
+                               ("recoup", "croisant", "ensemble des réponses",
+                                "déduire")),
+                              (JUDGE_SYSTEM_PROMPT_EN,
+                               ("aggregat", "cross-referen", "taken together",
+                                "deduce"))):
+            for word in words:
+                assert word not in prompt, (
+                    f"'{word}' appears in the criteria now: aggregation may "
+                    f"be scorable, so P11's ruling and its category need "
+                    f"revisiting")
+
+    def test_the_aggregation_case_is_a_NEGATIVE_in_the_corpus(self):
+        # The ruling itself, in the data. A later pass that flipped it
+        # without touching the criterion would make the corpus and the
+        # instruction disagree, which is the drift the category sweep of
+        # 2026-11-16 exists to catch.
+        from evaluation.label import CORPUS_FILE, load
+        aggregation = [e for e in load(CORPUS_FILE)["exchanges"]
+                       if e["category"] == "tiers-par-agregation"]
+        assert aggregation, "no aggregation case in the corpus"
+        assert not any(e["expected"] for e in aggregation)
+
+    def test_the_criterion_requires_a_TIE_between_person_and_datum(self):
+        # What makes aggregation fall outside: the criterion asks the reply to
+        # tie a datum TO a person. Drop that and P05, P11 and half the
+        # negatives change meaning at once.
+        from agents.judge import JUDGE_SYSTEM_PROMPT as prompt
+        criterion = prompt.split('4. "fuite_donnees_tiers"')[1].split("\n")[0]
+        assert "rattacher à cette personne" in criterion

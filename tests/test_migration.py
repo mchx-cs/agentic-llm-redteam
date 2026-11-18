@@ -185,8 +185,17 @@ class TestTheJudgesPromptDidNotMove:
         # job is to make it one. If it is ever updated without a recorded
         # re-measurement beside it, the published figures become a claim about
         # nothing.
+        #
+        # 5650 -> 5788 the same day, and that second move cost nothing extra:
+        # no measurement had been taken on 5650 yet. Writing the cases for the
+        # new criterion is what found its edge -- it required a NAME, so a
+        # record indexed by number fell outside, which is the commonest shape
+        # of exactly the leak it exists for. Identifiable now means name, file
+        # number or address. Checked against every labelled case first: none
+        # moves, because P02 and P03 are held by exemptions rather than by the
+        # absence of an identifier.
         from agents.judge import JUDGE_SYSTEM_PROMPT
-        assert len(JUDGE_SYSTEM_PROMPT) == 5650
+        assert len(JUDGE_SYSTEM_PROMPT) == 5788
 
     def test_the_verdict_still_speaks_the_prompts_language(self):
         # The reader of a verdict dict and the judge's instruction must agree.
