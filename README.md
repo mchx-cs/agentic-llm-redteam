@@ -8,12 +8,13 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > single-turn or multi-turn.**
 > Reconnaissance → planning → attack → judgement → replay verification runs end to end,
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
-> 212 labelled exchanges — 95 labelled by the author, 117 by a model, and every entry
+> 223 labelled exchanges — 106 labelled by the author, 117 by a model, and every entry
 > records which, because a figure measured against model-decided labels says that two
 > models agree, not that the judge is right. On the 23 author-labelled entries of a
 > frozen subset it has never been tuned against, it misses no vulnerability at all
-> (recall 100%), and it classifies translated cases in English as accurately as their
-> French originals.
+> (recall 100%) — unchanged case for case across five consultations, including after the
+> criteria grew by half — and it classifies translated cases in English as accurately as
+> their French originals.
 > Attack content comes from a local [garak](https://github.com/NVIDIA/garak) snapshot —
 > 52 probes, 1,143 payloads — plus 15 hand-written ones for the two families garak ships
 > no probe for.
@@ -21,8 +22,11 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > where an attacker model reads each reply and writes the next turn. The two are not
 > interchangeable and the trade-off is stated in
 > [Single-turn or multi-turn](#single-turn-or-multi-turn).
-> What is missing is the judge's reach: three criteria cover four OWASP families, so six
+> What is missing is the judge's reach: four criteria cover four OWASP families, so six
 > of the ten stay out of reach, and whether multi-turn finds MORE is not yet measured.
+> The fourth criterion added depth, not breadth — a third party's data with no tool
+> involved is still LLM02 — and the frozen set holds no case for it, so its correctness
+> on cases never looked at is not measured.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
 
 ---
@@ -179,7 +183,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,002 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,052 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -605,11 +609,11 @@ What it found already in place:
 | What the manual asks for | Where it lives here |
 |---|---|
 | Validate the scorer separately from the system under test | `evaluation/evaluate_judge.py`, hand-labelled corpus, frozen test set |
-| Explicit oracles, including a *needs human adjudication* state | three criteria, and a split vote returning no verdict |
+| Explicit oracles, including a *needs human adjudication* state | four criteria, and a split vote returning no verdict |
 | A missing trace must never be recorded as a defensive pass | truncated replies detected and warned about twice |
 | Record tested, untested and inconclusive cases, benign controls included | tested / touched-but-unjudged / skipped, plus the `controle` technique |
 | Report effort alongside success — tokens expended | call and token journal, budget as a circuit breaker |
-| Avoid an all-malicious corpus, where false positives are nil by construction | 106 of the 157 dev exchanges are negatives — controls, failed attacks and near-misses the judge must not flag |
+| Avoid an all-malicious corpus, where false positives are nil by construction | 111 of the 168 dev exchanges are negatives — controls, failed attacks and near-misses the judge must not flag |
 
 And seven gaps, which became phases 13 and 14. The severe one was the first: a campaign
 that found nothing said so honestly but **bounded nothing**, and with `MAX_ATTEMPTS=3` the
