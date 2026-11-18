@@ -4315,7 +4315,7 @@ expensive: touching `JUDGE_SYSTEM_PROMPT` invalidates the published
 89 / 100 / 96 and the four logged frozen-set consultations, so it costs a full
 re-measurement of both formats (~300,000 tokens).
 
-**2. THE CORPUS'S PROVENANCE.** 117 of 212 labels were decided by a MODEL, at
+**2. THE CORPUS'S PROVENANCE — and the FROZEN LOT, kept as the next chantier on 2026-11-18.** The frozen set has ZERO cases for `fuite_donnees_tiers` and ZERO author-labelled cases for `abus_outils`, so neither criterion's correctness is measured on cases never looked at. A second lot — written, labelled by the author, and THEN frozen — is the only work that unblocks either, and the only work that unblocks the `conversation / test` line, which rests on two positives with a floor of 34%.  117 of 212 labels were decided by a MODEL, at
 the author's explicit request, and every entry records which. On the ground
 truth the author validated, the frozen set holds **23 entries, 8 positives** —
 recall is 100% there, but eight cases do not carry much. And `abus_outils` has
@@ -4743,6 +4743,72 @@ then frozen. The re-measurement of `dev` can now say something about the new
 criterion; the frozen set still cannot.
 
 1,029 `pytest` tests, still with no LLM call at all.
+
+**A pass over the corpus BY CRITERION, before spending the measurement
+(2026-11-18).** Asked for in those terms — "does it cover every vulnerability
+we can identify, with a sensible number of cases" — and the corpus had never
+been looked at through that lens: every published figure is a total, and a
+total hides a register with one case behind forty.
+
+```
+criterion                cases   positives   recall floor if perfect
+divulgation                 64        39              91%
+obeissance                  49        22              85%
+abus_outils                 16         5              57%
+fuite_donnees_tiers         10         5              57%
+```
+
+**The four criteria are not at the same level of proof, and the total hides
+it.** A single accuracy figure averages them, and the average is carried by
+the two oldest. So `_per_criterion` now prints each one with the FLOOR its
+positives support: "caught 5 of 5" bounds the true rate at 57%, "39 of 39" at
+91%, and the two are not the same claim. `CRITERION_OF` lives beside
+`CATEGORIES` in `label.py`, total on purpose — `None` means "a control, no
+criterion to score", which is a real answer, while a MISSING key is a row no
+measurement can interpret, and a test fails on it.
+
+**And per FORMAT the picture is sharper still:**
+
+```
+                           cases    pos/neg    recall floor
+single-turn   dev            118     40 / 78        91%
+single-turn   test            39     12 / 27        76%
+conversation  dev             50     17 / 33        82%
+conversation  test            16      2 / 14        34%
+```
+
+The `conversation / test` line **measures nothing**: two positives, a floor of
+34%, and all sixteen entries model-labelled. The consultation of 2026-11-17
+already said so in words ("a perfect score on two positives measures almost
+nothing"); the audit puts a number on it.
+
+**THE ONE HOLE THE AUDIT FOUND IS NOT A CORPUS DEFECT, and that is the
+interesting part.** `multitours-reussi` — the category created on 2026-11-13
+for "the format's expected contribution" — is EMPTY. Meanwhile 8 of the
+`obeissance` positives ARE conversations, and **7 of those 8 breach on turn
+1**; only `C-demo2-04-1` breaches on turn 2.
+
+So the category names a real thing of which the corpus holds exactly ONE
+instance, filed elsewhere. That is not a labelling gap: **it is the
+measurement result showing up in the corpus.** The two-turn sequences the
+harvest plays almost never make the target give way at the SECOND turn — it
+gives way immediately — which is exactly consistent with `measure_multiturn`
+(p = 0.067, contribution not demonstrated). Neither the category nor the
+filing was touched: both are the author's to decide.
+
+**Eight registers hold a single case**, five of them the new criterion's
+negatives. For NEGATIVES that matters less than it looks: precision pools
+them, so five negatives count as a group rather than as five measurements.
+The one worth naming for itself is `conversation-anodine` with one case — the
+control the OWASP manual asks for explicitly — though in practice the 22
+`attaque-sans-effet` conversations serve the same purpose, so conversation
+false positives rest on 33 negatives and not on one.
+
+**Decision: measure now, publishing the floors per criterion rather than a
+total** — because no amount of case-writing fixes what the audit actually
+found, which is that the gap has moved from `dev` to the FROZEN set.
+
+1,034 `pytest` tests, still with no LLM call at all.
 
 ## Legal framing
 

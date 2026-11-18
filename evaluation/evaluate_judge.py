@@ -228,6 +228,72 @@ def scores(exchanges, results_by_id):
             "exactitude": ratio(tp + tn, len(exchanges))}
 
 
+def _per_criterion(exchanges, results_by_id):
+    """
+    The figures by CRITERION, each with the floor its positives support.
+
+    Added after the audit of 2026-11-18, which looked at the corpus through
+    its criteria for the first time: `divulgation` has 39 positives and the
+    two newest criteria have 5 each. A single accuracy figure averages four
+    levels of proof and reads as one, which is the lie by omission this
+    project refuses everywhere else.
+
+    The floor is `stats.wilson_interval(p, p)[0]` -- what a PERFECT recall
+    still allows. "Caught 5 of 5" bounds the true rate at 57%, "39 of 39" at
+    91%, and those are not the same claim.
+
+    Printed in the corpus's own order of maturity rather than alphabetically,
+    so a reader meets the well-covered criteria first and the thin ones last,
+    where the floor is the point.
+    """
+    import stats
+    from evaluation.label import CRITERION_OF
+
+    unmapped = sorted({e["category"] for e in exchanges
+                       if e["category"] not in CRITERION_OF})
+    if unmapped:
+        print(f"\n/!\\ categories with no criterion: {unmapped} — "
+              f"add them to CRITERION_OF, or their rows mean nothing.")
+
+    groups = {}
+    for exchange in exchanges:
+        criterion = CRITERION_OF.get(exchange["category"])
+        if criterion is None:
+            continue
+        groups.setdefault(criterion, []).append(exchange)
+    if len(groups) < 2:
+        return
+
+    print("\n--- Per criterion, with what each one's positives SUPPORT ---")
+    print("A perfect recall on few positives bounds little: the floor says "
+          "how little.")
+    for criterion in sorted(groups, key=lambda c: -sum(
+            1 for e in groups[c] if e["expected"])):
+        subset = groups[criterion]
+        s = scores(subset, results_by_id)
+        if s["positives"]:
+            floor = stats.wilson_interval(s["positives"],
+                                          s["positives"])[0]
+            bound = f"floor {floor:.0%} on {s['positives']} positive(s)"
+            recall = f"{s['rappel']:.0%}"
+        else:
+            bound = "no positive: no recall measurable"
+            recall = "n/a"
+        print(f"  {criterion:22s} {s['n']:3d} case(s)  "
+              f"precision={s['precision']:.0%}  recall={recall:>4s}  "
+              f"accuracy={s['exactitude']:.0%}   [{bound}]")
+
+    # Controls carry no criterion and that is their job: they witness against
+    # false positives, so they are counted apart rather than dropped.
+    controls = [e for e in exchanges
+                if CRITERION_OF.get(e["category"], "missing") is None]
+    if controls:
+        flagged = sum(1 for e in controls
+                      if results_by_id[e["id"]]["reussi"])
+        print(f"  {'controls':22s} {len(controls):3d} case(s), no criterion "
+              f"to score — {flagged} wrongly flagged")
+
+
 def _per_provenance(exchanges, results_by_id):
     """
     Author-labelled against model-labelled, never pooled.
@@ -499,6 +565,7 @@ def evaluate(dataset="dev", language="fr", only=None):
 
     _per_format(exchanges, results_by_id)
     _per_language(exchanges, results_by_id)
+    _per_criterion(exchanges, results_by_id)
     _per_provenance(exchanges, results_by_id)
     _print_turn_agreement(exchanges, results_by_id)
 

@@ -1150,3 +1150,86 @@ class TestAggregationIsOutsideTheCriterion:
         from agents.judge import JUDGE_SYSTEM_PROMPT as prompt
         criterion = prompt.split('4. "fuite_donnees_tiers"')[1].split("\n")[0]
         assert "rattacher à cette personne" in criterion
+
+
+class TestTheFiguresAreReportedPerCRITERION:
+    """
+    Added after the audit of 2026-11-18, which looked at the corpus through
+    its criteria for the first time and found they are nowhere near uniform:
+    `divulgation` has 39 positives, the two newest criteria have 5 each.
+
+    A single accuracy figure averages four levels of proof and reads as one.
+    That is the lie by omission this project refuses everywhere else -- the
+    same reason the report prints "not calculable" instead of 0%, and the same
+    reason the provenance split exists.
+    """
+
+    def test_every_category_maps_to_a_criterion_or_to_None(self):
+        # A category with no mapping is a row no measurement can interpret.
+        # Total on purpose: `None` means "a control, no criterion to score",
+        # which is a real answer, and a MISSING key is not.
+        from evaluation.label import CATEGORIES, CRITERION_OF
+        unmapped = [c for c in CATEGORIES if c not in CRITERION_OF]
+        assert not unmapped, (
+            f"these categories have no criterion: {unmapped}. Add them to "
+            f"CRITERION_OF — None for a control, the criterion otherwise.")
+
+    def test_the_mapping_invents_no_category(self):
+        from evaluation.label import CATEGORIES, CRITERION_OF
+        invented = [c for c in CRITERION_OF if c not in CATEGORIES]
+        assert not invented, invented
+
+    def test_the_mapping_names_only_REAL_criteria(self):
+        # A criterion in the mapping that the judge cannot emit would produce
+        # a row whose recall is zero by construction -- the defect the project
+        # names when it refuses to add a label before its criterion.
+        from agents.judge import JUDGE_SYSTEM_PROMPT
+        from evaluation.label import CRITERION_OF
+        for criterion in {c for c in CRITERION_OF.values() if c}:
+            assert f'"{criterion}"' in JUDGE_SYSTEM_PROMPT, (
+                f"{criterion} is mapped but the judge's instruction does not "
+                f"name it")
+
+    def test_each_criterion_is_printed_with_its_FLOOR(self, capsys):
+        # The floor is the point: "caught 5 of 5" bounds the true rate at 57%,
+        # "39 of 39" at 91%, and the two must not read alike.
+        import evaluation.evaluate_judge as evaluator
+
+        exchanges, results = [], {}
+        # Two criteria, deliberately lopsided: one positive against six.
+        for n in range(6):
+            exchanges.append({"id": f"a{n}", "expected": True,
+                              "category": "fuite-directe", "dataset": "dev",
+                              "languages": "fr->fr"})
+            results[f"a{n}"] = {"reussi": True}
+        exchanges.append({"id": "b0", "expected": True,
+                          "category": "fuite-donnees-tiers",
+                          "dataset": "dev", "languages": "fr->fr"})
+        results["b0"] = {"reussi": True}
+
+        evaluator._per_criterion(exchanges, results)
+        out = capsys.readouterr().out
+        assert "divulgation" in out and "fuite_donnees_tiers" in out
+        # Six positives floor at 61%, one at 21% -- both printed, so a reader
+        # cannot take the thin one for the thick one.
+        assert "61%" in out and "21%" in out
+
+    def test_the_CONTROLS_are_counted_apart_not_dropped(self, capsys):
+        # They carry no criterion and that is their job: they witness against
+        # false positives. Dropping them would hide a judge that flags benign
+        # exchanges.
+        import evaluation.evaluate_judge as evaluator
+        exchanges = [
+            {"id": "a", "expected": True, "category": "fuite-directe",
+             "dataset": "dev", "languages": "fr->fr"},
+            {"id": "b", "expected": True, "category": "obeissance",
+             "dataset": "dev", "languages": "fr->fr"},
+            {"id": "c", "expected": False, "category": "controle",
+             "dataset": "dev", "languages": "fr->fr"},
+        ]
+        results = {"a": {"reussi": True}, "b": {"reussi": True},
+                   "c": {"reussi": True}}
+        evaluator._per_criterion(exchanges, results)
+        out = capsys.readouterr().out
+        assert "controls" in out
+        assert "1 wrongly flagged" in out
