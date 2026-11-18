@@ -421,6 +421,32 @@ class TestTheDevTestSplit:
         decision = assign(self._groups(names))
         assert set(decision.values()) == {"dev"}
 
+    def test_a_group_DECLARED_hand_written_goes_to_dev_whatever_its_name(self):
+        """
+        The other half, added 2026-11-18 because the test above covered only
+        the CONVENTION. The criterion-4 cases are grouped `T-...`, so the
+        prefix rule did not see them and the striping could have sent the
+        T01/T02 twins into the frozen set -- the very defect the rule exists
+        to prevent, reproduced three days later by someone choosing another
+        letter. That someone was me.
+
+        So the stratum is now read from the module that DECLARES its groups,
+        and this test uses the real names rather than invented ones: an
+        invented name can only ever test the convention.
+        """
+        from evaluation.split_sets import assign, handwritten_groups
+        declared = sorted(handwritten_groups())
+        # Not a specific letter: the first version of this assertion wrote
+        # `T-` and the groups were then renamed `P-` (the `T` prefix belongs
+        # to the frozen set), so the test broke on the very thing the fix was
+        # about. What matters is that the declaration covers a group the `A-`
+        # CONVENTION would miss -- whatever letter it happens to use.
+        assert any(not g.startswith("A-") for g in declared), (
+            "every declared group follows the A- convention, so this test "
+            "would be back to checking the prefix it exists to replace")
+        decision = assign(self._groups(declared))
+        assert set(decision.values()) == {"dev"}
+
     def test_about_a_quarter_of_the_harvested_groups_go_to_test(self):
         from evaluation.split_sets import assign
         names = [f"C-demo-{n:02d}" for n in range(1, 21)]

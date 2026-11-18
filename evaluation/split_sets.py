@@ -65,6 +65,35 @@ TEST = "test"
 DEV = "dev"
 
 
+def handwritten_groups():
+    """
+    The groups of the hand-written stratum, READ from the module that declares
+    them.
+
+    Keyed to the prefix `A-` until 2026-11-18, when the criterion-4 cases
+    arrived grouped `T-…` and fell into "other" — so `label.py` would have
+    ASKED for their set and the striping could have sent the T01/T02 twins
+    into the FROZEN set. That is the defect recorded on 2026-11-16, and a pair
+    written to pin one specific trap is unusable there for the only job it
+    exists for.
+
+    A prefix is a convention the next person breaks, and three days was
+    enough. Reading the declaration instead means any new hand-written group
+    is recognised whatever letter it starts with — the same reason
+    `judge_identity()`, `stats.STATES` and the attack catalogue are read
+    rather than restated.
+
+    The import is LAZY and failure is non-fatal: this module is also used on
+    corpora that predate the hand-written cases, and a split must not depend
+    on a sibling module importing cleanly.
+    """
+    try:
+        from evaluation.handwritten_conversations import CASES
+    except Exception:
+        return frozenset()
+    return frozenset(group for _, group, _, _ in CASES)
+
+
 def defence_level(group):
     """
     The target the group was harvested against, read from its name.
@@ -72,8 +101,17 @@ def defence_level(group):
     `C-demo-04` and `C-demo-refus1-04` are both level 1 — the middle part is
     the OBJECTIVE, not the target. `C-demo2-04` is level 2. Getting this
     wrong would put three different resistances in one stratum.
+
+    A hand-written group is its own stratum, and always `dev`: see
+    `handwritten_groups` for why that is read rather than spelled out.
     """
-    if group.startswith("A-"):
+    # Declared OR conventional, and both rather than a choice between them.
+    # The declaration protects exactly what the module ships -- including the
+    # `T-` groups whose prefix nobody had foreseen. The `A-` convention
+    # protects anyone who follows it from somewhere else, which is what the
+    # rule did before and what no declaration can cover. Dropping either one
+    # loses a case the other does not catch.
+    if group in handwritten_groups() or group.startswith("A-"):
         return "hand-written"
     match = re.match(r"C-demo(\d?)", group)
     return f"demo{match.group(1) or '1'}" if match else "other"

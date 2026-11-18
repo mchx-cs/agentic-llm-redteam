@@ -161,3 +161,59 @@ class TestPouringIn:
         added, total = by_hand.add_to_harvest()
         assert added == []
         assert total == len(CASES)
+
+
+class TestAHandWrittenIdCannotCOLLIDEWithTheCorpus:
+    """
+    Found by running the labelling, 2026-11-18. Six new cases were shipped as
+    `T01`-`T06` — and `T01`-`T14` are the FROZEN SET's own identifiers.
+
+    `label()` refused them as "already in the corpus", which is the guard
+    added on 2026-11-16 doing its job. Without it `integrate()` would have
+    SILENTLY DROPPED all six, since it skips ids already present: the author
+    would have labelled six cases and added none, and the figure measured
+    afterwards would have described a criterion with no cases behind it.
+
+    The id space is shared and nobody owned the check: E, T, R, D, C and A
+    were all taken, and nothing said so. Now something does.
+    """
+
+    def test_no_case_id_designates_a_DIFFERENT_corpus_entry(self):
+        """
+        "Already in the corpus" is NOT the collision: a case that has been
+        labelled and integrated is there legitimately, which is true of every
+        A-case. The collision is an id that designates SOMEONE ELSE'S entry —
+        and that is what `T01`-`T06` did, pointing at frozen-set cases.
+
+        So the check compares the CONTENT, not the presence. First version
+        compared presence alone and flagged all ten A-cases: a guard that
+        cries wrong on legitimate data teaches people to ignore it, which
+        this project removed a guard for once already.
+        """
+        from evaluation.handwritten_conversations import entries
+        from evaluation.label import CORPUS_FILE, load
+
+        corpus = {e["id"]: e for e in load(CORPUS_FILE)["exchanges"]}
+        stolen = []
+        for case in entries():
+            existing = corpus.get(case["id"])
+            if existing is None:
+                continue
+            ours = (existing.get("turns") == case.get("turns")
+                    and existing.get("payload") == case.get("payload")
+                    and existing.get("reply") == case.get("reply"))
+            if not ours:
+                stolen.append(case["id"])
+
+        assert not stolen, (
+            f"these hand-written ids designate DIFFERENT corpus entries: "
+            f"{sorted(stolen)}. `integrate()` skips ids already present, so "
+            f"they would be labelled and then silently dropped. Taken "
+            f"prefixes: {sorted({i[0] for i in corpus})}.")
+
+    def test_no_two_cases_share_an_id(self):
+        # The same collision one level in: two cases with one id means one of
+        # them never reaches the corpus, and nothing says which.
+        from evaluation.handwritten_conversations import CASES
+        identifiers = [identifier for identifier, _, _, _ in CASES]
+        assert len(identifiers) == len(set(identifiers))
