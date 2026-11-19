@@ -1364,6 +1364,66 @@ class TestAFalsePositiveBelongsToTheCriterionTheJUDGENamed:
             "the row still prints the label-attributed precision")
 
 
+class TestTheFormatsContributionIsDERIVEDNotFiled:
+    """
+    What `multitours-reussi` was meant to name, counted from `breach_turn`.
+
+    Criterion-independent by construction, which is exactly why it replaces a
+    category: the eight conversations that breach after the first turn span
+    three criteria, and a category can only carry one.
+    """
+
+    @staticmethod
+    def _count(cases):
+        """cases: (expected, turns, breach_turn)."""
+        from evaluation.evaluate_judge import format_contribution
+        return format_contribution([
+            {"id": str(n), "expected": e,
+             "turns": [{}] * turns, "breach_turn": b}
+            for n, (e, turns, b) in enumerate(cases)])
+
+    def test_a_breach_after_the_first_turn_counts(self):
+        assert self._count([(True, 4, 2)]) == (1, 1)
+
+    def test_a_breach_on_the_first_turn_does_not(self):
+        # The preamble alone did the work: the format added nothing, and 7 of
+        # the 8 obeissance conversation positives are of this shape.
+        assert self._count([(True, 4, 1)]) == (0, 1)
+
+    def test_a_missing_turn_reads_as_the_FIRST(self):
+        # Older entries predate `breach_turn`. Reading None as "late" would
+        # inflate the format's contribution with entries that never recorded
+        # one.
+        assert self._count([(True, 4, None)]) == (0, 1)
+
+    def test_single_turn_entries_are_outside_it_entirely(self):
+        # An entry stored as `turns` may hold ONE exchange (A03, A04): it has
+        # no later turn to breach at, so counting it would dilute the rate.
+        assert self._count([(True, 2, 1)]) == (None, 0)
+
+    def test_negatives_are_outside_it_too(self):
+        assert self._count([(False, 4, None)]) == (None, 0)
+
+    def test_nothing_to_count_gives_None_and_not_zero(self):
+        # A 0% would read as "the format never contributes", where nothing
+        # was counted at all.
+        assert self._count([]) == (None, 0)
+
+    def test_the_corpus_itself_shows_the_eight(self):
+        # The figure this replaced a category with, on the real data: it has
+        # to be visible or the removal traded one silence for another.
+        import json
+        from evaluation.evaluate_judge import format_contribution
+        corpus = json.loads(
+            pathlib.Path("evaluation/labelled_exchanges.json").read_text(
+                encoding="utf-8"))
+        late, positives = format_contribution(corpus["exchanges"])
+        assert late >= 8, (
+            f"{late} conversation breaches after the first turn; the removal "
+            f"of `multitours-reussi` rests on there being more of them than "
+            f"one criterion could hold")
+
+
 class TestCriterionAgreement:
     """
     The sibling of `turn_agreement`, and kept just as separate.

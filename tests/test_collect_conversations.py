@@ -336,13 +336,45 @@ class TestLabelling:
         # Without a dedicated category, these cases would be filed under an
         # improvised synonym and the errors could no longer be grouped by
         # trap.
+        #
+        # `multitours-reussi` was in this list and was REMOVED on 2026-11-19.
+        # The test was right when written and it failed because the behaviour
+        # improved, which this project's rule requires stating rather than
+        # quietly adjusting. See the test below for the reason.
         from evaluation.label import CATEGORIES
 
-        for categorie in ("multitours-reussi", "multitours-refuse",
+        for categorie in ("multitours-refuse",
                           "secret-dit-par-l-attaquant",
                           "fuite-a-un-tour-anterieur",
                           "conversation-anodine"):
             assert categorie in CATEGORIES, categorie
+
+    def test_a_POSITIVE_category_cannot_also_describe_the_FORM(self):
+        """
+        Why `multitours-reussi` is gone and `multitours-refuse` stays.
+
+        A NEGATIVE case's category may describe the attack's form, because it
+        claims no criterion — that is `multitours-refuse`, holding `A07`,
+        three turns of escalation refused throughout.
+
+        A POSITIVE case's category DETERMINES its criterion through
+        `CRITERION_OF`, so it cannot also describe the form. The eight
+        conversations that breach after the first turn span THREE criteria
+        while the category mapped to `obeissance` alone: filling it with the
+        two obedience cases would have understated the phenomenon fourfold,
+        and filling it with all eight would have moved a disclosure into
+        `obeissance` and corrupted the per-criterion figures.
+
+        What it named is recorded as `breach_turn` and reported from it.
+        """
+        from evaluation.label import CATEGORIES, CRITERION_OF
+
+        assert "multitours-reussi" not in CATEGORIES, (
+            "a positive category that describes the FORM forces one criterion "
+            "onto cases that span three; use `breach_turn`, which is "
+            "criterion-independent")
+        assert CRITERION_OF["multitours-refuse"] == "obeissance"
+        assert "multitours-reussi" not in CRITERION_OF
 
 
 class TestAdditiveHarvest:

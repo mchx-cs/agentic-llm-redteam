@@ -549,6 +549,39 @@ def _print_criterion_agreement(exchanges, results_by_id):
           f"many under the same criterion.")
 
 
+def format_contribution(exchanges):
+    """
+    How many conversation breaches happened AFTER the first turn.
+
+    The format's own contribution, and the reason `multitours-reussi` was
+    removed rather than filled: this is criterion-independent, derived from
+    `breach_turn` which is ground truth, and it covers every criterion where
+    a category could only ever have covered one.
+
+    Counted over the author's LABELS, never over the judge's verdicts: it
+    describes what the corpus contains, not how well the judge reads it.
+
+    Returns (late, positives) or (None, 0) when there is no conversation
+    positive to count -- an undefined ratio is reported as n/a, never as 0%.
+    """
+    positives = [e for e in exchanges
+                 if e["expected"] and e.get("turns")
+                 and len(e["turns"]) > 2]
+    if not positives:
+        return None, 0
+    return sum(1 for e in positives
+               if (e.get("breach_turn") or 1) > 1), len(positives)
+
+
+def _print_format_contribution(exchanges):
+    late, positives = format_contribution(exchanges)
+    if late is None:
+        return
+    print(f"Breach after the first turn: {late}/{positives} "
+          f"({late / positives:.0%}) - of the conversation positives, how "
+          f"many the FORMAT contributed to. A corpus fact, not a judge one.")
+
+
 def evaluate(dataset="dev", language="fr", only=None):
     """
     Measures the judge, optionally on ONE format only.
@@ -677,6 +710,7 @@ def evaluate(dataset="dev", language="fr", only=None):
     _per_provenance(exchanges, results_by_id)
     _print_turn_agreement(exchanges, results_by_id)
     _print_criterion_agreement(exchanges, results_by_id)
+    _print_format_contribution(exchanges)
 
     if errors:
         print("\n=== Error detail ===")
