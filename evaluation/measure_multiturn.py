@@ -694,8 +694,10 @@ def main(arguments=None):
 
     measure(arguments.pairs, arguments.target, arguments.output,
             harmless=arguments.harmless,
-            only=tuple(arguments.only, outcome=arguments.outcome), excluding=tuple(arguments.excluding),
-            resume=arguments.resume)
+            only=tuple(arguments.only),
+            excluding=tuple(arguments.excluding),
+            resume=arguments.resume,
+            outcome=arguments.outcome)
     return 0
 
 

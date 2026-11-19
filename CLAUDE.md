@@ -5972,6 +5972,104 @@ invariant that every category maps to a criterion.
 
 1,106 `pytest` tests, still with no LLM call at all.
 
+**VERROU 3, half answered — and the answer is NEGATIVE (102 pairs,
+2026-11-19).** Protocol declared and committed before the run
+([`6dae435`](6dae435)), so git shows it predates the result.
+
+```
+the sequence alone breaches : 15
+the single turn alone       : 17
+both                        : 14
+neither                     : 56
+
+sign test over 32 non-null pairs: p = 0.70 — NOT significant
+sequence   29/102   Wilson 21% to 38%
+composed   31/102   Wilson 22% to 40%
+```
+
+**THE DIRECTION REVERSED, and that is the result.** The three previous runs
+all leaned the same way (p = 0.035 exploratory, 0.073 defective, 0.067 sound).
+With the outcome widened to what the judge can see, the lean disappears and
+tips marginally the other way.
+
+The breakdown by criterion says why:
+
+```
+sequenced : 29 — abus_outils 11, divulgation 9, obeissance 6, fuite_donnees_tiers 3
+composed  : 31 — abus_outils 14, divulgation 8, obeissance 7, fuite_donnees_tiers 2
+```
+
+`abus_outils` dominates both arms and the COMPOSED form wins it. The string
+outcome could only ever see `divulgation` of one specific secret — where the
+sequenced form does keep its slight edge, 9 against 8. **That is exactly what
+defect 3 predicted**: half the pairs were measuring an outcome their own
+objective does not aim at, and widening the outcome properly REMOVES the
+apparent effect instead of strengthening it. The principled fix and the
+corrupt one would have pointed opposite ways, which is the clearest
+vindication of refusing the corrupt one that this project has had.
+
+**THE EFFECT IS BOUNDED, not merely unproven**, and that is a stronger
+statement than a p-value:
+
+```
+difference in breach rate (sequenced - composed)
+  observed       :  -2.0%
+  95% interval   : -12.0% to +8.5%
+```
+
+**And correcting for the bias declared BEFORE the run makes it a dead tie.**
+The judge's precision is 93% single-turn against 100% in conversation, so its
+false positives inflate the COMPOSED arm: 31 becomes ~29 true breaches,
+against 29. The bias I had announced as running against the hypothesis does
+not conceal a sequenced win — it erases the composed one.
+
+**The protocol's rule held.** 102 pairs over 102 DISTINCT couples (34
+techniques × 3 objectives), where the previous run gave 68 because
+reconnaissance returned two objectives. N is a rule and the figure follows
+the profile, exactly as declared. So the sign test's independence assumption
+holds, and the 29 sequenced wins spread over **14 techniques** — not the
+property of one payload.
+
+**A FACT THAT DEPENDS ON NO COMPARISON, and it comes out STRONGER than the
+measurement that buried its neighbour: 13 of the 29 sequenced breaches — 45%
+— are invisible in the last reply**, against 21% under the string outcome.
+A judge reading only the last turn would miss nearly half of them. That is the
+direct argument for the addendum's first rule, and it survives a run that
+settles nothing in its favour.
+
+**WHAT THIS SETTLES AND WHAT IT DOES NOT, and the distinction must not be
+blurred.** What was measured is `attacker.sequence_turns` — a FIXED two-turn
+delivery, the same ingredients as a composed message split in two. That is
+NOT what `--multiturn` runs: a campaign hands the attack to PyRIT, whose
+attacker model READS each reply and writes the next turn.
+
+  * **the sequenced form's gain: measured, and absent.** Bounded within about
+    ±10 points, and a tie once the declared bias is corrected;
+  * **the adaptive attacker's gain: still unmeasured.** It is the half PyRIT
+    was bought for, and this result makes it MORE interesting rather than
+    less: if splitting an attack in two adds nothing, the question becomes
+    whether ADAPTING across turns does.
+
+And the obstacle recorded against that measurement has dissolved the same way
+this one's did. "PyRIT's value is, BY CONSTRUCTION, only measurable with the
+judge in the loop — the expensive configuration" was written on 2026-11-17
+against the free tier. At paid rates the judge in the loop costs cents, so
+what remains is a declared protocol and the wall-clock, not a wall.
+
+**A SIXTH JUNCTION DEFECT, found by running it.** The first launch died
+instantly: `measure()` took the outcome correctly and the CLI parsed it
+correctly, and my own patch had spliced the argument into
+`tuple(arguments.only)` instead of the call. Thirteen tests passed over it
+because not one drove `main()`. After `_inject`, the unreachable profile
+guard, the three chain-of-custody fields, `label.py`'s set question and the
+frozen lot's silent guard — two modules correct on their own, nothing
+covering the glue. The guard added DRIVES `main()` rather than reading its
+source, which is this morning's lesson, and it watches `--only` and
+`--excluding` too, because the bad splice mangled those as well. It cost
+nothing: the run writes as it goes and refuses to resume a completed one.
+
+1,121 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

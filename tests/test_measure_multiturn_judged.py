@@ -199,6 +199,56 @@ class TestARunNeverBlendsTheTwoOutcomes:
         assert ("t", "refus-1") in done
 
 
+class TestTheFlagACTUALLYReachesTheMeasurement:
+    """
+    The JUNCTION, and it was broken.
+
+    `measure()` took the outcome correctly and the CLI parsed it correctly,
+    and the argument was spliced into `tuple(arguments.only)` instead of the
+    call -- so the first real run died on `tuple() takes no keyword
+    arguments` before sending anything. Thirteen tests passed over it,
+    because not one of them drove `main()`.
+
+    That is this project's commonest defect shape, met here for the sixth
+    time after `_inject`, the unreachable profile guard, the three
+    chain-of-custody fields, `label.py`'s set question and the frozen lot's
+    silent guard: two modules correct on their own, nothing covering the glue.
+
+    Driven rather than read from the source -- reading it is what let a
+    disabled branch pass this morning.
+    """
+
+    @staticmethod
+    def _spy(monkeypatch):
+        seen = {}
+        monkeypatch.setattr(measure, "measure",
+                            lambda *a, **k: seen.update(k) or [])
+        return seen
+
+    def test_the_outcome_reaches_measure(self, monkeypatch):
+        seen = self._spy(monkeypatch)
+        measure.main(["--outcome", "judge"])
+        assert seen["outcome"] == "judge"
+
+    def test_the_default_is_the_string_outcome(self, monkeypatch):
+        # The free, deterministic protocol stays the default: the judged one
+        # costs money, and a default that spends it would be a trap.
+        seen = self._spy(monkeypatch)
+        measure.main([])
+        assert seen["outcome"] == "string"
+
+    def test_the_other_options_still_reach_it(self, monkeypatch):
+        # The contrast that makes the tests above mean something: the splice
+        # that broke the outcome ALSO mangled `only`, and a test watching
+        # only the new argument would have missed that.
+        seen = self._spy(monkeypatch)
+        measure.main(["--outcome", "judge", "--only", "LLM07",
+                      "--excluding", "dan", "--resume"])
+        assert seen["only"] == ("LLM07",)
+        assert seen["excluding"] == ("dan",)
+        assert seen["resume"] is True
+
+
 class TestTheBreakdownIsDescriptiveAndNeverTested:
     def test_it_names_the_criteria_of_each_arm(self):
         said = []
