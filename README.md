@@ -142,6 +142,8 @@ and coverage that states what was never attempted.
 │   ├── check_replay.py              # exercises the replay check on simulated targets
 │   ├── check_stability.py           # judges a few cases N times: did an edit do anything?
 │   ├── frozen_lot.py                # the second lot, written to be HELD OUT and measured on
+│   ├── measure_adaptive.py          # the adaptive arm, and the confound that stopped it
+│   ├── measure_modes.py             # --multiturn against single-turn, at equal cost to the target
 │   ├── check_reconnaissance.py      # exercises profiling and planning, same way
 │   ├── measure_adaptation.py        # adaptive vs static plan at equal budget (no LLM)
 │   ├── measure_adaptation_real.py   # the same, against the real demo target
@@ -186,7 +188,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,145 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,159 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:

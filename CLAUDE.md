@@ -6167,6 +6167,60 @@ next reader meets it before running anything.
 
 1,145 `pytest` tests, still with no LLM call at all.
 
+**MODE AGAINST MODE: the protocol is DECLARED (2026-11-19).**
+`evaluation/measure_modes.py`, written and committed before any run. It is
+the comparison the recorded PyRIT condition asks for, and the one question
+about multi-turn still both sound and unanswered — "does `--multiturn` find
+more than a single-turn campaign", which is what an operator actually chooses
+between.
+
+It is explicitly NOT "does adaptation help": that has no isolated answer with
+the tool as built, since `objective_for` couples adaptation to payload-use.
+Mode against mode does not need them separated — an operator choosing
+`--multiturn` buys the whole package, improvisation included.
+
+**THE DECISION THAT SHAPES THE RESULT: equal TARGET REQUESTS.** Not equal
+attempts, which would hand multi-turn ~4.5 times the resources; not equal
+tokens, which cost cents on the paid plan and are nobody's constraint. The
+project's own recorded constraints on a real target are *"the throughput the
+target allows"*, *"the contractual testing window"* and *"the cost to the
+client if their target is billed by usage"* — all three count REQUESTS TO THE
+TARGET. So multi-turn gets 3 attempts of 3 turns and single-turn gets 9
+attempts of one message.
+
+**A BIAS DECLARED BEFORE THE RUN, and it favours MULTI-TURN.** A single-turn
+campaign ALSO spends replay requests, and replay is not a luxury: it is what
+lets a single-turn finding reach `high` severity at all. So that arm really
+spends MORE than the budget allows, and the gap cannot be closed by shrinking
+it — removing replay would change the mode rather than equalise it. The
+counts actually spent are MEASURED and printed, so the size of the advantage
+is visible rather than taken on trust.
+
+**And the direction is declared with its escape hatch.** One-sided,
+"multi-turn finds more" — the hypothesis that would justify PyRIT. If the
+result runs the other way, the reverse p is reported AND flagged as not the
+declared test, exactly as the adaptation series did on 2026-11-12 where the
+declared hypothesis gave 0.99 and the reverse 0.032. A test guards both
+halves: the flag must appear when the result reverses, and must NOT appear
+when it does not.
+
+Reported beside the test and never tested: the target requests each mode
+spent, the findings by criterion AND BY SEVERITY — a tie in COUNT is not a
+tie in WORTH, since a multi-turn campaign can never produce a `high` finding
+— and the share of multi-turn attempts whose family is what was *aimed at*
+rather than *sent*, which makes this the first measurement to exercise the
+coverage correction of the same day.
+
+Fourteen tests, and they check the PROTOCOL rather than anything a model
+does: the normalisation, the back-to-back pairing, the counter that preserves
+the conversation capability (a wrapper dropping it would silently turn the
+measurement into single-turn against single-turn), and the honesty of the
+reverse report.
+
+**Nothing has been RUN.** The protocol exists; the figures do not.
+
+1,159 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
