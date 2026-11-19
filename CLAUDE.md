@@ -6221,6 +6221,57 @@ reverse report.
 
 1,159 `pytest` tests, still with no LLM call at all.
 
+**RESULT, mode against mode: the single-turn campaign wins decisively
+(20 pairs, 2026-11-19).** Protocol declared and committed before the run
+([`277b011`](277b011)).
+
+```
+multi-turn finds more :  1
+single-turn finds more: 17
+tie                   :  2
+
+DECLARED test (multi-turn finds more): p = 1.0000 — NOT significant
+/!\ the result runs the OTHER way, and NOT as the declared test:
+    single-turn finds more: p = 0.0001
+
+multi-turn :  27 finding(s) over 245 target request(s)
+single-turn:  83 finding(s) over 384 target request(s)
+```
+
+**AND THE DECLARED BIAS MAKES IT STRONGER, not weaker.** The protocol
+equalised the attempt budget at 9 target requests a campaign; the single-turn
+arm actually spent **384 against 245**, 57% more, because of the replay
+requests the bias was declared about. Normalising on what was really spent:
+
+```
+multi-turn   27/245 = 0.110 finding(s) per target request
+single-turn  83/384 = 0.216 — nearly TWICE as many
+```
+
+So the arm the bias favoured lost, and it lost by a factor of two per request
+even after the advantage is paid back. Nineteen of the twenty pairs are
+decided and only one goes the other way.
+
+**What this settles, and what it does not.** It answers the operator's
+question — *should I run `--multiturn`?* — for this target at this level, and
+the answer is no. It says nothing about adaptation in isolation, which has no
+answer with the tool as built, and nothing about a target other than `demo`.
+
+And it is the third measurement in a row to run against multi-turn's favour:
+the sequenced form against a composed message was null (15-17, p = 0.70), the
+adaptive arm turned out to carry no payload at all, and the mode comparison
+now reverses outright. The direction of the first three string-outcome runs —
+all mildly favourable — did not survive either a wider outcome or a campaign.
+
+**A gap in the instrument, found by reading the output**: the by-criterion
+and by-severity lines printed nothing, so the comparison that matters most —
+a tie in COUNT is not a tie in WORTH, since multi-turn can never reach `high`
+— was not shown. The findings' key names in `result.json` are not the ones
+`_summary` reads. The figures above stand; that breakdown has to be re-read
+from the saved run rather than re-measured.
+
+1,160 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
