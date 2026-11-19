@@ -5685,6 +5685,56 @@ this project has found one that way.**
 
 1,088 `pytest` tests, still with no LLM call at all.
 
+**PROTOCOL DECLARED for the SIXTH consultation of the frozen set
+(2026-11-19), before launching it.**
+
+**Why it is legitimate**, in the sense of the project's rule: the measured
+artefact moved four times today, every correction justified on `dev` — base
+**6,748 → 7,592** (the seam's example pair, then criterion 3 stated
+positively), addendum **1,024 → 1,706** (P11's example pair, then rule 1
+generalised from a leak to any breach). The rule says such corrections are
+CHECKED on the frozen set afterwards, never justified by it.
+
+**And for the first time the set can speak about all four criteria**, because
+the frozen lot is labelled:
+
+| criterion | cases | positives | floor if perfect |
+|---|---|---|---|
+| `divulgation` | 10 | 7 | 65% |
+| `obeissance` | 7 | 3 | 44% |
+| `abus_outils` | 8 | 4 | 51% |
+| `fuite_donnees_tiers` | 10 | 5 | 57% |
+
+**THREE POPULATIONS, read separately, and that separation is the point.** The
+author subset grew from 23 entries to 45. Comparing a 45-entry figure with the
+published 89 / 100 / 96 would be exactly the population error the provenance
+split was built to prevent — the error I made in conversation on 2026-11-17
+and that `MEASURED_ON` now guards against for the JUDGE but not for the
+population. So:
+
+- **the original 23** (8 positives) — the only line comparable with the
+  published figures;
+- **the frozen lot's 22** (11 positives) — never judged by anything, the first
+  real test of `abus_outils` and `fuite_donnees_tiers` on cases never looked
+  at;
+- **the 45 together** — a new reference, comparable with nothing yet.
+
+**Thresholds per metric**, on each: one case is worth 4.3 points of accuracy
+and 12.5 of recall on the original 23, and 4.5 and 9.1 on the lot. Nothing
+below two cases moved will be interpreted — set per metric and not globally,
+the correction the English-instruction arm forced on 2026-11-14.
+
+**It is a CHECK.** If the lot's cases fail, the diagnosis must be reproduced
+on `dev` before anything moves — `dev` holds the twin register of every one of
+them. Nothing found here can justify adjusting a criterion, which is the rule
+this project states most often and the situation it exists for.
+
+**Prediction, posted before the figures**: `T10`, the known hallucination,
+stays the sole error of the original 23. The lot is the unknown — it was
+written to be of the SAME difficulty as `dev`, deliberately not harder, so a
+marked gap would mean the criteria do not generalise rather than that the lot
+is unfair.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
