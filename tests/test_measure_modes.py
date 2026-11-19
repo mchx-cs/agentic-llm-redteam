@@ -198,3 +198,100 @@ class TestTheProtocolIsSTATEDBeforeTheFigures:
         out = capsys.readouterr().out
         assert "Protocol CHANGED" in out
         assert "exploratory" in out
+
+
+class TestTheBreakdownIsREADThroughTheReport:
+    """
+    The by-criterion and by-severity lines printed NOTHING on the first real
+    run (2026-11-19). `one_campaign` read the REPORT's field names off the
+    CAMPAIGN's raw result, where a finding carries `payload` and `verdict` as
+    sub-objects and severity does not exist at all -- it is DERIVED by the
+    rules in `report.py`.
+
+    Three of the four fields came back `None`, the counts beside them were
+    right, and so nothing looked broken. Every test above feeds `_summary`
+    ready-made dicts, so not one of them covered where those dicts come from:
+    the junction defect this project has met repeatedly, two pieces correct on
+    their own and nothing on the glue.
+    """
+
+    @staticmethod
+    def _raw(criterion="divulgation", replay="confirmed", from_objective=None):
+        """A campaign result in the shape `run_campaign` really returns."""
+        attempt = {"technique": "t", "owasp_family": "LLM02",
+                   "objective": "secret", "transformation": "identity",
+                   "text": "payload"}
+        if from_objective:
+            attempt = dict(attempt, pyrit_objective_from=from_objective)
+        return {
+            "status": "findings",
+            "profile": None,
+            "plan": {"attempts": [attempt], "candidates": [attempt],
+                     "skipped": []},
+            "launched": [attempt],
+            "observations": [],
+            "call_log": {"calls": 1, "tokens": 10, "truncated_replies": []},
+            "findings": [{
+                "attempt": 1,
+                "payload": attempt,
+                "reply": "réponse",
+                "verdict": {"reussi": True, "critere": criterion,
+                            "valeur": "V", "analyse": "a",
+                            "votes": [True, True, True]},
+                "replay_check": ({"status": replay, "explanation": ""}
+                                 if replay else None),
+                "truncated": False,
+            }],
+        }
+
+    def _run(self, monkeypatch, raw):
+        import main
+        monkeypatch.setattr(main, "run_campaign", lambda **kwargs: raw)
+        return modes.one_campaign(lambda m, h=None: "r", multiturn=None,
+                                  attempts=1, turns=None, show=lambda *_: None)
+
+    def test_the_criterion_comes_back_NAMED(self, monkeypatch):
+        got = self._run(monkeypatch, self._raw(criterion="abus_outils"))
+        assert got["criteria"] == ["abus_outils"], (
+            "the criterion lives in finding['verdict']['critere'], not at the "
+            "finding's top level: reading it there gives None, which is what "
+            "silenced the breakdown")
+
+    def test_the_SEVERITY_is_graded_and_not_merely_copied(self, monkeypatch):
+        """
+        The row that decides the comparison. A multi-turn campaign can never
+        reach `high`, since `high` needs ("divulgation", "confirmed") and
+        replay re-sends ONE payload, which a conversation has none of. So a
+        tie in COUNT is not a tie in WORTH -- and severity is not a field of
+        the campaign's result, it is a RULE applied to the verdict and the
+        replay.
+        """
+        got = self._run(monkeypatch, self._raw("divulgation", "confirmed"))
+        assert got["severities"] == ["high"]
+
+        got = self._run(monkeypatch, self._raw("obeissance", None))
+        assert got["severities"] == ["medium"], (
+            "graded by report.SEVERITIES -- a second copy of that rule here "
+            "would drift from the one the operator's report shows")
+
+    def test_the_family_comes_back_NAMED(self, monkeypatch):
+        got = self._run(monkeypatch, self._raw())
+        assert got["families"] == ["LLM02"]
+
+    def test_the_coverage_caveat_is_COUNTED_not_assumed_zero(self, monkeypatch):
+        """
+        `aimed_from_objective` is computed by `build_report` and lives in its
+        coverage: the campaign's raw result has no `coverage` key at all, so
+        reading it there returns the default 0 and the caveat NEVER prints.
+        On the real run all 60 multi-turn attempts pursued a reconnaissance
+        objective, and the warning was suppressed for every one of them.
+        """
+        got = self._run(monkeypatch,
+                        self._raw(from_objective="objective"))
+        assert got["aimed_from_objective"] == 1
+
+        got = self._run(monkeypatch,
+                        self._raw(from_objective="payload-text"))
+        assert got["aimed_from_objective"] == 0, (
+            "an attempt pursuing the payload's own text DOES exercise the "
+            "family it names: counting it here would warn about nothing")

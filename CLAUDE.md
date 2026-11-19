@@ -6272,6 +6272,78 @@ from the saved run rather than re-measured.
 
 1,160 `pytest` tests, still with no LLM call at all.
 
+**THE BREAKDOWN THAT PRINTED NOTHING — recovered WITHOUT re-measuring, and
+it widens the result (2026-11-19).**
+
+The mode-against-mode run reported its counts correctly and its by-criterion
+and by-severity lines printed nothing. Cause: `one_campaign` read the
+REPORT's field names off the CAMPAIGN's raw result. There, a finding carries
+`payload` and `verdict` as sub-objects, and **severity does not exist at all**
+— it is DERIVED, by the rules in `report.py`, from the verdict and the replay.
+So three of the four fields came back `None`, the counts beside them were
+right, and nothing looked broken.
+
+**Not one of the fourteen tests covered it**, because every one of them fed
+`_summary` ready-made dicts. The junction defect again — two pieces correct on
+their own, nothing on the glue — after `_inject`, the unreachable profile
+guard, the three chain-of-custody fields, `label.py`'s set question, the
+frozen lot's silent guard and the mangled `measure()` call.
+
+**AND IT DID NOT COST THE MEASUREMENT, because the evidence was kept.** The
+per-finding data is not in `modes.json` — only the derived counts are — but
+the campaign's own stdout carries the criterion on every `[Judge]` line and
+the status on every `[Replay]` line. The breakdown was therefore re-read from
+the saved output, severity graded by calling `report.assess_severity` rather
+than by a second copy of the rule, and the recovered totals come to 27 and 83
+— the counts `modes.json` recorded, which is what says the reconstruction is
+of the same run. Third time the choice "the JSON is the source of truth" has
+paid in cash, after two example-report regenerations.
+
+| | multi-turn | single-turn |
+|---|---|---|
+| findings | 27 | 83 |
+| **`high`** | **0** | **26** |
+| `medium` | 27 | 56 |
+| `to_verify` | 0 | 1 |
+| replay *confirmed* | — | 26 |
+
+**THE GAP IN WORTH IS WIDER THAN THE GAP IN COUNT, which is exactly what the
+breakdown was declared for.** 83 against 27 is a factor of three; **26 `high`
+against none** is a difference in kind. And it is structural, not a draw:
+`high` requires `("divulgation", "confirmed")`, replay re-sends ONE payload,
+and a conversation has none to re-send. A multi-turn campaign cannot reach
+`high` however many findings it produces.
+
+**And the criterion breakdown CONFIRMS the morning's confound from the other
+side:**
+
+```
+multi-turn  : abus_outils 19, divulgation 7, fuite_donnees_tiers 1, obeissance  0
+single-turn : obeissance 30, divulgation 29, abus_outils 21, fuite_donnees_tiers 3
+```
+
+**Multi-turn produced not one `obeissance` finding; single-turn produced
+thirty.** That is the coupling found hours earlier, measured: a multi-turn
+attempt pursues an objective derived from RECONNAISSANCE, so it never sends
+the jailbreak payload its technique names — and `obeissance` is precisely what
+those payloads are for. The arm was not beaten on jailbreaks, it never
+attempted them.
+
+**The coverage caveat was suppressed for every attempt it concerned.** All
+**60** multi-turn attempts pursued a reconnaissance objective — the stdout
+records it on each one — and `aimed_from_objective` was read from a key the
+raw result does not have, so it defaulted to 0 and the warning never printed.
+The first measurement meant to exercise that correction exercised nothing.
+
+**Fixed by reading through `build_report`**, which is the project's own
+principle rather than a convenience: the JSON is the source of truth, every
+rendering follows from it, and a copy of the severity rule inside a
+measurement module would drift from the one the operator's report shows. Four
+mutations bite — the criterion, the family, the severity and the caveat's
+count each read off the raw result again.
+
+1,164 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

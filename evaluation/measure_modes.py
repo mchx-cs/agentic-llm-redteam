@@ -158,6 +158,7 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show):
     worth nothing.
     """
     import main
+    import report
 
     counted, calls = counting(ask_target)
     original = main.MAX_ATTEMPTS
@@ -170,17 +171,33 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show):
     finally:
         main.MAX_ATTEMPTS = original
 
-    findings = result.get("findings") or []
-    coverage = (result.get("coverage") or {})
+    # THROUGH `build_report`, never off the raw result -- and that is not a
+    # convenience. A campaign's finding carries `payload` and `verdict` as
+    # sub-objects, and the criterion, the family and above all the SEVERITY
+    # are DERIVED: severity by the rules in `report.py`, which is the one
+    # place in this project that grades.
+    #
+    # Reading the REPORT's field names off the CAMPAIGN's result is exactly
+    # what silenced this breakdown on the first run: three of the four came
+    # back `None`, the by-criterion and by-severity lines printed nothing, and
+    # the counts beside them were right -- so nothing looked broken. The
+    # comparison lost was the one that matters most, since a tie in COUNT is
+    # not a tie in WORTH.
+    #
+    # The same reason the example report is regenerated from `result.json`
+    # rather than re-derived by hand: the JSON is the source of truth, every
+    # rendering follows from it, and a second copy of the severity rule here
+    # would drift from the one the operator's report shows.
+    built = report.build_report(result, target=TARGET)
+    findings = built["findings"]
     return {
         "findings": len(findings),
         "requests": calls["n"],
-        "criteria": [f.get("critere") for f in findings],
-        "severities": [f.get("severite") or f.get("severity")
-                       for f in findings],
-        "families": sorted({f.get("owasp_family") or f.get("technique")
-                            for f in findings}),
-        "aimed_from_objective": coverage.get("aimed_from_objective", 0),
+        "criteria": [finding["critere"] for finding in findings],
+        "severities": [finding["severity"] for finding in findings],
+        "families": sorted({finding["owasp_family"] or finding["technique"]
+                            for finding in findings}),
+        "aimed_from_objective": built["coverage"]["aimed_from_objective"],
     }
 
 
