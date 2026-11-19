@@ -12,10 +12,12 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > records which, because a figure measured against model-decided labels says that two
 > models agree, not that the judge is right. On the 23 author-labelled entries of a
 > frozen subset it has never been tuned against, it misses no vulnerability at all
-> (recall 100%) — unchanged case for case across five consultations, including after the
-> criteria grew by half — and it classifies translated cases in English as accurately as
-> their French originals. That subset now covers all four criteria: it covered two until
-> a second lot was written to be held out and labelled by hand.
+> (recall 100% in six consultations, including after the criteria grew by half) and it
+> classifies translated cases in English as accurately as their French originals. That
+> subset now covers all four criteria — it covered two until a second lot was written to
+> be held out and labelled by hand — and each criterion's figure is published with the
+> floor its positives support, because a perfect score on five cases bounds the true rate
+> at 57%, not at 100%.
 > Attack content comes from a local [garak](https://github.com/NVIDIA/garak) snapshot —
 > 52 probes, 1,143 payloads — plus 15 hand-written ones for the two families garak ships
 > no probe for.
