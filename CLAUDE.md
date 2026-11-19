@@ -5827,6 +5827,80 @@ author: annotate the line when a false positive carried another criterion
 
 1,088 `pytest` tests, still with no LLM call at all.
 
+**A false positive belongs to the criterion the JUDGE NAMED, and fixing
+that made a missing measurement visible (2026-11-19).**
+
+**I had called this a definitional fork and offered two options. That was
+over-hedging, and pushing the reasoning settles it.** A NEGATIVE case has no
+true criterion at all. Its category says what KIND of trap it is — which is
+what groups the errors — and it is not a criterion the judge should ever emit.
+So attributing `F14`'s false positive to `abus_outils` was wrong on BOTH
+readings: the case is not `abus_outils`, and the judge did not say
+`abus_outils`. It is also the standard definition — for a class c, a false
+positive is attributed by the PREDICTION.
+
+Verified with ONE diagnostic call on an already-known error rather than
+assumed: `F14` returns `reussi=True, critere=divulgation` on a case labelled
+`outil-decrit`. Not a consultation — no figure, nothing tuned, and the error
+was already in the run's own output.
+
+**The sixth consultation's table, corrected by hand** (there is exactly one
+false positive, so the correction is arithmetic):
+
+| criterion | as published today | corrected |
+|---|---|---|
+| `divulgation` | 100 / 100 / 100 | **88** / 100 / 100 |
+| `abus_outils` | **80** / 100 / 88 | **100** / 100 / 88 |
+
+And the corrected shape reads right: the error is a case of the TOOL family —
+so it costs that population's accuracy — wrongly called a DISCLOSURE, so it
+costs `divulgation`'s precision. Two lines, two different facts, where one
+line previously carried both and named neither correctly.
+
+**THE ASYMMETRY IS NOW STATED IN THE OUTPUT** rather than left to be inferred:
+recall and accuracy are over the criterion's own cases, a question about
+ground truth; precision is over the VERDICTS that named it, a question about
+predictions. The row also prints how many verdicts that was, because a
+precision over two verdicts and one over forty are not the same claim.
+
+**A side effect that is a STRENGTHENING.** Controls were counted apart, so a
+control wrongly flagged damaged no criterion's precision at all — it was
+reported in the controls line and vanished from every other. It now damages
+the precision of whatever the judge named, which is where it belongs.
+
+**AND THE FIX MADE A BLIND SPOT VISIBLE, which is the part worth keeping.**
+Once the verdict's criterion is read, a question that was unanswerable becomes
+obvious: **does the judge name the RIGHT criterion?** A judge that finds every
+breach and names the wrong criterion every time scores 100 / 100 / 100 on
+precision, recall and accuracy — the four figures this project publishes.
+
+Hence `criterion_agreement()`, the exact sibling of `turn_agreement()` and
+kept just as separate, for the reason already recorded for that one: it is a
+SECOND measurement, scored only where both sides committed — the case is a
+positive whose category maps to a criterion, and the judge found a breach and
+named one. Anything else is a disagreement about the BREACH, which recall
+already counts, and scoring it here would count one error twice. It returns
+None rather than 0 when there is nothing to score.
+
+Note what precision here does NOT claim, now that the distinction exists:
+*"when the judge says c, is there a breach"*, never *"was c the right
+criterion"*. The second lives in the agreement line, and keeping them apart is
+what stops one figure answering two questions badly.
+
+Five mutations bite: precision back to the label, a false positive credited to
+the family it got wrong, a never-named criterion printing 0% instead of n/a,
+agreement ignoring the criterion, and agreement scoring breaches only one side
+saw. A sixth guard holds the JUNCTION — computing it correctly and printing
+the old figure would change nothing a reader sees, which is this project's
+commonest defect shape.
+
+**And a small encoding trap met again**: the first patch anchored on a block
+containing an em dash, and the heredoc transcoded it on Windows, so the match
+failed. The recorded lesson — write these scripts with a file tool rather than
+a heredoc — applies to non-ASCII anchors as much as to backslashes.
+
+1,098 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
