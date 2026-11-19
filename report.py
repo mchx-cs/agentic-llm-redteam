@@ -223,6 +223,23 @@ def build_report(result, target="unknown"):
                 {family for attempt in launched
                  for family in (attempt.get("families_not_scorable") or [])}),
             "families_skipped": plan["skipped"],
+            # HOW MANY ATTEMPTS AIMED AT THE FAMILY THEY CARRY, which is a
+            # coverage fact and not a rendering one -- so it lives here, and
+            # `result.json` keeps it for a reader who never runs the
+            # renderer.
+            #
+            # A multi-turn attempt whose goal came from RECONNAISSANCE did
+            # not send its payload at all: the family stamped on it is the
+            # one of a payload that was never used. Only an attempt pursuing
+            # the payload's own text exercises the family it names. Both
+            # counts are zero for a single-turn campaign, where every payload
+            # is sent as written.
+            "aimed_from_objective": sum(
+                1 for attempt in launched
+                if attempt.get("pyrit_objective_from") == "objective"),
+            "aimed_from_payload": sum(
+                1 for attempt in launched
+                if attempt.get("pyrit_objective_from") == "payload-text"),
         },
         # What the campaign learned about the target along the way, and
         # which changed the order of attempts. Without this trace a reader
@@ -438,7 +455,8 @@ def _evidence_block(campaign):
     return lines
 
 
-def _not_attempted_block(delivery="single-turn", attack=None):
+def _not_attempted_block(delivery="single-turn", attack=None,
+                         from_objective=0, from_payload=0):
     """
     What this campaign does NOT attempt.
 
@@ -492,8 +510,35 @@ def _not_attempted_block(delivery="single-turn", attack=None):
             f"a single-turn campaign declares here do not apply to it.",
             "- **but the payloads were not sent as written** : the library's "
             "technique chose what to aim at, and the attacker model chose the "
-            "words. Coverage by OWASP family holds; this report does NOT "
-            "claim a given payload text was sent.",
+            "words. This report does NOT claim a given payload text was "
+            "sent.",
+        ]
+        # AND COVERAGE BY FAMILY DOES NOT ALWAYS HOLD, which this block
+        # asserted flatly until 2026-11-19. `objective_for` has two branches:
+        # where the plan filled an objective, the goal comes from
+        # RECONNAISSANCE and the payload -- with its family -- is not used at
+        # all; only where no objective was filled is the payload's own text
+        # pursued. The first is the normal case against a reconnoitred
+        # target.
+        #
+        # Found by inspecting what the attacker model actually SENDS before
+        # spending a measurement on it: polite English probing toward
+        # "personal or confidential information", on an attempt stamped
+        # LLM07. The provenance was already recorded on every attempt; it was
+        # the claim that ignored it.
+        if from_objective:
+            lines += [
+                f"- **and the OWASP families below are NOT all exercised** : "
+                f"{from_objective} attempt(s) pursued an objective derived "
+                f"from RECONNAISSANCE, not the chosen payload. For those, the "
+                f"family named is the one of a payload that was never sent, "
+                f"and the attacker model aimed at what the target said it "
+                f"refuses. Read the families as *what was aimed at*, never as "
+                f"*what was sent*."
+                + (f" The other {from_payload} attempt(s) did pursue the "
+                   f"payload's own text." if from_payload else ""),
+            ]
+        lines += [
             "- **no replay check** : replay re-sends ONE payload to tell a "
             "real secret from an invented one. A conversation has no single "
             "payload to re-send, so a disclosure here is not corroborated "
@@ -903,7 +948,9 @@ def render_markdown(report, abridge=False):
 
     lines += _not_attempted_block(
         campaign.get("delivery") or "single-turn",
-        campaign.get("multiturn_attack"))
+        campaign.get("multiturn_attack"),
+        from_objective=coverage.get("aimed_from_objective", 0),
+        from_payload=coverage.get("aimed_from_payload", 0))
 
     # --- Adaptation: why these attempts, in this order ----------------------
     # A campaign that reorders its attempts without saying why is a black box.

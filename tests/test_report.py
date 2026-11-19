@@ -986,6 +986,78 @@ class TestAMultiturnFindingsEVIDENCEIsTheConversation:
         assert "Objective pursued" not in text
 
 
+
+class TestCoverageByFamilyDoesNotAlwaysHold:
+    """
+    The block asserted "Coverage by OWASP family holds" flatly until
+    2026-11-19, and it is FALSE for a reconnoitred target.
+
+    `objective_for` has two branches. Where the plan filled an objective, the
+    goal handed to PyRIT comes from RECONNAISSANCE and the payload -- with its
+    family -- is never sent; only where no objective was filled is the
+    payload's own text pursued. The first is the normal case, and it is what
+    fires against `demo`.
+
+    Found by inspecting what the attacker model actually SENDS before spending
+    a measurement on it: polite English probing toward "personal or
+    confidential information", on an attempt stamped LLM07. The provenance was
+    already recorded on every attempt; it was the CLAIM that ignored it.
+    """
+
+    @staticmethod
+    def _report(provenances, delivery="pyrit-multiturn"):
+        from report import build_report
+        return build_report({
+            "target": "demo", "status": "termine", "delivery": delivery,
+            "plan": {"attempts": [], "skipped": []}, "findings": [],
+            "launched": [{"technique": f"t{n}", "owasp_family": "LLM01",
+                          "pyrit_objective_from": origin, "payload": {}}
+                         for n, origin in enumerate(provenances)],
+            "etats": {}, "observations": [],
+        }, target="demo")
+
+    @staticmethod
+    def _block(report):
+        from report import render_markdown
+        text = render_markdown(report)
+        start = text.index("**What was NOT attempted")
+        return text[start:start + 2000]
+
+    def test_the_provenance_is_a_COVERAGE_fact(self):
+        # It lives in `coverage`, so `result.json` keeps it for a reader who
+        # never runs the renderer -- the same reason the JSON is the source
+        # of truth and the Markdown only a rendering.
+        report = self._report(["objective", "objective", "payload-text"])
+        assert report["coverage"]["aimed_from_objective"] == 2
+        assert report["coverage"]["aimed_from_payload"] == 1
+
+    def test_the_report_WARNS_when_a_family_was_not_exercised(self):
+        text = self._block(self._report(["objective", "objective"]))
+        assert "NOT all exercised" in text
+        assert "2 attempt(s) pursued an objective derived from RECONNAISSANCE"             in text
+        assert "never as *what was sent*" in text
+
+    def test_it_does_NOT_warn_when_every_attempt_pursued_its_payload(self):
+        # The contrast that makes the test above mean something: warning
+        # always would pass just as well, and would then be noise.
+        text = self._block(self._report(["payload-text", "payload-text"]))
+        assert "NOT all exercised" not in text
+
+    def test_the_old_flat_claim_is_GONE(self):
+        # It said "Coverage by OWASP family holds" with no condition, in the
+        # section that exists to stop a reader inferring coverage the
+        # campaign does not have.
+        text = self._block(self._report(["objective"]))
+        assert "Coverage by OWASP family holds" not in text
+
+    def test_a_single_turn_campaign_counts_zero_of_both(self):
+        # Every payload is sent as written there, so neither count applies
+        # and the warning must not appear.
+        report = self._report([], delivery="single-turn")
+        assert report["coverage"]["aimed_from_objective"] == 0
+        assert report["coverage"]["aimed_from_payload"] == 0
+
+
 class TestADisclosureWithNoReplayHasAGRADE:
     """
     `("divulgation", None)` was MISSING from the severity table, and nothing
