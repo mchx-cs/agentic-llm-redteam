@@ -652,9 +652,11 @@ actually run:
   the binomial model doesn't apply, and a number that looked rigorous without being so
   would be worse than none. The report says what *would* let you claim something: about
   30 independent attempts of one technique to rule out a 10% residual rate;
-- `--only <technique> --no-adaptation` makes the attempts i.i.d. — same
+- `--only <technique> --no-adaptation --attempts 30` makes the attempts i.i.d. — same
   technique, no learning — and then the bound is real: *"0 of 30 proves nothing; the
   true rate could still reach 10%. To push that to 5%, 60 attempts; to 1%, 300."*
+  `--attempts` is what makes that reachable: the default is 3, where the rule of three
+  bounds 3/3 = 100% and so bounds nothing at all.
 
 The replay check is bounded too, and that one matters to a client: "the value came back
 2 times out of 3" reads as 67%, when three trials only support a range of 21–94%.
