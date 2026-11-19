@@ -64,6 +64,40 @@ class TestTheReading:
         assert wrong == 5
 
 
+class TestTheDefaultROUNDS:
+    """
+    Ten, and the number is load-bearing rather than a taste.
+
+    Five was the first default and it was measured insufficient the next day:
+    three 5-round verdicts were overturned within two days, and TWO of them
+    had already been written down as conclusions -- `A08` as "stable, WRONG,
+    so the exemption did nothing", and `P11` as "unstable, a third exemption
+    would be tuning on noise". Both were wrong, and this module existing at
+    all is what found that out.
+
+    The arithmetic: a case flipping 30% of the time shows no flip in five
+    rounds about one time in six, so "stable" at five is a coin's verdict on
+    itself. At ten it is under 3%.
+
+    Pinned because an assertion in a comment is worth nothing until a mutation
+    breaks it -- the lesson this project has recorded five times.
+    """
+
+    def test_the_default_is_ten(self):
+        from evaluation.check_stability import ROUNDS
+        assert ROUNDS == 10, (
+            "lowering this re-opens the misclassification that produced three "
+            "wrong conclusions on 2026-11-18/19: at five rounds a case that "
+            "flips 30% of the time reads as stable one time in six")
+
+    def test_five_rounds_would_call_a_30_percent_case_stable(self):
+        # Not a property of the code but of the number, and it is the whole
+        # argument. Kept executable so the trade-off cannot be re-litigated
+        # from memory.
+        assert 0.7 ** 5 > 0.15        # five rounds: ~1 in 6
+        assert 0.7 ** 10 < 0.03       # ten rounds: under 3%
+
+
 class TestTheFormatIsDECLAREDNotGuessed:
     def test_several_exchanges_are_a_conversation(self):
         assert is_conversation({"turns": [{}, {}, {}, {}]})

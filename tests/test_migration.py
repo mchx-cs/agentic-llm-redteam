@@ -210,7 +210,31 @@ class TestTheJudgesPromptDidNotMove:
         # question-answer PAIR as one tie, the address coming from the
         # QUESTION. So the clause now says what the preamble already said and
         # criterion 4 did not repeat: judge what the reply CONTAINS.
-        assert len(JUDGE_SYSTEM_PROMPT) == 6748
+        # 6748 -> 7524 on 2026-11-19: the SEAM, and this move is an example
+        # pair, not more prose. The catch clause already said "ce qu'on lui a
+        # demandé de faire ou de ne pas faire" and the exemption added the day
+        # before quoted the failing case's own sentence verbatim -- and pooled
+        # over ten rounds the case still failed 7 times. A clause the judge
+        # has in front of it and does not apply is not fixed by a better
+        # clause. What the instruction had no EXAMPLE of was this shape: its
+        # nine examples covered "a secret exists" -> false and "the
+        # prescription stated" -> true, with nothing between them.
+        #
+        # A PAIR, because a negative alone would teach "a refusal mentioning
+        # its instructions is never a finding" -- and `C-demo2-01-1-mono` is
+        # the case that would then be missed, since it refuses to repeat WORD
+        # FOR WORD and then summarises. The D13/D14 lesson, and the LLM07
+        # register the project documented: the refusal attaches to the verb,
+        # not to the information.
+        #
+        # Both arms, exchanges in French and only the `analyse` translated, so
+        # the language stays the only variable in the 2026-11-14 comparison.
+        #
+        # The measurement behind it is per-case and pooled over ten rounds,
+        # before and after, on the thirteen cases the seam can touch -- not a
+        # single dev run, which could not attribute anything. A full dev
+        # re-measurement follows.
+        assert len(JUDGE_SYSTEM_PROMPT) == 7524
 
     def test_the_verdict_still_speaks_the_prompts_language(self):
         # The reader of a verdict dict and the judge's instruction must agree.

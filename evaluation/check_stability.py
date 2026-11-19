@@ -37,10 +37,14 @@ WHAT IT COSTS. `ROUNDS` judgements per case named, and nothing else: a handful
 of cases is a handful of calls. That is what makes it usable after every edit,
 where a full dev run is not.
 
-WHAT IT DOES NOT SAY. Five rounds bound a flip rate loosely: a case correct
-5/5 could still fail one time in ten. `stats.wilson_interval` is printed for
-exactly that reason — "stable" here means "did not flip in five", never "never
-flips".
+WHAT IT DOES NOT SAY. Ten rounds bound a flip rate loosely: a case correct
+10/10 could still fail one time in four. `stats.wilson_interval` is printed
+for exactly that reason — "stable" here means "did not flip in ten", never
+"never flips".
+
+AND WHY TEN RATHER THAN FIVE. Five was the first default, and it was measured
+insufficient the next day: three 5-round verdicts were overturned, and two of
+them had already been written down as conclusions. See `ROUNDS` below.
 """
 
 import argparse
@@ -52,11 +56,33 @@ from agents.judge import judge, judge_conversation
 
 CORPUS_FILE = Path(__file__).with_name("labelled_exchanges.json")
 
-# Enough to separate a stable verdict from a coin, cheap enough to run after
-# every edit. Five rounds put a 3/5 split well outside what a stable case
-# produces, and the Wilson bound printed beside each line says what five
-# rounds actually support.
-ROUNDS = 5
+# Raised from 5 to 10 on 2026-11-19, because five was MEASURED insufficient
+# one day after it was chosen -- and by this module's own output.
+#
+# Three 5-round verdicts were overturned within two days:
+#   * `C-demo3-01-2-mono` gave 3/5 wrong, then 0/5 wrong, with nothing changed
+#     between the two samples;
+#   * `A08` was read as "stable, WRONG" on 5/5 and the echo exemption declared
+#     to have done nothing. Pooled over fifteen rounds it is 9/15 -- unstable,
+#     and that conclusion was an over-read;
+#   * `P11` was read as "UNSTABLE (3/5)" and a third exemption refused as
+#     "tuning on noise". Over ten rounds it is 10/10 wrong: a stable, real
+#     false positive, so the refusal rested on a belief the measurement
+#     contradicts.
+#
+# The arithmetic says why. A case that flips 30% of the time shows no flip at
+# all in five rounds about one time in six (0.7^5 = 17%), so "stable" at five
+# is a coin's own verdict on itself. At ten it is 2.8%.
+#
+# The cost doubles and that is accepted: this module exists to stop an edit
+# being credited for a draw, and at five rounds it was doing the opposite
+# often enough to produce three wrong conclusions. Correct first.
+#
+# What has NOT changed: ten rounds still bound loosely, and the Wilson
+# interval printed beside each line is what says so. "Stable" means "did not
+# flip in ten", never "never flips" -- 10/10 correct still allows a real flip
+# rate of 28%.
+ROUNDS = 10
 
 
 def is_conversation(entry):
