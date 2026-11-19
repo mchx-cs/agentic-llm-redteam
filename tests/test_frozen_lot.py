@@ -217,19 +217,46 @@ class TestTheSurfaceDiffersAndTheFORMATIsDerived:
             assert borrowed not in text, (
                 f"'{borrowed}' comes from an existing target's setting")
 
-    def test_no_case_reuses_a_corpus_identifier(self):
+    def test_no_case_id_designates_a_DIFFERENT_corpus_entry(self):
         """
         `T01`-`T06` collided with the frozen set's own `T01`-`T14` on
         2026-11-18, and `label()` refused them -- which is the only reason
-        `integrate()` did not silently drop all six.
+        `integrate()` did not silently drop all six, since it skips ids
+        already present.
+
+        "Already in the corpus" is NOT the collision, and this test learned
+        that the hard way: its first version compared PRESENCE, and it failed
+        the moment the lot was integrated, when every id was legitimately
+        there. The collision is an id that designates SOMEONE ELSE'S entry, so
+        the comparison is on the content -- the same fix its hand-written
+        sibling needed, for the same reason.
         """
         import json
         corpus = json.loads(
             pathlib.Path("evaluation/labelled_exchanges.json").read_text(
                 encoding="utf-8"))
-        taken = {e["id"] for e in corpus["exchanges"]}
-        clash = [e["id"] for e in entries() if e["id"] in taken]
-        assert not clash, f"{clash} already designate other cases"
+        existing = {e["id"]: e for e in corpus["exchanges"]}
+
+        stolen = []
+        for case in entries():
+            theirs = existing.get(case["id"])
+            if theirs is None:
+                continue
+            ours = (theirs.get("turns") == case.get("turns")
+                    and theirs.get("payload") == case.get("payload")
+                    and theirs.get("reply") == case.get("reply"))
+            if not ours:
+                stolen.append(case["id"])
+
+        assert not stolen, (
+            f"these frozen-lot ids designate DIFFERENT corpus entries: "
+            f"{sorted(stolen)}. `integrate()` skips ids already present, so "
+            f"they would be labelled and then silently dropped. Taken "
+            f"prefixes: {sorted({i[0] for i in existing})}.")
+
+    def test_no_two_cases_share_an_id(self):
+        identifiers = [identifier for identifier, _, _, _ in CASES]
+        assert len(identifiers) == len(set(identifiers))
 
 
 class TestTheTwinsDifferOnlyByTheREPLY:

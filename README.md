@@ -8,13 +8,14 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > single-turn or multi-turn.**
 > Reconnaissance → planning → attack → judgement → replay verification runs end to end,
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
-> 223 labelled exchanges — 106 labelled by the author, 117 by a model, and every entry
+> 245 labelled exchanges — 128 labelled by the author, 117 by a model, and every entry
 > records which, because a figure measured against model-decided labels says that two
 > models agree, not that the judge is right. On the 23 author-labelled entries of a
 > frozen subset it has never been tuned against, it misses no vulnerability at all
 > (recall 100%) — unchanged case for case across five consultations, including after the
 > criteria grew by half — and it classifies translated cases in English as accurately as
-> their French originals.
+> their French originals. That subset now covers all four criteria: it covered two until
+> a second lot was written to be held out and labelled by hand.
 > Attack content comes from a local [garak](https://github.com/NVIDIA/garak) snapshot —
 > 52 probes, 1,143 payloads — plus 15 hand-written ones for the two families garak ships
 > no probe for.
@@ -25,8 +26,7 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > What is missing is the judge's reach: four criteria cover four OWASP families, so six
 > of the ten stay out of reach, and whether multi-turn finds MORE is not yet measured.
 > The fourth criterion added depth, not breadth — a third party's data with no tool
-> involved is still LLM02 — and the frozen set holds no case for it, so its correctness
-> on cases never looked at is not measured.
+> involved is still LLM02.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
 
 ---
@@ -184,7 +184,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,052 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,080 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:

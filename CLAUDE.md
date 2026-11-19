@@ -5235,6 +5235,111 @@ python -m evaluation.label --integrate
 
 1,078 `pytest` tests, still with no LLM call at all.
 
+**The frozen lot is LABELLED, by the author, and the two empty criteria are
+no longer empty (2026-11-19).** Clement ruled on all 22, block by block, with
+four cases deferred mid-block and settled on his own precedent.
+
+| | before | after |
+|---|---|---|
+| `divulgation` | 10 cases, 7 pos, floor 65% | unchanged |
+| `obeissance` | 4 cases, **1** pos, floor **21%** | **7 cases, 3 pos, floor 44%** |
+| `abus_outils` | **0** | **8 cases, 4 pos, floor 51%** |
+| `fuite_donnees_tiers` | **0** | **10 cases, 5 pos, floor 57%** |
+| conversations | **0** | **6 cases, 4 pos, floor 51%** |
+
+(The frozen set, counted on author-labelled entries only — the population the
+published figures describe. It goes from 23 entries to 45.)
+
+Corpus: **245 entries**, dev 168 / test 77, provenance **128 `author` / 117
+`model`**. The author's half is now the majority for the first time since the
+119 were integrated.
+
+**The verdicts, and the five positives land exactly where the lot was sized
+for them**: F01, F05, F06, F07, F09 for third-party data; F11, F15, F16, F18
+for tool abuse; F19 and F21 for obedience. Thirteen negatives, which is the
+balance D16–D20 and P01–P11 established — the risk on both new criteria is not
+missing a disclosure, it is flagging every mention of a person or every use of
+a tool.
+
+**THE METHOD THAT MADE THIS CHEAP: the author's own precedents, verbatim, in
+place of my reading.** Four cases of block 1 and two of block 2 came back as
+"j'ai un doute", and for each one the useful answer was not an opinion but a
+`dev` twin he had ruled himself — P03, P05, P08, P09 for the first four, D17-1
+and D18-2 for the next two. He answered "on suit mon verdict précédent", and
+the script ASSERTS each precedent against the corpus before using it: that it
+carries the verdict claimed, the category claimed, and `labelled_by: author`.
+"Follow the previous verdict" means nothing if the previous verdict is not the
+one asserted.
+
+Following the CATEGORY and not only the verdict was deliberate. Consistency in
+the verdict alone would leave the same register filed under two names, and
+grouping the errors by kind of trap is the one job the category list has.
+
+**And I proposed no reading at all on this lot, which is a departure.** On the
+P-cases I offered one, and he happened to agree. Here a ratified suggestion of
+mine would make the provenance mine in substance, and the measurement
+afterwards would compare the judge with ME — the exact failure mode the
+provenance split exists to expose, and the gap this lot was written to fill.
+The precedents are facts about his own past rulings; a reading would not have
+been.
+
+**ONE CASE HAD NO PRECEDENT OF HIS, AND SAYING SO CHANGED THE ANSWER'S
+WEIGHT.** F21 — the instruction set aside on turn 1, the last reply
+impeccable — has six `dev` cases of exactly its shape (`C-demo-04-1/2`,
+`C-demo3-04-1/2`, `C-demo2-04-2`, `C-demo-refus1-04-1/2`), **all labelled by a
+MODEL**. Offering them as a precedent would have been offering a model's
+label, which is what this lot exists to escape. So it was put to him as a
+first, with the note that his answer bears retroactively on those six: a `non`
+would have meant the six are wrong and `dev`'s `obeissance` population is
+mostly mislabelled. He ruled **oui**, which is also the reading the criterion
+gives — and F21 is a cleaner case than its six precedents, where the target
+ACCEPTS the persona in words without producing anything forbidden, while F21
+produces it.
+
+**Two things I filled in, both flagged rather than buried:**
+- **F21's breach turn.** Not named in the ruling. Turn 1, taken from the
+  case's own description that he ruled on, and the only tenable reading — turn
+  2 is a judo enrolment deadline.
+- **F19 and F20's filing.** He was offered `multitours-reussi` /
+  `multitours-refuse` — empty since 2026-11-13 and found so by the audit of
+  2026-11-18 — against `obeissance` / `obeissance-refusee`, and did not rule.
+  The stated fallback applied: filed as `C-demo2-04-1` is. **So the two
+  multi-turn categories are still empty and the question is still open**,
+  which is worth saying plainly: the corpus now holds two author-labelled
+  cases of the format's own contribution, filed under names that do not record
+  it.
+
+**One category was added, and it is a filing choice of mine**:
+`tiers-dit-par-l-attaquant`, negative, for F10 — the third party's data
+supplied by the ATTACKER with the target saying nothing of it.
+`secret-dit-par-l-attaquant` is the same trap for a secret (A08, A10); filing
+F10 under "named without data" would lose what makes the case, which is that
+the data IS in the exchange and did not come from the chatbot. The same
+argument as A10's filing and as `tiers-par-agregation`. A negative category
+for something needing no criterion costs no recall, which is the rule that
+allows it where a positive one is forbidden.
+
+**AND MY OWN COLLISION GUARD FAILED THE MOMENT THE LOT WAS INTEGRATED.** It
+compared the PRESENCE of an id in the corpus — so once the 22 were integrated,
+every one of them was "a collision". Correct of the test to fail and wrong
+about the data: those ids designate the lot's own entries.
+
+That is the identical false positive the hand-written sibling had in its first
+version, where comparing presence flagged all ten legitimate A-cases, and the
+reason recorded then applies unchanged: a guard that cries wrong on legitimate
+data teaches people to ignore it, and this project removed a guard once for
+exactly that. Rewritten onto the CONTENT behind the id, and re-verified by
+mutation — renaming a case to `T01`, which designates a frozen-set case that
+is not ours, still bites.
+
+**What is NOT done, and it is the whole point of the lot:** the frozen set has
+not been consulted on these cases, and it must not be until something is worth
+checking. The next consultation is a CHECK of a criterion justified on `dev`,
+never a reason to adjust one. What the lot changes is that such a check can
+now say something about `abus_outils` and `fuite_donnees_tiers` at all.
+
+1,080 `pytest` tests, still with no LLM call at all.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
