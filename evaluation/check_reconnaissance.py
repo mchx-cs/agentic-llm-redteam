@@ -15,6 +15,7 @@ Run it from the project root with:
 
 from agents.planner import plan_campaign
 from agents.reconnaissance import reconnoitre, summarise
+from console import write_in_utf8
 
 BUDGET = 6
 
@@ -91,4 +92,5 @@ def run():
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     run()

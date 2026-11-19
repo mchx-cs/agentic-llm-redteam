@@ -25,6 +25,7 @@ from pathlib import Path
 
 from agents.attacker import generate_payloads
 from targets import choose_target
+from console import write_in_utf8
 
 OUTPUT_FILE = Path(__file__).parent / "to_label.json"
 
@@ -71,4 +72,5 @@ def collect():
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     collect()

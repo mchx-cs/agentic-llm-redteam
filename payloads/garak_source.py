@@ -45,6 +45,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
+from console import write_in_utf8
 
 REPOSITORY = "NVIDIA/garak"
 PAYLOADS_PATH = "garak/data/payloads"
@@ -297,4 +298,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     sys.exit(main())

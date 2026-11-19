@@ -115,6 +115,7 @@ from agents.reconnaissance import reconnoitre
 from evaluation.measure_multiturn import launchable, targeted_objectives
 from targets import choose_target
 from targets.conversation import play, require_conversation
+from console import write_in_utf8
 
 # --- The declared protocol ---------------------------------------------------
 TARGET = "demo"
@@ -380,4 +381,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     raise SystemExit(main())

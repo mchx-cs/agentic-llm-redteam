@@ -53,6 +53,7 @@ Run it from the project root:
 import argparse
 import json
 from pathlib import Path
+from console import write_in_utf8
 
 HARVEST_FILE = Path(__file__).parent / "to_label_conversations.json"
 
@@ -440,4 +441,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     main()

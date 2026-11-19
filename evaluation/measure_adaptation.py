@@ -41,6 +41,7 @@ from statistics import mean
 
 import agents.adaptation as adaptation
 from agents.planner import plan_campaign
+from console import write_in_utf8
 
 DRAW_COUNT = 150
 BUDGETS = (3, 6, 10, 20, 40)
@@ -202,4 +203,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     main()

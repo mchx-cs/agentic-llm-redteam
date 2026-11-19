@@ -96,19 +96,7 @@ import json
 import math
 import sys
 from pathlib import Path
-
-# A long measurement runs REDIRECTED, in the background, and Windows gives a
-# redirected stdout the locale codec (cp1252) — which cannot encode what a
-# target or an attacker model writes. The first smoke run died on exactly
-# that, mid-campaign, after several minutes of local inference.
-#
-# A measurement that cannot survive its own redirection cannot be run at all
-# here, so this is a condition of running rather than a nicety. The same
-# exposure exists in the other long evaluation modules; it is fixed where it
-# bit and noted rather than swept through blind.
-if hasattr(sys.stdout, "reconfigure"):          # pragma: no cover
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+from console import write_in_utf8
 
 # --- The declared protocol ---------------------------------------------------
 TARGET = "demo"
@@ -324,4 +312,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     raise SystemExit(main())

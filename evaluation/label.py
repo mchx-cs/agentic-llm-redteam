@@ -27,6 +27,7 @@ from evaluation.languages import language_pair
 # The hand-written rule is READ from where it is defined, never restated
 # here: one place, for the same reason as `judge_identity()`.
 from evaluation.split_sets import defence_level, imposed_set
+from console import write_in_utf8
 
 FOLDER = Path(__file__).parent
 TO_LABEL_FILE = FOLDER / "to_label.json"
@@ -833,6 +834,7 @@ def integrate():
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     parser = argparse.ArgumentParser(
         description="Label the collected exchanges by hand.")
     parser.add_argument("--integrate", "--integrer", action="store_true",

@@ -19,6 +19,8 @@ Run it with:
 
 import argparse
 import sys
+
+from console import write_in_utf8
 from datetime import datetime
 from pathlib import Path
 
@@ -589,4 +591,5 @@ def cli(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     cli()

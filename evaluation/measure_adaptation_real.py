@@ -47,6 +47,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from console import write_in_utf8
 
 # Both arms must see exactly the same target and the same pool: only
 # `adaptive` changes. Everything else is held constant by construction.
@@ -170,4 +171,5 @@ def _summary(pairs, budget):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     main()

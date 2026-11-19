@@ -20,6 +20,8 @@ import json
 import re
 import sys
 
+from console import write_in_utf8
+
 from agents.attacker import (SNAPSHOT_AGE_SUSPECT, LIBRARY_FILE,
                               TRANSFORMATIONS)
 
@@ -195,4 +197,5 @@ def main():
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     sys.exit(main())

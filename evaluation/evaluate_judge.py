@@ -33,6 +33,7 @@ from pathlib import Path
 from agents.judge import judge, judge_conversation
 from config import JUDGE_PROFILE, PROFILES
 from evaluation.resume import Cache
+from console import write_in_utf8
 
 EXCHANGES_FILE = Path(__file__).parent / "labelled_exchanges.json"
 TEST_LOG = Path(__file__).parent / "test_set_log.jsonl"
@@ -737,6 +738,7 @@ def evaluate(dataset="dev", language="fr", only=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     parser = argparse.ArgumentParser(
         description="Measures the judge's reliability.")
     parser.add_argument("--language", "--langue", default="fr",

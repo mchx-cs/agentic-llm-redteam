@@ -114,6 +114,7 @@ and coverage that states what was never attempted.
 │   ├── demo.py          # deliberately weak target, three defence levels
 │   ├── decoy.py         # local decoy chatbot holding a fake secret (default)
 │   ├── mock.py          # deterministic, no LLM: free end-to-end tests
+│   ├── records.py       # a retrieval desk over reader records: the third-party target
 │   ├── conversation.py  # the multi-turn contract, and the refusal to fake it
 │   └── http.py          # a real endpoint, described in .env (urllib, no new dependency)
 ├── agents/
@@ -161,6 +162,7 @@ and coverage that states what was never attempted.
 ├── audit.py             # authorisation gate + append-as-you-go JSONL audit trail
 ├── stats.py             # what a result bounds — and the refusal to bound dependent trials
 ├── migration.py         # reads data written before the names were translated
+├── console.py           # output in UTF-8: a redirected campaign must survive its payloads
 ├── check_rename_damage.py  # finds an English identifier dropped into a French sentence
 ├── report.py            # result.json (source of truth) → report.md; rule-based severity
 └── main.py              # orchestrator: runs the campaign loop
@@ -188,7 +190,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,159 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,208 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:

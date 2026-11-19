@@ -71,6 +71,7 @@ targets/           # the systems under test — one common contract: ask(message
   decoy.py         # local toy chatbot with a fake secret (the default)
   mock.py          # deterministic, no LLM: free end-to-end tests
   http.py          # a real endpoint: API profiles, --probe-target, zero dependencies
+  records.py       # a retrieval desk over reader records: the third-party target
   conversation.py  # the multi-turn contract, and the refusal to fake it
 agents/
   reconnaissance.py # probes the target (harmless questions) and builds a profile
@@ -80,6 +81,10 @@ agents/
   judge.py          # LLM-as-judge: rules success / failure (JSON output)
   detectors.py      # decodes spelled-out, Base64 and hex BEFORE the judge (deterministic)
   verifier.py       # replay: does a leaked value come back, or was it a hallucination?
+pyrit_bridge/      # PyRIT as the attack stage -- an EXTRA, absent from CI
+  convert.py        # every decision takeable on plain data: imports NO PyRIT
+  targets.py        # our model and our target, back inside ask_llm()
+  campaign.py       # one multi-turn attempt, judged by OUR judge, on OUR format
 payloads/
   library.json       # techniques (OWASP family + prerequisites) and objectives
   validate.py        # checks the library — `python -m payloads.validate`
@@ -106,10 +111,19 @@ evaluation/        # measurements that NEED a model: to be run by hand
   collect_conversations.py # the same, multi-turn — no judge, no attacker model
   handwritten_conversations.py # the traps a harvest cannot produce, written by hand
   labelling_prepass.py     # mechanical facts to speed up labelling, and NO verdict
+  frozen_lot.py            # the lot written to be HELD OUT: `test`, imposed
+  split_sets.py            # dev / test, and which groups a set is IMPOSED on
+  languages.py             # the attacker -> target language pair, stored not derived
+  check_stability.py       # judges a NAMED FEW several times: an edit, or a draw?
+  resume.py                # verdicts written as they come, so a run can be repaired
+  measure_modes.py         # `--multiturn` against single-turn, at equal requests
+  measure_adaptive.py      # the adaptive arm -- and the confound that stopped it
 audit.py           # mandate required before starting + JSONL audit trail as it goes
 stats.py           # what a result bounds — and the refusal to bound absent independence
 report.py          # result.json (truth) → report.md (rendering), severity by rules
 migration.py       # reads data written before the names were translated
+console.py         # output in UTF-8: a redirected campaign must survive its payloads
+check_rename_damage.py # what the switch to English may have broken
 examples/
   demo-report.md   # a committed example report, abridged (--abridge)
 main.py            # orchestrator: the campaign loop with its attempt budget
@@ -6343,6 +6357,85 @@ mutations bite — the criterion, the family, the severity and the caveat's
 count each read off the raw result again.
 
 1,164 `pytest` tests, still with no LLM call at all.
+
+**A REDIRECTED CAMPAIGN DIES ON ITS OWN PAYLOADS, and 22% of the library
+carries one that does it (2026-11-19).** Flagged on 2026-11-19 as "the same
+exposure exists in the other long evaluation modules; it is fixed where it bit
+and noted rather than swept through blind". Measured, the note was too modest:
+the exposure is in the TOOL, not in the measurement scaffolding.
+
+Windows gives a REDIRECTED stdout the locale codec — cp1252 on this machine,
+verified — so `python main.py --target … > campaign.log` encodes every `print`
+through it, and the first character outside that codec raises
+`UnicodeEncodeError` from inside `print`.
+
+**Counted over the repository's own library: 13 techniques out of 58 carry a
+payload cp1252 cannot encode.** Braille (`injectbraille`), zalgo, base2048,
+ecoji, Chinese (`latentinjectiontranslationenzh`), emoji (`daninthewild`,
+`autodancached`), unicode tag characters, raw ANSI. So this is not an exotic
+case to guard against: it is what a quarter of the attack library LOOKS like,
+and the round-robin over modules puts `encoding` in the first few attempts.
+
+**And it kills the run at the worst moment.** The payload has been sent, the
+client's throughput spent, the audit trail written — and what dies is the
+campaign, printing the payload it just delivered. The trail survives, which is
+exactly the design that saves it ("if the campaign dies, we keep the record of
+what has ALREADY been sent"); the campaign does not.
+
+**One place, called by the ENTRY POINTS, never on import.** `console.py`, and
+the two halves of that sentence are both decisions:
+- one place, because nineteen copies of a two-line reconfigure drift — the
+  same reason the bridge reads `stats.STATES` and `label.py` reads
+  `split_sets.imposed_set()` rather than restating them;
+- at the entry point, because reconfiguring a stream is GLOBAL. A module doing
+  it at import time changes the interpreter underneath whoever imported it,
+  `pytest` included, whose captured stdout is not a real stream. The same
+  reason the budget is armed by the orchestrator and not by `llm_client`.
+
+**The fallback is named rather than hidden.** `errors="replace"` shows `?` for
+a character it cannot encode, which on a security tool is a silent alteration
+— so: **the terminal is a VIEW, the record is the audit trail and
+`result.json`.** Losing a glyph on screen costs nothing; losing the campaign
+costs the engagement. In practice it never fires, UTF-8 encoding every string
+but a lone surrogate.
+
+**THE GUARD IS A SWEEP, not a list.** Every file in the repository that runs
+as a program must call it as the FIRST statement of its
+`if __name__ == "__main__":` block — derived by parsing, so it fails the day a
+new entry point appears, which is exactly when the decision has to be taken
+deliberately instead of inherited. Twice already a lot of hand-written cases
+was added that the set split did not know about; a list somebody must remember
+to extend is the defect, not the fix.
+
+**With ONE exemption, and the guard encodes its reason.**
+`payloads/garak_export.py` runs in garak's venv and imports nothing from this
+project — that is what keeps the 164 dependencies outside. So a test asserts
+both halves: every other entry point calls it, and garak_export imports
+nothing of ours. The day that stops being true, the exemption has lost its
+reason and the test says so, instead of leaving a silent hole.
+
+**A THIRD SPLICE ERROR IN ONE SESSION, and it is the same mistake again.** The
+wiring script inserted the import after "the last line that looks like an
+import", which in `main.py` and `payloads/validate.py` is the FIRST line of a
+parenthesised `from x import (` — so the import landed inside a continuation
+and both files stopped parsing. After the CLI flag spliced into
+`tuple(arguments.only)` and the coverage counts spliced into
+`campaign.get("delivery",`: anchor on something unambiguous, or rewrite the
+whole statement. Caught immediately here, because a syntax error cannot hide.
+
+Four mutations bite: a call removed from one entry point, the exempt module
+importing from the project, the call moved to import time, and the fallback
+dropped.
+
+**The maps were diffed against the disk at the same time**, which is the third
+reading this project needs — and it found `console.py` and `targets/records.py`
+missing from the README's tree, plus `pyrit_bridge/`, seven `evaluation/`
+modules and `check_rename_damage.py` missing from CLAUDE.md's. `records.py` is
+the target written for verrou 1's first step, so it is the same defect as
+`stats.py` on 2026-11-12 and `pyrit_bridge/` on 2026-11-17: a showcase piece
+absent from the repository's own map. Both maps now re-diff clean.
+
+1,208 `pytest` tests, still with no LLM call at all.
 
 ## Legal framing
 

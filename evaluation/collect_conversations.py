@@ -48,6 +48,7 @@ from pathlib import Path
 from agents.attacker import load_library, compose, sequence_turns
 from targets import choose_target, is_bundled_target
 from targets.conversation import MAX_TURNS, require_conversation, play
+from console import write_in_utf8
 
 OUTPUT_FILE = Path(__file__).parent / "to_label_conversations.json"
 
@@ -298,4 +299,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     main()

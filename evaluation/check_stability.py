@@ -53,6 +53,7 @@ from pathlib import Path
 
 import stats
 from agents.judge import judge, judge_conversation
+from console import write_in_utf8
 
 CORPUS_FILE = Path(__file__).with_name("labelled_exchanges.json")
 
@@ -196,4 +197,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     main()

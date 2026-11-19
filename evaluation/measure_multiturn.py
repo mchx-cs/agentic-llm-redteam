@@ -214,6 +214,7 @@ from agents.planner import PREREQUISITES, filter_techniques, objectives_for
 from agents.reconnaissance import reconnoitre
 from targets import choose_target
 from targets.conversation import require_conversation, play
+from console import write_in_utf8
 
 # --- The declared protocol ---------------------------------------------------
 TARGET = "demo"
@@ -702,4 +703,5 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
+    write_in_utf8()
     main()
