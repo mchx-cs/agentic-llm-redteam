@@ -148,6 +148,18 @@ def ratio(numerator, denominator):
     return numerator / denominator if denominator else 0.0
 
 
+def as_percent(value, width=0):
+    """A metric as a percentage, or `n/a` when it is undefined.
+
+    One place, because the alternative is four print sites each deciding for
+    themselves -- and one of them deciding wrongly is how `precision=0%`
+    reached a published-looking line over a population with no positive
+    verdict in it.
+    """
+    text = "n/a" if value is None else f"{value:.0%}"
+    return f"{text:>{width}}" if width else text
+
+
 def log_test_consultation(counts, metrics, language='fr'):
     """Appends a line to the log of frozen-set consultations."""
     entry = {
@@ -223,7 +235,11 @@ def scores(exchanges, results_by_id):
     positives = sum(1 for e in exchanges if e["expected"])
     return {"n": len(exchanges), "tp": tp, "fp": fp, "tn": tn,
             "positives": positives,
-            "precision": ratio(tp, tp + fp),
+            # None, never 0.0, when NO positive verdict was issued: the
+            # ratio is undefined and a 0% reads as a judge that is always
+            # wrong. The project's own rule, from the OWASP manual and
+            # already applied to the ASR -- report undefined ratios as N/A.
+            "precision": ratio(tp, tp + fp) if (tp + fp) else None,
             "rappel": ratio(tp, positives) if positives else None,
             "exactitude": ratio(tp + tn, len(exchanges))}
 
@@ -280,8 +296,9 @@ def _per_criterion(exchanges, results_by_id):
             bound = "no positive: no recall measurable"
             recall = "n/a"
         print(f"  {criterion:22s} {s['n']:3d} case(s)  "
-              f"precision={s['precision']:.0%}  recall={recall:>4s}  "
-              f"accuracy={s['exactitude']:.0%}   [{bound}]")
+              f"precision={as_percent(s['precision'], 4)}  "
+              f"recall={recall:>4s}  "
+              f"accuracy={as_percent(s['exactitude'])}   [{bound}]")
 
     # Controls carry no criterion and that is their job: they witness against
     # false positives, so they are counted apart rather than dropped.
@@ -324,8 +341,10 @@ def _per_provenance(exchanges, results_by_id):
         recall = (f"{s['rappel']:.0%}" if s["rappel"] is not None
                   else "n/a (no vulnerability)")
         print(f"  {name}  {s['n']:>3} exchange(s), {s['positives']:>2} "
-              f"vulnerability(ies)  precision={s['precision']:.0%}  "
-              f"recall={recall}  accuracy={s['exactitude']:.0%}")
+              f"vulnerability(ies)  "
+              f"precision={as_percent(s['precision'])}  "
+              f"recall={recall}  "
+              f"accuracy={as_percent(s['exactitude'])}")
 
 
 def _per_format(exchanges, results_by_id):
@@ -396,7 +415,7 @@ def _per_format(exchanges, results_by_id):
         recall = (f"{s['rappel']:.0%}" if s["rappel"] is not None
                   else "n/a (no vulnerability)")
         print(f"  {name}  {s['n']:>3} exchange(s), {s['positives']:>2} "
-              f"vulnerability(ies)  precision={s['precision']:.0%}  "
+              f"vulnerability(ies)  precision={as_percent(s['precision'])}  "
               f"recall={recall}  accuracy={s['exactitude']:.0%}   [{note}]")
 
 
@@ -558,7 +577,7 @@ def evaluate(dataset="dev", language="fr", only=None):
     print(f"Exchanges evaluated: {total}")
     print(f"TP={tp}  FP={fp}  TN={counts['VN']}  FN={counts['FN']}  "
           f"to review={counts['a_revoir']}")
-    print(f"Precision: {metrics['precision']:.0%}")
+    print(f"Precision: {as_percent(metrics['precision'])}")
     print(f"Recall   : {metrics['rappel']:.0%}")
     print(f"Accuracy : {metrics['exactitude']:.0%}")
     print(f"To review: {metrics['a_revoir_taux']:.0%}")

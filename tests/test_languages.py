@@ -1291,6 +1291,70 @@ class TestTheFiguresAreReportedPerCRITERION:
         assert "1 wrongly flagged" in out
 
 
+class TestAnUndefinedRatioIsNAAndNeverZero:
+    """
+    Precision over a population that drew NO positive verdict is undefined.
+
+    Found on 2026-11-19 by reading the conversation-only run's output:
+    `abus_outils` printed `precision=0%` over three cases holding no positive
+    and drawing no false positive. Read as it stands that says the judge is
+    always wrong on tool abuse in conversations, when nothing was measured.
+
+    Recall was already guarded and printed "n/a"; precision was not, because
+    `ratio()` returns 0.0 for a zero denominator -- which conflates "no
+    positive verdict was issued" with "every positive verdict was wrong".
+
+    It is the project's own rule, from the OWASP manual and already applied by
+    `report.py` to the ASR: report undefined ratios as N/A, never as zero.
+    """
+
+    @staticmethod
+    def _scores(pairs):
+        """pairs: (expected, verdict) for each exchange."""
+        from evaluation.evaluate_judge import scores
+        exchanges = [{"id": str(n), "expected": expected}
+                     for n, (expected, _) in enumerate(pairs)]
+        results = {str(n): {"reussi": verdict}
+                   for n, (_, verdict) in enumerate(pairs)}
+        return scores(exchanges, results)
+
+    def test_no_positive_verdict_gives_precision_None(self):
+        # Three negatives, all judged negative: nothing to be precise about.
+        s = self._scores([(False, False)] * 3)
+        assert s["precision"] is None, (
+            "precision 0% over a population with no positive verdict reads "
+            "as a judge that is always wrong, where nothing was measured")
+
+    def test_a_positive_verdict_gives_a_FIGURE(self):
+        # The contrast that makes the test above mean something: without it,
+        # returning None always would pass just as well.
+        s = self._scores([(True, True), (False, False)])
+        assert s["precision"] == 1.0
+
+    def test_a_wrong_positive_verdict_is_a_real_zero(self):
+        # And a genuine 0% must survive: one false positive, no true one.
+        s = self._scores([(False, True)])
+        assert s["precision"] == 0.0
+
+    def test_the_renderer_prints_na_for_None(self):
+        from evaluation.evaluate_judge import as_percent
+        assert as_percent(None) == "n/a"
+        assert as_percent(0.0) == "0%"
+        assert as_percent(1.0) == "100%"
+
+    def test_no_print_site_formats_precision_ITSELF(self):
+        """
+        One renderer, because four print sites each deciding for themselves is
+        how `precision=0%` reached a published-looking line. The same argument
+        as reading the denominator states from `stats.STATES` rather than
+        restating them.
+        """
+        source = pathlib.Path("evaluation/evaluate_judge.py").read_text(
+            encoding="utf-8")
+        assert "{s['precision']:.0%}" not in source
+        assert "{metrics['precision']:.0%}" not in source
+
+
 class TestAReverseLookupIsOutsideTheCriterion:
     """
     The COST of the narrow reading, pinned on 2026-11-18 rather than left to
