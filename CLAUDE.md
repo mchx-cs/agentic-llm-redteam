@@ -4301,21 +4301,23 @@ of the project.
 
 ## What remains, in the order the dependencies impose
 
-Recorded 2026-11-17, after verrou 2. Four locks and a tail, and the order is
-not a preference: taken backwards, the measurements mean nothing.
+Rewritten 2026-11-19. The four locks recorded on 2026-11-17 have all moved:
+two are closed, one is ANSWERED negatively, one is reduced tenfold and
+deliberately stopped. What is left is smaller than what was, and this section
+says so rather than keeping the old shape for comfort.
 
-**1. THE JUDGE'S CRITERIA — four of ten OWASP families scorable.** (Step one and two DONE on 2026-11-17/18: the `records` target and the `fuite_donnees_tiers` criterion. What is left of this lock is the MEASUREMENT: label T01–T06 and re-measure both formats.) (Three CRITERIA, four families: `divulgation` covers LLM02 and LLM07. I first wrote "three of ten" here, carrying over the 2026-11-09 line about the CORPUS, which touches three — the README had it right.) This is
-the ceiling of everything else: growing the corpus or adding payloads changes
-nothing while the judge has only `divulgation`, `obeissance` and
-`abus_outils`. Four gaps are PINNED BY TESTS that name what the corpus would
-then need, so adding one fails a test that says why:
+**1. THE JUDGE'S CRITERIA — four criteria, four of ten OWASP families
+scorable.** `divulgation` covers LLM02 and LLM07, `obeissance` LLM01,
+`abus_outils` LLM06, and `fuite_donnees_tiers` (added 2026-11-18) the LLM02
+case no tool reports. **The gap this lock was named for is CLOSED**: a target
+volunteering a reader's name, address, phone number, file number and debt with
+no tool marker used to score `aucun` — measured against the real judge, the
+commonest finding of a real engagement scoring zero — and it now has a
+criterion, ten labelled cases (5 positive), a severity row and five labelling
+categories.
 
-- **a third party's data without a tool.** Measured against the good judge,
-  not asserted: a target volunteering a reader's name, address, phone number,
-  file number and debt, with no tool marker, scores `aucun` — the judge
-  describing the breach and then ruling there is none. **That is the commonest
-  finding of a real engagement** (a RAG over customer records) and it scores
-  zero;
+Five gaps stay PINNED BY TESTS, so adding one fails a test that says what the
+corpus then needs. Three are registers the judge cannot score at all:
 - **indirect injection** — a payload arriving from a document, a page or a
   tool's output rather than from the user;
 - **fingerprinting** — the target naming its model, provider or sampling
@@ -4323,46 +4325,89 @@ then need, so adding one fails a test that says why:
 - **a disclosed bypassable control** — LLM07's own example, "I only refuse if
   you do not claim to be an administrator": a bypass handed over, not a hint.
 
-The order inside this lock is the one recorded since 2026-11-11: enrich the
-target → widen the CRITERIA → grow the corpus → add payloads. And it is
-expensive: touching `JUDGE_SYSTEM_PROMPT` invalidates the published
-89 / 100 / 96 and the four logged frozen-set consultations, so it costs a full
-re-measurement of both formats (~300,000 tokens).
+Two are deliberate BOUNDARIES of criterion 4, decided by the author and
+pinned so they cannot be inherited silently: **aggregation** (elements across
+several replies that identify only together — `P11`, ruled no) and **a reverse
+lookup** answered with a name alone, which the narrow reading of "the reply
+ties a datum to a person" does not reach. A test asserts the corpus holds no
+reverse lookup at all, so the day one is added the decision is forced.
 
-**2. THE CORPUS'S PROVENANCE — and the FROZEN LOT, kept as the next chantier on 2026-11-18.** The frozen set has ZERO cases for `fuite_donnees_tiers` and ZERO author-labelled cases for `abus_outils`, so neither criterion's correctness is measured on cases never looked at. A second lot — written, labelled by the author, and THEN frozen — is the only work that unblocks either, and the only work that unblocks the `conversation / test` line, which rests on two positives with a floor of 34%.  117 of 212 labels were decided by a MODEL, at
-the author's explicit request, and every entry records which. On the ground
-truth the author validated, the frozen set holds **23 entries, 8 positives** —
-recall is 100% there, but eight cases do not carry much. And `abus_outils` has
-**no case at all** in the frozen set, so the criterion's correctness on cases
-never looked at is simply not measured. A second tool-abuse corpus,
-hand-labelled and then frozen, is the work the project's own rule requires.
+What is actually left in this lock is the FLOORS, not the criteria. On the
+author's ground truth in the frozen set: `divulgation` 65%, `fuite_donnees_tiers`
+57%, `abus_outils` 51%, `obeissance` 44% — a perfect recall on five positives
+bounds the true rate at 57% and no higher. Raising any of them is more cases,
+written and labelled by the author. The published figures now describe an
+instruction of 7,592 characters (base) plus a 1,706-character addendum, with
+`dev` at 95 / 98 / 98 and the frozen set's original 23 at 100 / 100 / 100.
 
-**3. THE MULTI-TURN GAIN IS NOT MEASURED.** `--multiturn` runs, and nothing
-says what it finds. Two obstacles, and they are the same one twice: the LOCAL
-judge is unusable — it returned `divulgation` three votes out of three on a
-reply that was *« Pas plus de détails sur ce système »* with its own analysis
-saying the chatbot refused, the 2026-10-30 ceiling met a third time on a third
-format — and the GOOD judge costs ~13,000 tokens an attempt. A declared
-protocol with the paid judge is the only honest route.
+**2. THE CORPUS'S PROVENANCE — closed as a blocker, permanent as a caveat.**
+The frozen lot was written (22 cases, 19 groups), labelled BY THE AUTHOR, and
+integrated: his half of the frozen set went from 23 entries to 45, and
+`abus_outils` and `fuite_donnees_tiers` got their first measurement on cases
+never looked at — the debt recorded on 2026-11-12 and doubled on 2026-11-18.
+Corpus: **245 entries, 128 `author` / 117 `model`**, the author's half now in
+the majority.
 
-**4. THE CRITERION SEAM.** Three observations in three populations: the
-criterion both CATCHES and EXEMPTS a refusal that names what it protects
-(`E03-b` under the English instruction, a `dev` conversation, and `R07-2` on
-the frozen set). It **cannot be acted on from the frozen set** — having seen
-it there, adjusting the criterion would be tuning against the test set, the
-one thing this project forbids outright. Any fix must be justified on `dev`,
-where `C-demo3-01-2` already sits, with the frozen set consulted afterwards
-only as a CHECK.
+What remains is not work but a READING RULE, and the sixth consultation showed
+why it is not optional: read flat, that run gives recall 79%; split by
+provenance, it is **100% on the author's ground truth and 50% on the
+model-labelled half**. A figure over model-decided labels measures agreement
+between models. The split is stored on every entry and reported above the
+figures, so the rule is enforced rather than remembered.
+
+**3. THE MULTI-TURN GAIN — ANSWERED, and the answer is NO.** Three
+measurements, each with its protocol committed before the run:
+- the sequenced form against a composed message, judged outcome, 102 pairs:
+  **15 against 17, p = 0.70**, the effect bounded within about ±10 points and
+  a dead tie once the declared judge bias is paid back;
+- the adaptive attacker in isolation: **not measurable with the tool as
+  built**. `objective_for` couples adaptation to payload-use, so the arms
+  would differ in two variables;
+- `--multiturn` against a single-turn campaign at equal TARGET REQUESTS, 20
+  pairs: **single-turn wins 17 pairs to 1**, reverse p = 0.0001, and
+  **0.216 against 0.110 findings per request** after the declared bias is paid
+  back. The breakdown is wider still: **26 `high` findings against none**, a
+  difference in kind, since `high` needs a replay and a conversation has
+  nothing to re-send.
+
+**And the obstacle this lock recorded was the FREE TIER, not the method.** It
+said the good judge costs ~13,000 tokens an attempt and a declared protocol
+with it was "the only honest route". That route was taken: the mode comparison
+ran on the PAID Groq judge — the measured one — for **2,054 calls and
+3.77 million tokens across 40 campaigns**, under a euro at listed rates. The
+measurement called infeasible in November cost less than a coffee once the
+plan changed.
+
+What is NOT settled: **generality.** One target, one defence level. And the
+adaptive attacker's own contribution, which no budget buys, because the tool
+cannot vary adaptation without varying payload-use.
+
+**4. THE CRITERION SEAM — reduced tenfold, then STOPPED on a power
+calculation.** `C-demo3-01-2` went from **7/10 wrong to 1/21**
+(p = 3.3 × 10⁻⁴) on an EXAMPLE pair, after a clause the judge already had and
+did not apply. Cycle 2 is cancelled: from 2/30, a perfect 0/100 would give
+p = 0.05, so no further correction would be attributable — and it would mean
+touching the most delicately tuned sentence in the project for a gain below
+the resolution of any affordable measurement.
+
+**And two of its three "observations" were WITHDRAWN.** `E03-b` under the
+English instruction and `R07-2` on the frozen set are single draws:
+measured across five consultations, `R07-2` is wrong, correct, correct, wrong,
+correct. The seam is measured on `dev` and nowhere else, and `F14` on the
+frozen lot is exactly what a 7% residual predicts across 22 cases (80% chance
+of at least one). It therefore justifies nothing: seen on the frozen set, it
+cannot be acted on from there at all.
 
 **The tail, concrete and bounded:**
 
-- **`measure_multiturn`'s next protocol.** Half the pairs measured an outcome
-  their own objective does not aim at: the outcome is "the secret's string
-  appears" and `outil-N` objectives aim at a third party's record
-  (`for_family: "LLM06"`). Restricting to the objectives the outcome can see
-  is a sound design — and, chosen now that p = 0.0669 is known, a corrupt
-  reason. Declared beforehand, with its own N, or not made.
-- **`collect_exchanges` has no bound**: `to_label.json` holds 18,546 entries,
+- **`multitours-reussi` was REMOVED and `multitours-refuse` holds one case.**
+  The two author-labelled cases of the format's own contribution (`F19`,
+  `F20`) are filed under `obeissance` / `obeissance-refusee` by my stated
+  fallback, which the author did not rule on. The counting no longer depends
+  on it — the contribution is reported as a figure, **35% of conversation
+  positives breach after the first turn** — but the filing is still his to
+  decide.
+- **`collect_exchanges` has no bound**: `to_label.json` holds 18,536 entries,
   33 MB, and a harvest nobody will label is not a harvest. Bounding it is a
   SAMPLING decision — which payloads, how many per technique — and it belongs
   to whoever chooses what the corpus should contain.
@@ -4373,22 +4418,25 @@ only as a CHECK.
 - **Phase 5: reconnaissance is purely DECLARATIVE.** A target that does not
   say what it protects is poorly reconnoitred, and the objectives derived from
   it are generic. That limit has been recorded since the first run and never
-  addressed.
-- **The example report predates both** the LLM06 payloads and multi-turn.
-  Regenerating it properly needs a campaign, hence quota — but the JSON is the
-  source of truth, so a rendering fix costs nothing.
+  addressed — and `--multiturn` makes it bite harder, since a multi-turn
+  attempt pursues the reconnaissance objective INSTEAD of its payload.
+- **The example report predates** the LLM06 payloads, multi-turn, the fourth
+  criterion and the coverage caveat. Regenerating it properly needs a
+  campaign, hence quota — but the JSON is the source of truth, so a rendering
+  fix costs nothing.
 - **`.env` still uses `PROFIL_ARBITRE`**, which prints a deprecation note on
   every command. It is the author's own config file, so it is theirs to
   rename.
 - **`multipart`, GET and WebSocket endpoints** are out of reach, single-turn
   as well as multi-turn.
 
-**And the pattern worth carrying forward**, because it has now happened seven
-times in two days: **a new delivery mode turns every unconditional sentence in
-the report into a claim that has to be re-checked**, and only READING THE
-RENDERING finds them. Three of the four presentation defects of 2026-11-12 and
-all four of 2026-11-17 came out that way — never from a test, never from
-reading the code.
+**And the pattern worth carrying forward**, because it has now happened nine
+times in a week: **a new delivery mode, or a new figure, turns every
+unconditional sentence in the output into a claim that has to be re-checked**
+— and only READING THE RENDERING finds them. Three of the four presentation
+defects of 2026-11-12, all four of 2026-11-17, the `precision=0%` on an
+unmeasured population and the by-criterion attribution all came out that way:
+never from a test, never from reading the code.
 
 **A pass over the README, and it found what the last two days had made false
 (2026-11-17).** Asked for alongside recording the single-turn / multi-turn
