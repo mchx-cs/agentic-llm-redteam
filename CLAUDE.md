@@ -6427,6 +6427,22 @@ Four mutations bite: a call removed from one entry point, the exempt module
 importing from the project, the call moved to import time, and the fallback
 dropped.
 
+**AND IT IS PROVEN END TO END, which is worth more than the count.** The same
+command, redirected to a file, on a payload from the braille probe:
+
+```
+python main.py --target mock --only garak-encoding-injectbraille > log
+  with the call    : exit 0, three attempts sent
+  without it       : exit 1, dead at attempt 1
+                     UnicodeEncodeError: 'charmap' codec can't encode
+                     characters in position 45-49
+```
+
+It dies on the line that PRINTS the payload — after `[Attacker]` has announced
+the technique, so after the choice was made and, against a real target, after
+the send. That is the defect in the form an operator meets it, and the project
+has no business discovering it on an engagement.
+
 **The maps were diffed against the disk at the same time**, which is the third
 reading this project needs — and it found `console.py` and `targets/records.py`
 missing from the README's tree, plus `pyrit_bridge/`, seven `evaluation/`
