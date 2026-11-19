@@ -59,7 +59,7 @@ from pyrit_bridge.convert import (ATTACK_NAMES as MULTITURN_ATTACKS,
 
 def run_campaign(ask_target=None, target_name=None, trail=None,
                  context=(), adaptive=True, only=(), excluding=(),
-                 multiturn=None, max_turns=None):
+                 multiturn=None, max_turns=None, attempts=None):
     """
     Runs a campaign against `ask_target`.
 
@@ -100,7 +100,12 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
 
     # --- 2. Planning: what to launch, and in what order? -------------------
     print("\n--- Plan ---")
-    plan = plan_campaign(profile, MAX_ATTEMPTS, only, excluding)
+    # The operator's budget when they state one, the module's otherwise.
+    # Read into a local name so the loop, the plan and every message agree:
+    # a plan built for one budget and a loop running another would announce a
+    # coverage it never attempted.
+    budget = attempts or MAX_ATTEMPTS
+    plan = plan_campaign(profile, budget, only, excluding)
     print(summarise_plan(plan))
 
     if not plan["attempts"]:
@@ -140,13 +145,13 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
         from pyrit_bridge.campaign import attack as multiturn_attack
         findings, launched, states, observations, cut_short = multiturn_attack(
             plan, ask_target, target_name=target_name, profile=profile,
-            trail=trail, adaptive=adaptive, attempts=MAX_ATTEMPTS,
+            trail=trail, adaptive=adaptive, attempts=budget,
             max_turns=max_turns or MULTITURN_TURNS, attack_name=multiturn)
         return _finish(_campaign_result(
             profile, plan, findings, launched, states, observations,
             cut_short, adaptive, only, excluding, multiturn=multiturn))
 
-    for number in range(1, MAX_ATTEMPTS + 1):
+    for number in range(1, budget + 1):
         # `adaptive=False` replays the static plan: same pool, same priority
         # order, but learning nothing from the replies. That is the CONTROL
         # the gain measurement needs — without it, adaptation can only be
@@ -158,7 +163,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             break
         launched.append(payload)
 
-        print(f"--- Attempt {number}/{MAX_ATTEMPTS} ---")
+        print(f"--- Attempt {number}/{budget} ---")
         print(f"  [Attacker] {payload['technique']} / "
               f"{payload['objective'] or 'complete payload'} "
               f"/ {payload['transformation']}")
@@ -246,7 +251,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             cut_short = str(stop)
             print(f"\n>>> {stop}")
             print(f">>> Campaign CUT SHORT at attempt {number} of "
-                  f"{MAX_ATTEMPTS}.")
+                  f"{budget}.")
             break
 
         print("  >>> Finding recorded.\n")
@@ -416,6 +421,17 @@ def cli(arguments=None):
              f"Each turn carries the whole history forward, so this "
              f"multiplies the cost of an attempt.")
     parser.add_argument(
+        "--attempts", "--tentatives", type=int, default=None, metavar="N",
+        help=f"attempts in the campaign, instead of {MAX_ATTEMPTS}. The one "
+             f"configuration that can BOUND a \"no finding\" needs a large "
+             f"N: `--only <technique> --no-adaptation --attempts 30` makes "
+             f"the attempts independent, and 0 successes in 30 then rules out "
+             # `%` doubled: argparse formats this string, so a lone percent sign
+             # makes `add_argument` itself raise.
+             f"a residual rate above 10%%. At 3 attempts the rule of three "
+             f"bounds nothing at all. Costs one target request per attempt, "
+             f"plus the judge.")
+    parser.add_argument(
         "--no-adaptation", "--sans-adaptation", action="store_true",
         dest="no_adaptation",
         help="follow the static plan, learning nothing from the replies. "
@@ -547,7 +563,8 @@ def cli(arguments=None):
             only=scope_patterns(arguments.only),
             excluding=scope_patterns(arguments.excluding),
             multiturn=arguments.multiturn,
-            max_turns=arguments.max_turns)
+            max_turns=arguments.max_turns,
+            attempts=arguments.attempts)
     except RuntimeError as failure:
         # The target did not answer as expected: unreachable host, HTTP
         # error, non-JSON reply, wrong response path. `targets/http.py`'s
