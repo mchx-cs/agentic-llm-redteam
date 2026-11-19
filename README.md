@@ -161,7 +161,8 @@ and coverage that states what was never attempted.
 │   ├── resume.py                    # resumes an interrupted evaluation, never repeats a finished one
 │   └── label.py                     # hand-labelling, one question at a time
 ├── examples/
-│   └── demo-report.md   # a committed example report, abridged, rendered by GitHub
+│   ├── demo-report.md   # a committed example report, abridged, rendered by GitHub
+│   └── demo-multiturn-report.md  # the same target, attacked over several turns
 ├── audit.py             # authorisation gate + append-as-you-go JSONL audit trail
 ├── stats.py             # what a result bounds — and the refusal to bound dependent trials
 ├── migration.py         # reads data written before the names were translated
@@ -516,6 +517,25 @@ campaign wins 17 pairs to 1. It even wins per request after paying back the bias
 declared in its own disfavour — it spends replay requests the other arm does not,
 57% more in all, and still finds 0.216 per request against 0.110. One target at one
 defence level, so not the last word; but the direction is measured, not reasoned.
+
+**Both modes have a committed report against the same target** — single-turn
+[here](examples/demo-report.md), multi-turn [here](examples/demo-multiturn-report.md) —
+so the rows above can be read instead of taken on trust:
+
+|  | single-turn | multi-turn |
+|---|---|---|
+| findings | 2 `high`, both replay-confirmed | 1 `medium`, no replay possible |
+| attack success rate | 67% (2 of 3) | 33% (1 of 3) |
+| spent | 31 calls, 50,309 tokens | 50 calls, 90,981 tokens |
+| evidence shown | the payload, and the reply | **every turn, numbered**, with the turn the judge puts the breach on |
+| its Coverage section declares | 3 limitations | **5** — the payloads were not sent as written, no replay corroborates anything, and all 3 attempts aimed at a reconnaissance objective rather than at the family they carry |
+
+The last two rows are the ones worth opening the file for. A multi-turn report
+cannot say *payload sent*, because the library's technique only chose the aim and the
+attacker model chose the words — so it says **objective pursued** and prints the
+conversation instead. And its coverage warns that the family stamped on an attempt
+belongs to a payload that was never sent, which is a caveat a single-turn report has
+no need of.
 
 ### Target wiring: reference
 
