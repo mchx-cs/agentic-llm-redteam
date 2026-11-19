@@ -26,7 +26,8 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > interchangeable and the trade-off is stated in
 > [Single-turn or multi-turn](#single-turn-or-multi-turn).
 > What is missing is the judge's reach: four criteria cover four OWASP families, so six
-> of the ten stay out of reach, and whether multi-turn finds MORE is not yet measured.
+> of the ten stay out of reach. And multi-turn has now been measured against
+> single-turn, at equal requests to the target: it finds LESS, 17 pairs to 1.
 > The fourth criterion added depth, not breadth — a third party's data with no tool
 > involved is still LLM02.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
@@ -54,7 +55,9 @@ A set of specialised agents, each owning one phase. The planner selects and orde
 attempts; a fixed budget bounds every campaign. Each next attempt is now *chosen* from
 the planner's full pool according to what the target has already replied — deterministic
 rules, not a model (phase 3a). Having the attacker *rewrite* the next turn from that
-reply, with conversation history, is phase 3b and is not implemented.
+reply, with conversation history, is phase 3b: `--multiturn` does it, through PyRIT,
+and at equal requests to the target it finds **less** than the single-turn
+campaign — measured, see *Single-turn or multi-turn*.
 
 ```mermaid
 flowchart TD
@@ -454,6 +457,7 @@ python main.py --target demo --multiturn crescendo --max-turns 4
 | cost per attempt | ~4,000 tokens | ~18,000, and quadratic in the turn count |
 | statistical bounds (`pass@k`) | **affordable** | out of reach |
 | what a *no finding* is worth | weaker | **stronger** |
+| findings at equal target requests (measured) | **0.216 per request, 26 `high`** | 0.110 per request, no `high` |
 | dependencies | **none** | PyRIT, Python ≥ 3.11 |
 
 The first row is the one that decides most engagements. `high` severity is reachable
@@ -461,15 +465,22 @@ only through replay — re-sending *one* payload to tell a real secret from one 
 invented — and a conversation has no single payload to re-send. So a multi-turn
 disclosure is graded `medium`, uncorroborated, and the report says why.
 
-The last row but one runs the other way, and the OWASP manual is explicit about it: zero
+The *no finding* row runs the other way, and the OWASP manual is explicit about it: zero
 successes against a *static list* is substantially weaker assurance than zero successes
 against an attacker that rewords. A clean single-turn run proves less than a clean
 multi-turn one.
 
 So: single-turn to reach anything, to bound a result, and to corroborate a leak;
 multi-turn when the target is a conversational endpoint, the extra is installed, and you
-accept losing replay. Whether multi-turn actually finds *more* is **not measured** — see
-the roadmap.
+accept losing replay.
+
+**And whether multi-turn finds *more* is now measured — it does not.** Twenty pairs
+against the bundled target, both arms given the same number of requests to the target,
+judged by the measured judge, protocol committed before the run: the single-turn
+campaign wins 17 pairs to 1. It even wins per request after paying back the bias
+declared in its own disfavour — it spends replay requests the other arm does not,
+57% more in all, and still finds 0.216 per request against 0.110. One target at one
+defence level, so not the last word; but the direction is measured, not reasoned.
 
 ### Target wiring: reference
 
@@ -878,7 +889,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
-| **3b** | Adaptive multi-turn attacker — [PyRIT](https://github.com/microsoft/PyRIT) drives the attack stage | **Done** — `--multiturn`, attacker model and judge inside our own points of passage. Reservation: **the gain is not measured** |
+| **3b** | Adaptive multi-turn attacker — [PyRIT](https://github.com/microsoft/PyRIT) drives the attack stage | **Done** — `--multiturn`, attacker model and judge inside our own points of passage. **The gain is now measured, negatively**: at equal target requests a single-turn campaign finds more, 17 pairs to 1, and 26 `high` findings against none |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | **Done** |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
@@ -913,18 +924,26 @@ mandate guard, the audit trail, the budget ceiling and the report unchanged arou
 — against the bundled targets, and against a real endpoint whose body template is a
 list of turns (`--probe-target` says whether it is).
 
-**PyRIT is integrated as an extra, and the gain it would amplify is still not
-demonstrated** — both halves matter. `--multiturn` runs it; what it finds has not
-been measured against a judge worth trusting. On the evidence so far: the simplest multi-turn form — two turns carrying the same
-ingredients as one composed message — has been measured three times against the
-bundled target and has never reached significance (p = 0.067 on the soundest run of
-68 pairs, the direction favourable each time, spread over 13 techniques). And PyRIT
+**PyRIT is integrated as an extra, and the gain it would amplify has now been
+measured — it is not there.** Both halves matter. `--multiturn` runs; and judged by
+the measured judge, at equal requests to the target, a single-turn campaign finds
+more (17 pairs to 1, and 26 `high` findings against none). The simplest multi-turn form — two turns carrying the same
+ingredients as one composed message — has been measured four times against the
+bundled target and has never reached significance. The first three looked for the
+secret's exact string and leaned favourably (p = 0.067 on the soundest, 68 pairs);
+the fourth widened the outcome to anything the judge scores, over 102 pairs, and
+the lean **disappeared** — 15 against 17, p = 0.70, the effect bounded within about
+±10 points. And PyRIT
 1.2.1 requires Python 3.11, where this project supports 3.10 and tests it in CI — which
 is why it is an **extra**, not a dependency: `pip install -r requirements.txt` is still one
 package, and multi-turn is simply unavailable on 3.10. The full reasoning, including why
 an adaptive attacker is *structurally* harder to measure than a sequenced one — it must
 read a verdict to adapt, so the judge is back in the loop and the measurement stops
-being free — is in `CLAUDE.md`.
+being free — is in `CLAUDE.md`. That cost turned out to be the free tier rather than
+the method: the mode comparison put the measured judge in the loop for 40 campaigns
+and 3.8 million tokens, which is under a euro at listed rates. What remains out of
+reach is isolating adaptation itself, because the tool cannot vary it without also
+varying whether a payload is sent at all.
 
 ## Stack
 

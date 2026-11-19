@@ -195,7 +195,7 @@ trails and the 91 commits.
 | 1 | A library of real prompt injection payloads | **Done** (via garak + 15 by hand) |
 | 2 | Judge reliability: measure and reduce false positives / negatives | In progress |
 | 3a | **Reorder the plan from the target's reply** (deterministic, extends phase 5) | **Done** |
-| 3b | Adaptive multi-turn attacker: evaluate PyRIT as a replacement for the hand-built orchestrator | **Done** — `--multiturn` runs a PyRIT conversation as the attack stage, attacker model and judge inside our own points of passage, with the trail, the budget and the report around it. Reservation: **the gain is not measured** — no multi-turn campaign has been judged by a judge worth trusting |
+| 3b | Adaptive multi-turn attacker: evaluate PyRIT as a replacement for the hand-built orchestrator | **Done** — `--multiturn` runs a PyRIT conversation as the attack stage, attacker model and judge inside our own points of passage, with the trail, the budget and the report around it. **And the gain is now MEASURED, negatively** (2026-11-19, paid judge, protocol committed first): at equal TARGET REQUESTS a single-turn campaign finds more, 17 pairs to 1, and **26 `high` findings against none** — a conversation has no single payload to replay. One target, one defence level |
 | 4 | Decouple the judge from the target model | **Done** |
 | 5 | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | 6 | Reporting: JSON as the source of truth, Markdown rendering by default | **Done** |
@@ -6500,6 +6500,55 @@ the target written for verrou 1's first step, so it is the same defect as
 absent from the repository's own map. Both maps now re-diff clean.
 
 1,208 `pytest` tests, still with no LLM call at all.
+
+**SIX PASSAGES SAID THE OPPOSITE OF THE MEASUREMENT, within hours of it
+(2026-11-19).** The mode comparison answered a question both documents
+described as open, so every sentence calling it open became false at once —
+and two of them are in the first screen a visitor reads.
+
+| where | said | now |
+|---|---|---|
+| README, Architecture | phase 3b "is not implemented" | `--multiturn` does it, and finds less |
+| README, status header | "whether multi-turn finds MORE is not yet measured" | measured: it finds LESS, 17 to 1 |
+| README, trade-off table | six reasoned rows, **no measured one** | a measured row: 0.216 against 0.110 per request, 26 `high` against none |
+| README, that section's close | "is **not measured** — see the roadmap" | the figures, with the bias paid back |
+| README, PyRIT's standing | "has not been measured against a judge worth trusting" | it has, and the gain is not there |
+| both roadmaps, 3b | "Reservation: the gain is not measured" | measured, negatively |
+
+**And one was worse than stale: it stated the opposite of the newest
+figure.** The README said the sequenced form had been measured "three times
+… the direction favourable each time". The fourth measurement — the judged
+one, over 102 pairs, and the SOUNDEST of the four — reversed: 15 against 17,
+p = 0.70. A sentence that was a fair summary on Tuesday became a claim
+contradicted by the project's own best run.
+
+**The boundary kept, deliberately: dated LOG entries were NOT rewritten.**
+"What is still NOT done" inside an entry of 2026-11-17 is true of that date,
+and editing it would turn a log into a summary — the same reason the 91 French
+commits and the 18 sealed trails stay as they are. What gets corrected is what
+asserts the state NOW and carries no date: the two roadmap rows, the status
+header, the Architecture paragraph and the trade-off section. A reader takes
+those as current because nothing tells them otherwise.
+
+**INSERTING A TABLE ROW BROKE A SENTENCE THAT POINTED AT A ROW BY POSITION.**
+"The last row but one runs the other way" referred to *what a no finding is
+worth*; adding the measured row below it made that sentence point at the new
+row, which runs the same way as everything else. It now names the row instead.
+
+No test could see it, and no reading of the code either: the claim is true of
+the document's SHAPE, and I changed the shape. It is the ninth presentation
+defect this project has found only by reading the rendering — and the first
+where **my own correction** manufactured one.
+
+**A cost claim corrected too, and it is the useful one.** Both documents said
+an adaptive attacker is structurally harder to measure because the judge goes
+back in the loop and "the measurement stops being free". True of the
+mechanism; **false as an obstacle.** The mode comparison put the measured
+judge in the loop for 40 campaigns, 2,054 calls and 3.77 million tokens —
+under a euro at listed rates. What was infeasible was infeasible on the FREE
+TIER, which is a fact about the plan and not about the method, and the
+documents now say which. What stays out of reach is isolating adaptation
+itself, for a reason no budget touches.
 
 ## Legal framing
 
