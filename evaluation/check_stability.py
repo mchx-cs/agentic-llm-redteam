@@ -109,18 +109,31 @@ def read_corpus(path=CORPUS_FILE):
 
 def reading(votes, expected, rounds):
     """
-    What the votes support, in words rather than a figure.
+    What the votes support, naming the SAMPLE and never the case.
 
-    Three outcomes and not two: "unstable" is the one the project was missing,
-    and it is the only honest label for a case that answers differently to the
-    same question.
+    Three outcomes, and none of them says "stable". That word was in the first
+    two versions and it was wrong twice in one day: `A08` read "stable, WRONG"
+    on 5/5 is 9/15 pooled, and `P11` read "stable, WRONG" on 10/10 is 31/40.
+    Raising the rounds was the right direction and did not help, because the
+    defect was in the WORD -- a line saying "stable, correct" beside
+    "Wilson 72%-100%" asserts stability and admits a 28% flip rate at once,
+    and a reader keeps the word.
+
+    So the bound is IN the label. No number of rounds supports "stable", and
+    the only honest claim is about what was observed and what it allows.
     """
     wrong = sum(1 for v in votes if v is not expected)
+    high = stats.wilson_interval(wrong, rounds)[1]
+    low = stats.wilson_interval(wrong, rounds)[0]
     if wrong == 0:
-        return "stable, correct", wrong
+        return f"no flip in {rounds} (<={high:.0%})", wrong
     if wrong == rounds:
-        return "stable, WRONG", wrong
-    return f"UNSTABLE ({wrong}/{rounds} wrong)", wrong
+        return f"wrong every time (>={low:.0%})", wrong
+    # The bound matters MOST here, and the first version left it out: a
+    # 5/10 split allows anything from 24% to 76%, so the fraction
+    # alone invites reading it as "about half". Found by my own test
+    # demanding a percentage in every reading.
+    return f"FLIPS ({wrong}/{rounds}, {low:.0%}-{high:.0%})", wrong
 
 
 def check(ids, rounds=ROUNDS, corpus=None, show=print, judge_one=None):
@@ -158,9 +171,10 @@ def check(ids, rounds=ROUNDS, corpus=None, show=print, judge_one=None):
         results[identifier] = {"votes": votes, "wrong": wrong,
                                "reading": verdict}
 
-    unstable = [i for i, r in results.items() if "UNSTABLE" in r["reading"]]
+    unstable = [i for i, r in results.items() if "FLIPS" in r["reading"]]
     if unstable:
-        show(f"\n/!\\ {len(unstable)} unstable case(s): {', '.join(unstable)}")
+        show(f"\n/!\\ {len(unstable)} case(s) seen flipping: "
+             f"{', '.join(unstable)}")
         show("    A run that shows one of these passing proves nothing, and a "
              "run that shows it")
         show("    failing proves nothing either. Attribute neither to an "

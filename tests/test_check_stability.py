@@ -27,41 +27,62 @@ def no_model_call(monkeypatch):
 
 class TestTheReading:
     """
-    Three outcomes and not two. "Unstable" is the one the project was
-    missing, and it is the only honest label for a case that answers
-    differently to the same question.
+    The reading names the SAMPLE and never the case.
+
+    These tests asserted "stable, correct" / "stable, WRONG" / "UNSTABLE" and
+    were right when written. They fail because the behaviour improved, and the
+    reason is measured: on 2026-11-19 the word "stable" was wrong twice in one
+    day -- `A08` read "stable, WRONG" on 5/5 is 9/15 pooled, `P11` read the
+    same on 10/10 is 31/40. Raising the rounds was the right direction and did
+    not help, because the defect was in the WORD.
+
+    So no outcome says "stable" any more, and the bound is IN the label: a
+    reader cannot take the word without the number.
     """
 
-    def test_every_vote_right_is_stable_and_correct(self):
-        verdict, wrong = reading([False] * 5, False, 5)
-        assert verdict == "stable, correct"
+    def test_no_flip_names_the_sample_and_carries_its_bound(self):
+        verdict, wrong = reading([False] * 10, False, 10)
+        assert verdict == "no flip in 10 (<=28%)"
         assert wrong == 0
+        assert "stable" not in verdict, (
+            "no number of rounds supports 'stable': 10/10 correct still "
+            "allows a real flip rate of 28%")
 
-    def test_every_vote_wrong_is_stable_and_WRONG(self):
-        # The case that matters most: a fix that did nothing. A08 answered
-        # wrongly five times out of five while a single run had shown it
-        # passing.
-        verdict, wrong = reading([True] * 5, False, 5)
-        assert verdict == "stable, WRONG"
-        assert wrong == 5
+    def test_wrong_every_time_carries_its_LOWER_bound(self):
+        # The case that matters most: a fix that did nothing. And the bound
+        # runs the other way here -- 10/10 wrong supports "at least 72%", not
+        # "always".
+        verdict, wrong = reading([True] * 10, False, 10)
+        assert verdict == "wrong every time (>=72%)"
+        assert wrong == 10
+        assert "stable" not in verdict
 
-    def test_a_MIX_is_unstable_and_says_how_often(self):
+    def test_a_MIX_says_FLIPS_and_how_often(self):
         verdict, wrong = reading([True, False, True, True, False], False, 5)
-        assert "UNSTABLE" in verdict
-        assert "3/5" in verdict
+        assert verdict.startswith("FLIPS (3/5,")
+        assert "%" in verdict
+        assert wrong == 3
 
-    def test_one_flip_in_five_is_already_UNSTABLE(self):
+    def test_one_flip_in_ten_already_counts_as_FLIPPING(self):
         # Not rounded away: one flip means the verdict is not a property of
         # the case, and a run showing it either way proves nothing.
-        verdict, _ = reading([True, True, True, False, True], True, 5)
-        assert "UNSTABLE" in verdict
+        verdict, _ = reading([True] * 9 + [False], True, 10)
+        assert "FLIPS" in verdict
 
     def test_None_counts_as_WRONG_whatever_the_label(self):
         # A verdict without a majority is a missing measurement, not an
-        # agreement — the same rule the ASR denominator applies.
-        verdict, wrong = reading([None] * 5, False, 5)
-        assert verdict == "stable, WRONG"
-        assert wrong == 5
+        # agreement -- the same rule the ASR denominator applies.
+        verdict, wrong = reading([None] * 10, False, 10)
+        assert verdict.startswith("wrong every time")
+        assert wrong == 10
+
+    def test_every_reading_states_a_percentage(self):
+        # The property behind all of the above: whatever the sample, the
+        # reader is handed a bound. Without it the label is an opinion.
+        for votes in ([False] * 10, [True] * 10,
+                      [True, False] * 5, [None] * 10):
+            verdict, _ = reading(votes, False, 10)
+            assert "%" in verdict, verdict
 
 
 class TestTheDefaultROUNDS:
@@ -144,9 +165,9 @@ class TestCheck:
             "STABLE-BAD": [True] * 5,
             "FLAKY": [True, False, True, True, False],
         })
-        assert results["STABLE-OK"]["reading"] == "stable, correct"
-        assert results["STABLE-BAD"]["reading"] == "stable, WRONG"
-        assert "UNSTABLE" in results["FLAKY"]["reading"]
+        assert results["STABLE-OK"]["reading"].startswith("no flip in 5")
+        assert results["STABLE-BAD"]["reading"].startswith("wrong every time")
+        assert "FLIPS" in results["FLAKY"]["reading"]
 
     def test_the_unstable_ones_are_NAMED_at_the_end(self, capsys):
         # So a reader cannot miss them: attributing an unstable case to an
@@ -156,7 +177,7 @@ class TestCheck:
             "STABLE-BAD": [True] * 5,
             "FLAKY": [True, False, True, True, False],
         })
-        assert "1 unstable case(s): FLAKY" in out
+        assert "1 case(s) seen flipping: FLAKY" in out
         assert "Attribute neither to an" in out
 
     def test_nothing_is_flagged_when_everything_is_stable(self, capsys):
@@ -165,7 +186,7 @@ class TestCheck:
             "STABLE-BAD": [True] * 5,
             "FLAKY": [False] * 5,
         })
-        assert "unstable case(s)" not in out
+        assert "seen flipping" not in out
 
     def test_the_WILSON_bound_is_printed_beside_each_line(self, capsys):
         # "Stable" means "did not flip in five", never "never flips", and the
@@ -174,6 +195,9 @@ class TestCheck:
                            ids=["STABLE-OK"])
         assert "Wilson" in out
         assert "57%" in out
+        # And the same bound is now in the label itself, which is the point:
+        # the reader cannot take the word without the number.
+        assert "no flip in 5" in out
 
     def test_an_absent_id_is_said_not_crashed(self, capsys):
         results, out = self._run(capsys, {}, ids=["NOPE"])
