@@ -124,6 +124,7 @@ report.py          # result.json (truth) → report.md (rendering), severity by 
 migration.py       # reads data written before the names were translated
 console.py         # output in UTF-8: a redirected campaign must survive its payloads
 check_rename_damage.py # what the switch to English may have broken
+check_excerpt.py   # the README's campaign excerpt against the run's real output
 examples/
   demo-report.md   # a committed example report, abridged (--abridge)
 main.py            # orchestrator: the campaign loop with its attempt budget
@@ -4420,10 +4421,13 @@ cannot be acted on from there at all.
   it are generic. That limit has been recorded since the first run and never
   addressed — and `--multiturn` makes it bite harder, since a multi-turn
   attempt pursues the reconnaissance objective INSTEAD of its payload.
-- **The example report predates** the LLM06 payloads, multi-turn, the fourth
-  criterion and the coverage caveat. Regenerating it properly needs a
-  campaign, hence quota — but the JSON is the source of truth, so a rendering
-  fix costs nothing.
+- **The example report is CURRENT** (regenerated 2026-11-19, two `high`
+  findings, replay-confirmed) and so is the README excerpt beside it, from the
+  same campaign. What neither shows is a MULTI-TURN campaign: the per-turn
+  evidence, the conditional limitations and the coverage caveat have no
+  committed artefact, and `--multiturn` is the one delivery mode whose
+  rendering nobody can read without running it. That costs a campaign and
+  PyRIT, not quota.
 - **`.env` still uses `PROFIL_ARBITRE`**, which prints a deprecation note on
   every command. It is the author's own config file, so it is theirs to
   rename.
@@ -6549,6 +6553,106 @@ under a euro at listed rates. What was infeasible was infeasible on the FREE
 TIER, which is a fact about the plan and not about the method, and the
 documents now say which. What stays out of reach is isolating adaptation
 itself, for a reason no budget touches.
+
+**THE SHOWCASE IS REGENERATED, and the new campaign is strictly better
+evidence (2026-11-19).** The committed example dated from 2026-11-15 and was
+rendered by an instruction with three criteria, before the coverage caveat and
+before `--multiturn` existed. One campaign against `demo`, judged by the
+measured judge, 31 calls and 50,309 tokens:
+
+| | committed before | now |
+|---|---|---|
+| findings | 2 **medium** | **2 `high`** |
+| criterion | `abus_outils` | `divulgation` (LLM07) |
+| replay | none shown | **confirmed on both**, 1/3 and 3/3 |
+| severity's grounds | a tool result, unprovable | a value that COMES BACK |
+
+**It is the first committed report to show a `high` finding**, and that is not
+a cosmetic gain: `high` is reachable only through
+`("divulgation", "confirmed")`, so the repository was claiming in its
+trade-off table a grade of evidence no committed artefact demonstrated. Now
+both findings carry a replay with its **Wilson interval** — 6%–79% on the
+value that came back once in three, 44%–100% on the one that came back three
+times — and the words *over 3 replays only* beside each. "1 of 3" reads as
+33%; three trials support anything from 6% to 79%. That gap IS the
+probabilistic nature of these attacks, printed instead of asserted.
+
+The run also traces the signal this project measured as its weakest. The
+target refused the first attempt while NAMING what it protects, so
+`secret_evoque` fired (−2) and the disclosure attempts moved up — and the
+third attempt shows three reasons netting to −3. On 2026-11-11 that signal
+was kept only "for that synergy, in the knowledge that it is the fragile
+signal"; here it is what put the campaign on the technique that worked.
+
+**THE TWO SHOWCASE PIECES ARE ONE CAMPAIGN, which is why this is one
+commit.** The README excerpt and the committed report come from the same run
+— the README says the report was "produced by that exact command" — so
+regenerating one alone would have left the showcase describing two different
+runs while claiming they were the same.
+
+**The trail was MOVED, never altered, and the seal was verified AFTER the
+move.** The campaign wrote into a scratchpad, so its chain-of-custody section
+named an absolute temp path, which has no business in a public repository. The
+seal hashes the trail's raw BYTES, so moving the file cannot affect it — and
+`verify_seal` was called on the moved file to SAY so rather than to assume it,
+then the seal recorded in the result was checked against the one the trail
+itself carries, because linking the two documents is that section's only
+function. Same discipline as the carry-over of 2026-11-12: a seal invented or
+left unchecked in a showcase report would be exactly the forgery a seal exists
+to prevent. The Markdown was then re-rendered from the result — the JSON is
+the source of truth.
+
+**AND RE-CUTTING THE EXCERPT CAUGHT TWO ALTERATIONS OF MINE.** An excerpt is
+EVIDENCE, and the only acceptable difference between it and the tool's output
+is a marked cut. Checked fragment by fragment against the run's own log, two
+of mine were not:
+
+- **the plan's skipped reasons came out in a different ORDER** than the tool
+  printed them — inherited from the old excerpt, whose order I copied without
+  checking it against anything;
+- **two of the judge's curly apostrophes had become straight ones** —
+  `refuse d’appeler` written `refuse d'appeler`. One character, invisible on
+  the page, and the sentence stops being what the judge wrote.
+
+Plus two omissions with no `[…]` to mark them. All four corrected, and the
+excerpt now matches the log in 12 fragments with nothing unmarked.
+
+**Hence `check_excerpt.py`, and it is a COMMAND rather than a test.** A test
+would need the log committed, and the log holds the complete payloads and the
+target's complete replies — which is exactly what `--abridge` exists to keep
+out of a public repository. So the check needs a file the repository
+deliberately does not keep, and it runs by hand, like `check_rename_damage.py`.
+
+Its method is the one that makes it unfoolable: **whitespace is OURS** (the
+wrapping, the column alignment) **and the words are the TOOL's**, so both
+sides are squashed to a whitespace-free string, the excerpt is split on `[…]`,
+and every remaining fragment must appear in the log. A reordering, a changed
+character and an unmarked omission all fail; any amount of re-wrapping
+passes. Three mutations bite — keeping whitespace, comparing line by line, and
+normalising apostrophes.
+
+**Two defects in my own additions, both found by the tests:**
+- the divergence locator anchored on a fragment's first 25 characters, so it
+  failed **precisely when the divergence was inside them** — a changed
+  apostrophe three words in, the real case — and then reported "nothing close
+  in the log at all" about a fragment that matched almost entirely. It takes
+  the longest matching prefix now;
+- the usage message printed `__doc__.split("\n\n")[2]`, a paragraph by
+  POSITION, so it printed the wrong paragraph. An instruction has to say what
+  to run.
+- and the test for the changed character **jumped from `[Judge]` to `refuse`**,
+  so it carried an unmarked omission too — it still passed with the
+  apostrophes deliberately normalised, which means it was testing the omission
+  and not the character. It now quotes the line in full and asserts the
+  faithful twin passes. A test is only worth what it COMPARES, for the sixth
+  time in this file.
+
+A stale claim corrected along the way: the tail said the example report
+"predates the LLM06 payloads". It did not — it was regenerated on 2026-11-15,
+three days after those payloads landed, and its two findings were `abus-outils`
+ones. The claim was true on 2026-11-12 and was carried forward unchecked.
+
+1,222 `pytest` tests, still with no LLM call at all.
 
 ## Legal framing
 
