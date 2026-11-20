@@ -1150,15 +1150,37 @@ def _suggest(url, headers, body, timeout, show, transport=JSON_POST):
         show(f"  TARGET_RESPONSE_PATH={path}")
         show(f"      → {extrait!r}")
 
-    # Si AUCUN texte reçu ne reprend ce qu'on a envoyé, c'est que la cible ne
-    # l'a pas vu : le corps est faux lui aussi, et corriger le seul path ne
-    # suffira pas. Sans cet indice, on lirait « choices.0.message.content »
-    # comme la solution, on relancerait, et la cible répondrait toujours à
-    # côté — en consommant du débit à chaque essai.
+    # L'INDICE QUE LE CORPS EST FAUX LUI AUSSI, et il est AMBIGU -- ce qui
+    # n'était pas dit, et c'était le défaut.
+    #
+    # L'intention était bonne : si la cible n'a jamais reçu le message,
+    # corriger le seul chemin ne suffira pas, on relancerait, et la cible
+    # répondrait toujours à côté en consommant du débit à chaque essai.
+    #
+    # Mais la version d'origine AFFIRMAIT « the target therefore did not
+    # receive it ». Reproduit contre Ollama le 2026-11-20, corps correct et
+    # chemin faux : la cible répond « Oui, je suis là pour t'aider. Je vous
+    # reçois bien » et le message envoyait quand même corriger TARGET_BODY.
+    # Un chatbot RÉPOND à une question, il ne la répète pas : l'absence
+    # d'écho est donc le cas NORMAL, et le garde criait faux sur un
+    # branchement parfait. C'est la famille de défaut pour laquelle ce projet
+    # a déjà SUPPRIMÉ un garde -- un garde qui crie faux apprend à être
+    # ignoré -- et c'est du mauvais conseil, qui coûte plus que pas de
+    # conseil du tout.
+    #
+    # Aucun test ne figeait ce message : il n'avait jamais été exercé sur un
+    # corps CORRECT, seulement sur un corps faux, où il tombait juste.
+    #
+    # Il dit maintenant les deux lectures et donne au lecteur le critère
+    # qu'il peut appliquer lui-même, car il est le seul à pouvoir : la
+    # réponse ci-dessus répond-elle à la question posée ?
     extrait_envoye = PROBE_MESSAGE[:20]
     if not any(extrait_envoye in valeur for _, valeur in chemins):
-        show("\nWarning: none of these texts echoes the message that was "
-             "sent.\n  The target therefore did not receive it where it "
-             "expected: TARGET_BODY needs fixing too, not just the path."
-             "\n  Try --target-profile "
-             f"{', '.join(TARGET_PROFILES)} to start from a known shape.")
+        show("\nNote: none of these texts repeats the message that was sent."
+             "\n  That is NORMAL for a chatbot — it answers a question, it "
+             "does not echo it.\n  But it is also what you see when "
+             "TARGET_BODY is wrong and the target never\n  received the "
+             "message at all. The reply above decides: if it does not answer"
+             "\n  what was asked, the body needs fixing too, not just the "
+             "path.\n  Starting from a known shape: --target-profile "
+             f"{', '.join(TARGET_PROFILES)}")

@@ -304,6 +304,45 @@ class TestCheckingTheWiring:
         assert "SECRET42" not in output
         assert "Authorization" in output
 
+    def test_the_echo_note_AFFIRMS_NOTHING(self, base):
+        """
+        LE DEFAUT, trouve le 2026-11-20 en reproduisant l'extrait du README
+        contre Ollama : corps correct, chemin faux, et le message affirmait
+        « the target therefore did not receive it where it expected » en
+        envoyant corriger TARGET_BODY.
+
+        Un chatbot REPOND a une question, il ne la repete pas. L'absence
+        d'echo est donc le cas NORMAL, et le garde criait faux sur un
+        branchement parfait -- la famille de defaut pour laquelle ce projet a
+        deja SUPPRIME un garde, et du mauvais conseil, qui coute plus que pas
+        de conseil du tout.
+
+        Aucun test ne figeait ce message : il n'avait jamais ete exercE sur
+        un corps correct. Celui-ci le fait, et la mutation mord.
+        """
+        ok, output = self._output(url=f"{base}/", body={"message": "{message}"},
+                                  response_path="inexistant")
+        assert ok is False
+        assert "repeats the message" in output, "la note doit paraitre"
+        # Les deux lectures nommees, et AUCUNE affirmee.
+        assert "NORMAL for a chatbot" in output
+        assert "The reply above decides" in output
+        for affirmation in ("therefore did not receive",
+                            "did not receive the message"):
+            assert affirmation not in output, (
+                "la note ne sait pas si la cible a recu le message : un "
+                "chatbot qui ne repete pas la question ressemble a une cible "
+                "qui ne l'a jamais vue")
+
+    def test_and_it_does_not_appear_when_the_reply_DOES_echo(self, base):
+        # L'autre borne : quand un texte recu reprend le message envoye, le
+        # corps est manifestement arrive et il n'y a rien a signaler.
+        ok, output = self._output(url=f"{base}/imbrique",
+                                  body=CORPS_IMBRIQUE,
+                                  response_path="reply")
+        assert ok is False
+        assert "repeats the message" not in output
+
     def test_an_unreachable_target_fails_cleanly(self):
         ok, output = self._output(url="http://127.0.0.1:9/x", profile="openai")
         assert ok is False

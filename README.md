@@ -197,7 +197,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,293 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,392 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -621,26 +621,39 @@ paths that *do* reach text in the reply you just got — the right one is almost
 among them:
 
 ```console
-$ python main.py --target http://localhost:11434/api/generate --probe-target
+$ TARGET_BODY='{"model":"llama3.2","prompt":"{message}","stream":false}' \
+    python main.py --target http://localhost:11434/api/generate --probe-target
 
+Target   : http://localhost:11434/api/generate
+Transport: json-post — POST, a JSON body (the default: almost every LLM API)
+Body     : {"model": "llama3.2", "prompt": "{message}", "stream": false}
+Path     : reply
+[…]
 FAILED — Target http://localhost:11434/api/generate: Path 'reply': key 'reply'
-missing. Keys available: model, created_at, response, done, done_reason, …
+missing. Keys available: model, created_at, response, done, done_reason, […]
 
 Paths that lead to text in the reply received:
-  TARGET_RESPONSE_PATH=response
-      → "Bonjour ! Oui, je suis là pour t'aider. Je suis un modèle de"
   TARGET_RESPONSE_PATH=model
       → 'llama3.2'
-
-Warning: none of these texts echoes the message that was sent.
-  The target therefore did not receive it where it expected: TARGET_BODY needs
-  fixing too, not just the path.
-  Try --target-profile openai, ollama, anthropic, simple, openai-flux, text to
-  start from a known shape.
+[…]
+  TARGET_RESPONSE_PATH=response
+      → 'Bonjour ! Oui, je suis là pour vous aider. Je suis un modèle'
+[…]
+Note: none of these texts repeats the message that was sent.
+  That is NORMAL for a chatbot — it answers a question, it does not echo it.
+  But it is also what you see when TARGET_BODY is wrong and the target never
+  received the message at all. The reply above decides: if it does not answer
+  what was asked, the body needs fixing too, not just the path.
+[…]
 ```
 
-That last warning matters: fixing only the path would have meant another run to
-discover the body was wrong as well.
+That last note is deliberately two-sided, and it used to be one-sided and
+wrong. It claimed *"the target therefore did not receive it"* — and a chatbot
+answers a question, it does not repeat it, so the absence of an echo is the
+NORMAL case. Reproduced above, the body is right, the reply plainly answers,
+and the old wording still sent you to fix `TARGET_BODY`. Wrong advice costs
+more than no advice: the note now names both readings and hands you the one
+criterion only you can apply.
 
 When the reply isn't JSON, it asks the target before guessing: a response declares its
 own format in `Content-Type`, so `text/event-stream` gets you pointed at

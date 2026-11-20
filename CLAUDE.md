@@ -7548,6 +7548,98 @@ lesson, and the fix is the same: write the code as it should READ.
 
 1,378 `pytest` tests, still with no LLM call at all.
 
+**L'EXTRAIT DU PROBE N'ÉTAIT PLUS UNE PREUVE, et le garde ne regardait pas ce
+bloc (2026-11-20).** Parti d'une vérification mécanique après les transports :
+trois profils ajoutés périment la dernière ligne de cet extrait, qui liste
+`', '.join(TARGET_PROFILES)`. Une ligne à corriger. En le reproduisant pour de
+vrai, trois défauts plus sérieux sont sortis, et aucun n'était de ce tour-ci.
+
+**1. L'extrait entier n'est plus reproductible, et pas de mon fait.** La
+commande qu'il affiche — `--target http://localhost:11434/api/generate
+--probe-target` — renvoie aujourd'hui `HTTP error 404 : model '' not found`,
+parce que le corps par défaut `{"message": …}` ne nomme aucun modèle. L'extrait
+montrait donc une commande suivie d'une sortie qu'elle ne produit pas. C'est
+exactement ce que `check_excerpt.py` existe pour empêcher — « an excerpt is
+EVIDENCE » — sauf qu'il ne regardait pas ce bloc. L'extrait affiche maintenant
+la commande qui produit vraiment cette sortie : `TARGET_BODY` réglé devant, ce
+qui EST le cas qu'il illustre, un corps écrit à la main et le chemin laissé par
+défaut.
+
+**2. LE DÉFAUT GRAVE : la note sur l'écho AFFIRMAIT ce qu'elle ne savait
+pas.** Reproduit contre Ollama, corps correct et chemin faux, la cible répond
+*« Oui, je suis là pour vous aider »* — et le message disait *« The target
+therefore did not receive it where it expected: TARGET_BODY needs fixing
+too »*. Or **un chatbot RÉPOND à une question, il ne la répète pas** : l'absence
+d'écho est le cas NORMAL, et le garde criait faux sur un branchement parfait.
+
+Deux lectures de la même famille s'appliquent, et elles pointent au même
+endroit : c'est du MAUVAIS CONSEIL, qui coûte plus que pas de conseil du tout —
+le défaut corrigé le matin même sur « the expected method is a POST » adressé à
+un socket — et c'est un garde qui crie faux, pour quoi ce projet a déjà
+SUPPRIMÉ un garde entier.
+
+La note nomme désormais les deux lectures et rend au lecteur le seul critère
+que lui seul peut appliquer : *la réponse ci-dessus répond-elle à la question
+posée ?* Pas de seuil, pas de devinette — la machine signale, l'humain décide.
+
+**Et aucun test ne figeait ce message**, ce qui explique qu'il ait vécu toute
+la phase 8 : il n'avait jamais été exercé sur un corps CORRECT, seulement sur
+un corps faux, où il tombait juste par accident. Deux bornes maintenant : la
+note paraît sans écho et n'affirme rien, et elle ne paraît pas quand un texte
+reçu reprend le message envoyé.
+
+**3. `check_excerpt` ne vérifiait QUE LE PREMIER bloc console.** Le README en a
+deux, et c'est le second dont le mensonge a survécu. Un extrait qu'aucun garde
+ne couvre est le défaut lui-même, donc chaque bloc exige désormais son log, et
+un bloc que rien ne couvre ÉCHOUE au lieu de passer en silence. Le log est
+choisi par la COUVERTURE et non par l'ordre des arguments : un opérateur qui
+passe deux logs n'a pas à se rappeler lequel va avec quel extrait, et un
+mauvais appariement rapporterait une divergence contre une sortie dont
+l'extrait n'a jamais été tiré.
+
+**4. Et `fragments` ne jetait que la PREMIÈRE ligne de prompt.** Le prompt
+shell est À NOUS, sur une ligne comme sur trois ; une commande continuée par un
+antislash voyait sa suite cherchée dans la sortie de la cible, où un
+`python main.py` n'a aucune raison d'être. Trouvé en en ayant besoin : la
+commande du probe règle `TARGET_BODY` devant, et la tenir sur une seule ligne
+serait illisible.
+
+**MA PREMIÈRE VERSION DU GARDE CONFONDAIT DEUX CHOSES, et un test l'a montré
+tout de suite.** « Aucun fragment couvert » peut vouloir dire « le log manque »
+ou « l'extrait est faux », et avec un extrait d'UN SEUL fragment il n'y a rien
+à distinguer : mon code annonçait « UNVERIFIED » sur un extrait simplement
+inexact. Les séparer demanderait un seuil sur la part de fragment qui
+correspond, c'est-à-dire exactement le genre de seuil que ce projet refuse. Donc
+les deux lectures sont NOMMÉES et la divergence est toujours imprimée : elle
+tranche pour le lecteur d'un coup d'œil.
+
+**ET LA MUTATION A MONTRÉ QUE MA CORRECTION N'ÉTAIT PAS TENUE.** Remettre
+l'affirmation fausse dans la note ne faisait échouer aucun test : j'avais
+corrigé le message sans écrire le garde. **Neuvième fois dans ce fichier qu'un
+garde ne vaut que ce qu'il COMPARE**, et la deuxième en deux jours sur du code
+écrit quelques minutes plus tôt. Cinq mutations mordent maintenant : un seul
+bloc vérifié, le log choisi par l'ordre, une seule ligne de prompt jetée, un
+bloc non couvert qui passe, et la note qui affirme à nouveau.
+
+**Ce qui n'a PAS été revérifié, et il faut le dire : le bloc 1, l'extrait de
+campagne.** Son log n'existe plus et le reproduire coûte une campagne sous le
+juge mesuré — un run local ne reproduirait pas ses verdicts. Rien de ce qui a
+été touché ne change la sortie d'une campagne (les trois profils n'ajoutent
+aucune technique, `not_sent` ne s'affiche que s'il survient), mais c'est un
+raisonnement et non une vérification, et le garde le signale franchement :
+« Block 1/2 : NOTHING of this block matched ».
+
+**Le piège du heredoc, rencontré deux fois de plus dans la même heure** — une
+ancre à tiret cadratin mal décodée par stdin, puis une ancre à séquence
+d'échappement. La leçon est enregistrée dans ce fichier depuis le 2026-11-19 et
+je l'ai réapprise deux fois : ces scripts s'écrivent avec un outil de fichier.
+
+Deux chiffres périmés corrigés au passage, tous deux par mon propre travail :
+le README annonçait 1 293 tests (1 378) et `.env.example` énumérait six profils
+sur neuf.
+
+1,392 `pytest` tests, toujours sans aucun appel à un modèle.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
