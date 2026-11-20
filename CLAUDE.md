@@ -7640,6 +7640,132 @@ sur neuf.
 
 1,392 `pytest` tests, toujours sans aucun appel à un modèle.
 
+**LA TÉLÉMÉTRIE N'ATTEIGNAIT PAS LE LECTEUR DU RAPPORT (2026-11-20).**
+`telemetry()` enregistre depuis la phase 14 exactement ce que le manuel OWASP
+demande au §7.3 — notre juge et son modèle, la température, le nombre de votes,
+ce que nous ne savons PAS de la cible, et la variance résiduelle en trois
+points. `build_report` la LIT et la met dans `result.json`. **Et rien ne la
+RENDAIT.**
+
+Les trois rapports d'exemple n'en portaient pas un mot, et aucun `result.json`
+n'est committé : un lecteur du dépôt ne la voyait donc **nulle part**. La seule
+personne pour qui elle existe n'y avait aucun accès.
+
+C'est la famille de défaut la plus fréquente de ce projet, en version plus
+subtile que la phase 14 : là, trois champs de chaîne de possession étaient LUS
+et jamais écrits ; ici un champ est écrit, lu, persisté — et jamais montré. Et
+le manuel ne demande pas de la ranger quelque part, il demande de l'ÉNONCER :
+*« If sampling parameters or backend routing cannot be locked, explicitly note
+the potential for variance during replay. »*
+
+**Trois choses justifient une section et non une note de bas de page**, et
+c'est ce qui décide de son contenu :
+- **ce que NOUS avons lancé** est entièrement connaissable, donc l'omettre est
+  un choix de ne pas dire. Quel juge, quel modèle, à quelle température, sur
+  combien de votes : un verdict ne vaut que l'oracle derrière lui, et ce projet
+  a mesuré deux juges qui diffèrent de cinquante points de rappel ;
+- **COMMENT la cible a été atteinte**, parce que le transport change ce qui a
+  été envoyé et ce qui est revenu — un GET refuse les payloads au-delà d'une
+  longueur d'URL, donc la couverture est plus étroite que le plan ; une réponse
+  WebSocket peut s'arrêter sur la fenêtre de silence, donc une queue peut
+  manquer ;
+- **ce que nous ne savons PAS**, déclaré comme tel. Un red teamer en boîte
+  noire ignore les paramètres d'échantillonnage de sa cible — c'est ce qu'il
+  cherche — et omettre la ligne suggérerait qu'on les avait épinglés.
+
+**UN DÉFAUT DANS MA PROPRE SECTION, trouvé en LISANT LE RENDU.** Contre `demo`,
+une cible embarquée sans transport, le paragraphe annonçait *« the transport
+changes what was sent and what came back, so a contested report has to be able
+to say which one carried it »* — puis ne nommait aucun transport, puisqu'il n'y
+en a pas. Une phrase inconditionnelle qui devient fausse selon le cas : la même
+forme que *« the assurance from a no finding is correspondingly stronger »* dans
+un rapport qui avait deux trouvailles. **Treizième fois que seule la lecture du
+rendu trouve un défaut de présentation**, et la deuxième fois en deux jours sur
+une section que je venais d'écrire.
+
+**ET MON GARDE DE RÉGÉNÉRATION M'A ARRÊTÉ**, ce qui mérite d'être noté parce
+que je ne l'avais pas écrit pour ça. Il refuse d'écrire un exemple si des
+lignes DISPARAISSENT du rendu, au motif qu'un exemple committé retouché à la
+main ou un renderer qui a bougé s'effaceraient silencieusement. Il a bloqué ma
+seconde passe — les deux lignes de ma phrase inconditionnelle — et m'a obligé à
+regarder un diff que je croyais anodin avant d'écraser trois pièces de la
+vitrine.
+
+**Les trois exemples régénérés sans aucune campagne**, appariés à leur
+`result.json` par le `case_id` qu'ils affichent, et le diff vérifié AVANT
+écriture : 19 lignes ajoutées, zéro disparue, rien hors de la nouvelle section.
+**Sixième fois que « le JSON est la source de vérité » paie en liquide.**
+
+**Ce qu'aucun exemple ne montre, et il faut le dire : la ligne
+`Transport`.** Les trois exemples visent `demo`, une cible embarquée atteinte
+directement, donc aucun ne porte cette ligne — exactement comme le bounded null
+reste non montré. La différence est que je pourrais en produire un gratuitement,
+contre un endpoint local, et que ce serait sans intérêt : le seul endpoint
+publiable dans une vitrine publique est `localhost`, et un rapport contre un
+endpoint de client est précisément ce qu'on ne publie pas, pour ses réponses
+verbatim. Le rendu est donc joignable et honnête, et personne ne l'a encore
+rencontré.
+
+**LA JONCTION QUE RIEN NE COUVRAIT : le vrai adaptateur et la piste
+d'audit.** `AuditTrail.trace` est testé avec des lambdas et des cibles
+factices, `targets/http.py` est testé sans piste — deux modules corrects
+séparément, et c'est la forme de défaut rencontrée neuf fois ici. C'est
+d'ailleurs là que vivait le défaut du 2026-11-17 : `trace` enveloppait
+`ask(message)` et PERDAIT l'historique, donc l'orchestrateur croyait tenir un
+dialogue tandis que la cible voyait des messages isolés.
+
+Et c'est le chemin qui compte : une cible distante, **sous mandat**, où la
+piste est obligatoire. Un transport qui ne survit pas à `trace` est
+inutilisable sur un engagement, c'est-à-dire sur la moitié du projet.
+
+**Elle tenait** — aucun défaut à corriger, ce qui est un résultat et pas une
+déception — et elle est désormais couverte sur le VRAI transport websocket, à
+travers une socket locale : la capability survit, les trois tours arrivent dans
+l'ordre avec le rôle `assistant` sur celui de la cible, l'échange est dans la
+piste avec son digest, et les deux transports plats refusent FORT un historique
+plutôt que de le laisser tomber. Deux mutations mordent, dont le retour exact
+du défaut du 2026-11-17.
+
+**UNE MUTATION MUETTE SUR MON PROPRE TEST, de nouveau.** Cacher le profil du
+juge dans le rendu ne cassait rien, alors que le test s'appelle *« the judge
+behind the verdicts is NAMED »* : il vérifiait le modèle, la température et les
+votes, pas le profil. **Dixième fois qu'un test ne vaut que ce qu'il COMPARE**,
+et la troisième en trois jours sur du code écrit quelques minutes plus tôt. Le
+test vérifie maintenant les deux profils, celui du juge et celui des autres
+appels — un juge distant avec un analyste local est la configuration par défaut
+du projet, et les confondre ferait lire les deux de travers.
+
+**Le README n'a rien gagné, et c'est volontaire** : il liste les sept gaps de
+l'audit sans prétendre énumérer les sections d'un rapport, et il ne parle pas
+davantage de la chaîne de possession. Son silence n'est donc pas un mensonge, et
+ajouter une section pour accompagner la mienne serait une extension et non une
+correction.
+
+**ET LE COMPTE DE TESTS DU README A UN GARDE, parce qu'il s'est périmé
+QUATRE FOIS dans la seule journée.** 909, 1 002, 1 293, 1 378, 1 392 — corrigé
+à la main chaque fois, et deux fois parce que mon propre travail venait de le
+périmer entre deux commits. C'est le seul chiffre de la vitrine qu'une machine
+peut vérifier seule : `tests/test_readme_figures.py` collecte la suite dans un
+sous-processus et compare. Le coût est assumé et c'est le vrai prix d'une
+affirmation chiffrée dans une vitrine : ajouter un test demande désormais de
+corriger une ligne du README.
+
+Trois détails de ce garde valent d'être notés. Il a échoué d'abord **parce que
+`-q` supprime la ligne « N tests collected »** — bruyamment, ce qui est la
+propriété voulue : une collecte illisible ÉCHOUE au lieu d'être sautée, car un
+garde qui se saute lui-même est précisément ce qu'il existe pour empêcher. Un
+second test vérifie que le chiffre reste écrit `1,408` avec une virgule, sinon
+l'expression du premier ne reconnaîtrait plus rien et PASSERAIT en ne comparant
+rien — la tautologie rencontrée cinq fois dans les gardes de ce projet. Et un
+troisième tient la phrase que le chiffre quantifie : sans « never calls a
+model » à côté, le chiffre resterait vrai et ne dirait plus rien.
+
+Ce qui n'y est PAS, volontairement : les chiffres qui demandent une mesure —
+les figures du juge, les taux, les intervalles. Ceux-là ne se vérifient pas
+sans modèle ni quota, et un garde qui les devinerait serait pire qu'absent.
+
+1,408 `pytest` tests, toujours sans aucun appel à un modèle.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are

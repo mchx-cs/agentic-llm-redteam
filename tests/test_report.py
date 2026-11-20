@@ -1231,3 +1231,123 @@ class TestADisclosureWithNoReplayHasAGRADE:
             findings=[{**finding, "payload": _payload(), "turns": []}],
             launched=[_payload()])))
         assert "the replay shown on each finding" in single
+
+
+class TestTheTELEMETRYReachesTheReader:
+    """
+    `telemetry()` a tout enregistré depuis la phase 14, `build_report` l'a lu
+    dans `result.json` depuis -- et RIEN ne le rendait. Les trois rapports
+    d'exemple n'en portaient pas un mot, aucun `result.json` n'est committé,
+    donc la seule personne pour qui elle existe n'y avait aucun accès.
+
+    La famille de défaut la plus fréquente ici, en version plus subtile que la
+    phase 14 : là, trois champs étaient lus et jamais écrits ; ici un champ est
+    écrit, lu, persisté -- et jamais montré. Le README annonce pourtant la
+    phase 14 « Done » avec « target telemetry » dans la ligne.
+
+    Et le manuel OWASP §7.3 ne demande pas de la ranger, il demande de
+    l'ÉNONCER : « explicitly note the potential for variance during replay ».
+    """
+
+    @staticmethod
+    def _telemetry(**overrides):
+        base = {
+            "our_models": {
+                "judge": {"profile": "groq", "model": "openai/gpt-oss-120b",
+                          "base_url": "https://x", "temperature": 0,
+                          "votes_per_verdict": 3},
+                "active_profile": "local",
+            },
+            "target": {"name": "https://client.fr/chat",
+                       "http_profile": "openai", "transport": "json-post",
+                       "generation_parameters": "unknown (black-box test)"},
+            "residual_non_determinism": [
+                "The target picks its own sampling parameters.",
+                "The judge itself is not deterministic at temperature 0.",
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def _rendered(self, **overrides):
+        return render_markdown(build_report(_result(
+            launched=[_payload()], telemetry=self._telemetry(**overrides))))
+
+    def test_the_judge_behind_the_verdicts_is_NAMED(self):
+        # Un verdict ne vaut que l'oracle derrière lui, et ce projet a mesuré
+        # deux juges qui diffèrent de cinquante points de rappel.
+        rendered = self._rendered()
+        assert "## Test environment" in rendered
+        # Le PROFIL autant que le modele : la mutation qui le cachait ne
+        # cassait rien tant que ce test ne verifiait que le modele, et il
+        # annonce pourtant nommer le juge. Un test ne vaut que ce qu'il
+        # COMPARE -- dixieme fois dans ce projet.
+        assert "`groq`" in rendered
+        assert "openai/gpt-oss-120b" in rendered
+        assert "temperature 0" in rendered
+        assert "3 vote(s) per verdict" in rendered
+        # Et le profil des AUTRES appels, qui n'est pas le meme : un juge
+        # distant avec un analyste local est la configuration par defaut du
+        # projet, et les confondre ferait lire les deux de travers.
+        assert "`local`" in rendered
+
+    def test_the_TRANSPORT_is_named_when_there_is_one(self):
+        # Il change ce qui a été envoyé et ce qui est revenu : un GET refuse
+        # les payloads trop longs, un socket peut perdre une queue de réponse.
+        rendered = self._rendered()
+        assert "**Transport**" in rendered
+        assert "json-post" in rendered
+
+    def test_and_the_transport_SENTENCE_disappears_when_there_is_none(self):
+        """
+        LE DÉFAUT, trouvé en LISANT le rendu : contre `demo`, une cible
+        embarquée sans transport, le paragraphe annonçait « the transport
+        changes what was sent and what came back » puis ne nommait aucun
+        transport.
+
+        Une phrase inconditionnelle qui devient fausse selon le cas -- la même
+        forme que « the assurance from a *no finding* is correspondingly
+        stronger » dans un rapport qui avait deux trouvailles. Mutation :
+        rendre la phrase inconditionnelle et ce test échoue.
+        """
+        bundled = self._telemetry()["target"] | {"transport": None,
+                                                 "http_profile": None,
+                                                 "name": "demo"}
+        rendered = self._rendered(target=bundled)
+        assert "the transport changes" not in rendered, (
+            "annoncer un transport puis n'en nommer aucun")
+        assert "**Transport**" not in rendered
+        # Et ce qu'on ne sait PAS reste dit : l'omettre suggérerait qu'on
+        # avait épinglé les paramètres de la cible.
+        assert "unknown (black-box test)" in rendered
+
+    def test_the_residual_VARIANCE_is_stated(self):
+        # Le manuel le demande dans ces termes, et un lecteur qui rencontre
+        # un verdict différent sur un re-run doit savoir que c'est une
+        # propriété du système testé, pas un défaut de la mesure.
+        rendered = self._rendered()
+        assert "NOT reproduce exactly" in rendered
+        assert "not deterministic at temperature 0" in rendered
+
+    def test_an_OLDER_result_without_telemetry_renders_as_before(self):
+        # Additif, comme `delivery` et `multiturn_attack` : un ancien
+        # `result.json` ne porte pas la clé et doit rester lisible.
+        rendered = render_markdown(build_report(_result(launched=[_payload()])))
+        assert "## Test environment" not in rendered
+
+    @pytest.mark.parametrize("example", [
+        "demo-report.md", "demo-multiturn-report.md",
+        "demo-pass-at-k-report.md",
+    ])
+    def test_the_COMMITTED_examples_carry_it(self, example):
+        """
+        Les trois exemples sont ce qu'un visiteur lit sans rien installer. Un
+        rendu ajouté au renderer et absent des exemples laisserait la vitrine
+        montrer un rapport que l'outil ne produit plus.
+        """
+        import pathlib
+
+        text = (pathlib.Path(__file__).resolve().parent.parent / "examples"
+                / example).read_text(encoding="utf-8")
+        assert "## Test environment" in text
+        assert "NOT reproduce exactly" in text

@@ -513,6 +513,93 @@ def _evidence_block(campaign):
     return lines
 
 
+def _telemetry_block(campaign):
+    """
+    The test environment, as the manual's §7.3 asks for it.
+
+    IT EXISTED AND NOBODY COULD SEE IT. `telemetry()` has recorded all of
+    this since phase 14 and `build_report` has read it into `result.json`
+    since -- but nothing RENDERED it, no example report carried a word of it,
+    and no `result.json` is committed. So the one person it is for, the
+    reader of the report, had no way to reach it.
+
+    Three things make it worth a section rather than a footnote:
+
+    - **what WE ran** is entirely knowable, so leaving it out is a choice to
+      withhold. Which judge, which model, at what temperature, over how many
+      votes: a verdict is only worth the oracle behind it, and this project
+      has measured two judges that disagree by fifty points of recall;
+    - **HOW the target was reached**, because the transport changes what was
+      actually sent and what came back. A GET refuses payloads over a URL
+      length, so coverage is narrower than the plan; a WebSocket reply may
+      stop on a silence window, so a tail may be missing;
+    - **what we do NOT know**, declared as such. A black-box red teamer knows
+      nothing of the target's sampling parameters -- that is what they are
+      looking for -- and omitting the line would suggest we had pinned them.
+
+    The residual non-determinism is the part the manual asks for in those
+    words: "explicitly note the potential for variance during replay". A
+    reader who meets a different verdict on a re-run must know that is a
+    property of the system under test, not a defect of the measurement.
+    """
+    telemetry = campaign.get("telemetry")
+    if not telemetry:
+        return []          # a campaign from before the telemetry existed
+
+    lines = ["", "## Test environment", ""]
+
+    ours = telemetry.get("our_models") or {}
+    judge = ours.get("judge") or {}
+    if judge:
+        lines += [
+            "**What we ran**, which is entirely known and therefore entirely "
+            "recorded:", "",
+            f"- **Judge** : `{judge.get('profile')}` / "
+            f"`{judge.get('model')}`, temperature "
+            f"{judge.get('temperature')}, "
+            f"{judge.get('votes_per_verdict')} vote(s) per verdict",
+        ]
+        if ours.get("active_profile"):
+            lines.append(f"- **Other calls** : `{ours['active_profile']}`")
+
+    target = telemetry.get("target") or {}
+    if target:
+        # The transport sentence appears ONLY when there is a transport.
+        # Against a bundled target there is none -- it is called directly --
+        # and the paragraph used to announce "the transport changes what was
+        # sent and what came back" and then name nothing. An unconditional
+        # sentence that goes false on a case, which is this project's
+        # commonest presentation defect and is only ever found by READING
+        # the rendering.
+        if target.get("transport"):
+            lines += ["", "**How the target was reached** — the transport "
+                      "changes what was sent and", "what came back, so a "
+                      "contested report has to be able to say which one",
+                      "carried it:", ""]
+        else:
+            lines += ["", "**The target**, and what we could not know about "
+                      "it:", ""]
+        lines.append(f"- **Target** : `{target.get('name')}`")
+        if target.get("transport"):
+            lines.append(f"- **Transport** : `{target['transport']}`"
+                         + (f", profile `{target['http_profile']}`"
+                            if target.get("http_profile") else ""))
+        lines.append(f"- **Its generation parameters** : "
+                     f"{target.get('generation_parameters')}")
+
+    variance = telemetry.get("residual_non_determinism") or []
+    if variance:
+        # The manual asks for this in these words -- "explicitly note the
+        # potential for variance during replay" -- and a reader meeting a
+        # different verdict on a re-run has to know it is a property of the
+        # system under test and not a defect of the measurement.
+        lines += ["", "**What will NOT reproduce exactly**, stated rather "
+                  "than discovered on a re-run:", ""]
+        lines += [f"- {said}" for said in variance]
+
+    return lines
+
+
 def _not_attempted_block(delivery="single-turn", attack=None,
                          from_objective=0, from_payload=0):
     """
@@ -1096,6 +1183,7 @@ def render_markdown(report, abridge=False):
         if authorisation.get("scope"):
             lines.append(f"- **Scope** : {authorisation['scope']}")
 
+    lines += _telemetry_block(campaign)
     lines += _evidence_block(campaign)
 
     if report["target_profile"]:

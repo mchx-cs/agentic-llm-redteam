@@ -291,6 +291,24 @@ The next attempt is chosen from what the target has already replied, by determin
 
 A relegated attempt is never skipped: it stays in the pool, because a probabilistic attack can succeed later.
 
+## Test environment
+
+**What we ran**, which is entirely known and therefore entirely recorded:
+
+- **Judge** : `groq` / `openai/gpt-oss-120b`, temperature 0, 3 vote(s) per verdict
+- **Other calls** : `local`
+
+**The target**, and what we could not know about it:
+
+- **Target** : `demo:3`
+- **Its generation parameters** : unknown (black-box test)
+
+**What will NOT reproduce exactly**, stated rather than discovered on a re-run:
+
+- The target picks its own sampling parameters: two identical campaigns can give different verdicts.
+- The judge itself is not deterministic at temperature 0 (measured): hence 3 votes per verdict.
+- A disclosure is replayed 3 times, which measures reproducibility without removing it.
+
 ## Chain of custody
 
 - **Case** : `20261120-190420-demo-3`

@@ -832,3 +832,117 @@ class TestAgainstARealSocket:
                                 response_path="reply")
         with pytest.raises(RuntimeError, match="received nothing"):
             ask("bonjour")
+
+
+class TestTheJunctionWithTheAUDITTRAIL:
+    """
+    Le vrai adaptateur, enveloppé par la piste. Rien ne couvrait ça.
+
+    `trace` est testé avec des lambdas, l'adaptateur est testé sans piste, et
+    le défaut du 2026-11-17 vivait précisément entre les deux : `trace`
+    enveloppait `ask(message)` et perdait l'historique. Il a été corrigé, et
+    aucun test ne l'exerce sur un VRAI transport.
+
+    C'est le chemin qui compte : une cible distante sous mandat, où la piste
+    est obligatoire. Un transport qui ne survit pas à `trace` ne sert à rien
+    sur un engagement.
+    """
+
+    @staticmethod
+    def _trail(tmp_path):
+        from audit import AuditTrail
+
+        return AuditTrail(tmp_path / "trail.jsonl", "ws://127.0.0.1/chat",
+                          None)
+
+    @staticmethod
+    def _lines(path):
+        import json
+
+        return [json.loads(line) for line in
+                path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+    def test_a_traced_socket_target_still_carries_its_DIALOGUE(
+            self, socket_base, tmp_path):
+        """
+        Le défaut du 2026-11-17, sur le transport qui n'existait pas alors.
+
+        Si l'historique se perdait ici, l'orchestrateur croirait tenir un
+        dialogue et la cible verrait des messages isolés -- et « le multi-tours
+        n'apporte rien » serait une conclusion fausse que rien ne
+        contredirait.
+        """
+        trail = self._trail(tmp_path)
+        ask = build_http_target(
+            f"{socket_base}/turns",
+            body={"messages": [{"role": "user", "content": MESSAGE_MARKER}]},
+            response_path="reply")
+        traced = trail.trace("attaque", ask)
+
+        assert traced.conversation is True, (
+            "la capability doit survivre à l'enveloppe, sinon "
+            "`require_conversation` refuse une cible parfaitement capable")
+        received = traced("et maintenant ?", history=[
+            {"role": "user", "content": "premier tour"},
+            {"role": "assistant", "content": "une réponse"},
+        ])
+        assert received == ("user:premier tour | assistant:une réponse"
+                            " | user:et maintenant ?")
+
+    def test_and_the_exchange_is_in_the_TRAIL(self, socket_base, tmp_path):
+        # Écrite au fil de l'eau : si la campagne meurt, on garde la trace de
+        # ce qui est DÉJÀ parti, et c'est le moment où on en a besoin.
+        trail = self._trail(tmp_path)
+        ask = build_http_target(f"{socket_base}/echo",
+                                body={"message": MESSAGE_MARKER},
+                                response_path="reply")
+        trail.trace("attaque", ask)("bonjour")
+
+        exchanges = [line for line in self._lines(trail.path)
+                     if line.get("type") == "exchange"]
+        assert len(exchanges) == 1
+        assert exchanges[0]["sent"] == "bonjour"
+        assert exchanges[0]["received"] == "bonjour"
+        # Et le digest, qui est ce qui rend l'echange citable dans un rapport.
+        assert exchanges[0]["sent_digest"]
+
+    @pytest.mark.parametrize("transport, body", [
+        (GET_QUERY, {"q": MESSAGE_MARKER}),
+        (MULTIPART, {"message": MESSAGE_MARKER}),
+    ])
+    def test_the_flat_transports_are_traced_too(self, transport, body,
+                                                tmp_path, monkeypatch):
+        """
+        Les deux transports plats, sous la piste. Ils ne portent pas de
+        dialogue -- un corps plat n'a pas de liste de tours -- et la piste ne
+        doit pas leur en prêter un en les enveloppant.
+        """
+        fake = _Captured()
+        monkeypatch.setattr("targets.http.urllib.request.urlopen", fake)
+        trail = self._trail(tmp_path)
+        ask = build_http_target("https://x/chat", body=body,
+                                response_path="reply", transport=transport)
+        traced = trail.trace("attaque", ask)
+
+        assert traced.conversation is False
+        assert traced("bonjour") == "bonjour"
+        assert len(self._lines(trail.path)) >= 2   # ouverture + échange
+
+    def test_a_traced_flat_target_REFUSES_a_history(self, tmp_path,
+                                                    monkeypatch):
+        """
+        Et il refuse FORT plutôt que de laisser tomber les tours.
+
+        L'enveloppe ne doit pas transformer un refus en silence : c'est la
+        différence entre « ce transport ne peut pas » et « le dialogue a
+        disparu en route », et seule la première est une mesure.
+        """
+        fake = _Captured()
+        monkeypatch.setattr("targets.http.urllib.request.urlopen", fake)
+        traced = self._trail(tmp_path).trace(
+            "attaque",
+            build_http_target("https://x/chat", body={"q": MESSAGE_MARKER},
+                              response_path="reply", transport=GET_QUERY))
+        with pytest.raises(RuntimeError, match="cannot carry a conversation"):
+            traced("deuxième tour",
+                   history=[{"role": "user", "content": "premier"}])
