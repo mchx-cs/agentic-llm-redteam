@@ -4418,10 +4418,12 @@ cannot be acted on from there at all.
   raised; picking a technique it resists in order to get one would be outcome
   selection. So the rendering is reachable and honest now, and nobody has met
   it yet.
-- **`collect_exchanges` has no bound**: `to_label.json` holds 18,536 entries,
-  33 MB, and a harvest nobody will label is not a harvest. Bounding it is a
-  SAMPLING decision — which payloads, how many per technique — and it belongs
-  to whoever chooses what the corpus should contain.
+- **`collect_exchanges` is BOUNDED (2026-11-20)**, and appends, and records
+  the secret its target declares. The sampling POLICY stays the author's:
+  `MAX_PAYLOADS = 60` and `--payloads N`, one visible number rather than a
+  rule in a loop. What is still theirs to decide is whether 60 x 2 is the
+  right size, and whether the existing 18,536-entry harvest is worth keeping
+  at all now that a fresh one is 120 entries.
 - **MITRE ATLAS is DONE (2026-11-20)**: four families, read from
   `dist/v6/ATLAS-2026.10.yaml`, each identifier carrying how its OWASP match
   was established — ATLAS cites the entry itself for LLM02 and LLM07. What
@@ -7094,6 +7096,81 @@ id and label actually READ on a page that loaded. Four rounds, each narrower
 than the last, to get there.
 
 1,254 `pytest` tests, still with no LLM call at all.
+
+**THE SINGLE-TURN HARVEST: four defects, THREE of them already fixed in its
+sibling (2026-11-20).** The bound was the recorded item; reading the file for
+it found the other three, and the pattern they share is worth more than any
+one of them — **`collect_conversations` was corrected on 2026-11-13 and not
+one of those corrections crossed the two files.**
+
+| | the defect | fixed in the sibling |
+|---|---|---|
+| 1 | **no bound**: 18,536 entries, 33 MB | `MAX_SEQUENCES`, from the day it was written |
+| 2 | **it OVERWROTE** `to_label.json` | 2026-11-13, for a recorded reason |
+| 3 | the secret **HARDCODED** to the decoy's | no — the sibling hardcodes `demo`'s |
+| 4 | ids colliding with the frozen set | the sibling stamps the target and objective |
+
+**2 is the one that destroys work.** `open(OUTPUT_FILE, "w")`, where the
+sibling was changed to append because "the corpus needs the demonstration
+target's three defence levels, hence several commands. The second would have
+erased the first, **and an evening of labelling with it**." That exact
+sentence is in this file, about the other collector, and the file it describes
+was left overwriting for a week.
+
+**3 is the one that produces a wrong answer that looks right.** The field is
+not decoration: `labelling_prepass` searches the replies for that exact
+string to tell the author WHO said the secret. Hardcoded to `TOPSECRET42`, a
+harvest from `demo` — whose secret is `ARCHIVES-7731` — would report "the
+secret is said by the target: 0" over a harvest full of disclosures. And the
+SIBLING has the mirror defect, hardcoding `ARCHIVES-7731`, so a conversation
+harvest from the decoy is wrong the other way.
+
+Hence **`targets.secret_of(name)`**, reading each module's own declaration
+(`demo.SECRET`, `mock.SECRET`) rather than restating it — the preference
+already recorded for `stats.STATES` and `judge_identity()`. **None where
+there genuinely is none**: `records` guards third-party records rather than a
+value, and an HTTP endpoint's secret is precisely what a black-box test is
+trying to obtain, so claiming to know it would invert this project's premise.
+None is a real answer there, as it already is for the frozen lot's entries.
+
+**ON THE SAMPLING POLICY, which this project deferred twice to whoever owns
+the corpus.** The deferral is respected rather than overridden: the MECHANISM
+is in place and the VALUES are one named constant and one flag
+(`MAX_PAYLOADS = 60`, `--payloads N`), so the choice stays legible instead of
+buried in a loop. 60 x 2 samples = 120 exchanges, the order of the corpus
+itself; the sibling's bound is 12.
+
+And the mechanism is not invented: it is **`planner._share_budget`**, this
+project's own answer to "which payloads, at what grain", read rather than
+copied. **The grain differs from a campaign's, on purpose.** It groups by
+`group` where there is one and by TECHNIQUE otherwise, and
+`generate_payloads` emits no `group` — so a harvest rotates per technique
+where a campaign rotates per garak MODULE. That is the right difference:
+a campaign wants coverage of distinct KINDS of attack, while "a CORPUS needs
+variety, not relevance" (recorded 2026-11-13). Fifteen `encoding` probes are
+fifteen different texts to label, and labelling is the scarce resource.
+
+**4 is prevention replacing detection.** `R01`..`R09` are the frozen set's own
+identifiers, so the old prefix collided with the corpus; the 2026-11-18 guard
+catches that when labelling, which is detection. The prefix is now `H` with
+the target stamped in (`H-demo3-07-1`), and that guard stays as the backstop.
+A test checks the property against the REAL corpus rather than against a
+letter.
+
+**The author's existing harvest is untouched.** It keeps its `R` ids and stays
+labellable; the new prefix only governs what is harvested from now on.
+
+Thirteen tests, and five mutations bite: unbounded again, overwriting,
+the secret hardcoded, the colliding prefix, and the first N instead of the
+round-robin. Plus three that DRIVE the CLI rather than reading it — the
+junction defect, met eight times in this project.
+
+**And one of my own tests looked for a phrase argparse had WRAPPED** across
+two lines. The fix is the one `check_excerpt.py` was built on the same
+morning: the whitespace is the TOOL's and the words are ours, so squash
+before matching.
+
+1,273 `pytest` tests, still with no LLM call at all.
 
 ## Legal framing
 

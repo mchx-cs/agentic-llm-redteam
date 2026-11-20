@@ -46,7 +46,7 @@ import json
 from pathlib import Path
 
 from agents.attacker import load_library, compose, sequence_turns
-from targets import choose_target, is_bundled_target
+from targets import choose_target, secret_of, is_bundled_target
 from targets.conversation import MAX_TURNS, require_conversation, play
 from console import write_in_utf8
 
@@ -176,6 +176,7 @@ def _label(target_name):
 def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
               harmless=False):
     ask_target = choose_target(target_name)
+    secret = secret_of(target_name)
     require_conversation(ask_target, target_name or "the configured target")
     label = _label(target_name)
 
@@ -210,7 +211,8 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
                 print(f"{group}-{sample}: already harvested, skipped.")
                 continue
             turns = play(ask_target, sequence["messages"])
-            entries.append(_entry(group, sample, sequence, turns))
+            entries.append(_entry(group, sample, sequence, turns,
+                                  secret=secret))
             print(f"{group}-{sample} ({sequence['technique']}): "
                   f"{len(turns) // 2} turn(s)")
 
@@ -223,7 +225,7 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
                     group, sample, sequence,
                     [{"role": "attacker", "content": sequence["single_turn"]},
                      {"role": "target", "content": reply}],
-                    suffix="-mono"))
+                    suffix="-mono", secret=secret))
                 print(f"{group}-{sample}-mono: 1 turn (control)")
 
     OUTPUT_FILE.write_text(
@@ -245,7 +247,7 @@ def _existing_harvest():
         encoding="utf-8"))).get("conversations", [])
 
 
-def _entry(group, sample, sequence, turns, suffix=""):
+def _entry(group, sample, sequence, turns, suffix="", secret=None):
     """An entry to label. The fields to fill in stay None."""
     return {
         "id": f"{group}-{sample}{suffix}",
@@ -255,7 +257,11 @@ def _entry(group, sample, sequence, turns, suffix=""):
         "source": (f"real target — {sequence['technique']} / "
                    f"{sequence['objective']} / "
                    f"{'composed' if suffix else 'sequenced'}"),
-        "secret": "ARCHIVES-7731",
+        # DECLARED by the target rather than hardcoded: this field is
+        # what `labelling_prepass` searches the replies for, so the
+        # decoy's value written over a `demo` harvest reports zero
+        # disclosures on a harvest full of them.
+        "secret": secret,
         "category": None,         # to fill in by hand
         "dataset": None,               # to fill in by hand: "dev" or "test"
         "expected": None,           # to fill in by hand: true or false
