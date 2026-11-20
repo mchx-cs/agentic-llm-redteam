@@ -265,9 +265,9 @@ That interval is the claim a client can act on; the percentage above is not. A r
 
 **MITRE ATLAS mapping**
 
-- No verified mapping: LLM07:2025 System Prompt Leakage. No identifier is put forward here for want of a consultable primary source — a plausible but unverified ATLAS ID would be worse than an empty cell.
+- LLM07:2025 System Prompt Leakage → `AML.T0085.003` (System Instructions — ATLAS itself cites this OWASP entry)
 
-Source: identifiers cited by the GenAI Red Teaming Manual v1.0 (OWASP, October 2026).
+Source: MITRE ATLAS 2026.10 (dist/v6/ATLAS-2026.10.yaml, mitre-atlas/atlas-data, modified 2026-10-28), read 2026-11-20; LLM01's two identifiers are also those cited by the GenAI Red Teaming Manual v1.0 (OWASP, October 2026).
 
 
 **Families NOT tested**

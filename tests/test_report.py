@@ -14,7 +14,9 @@ import pytest
 
 import re
 
-from report import (ATLAS_BY_FAMILY, atlas_for, build_report,
+from report import (ATLAS_BY_FAMILY, ATLAS_CITES_OWASP,
+                    ATLAS_PROVENANCE, ATLAS_RETIRED, MANUAL_CITES,
+                    OUR_READING, atlas_for, build_report,
                      SEVERITY_ORDER, assess_severity, render_markdown)
 
 
@@ -495,29 +497,81 @@ class TestSuccessRate:
 
 class TestAtlasMapping:
     """
-    Le manuel demande de mapper chaque cas de test a OWASP LLM ET a MITRE
-    ATLAS. Les identifiants viennent du manuel lui-meme avec leurs libelles
-    verbatim : atlas.mitre.org renvoyait 404 sur la matrice et sur chaque
-    page de technique le 2026-11-12, donc la source primaire n'etait pas
-    consultable.
+    The manual asks that every test case be mapped to OWASP LLM AND to MITRE
+    ATLAS. Until 2026-11-20 only LLM01 was mapped, from the manual's own
+    citations, because atlas.mitre.org returned 404 on the matrix and on every
+    technique page -- and a plausible but unverified ATLAS ID in a security
+    report is worse than an empty cell.
 
-    D'ou un mapping VOLONTAIREMENT incomplet. Un ID ATLAS plausible mais non
-    verifie dans un rapport de securite est pire qu'une case vide : il a
-    l'air verifiable et ne l'est pas.
+    SIX TESTS IN THIS CLASS FAILED when the gap closed, and every one of them
+    failed because the behaviour improved: three families that were
+    deliberately unmapped are now mapped from MITRE's own 2026.10 data. A test
+    that breaks on an improvement is not a regression, but it has to say so,
+    otherwise the correction reads as an adjustment for convenience.
+
+    And the eight-day wait is what makes the mapping correct rather than
+    merely present: `AML.T0056` and `AML.T0057` -- the two identifiers the
+    manual's generation of material points at for LLM07 and LLM02 -- NO LONGER
+    EXIST. Completing the gap from the obvious source would have published two
+    dead IDs.
     """
 
-    def test_LLM01_is_mapped(self):
+    def test_LLM01_keeps_the_identifiers_the_manual_cites(self):
         techniques = atlas_for("LLM01:2025 Prompt Injection")
-        assert ("AML.T0051", "LLM Prompt Injection") in techniques
-        assert ("AML.T0054", "LLM Jailbreak") in techniques
+        assert ("AML.T0051", "LLM Prompt Injection", MANUAL_CITES) in techniques
+        assert ("AML.T0054", "LLM Jailbreak", MANUAL_CITES) in techniques
 
-    @pytest.mark.parametrize("family", [
-        "LLM02:2025 Sensitive Information Disclosure",
-        "LLM07:2025 System Prompt Leakage",
-        "LLM06:2025 Excessive Agency",
+    @pytest.mark.parametrize("family, identifier, name", [
+        ("LLM02:2025 Sensitive Information Disclosure",
+         "AML.T0085.002", "Conversation Context and Memory"),
+        ("LLM07:2025 System Prompt Leakage",
+         "AML.T0085.003", "System Instructions"),
     ])
-    def test_the_families_with_no_source_are_NOT_mapped(self, family):
-        assert atlas_for(family) == []
+    def test_ATLAS_ITSELF_cites_these_two_OWASP_entries(self, family,
+                                                        identifier, name):
+        """
+        The find that makes these two SOURCED rather than inferred: MITRE's
+        data carries the OWASP entry inside each technique's `references:`
+        (`title: LLM02:2025 Sensitive Information Disclosure`, and the same
+        shape for LLM07). A cross-reference in the primary source is a
+        different claim from our reading of a description.
+
+        This test replaces one asserting these families were NOT mapped.
+        """
+        assert atlas_for(family) == [(identifier, name, ATLAS_CITES_OWASP)]
+
+    def test_LLM06_is_mapped_but_SAYS_the_match_is_OURS(self):
+        """
+        `AI Agent Tool Invocation` is verbatim from the 2026.10 data and
+        nothing in it cites OWASP, so the identifier is sourced and the
+        correspondence is a reading. The honesty is the point: the cell is
+        filled AND the reader is told what kind of filling it is.
+        """
+        techniques = atlas_for("LLM06:2025 Excessive Agency")
+        assert techniques == [("AML.T0053", "AI Agent Tool Invocation",
+                               OUR_READING)]
+
+    def test_the_RETIRED_identifiers_appear_nowhere(self):
+        """
+        The guard that lasts. Both IDs were renumbered in 2026.10, and both
+        are what a future reader reaching for the manual's citations would
+        find. Re-introducing one would put a dead identifier in a report,
+        which looks checkable and is not -- the exact failure mode the empty
+        cell was protecting against.
+        """
+        published = {identifier
+                     for techniques in ATLAS_BY_FAMILY.values()
+                     for identifier, _, _ in techniques}
+        for retired, where in ATLAS_RETIRED.items():
+            assert retired not in published, f"{retired} is dead: {where}"
+
+    def test_a_family_with_no_identifier_is_still_NAMED_as_such(self):
+        # An empty cell would pass for an oversight; naming it says it is a
+        # choice, and why. LLM05 has no ATLAS entry we have read.
+        attempt = _payload(family="LLM05:2025 Improper Output Handling")
+        rendered = render_markdown(build_report(_result(launched=[attempt])))
+        assert "No verified mapping" in rendered
+        assert "worse than an empty cell" in rendered
 
     def test_an_absent_family_does_not_raise(self):
         assert atlas_for(None) == []
@@ -529,25 +583,38 @@ class TestAtlasMapping:
         assert "AML.T0051" in rendered
         assert "AML.T0054" in rendered
 
-    def test_the_report_NAMES_what_is_not_mapped(self):
-        # Une case vide passerait pour un oubli ; la nommer dit que c'est un
-        # choix, et pourquoi.
-        attempt = _payload(family="LLM02:2025 Sensitive Information Disclosure")
-        rendered = render_markdown(build_report(_result(launched=[attempt])))
-        assert "No verified mapping" in rendered
-        assert "worse than an empty cell" in rendered
+    def test_the_report_distinguishes_a_SOURCED_match_from_OURS(self):
+        """
+        The junction: computing the provenance and printing none would change
+        nothing a reader sees, which is this project's commonest defect shape.
+        """
+        sourced = _payload(family="LLM07:2025 System Prompt Leakage")
+        rendered = render_markdown(build_report(_result(launched=[sourced])))
+        assert "ATLAS itself cites this OWASP entry" in rendered
 
-    def test_the_source_is_cited(self):
-        # Un identifiant sans source n'est pas verifiable par le lecteur.
+        ours = _payload(family="LLM06:2025 Excessive Agency")
+        rendered = render_markdown(build_report(_result(launched=[ours])))
+        assert "NOT a sourced mapping" in rendered, (
+            "an identifier whose family match is ours must say so in the "
+            "report, or it reads exactly like one ATLAS states itself")
+
+    def test_the_source_names_the_FILE_and_the_VERSION(self):
+        # An identifier without a source is not verifiable by the reader, and
+        # "MITRE ATLAS" without a version is not either: two of these IDs did
+        # not exist one version ago.
         attempt = _payload(family="LLM01:2025 Prompt Injection")
         rendered = render_markdown(build_report(_result(launched=[attempt])))
-        assert "GenAI Red Teaming Manual" in rendered
+        assert "2026.10" in rendered
+        assert "ATLAS-2026.10.yaml" in rendered
 
     def test_every_identifier_has_the_right_format(self):
         for techniques in ATLAS_BY_FAMILY.values():
-            for identifier, name in techniques:
+            for identifier, name, provenance in techniques:
                 assert re.fullmatch(r"AML\.T\d{4}(\.\d{3})?", identifier)
                 assert name.strip()
+                assert provenance in ATLAS_PROVENANCE, (
+                    "a provenance the report cannot render would raise at "
+                    "rendering time, in front of a reader")
 
 
 class TestTelemetryInTheReport:

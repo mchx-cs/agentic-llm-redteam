@@ -196,7 +196,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,222 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,254 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -678,9 +678,21 @@ The replay check is bounded too, and that one matters to a client: "the value ca
 
 Every report states what was **not** tested and why — a tool that hides its coverage
 gives a false sense of security, which is worse than no report at all. Coverage is
-mapped to OWASP LLM and, where a published identifier could be verified, to MITRE ATLAS.
-Where none could, the report says so rather than offering a plausible ID: one that looks
-checkable without being so is worse than an empty cell.
+mapped to OWASP LLM and to **MITRE ATLAS**, read from MITRE's own data
+(`dist/v6/ATLAS-2026.10.yaml`), and **each identifier says how its OWASP match was
+established**: ATLAS cites the OWASP entry itself for LLM02 and LLM07, the OWASP manual
+cites the two LLM01 identifiers, and LLM06's is our reading of an ATLAS description —
+labelled as such, because a reader cannot otherwise tell a sourced mapping from a
+defensible guess. A family with no identifier is named as unmapped rather than given a
+plausible one: an ID that looks checkable without being so is worse than an empty cell.
+
+That mapping sat empty for eight days on purpose, and the wait is what made it correct.
+`atlas.mitre.org` returns 404 on the matrix and on every technique page, and the
+repository's obvious `dist/ATLAS.yaml` is **deprecated** at version 5.6.0 and says so in
+its own first lines. Worse: the two identifiers a mapping built from the manual's
+citations would reach for — `AML.T0056` *Extract LLM System Prompt* and `AML.T0057`
+*LLM Data Leakage* — **no longer exist**. ATLAS 2026.10 renumbered them, so filling the
+gap from the obvious source would have published two dead IDs in a security report.
 
 ### Audited against the OWASP GenAI Red Teaming Manual
 
@@ -710,7 +722,8 @@ that found nothing said so honestly but **bounded nothing**, and with `MAX_ATTEM
 rule of three gives 100% — that was the last place this tool still let a reader infer
 safety it had not verified, which is what it argues against everywhere else. The rest:
 no attack success rate, no declared denominator states, no cryptographic integrity on
-the evidence, no target telemetry, no MITRE ATLAS mapping.
+the evidence, no target telemetry, no MITRE ATLAS mapping — that last one closed on
+2026-11-20, once MITRE's data became readable again.
 
 Two things the audit did **not** resolve, and the repo says which is which:
 

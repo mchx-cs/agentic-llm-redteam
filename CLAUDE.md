@@ -4422,10 +4422,12 @@ cannot be acted on from there at all.
   33 MB, and a harvest nobody will label is not a harvest. Bounding it is a
   SAMPLING decision — which payloads, how many per technique — and it belongs
   to whoever chooses what the corpus should contain.
-- **MITRE ATLAS is incomplete**: two identifiers of five, because
-  atlas.mitre.org returned 404 on 2026-11-12. Completing `ATLAS_BY_FAMILY`
-  needs nothing but a reachable primary source; a plausible unverified
-  identifier stays worse than an empty cell.
+- **MITRE ATLAS is DONE (2026-11-20)**: four families, read from
+  `dist/v6/ATLAS-2026.10.yaml`, each identifier carrying how its OWASP match
+  was established — ATLAS cites the entry itself for LLM02 and LLM07. What
+  remains unmapped is every family we do not test, which is the honest state.
+  Re-check on the next ATLAS release: two IDs were renumbered between 5.6.0
+  and 2026.10, so these labels are a dated reading and not a permanent fact.
 - **Phase 5: reconnaissance is purely DECLARATIVE.** A target that does not
   say what it protects is poorly reconnoitred, and the objectives derived from
   it are generic. That limit has been recorded since the first run and never
@@ -7011,6 +7013,87 @@ README reverting to the old advice, the measured rate not printed, and the
 sweep's sentence printed over a repetition.
 
 1,252 `pytest` tests, still with no LLM call at all.
+
+**MITRE ATLAS: the gap closes from MITRE'S OWN DATA, and the eight-day wait
+is what made it correct (2026-11-20).** Recorded on 2026-11-12 as needing
+nothing but a reachable primary source. Checked again, and the answer was
+three layers deeper than "is the site up".
+
+**The chain, because the obvious route is a trap at every step.**
+- `atlas.mitre.org` still returns **404** on the matrix and on every technique
+  page. Eight days, unchanged. The website is not the way in;
+- `mitre-atlas/atlas-data`'s `dist/ATLAS.yaml` — the file a first attempt
+  lands on — opens with *"This version of the ATLAS data is deprecated and is
+  no longer being updated with new content."* Version 5.6.0;
+- there is no `data/` directory any more: the repository's `atlas/` holds
+  Python (`api.py`, `routes.py`, `schemas.py`), not YAML;
+- the README gives the real chain, through two pointer files:
+  `dist/ATLAS-latest.yaml` → `v6/ATLAS-latest.yaml` →
+  **`dist/v6/ATLAS-2026.10.yaml`**, format 6.1.0, collection version
+  `'2026.10'`, modified `'2026-10-28'`.
+
+**AND THE TWO IDENTIFIERS THE OBVIOUS COMPLETION WOULD HAVE PUBLISHED ARE
+DEAD.** The 2026.10 changelog reads `moved from "Extract LLM System Prompt"
+(AML.T0056)` and `moved from "LLM Data Leakage" (AML.T0057)`, and neither ID
+is a key in the current data. Those two are exactly what a mapping built from
+the OWASP manual's generation of material points at for LLM07 and LLM02 — so
+closing this gap on 2026-11-12 from any source that was reachable then would
+have put **two dead identifiers in a security report**. That is precisely the
+failure the empty cell existed to prevent, and it is the first time in this
+project that a refusal to fill a gap has been vindicated by the gap's own
+later content.
+
+**AND THE FIND THAT CHANGES THE NATURE OF THE MAPPING: MITRE'S DATA CITES
+OWASP ITSELF.** The project assumed any correspondence would be our
+inference. It is not, for two of the four — verbatim, inside each technique's
+`references:`:
+
+| family | identifier | name | how the match was established |
+|---|---|---|---|
+| LLM01 | `AML.T0051`, `AML.T0054` | LLM Prompt Injection, LLM Jailbreak | the OWASP manual cites them; labels now CONFIRMED verbatim in 2026.10 |
+| LLM02 | `AML.T0085.002` | Conversation Context and Memory | **ATLAS cites** `title: LLM02:2025 Sensitive Information Disclosure` |
+| LLM07 | `AML.T0085.003` | System Instructions | **ATLAS cites** `title: LLM07:2025 System Prompt Leakage` |
+| LLM06 | `AML.T0053` | AI Agent Tool Invocation | **OUR READING** of the description; nothing in it cites OWASP |
+
+So the mapping goes from **one family to four**, and the report carries the
+provenance WITH each identifier rather than in a footnote: *"ATLAS itself
+cites this OWASP entry"*, *"cited by the OWASP manual"*, *"our reading of the
+ATLAS description, NOT a sourced mapping"*. A reader who cannot tell a
+cross-reference in the primary source from our reading of a description has to
+trust both equally, and only one of them deserves it.
+
+**`ATLAS_RETIRED` keeps the dead identifiers**, with where each one went, and
+a test asserts neither appears in the published mapping. They are what a
+future reader reaching for the manual's citations will find first, so the
+guard is against the likeliest mistake rather than a hypothetical one.
+
+**Six tests failed, every one because the gap closed**, and the class says so:
+three families that were deliberately unmapped are now mapped. A test that
+breaks on an improvement is not a regression, but leaving that unsaid makes
+the correction read as an adjustment for convenience.
+
+**The three committed examples were re-rendered** and now show sourced ATLAS
+identifiers where they printed *"No verified mapping"* — LLM07 in the
+single-turn and pass@k reports, LLM01 and LLM07 in the multi-turn one. No
+campaign, no quota: the JSON is the source of truth, for the fifth time.
+
+**Four mutations bite**: a retired ID re-introduced, the provenance computed
+and not printed (this project's commonest defect shape), our reading passed
+off as sourced, and the version dropped from the source line — "MITRE ATLAS"
+without a version is not verifiable either, since two of these IDs did not
+exist one version ago.
+
+**A method note, and it is about delegation.** The first report back said the
+names for the five IDs and they were plausible and WRONG — drawn from a model
+summary of the deprecated 5.6.0 dump, with the agent itself flagging that it
+had not read them verbatim. Taking that report at face value would have
+published `AML.T0057 "LLM Data Leakage"`, a dead identifier, under a comment
+claiming it was checked against the primary source. What stopped it was the
+project's own rule applied to the delegation rather than to the data: only an
+id and label actually READ on a page that loaded. Four rounds, each narrower
+than the last, to get there.
+
+1,254 `pytest` tests, still with no LLM call at all.
 
 ## Legal framing
 

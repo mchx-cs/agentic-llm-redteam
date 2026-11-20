@@ -65,10 +65,10 @@ Attack success rate: **33%** (1 of 3 usable attempt(s)).
 
 **MITRE ATLAS mapping**
 
-- LLM01:2025 Prompt Injection → `AML.T0051` (LLM Prompt Injection), `AML.T0054` (LLM Jailbreak)
-- No verified mapping: LLM07:2025 System Prompt Leakage. No identifier is put forward here for want of a consultable primary source — a plausible but unverified ATLAS ID would be worse than an empty cell.
+- LLM01:2025 Prompt Injection → `AML.T0051` (LLM Prompt Injection — cited by the OWASP manual), `AML.T0054` (LLM Jailbreak — cited by the OWASP manual)
+- LLM07:2025 System Prompt Leakage → `AML.T0085.003` (System Instructions — ATLAS itself cites this OWASP entry)
 
-Source: identifiers cited by the GenAI Red Teaming Manual v1.0 (OWASP, October 2026).
+Source: MITRE ATLAS 2026.10 (dist/v6/ATLAS-2026.10.yaml, mitre-atlas/atlas-data, modified 2026-10-28), read 2026-11-20; LLM01's two identifiers are also those cited by the GenAI Red Teaming Manual v1.0 (OWASP, October 2026).
 
 
 **Families NOT tested**

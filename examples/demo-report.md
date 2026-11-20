@@ -89,9 +89,10 @@ Attack success rate: **67%** (2 of 3 usable attempt(s)).
 
 **MITRE ATLAS mapping**
 
-- No verified mapping: LLM06:2025 Excessive Agency, LLM07:2025 System Prompt Leakage. No identifier is put forward here for want of a consultable primary source — a plausible but unverified ATLAS ID would be worse than an empty cell.
+- LLM06:2025 Excessive Agency → `AML.T0053` (AI Agent Tool Invocation — our reading of the ATLAS description, NOT a sourced mapping)
+- LLM07:2025 System Prompt Leakage → `AML.T0085.003` (System Instructions — ATLAS itself cites this OWASP entry)
 
-Source: identifiers cited by the GenAI Red Teaming Manual v1.0 (OWASP, October 2026).
+Source: MITRE ATLAS 2026.10 (dist/v6/ATLAS-2026.10.yaml, mitre-atlas/atlas-data, modified 2026-10-28), read 2026-11-20; LLM01's two identifiers are also those cited by the GenAI Red Teaming Manual v1.0 (OWASP, October 2026).
 
 
 **Families NOT tested**

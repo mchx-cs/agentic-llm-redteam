@@ -289,24 +289,71 @@ def build_report(result, target="unknown"):
 EXCERPT_LENGTH = 300
 
 
-# --- MITRE ATLAS: only what is SOURCED ---------------------------------------
+# --- MITRE ATLAS: only what is SOURCED, and how ------------------------------
 # The OWASP manual asks that every test case be mapped to OWASP LLM *and* to
-# MITRE ATLAS (§1.5, §7.4). The identifiers below are the ones the manual
-# itself cites, with their verbatim labels — atlas.mitre.org was unreachable
-# (404 on the matrix and on every technique page) on 2026-11-12, so there was
-# no way to check against the primary source.
+# MITRE ATLAS (§1.5, §7.4).
 #
-# Hence a DELIBERATELY incomplete mapping. The families not covered are named
-# as such in the report, rather than matched to a plausible identifier: an
-# ATLAS ID invented in a security report is worse than an empty cell, because
-# it looks verifiable and is not.
+# Read on 2026-11-20 from MITRE's own data, since atlas.mitre.org still
+# returns 404 on the matrix and on every technique page:
+# `dist/v6/ATLAS-2026.10.yaml` in github.com/mitre-atlas/atlas-data, format
+# 6.1.0, collection version 2026.10, modified 2026-10-28. The chain to it runs
+# through two pointer files, and the obvious `dist/ATLAS.yaml` is DEPRECATED
+# at version 5.6.0 and says so in its own first lines.
+#
+# THE REASON THIS GAP WAS WORTH LEAVING OPEN FOR EIGHT DAYS: the two
+# identifiers a mapping built from the manual's generation would have cited —
+# AML.T0056 "Extract LLM System Prompt" and AML.T0057 "LLM Data Leakage" — NO
+# LONGER EXIST. The 2026.10 changelog moves them to AML.T0085.003 and
+# AML.T0085.002, and neither old ID is a key in the current data. Publishing
+# them would have been publishing two dead identifiers, which is exactly the
+# failure the empty cell existed to prevent.
+#
+# PROVENANCE IS PART OF THE MAPPING, not a footnote. A reader has to be able
+# to tell what was checked from what was concluded, so each entry carries how
+# its family match was established:
+ATLAS_CITES_OWASP = "atlas-cites-owasp"   # MITRE's own `references:` name it
+MANUAL_CITES = "manual-cites"             # the OWASP manual cites the ID
+OUR_READING = "our-reading"               # ours, from the description
+
 ATLAS_BY_FAMILY = {
-    "LLM01": [("AML.T0051", "LLM Prompt Injection"),
-              ("AML.T0054", "LLM Jailbreak")],
+    # Cited by the manual, and confirmed verbatim in the 2026.10 data with
+    # matching labels.
+    "LLM01": [("AML.T0051", "LLM Prompt Injection", MANUAL_CITES),
+              ("AML.T0054", "LLM Jailbreak", MANUAL_CITES)],
+    # MITRE's data cites OWASP itself, inside the technique's `references:`:
+    # `title: LLM02:2025 Sensitive Information Disclosure`. That is a
+    # cross-reference in the primary source, not our inference.
+    "LLM02": [("AML.T0085.002", "Conversation Context and Memory",
+               ATLAS_CITES_OWASP)],
+    # Ours. `AI Agent Tool Invocation` is verbatim and nothing in it cites
+    # OWASP, so the identifier is sourced and the correspondence is a reading.
+    "LLM06": [("AML.T0053", "AI Agent Tool Invocation", OUR_READING)],
+    # MITRE's data again: `title: LLM07:2025 System Prompt Leakage`.
+    "LLM07": [("AML.T0085.003", "System Instructions", ATLAS_CITES_OWASP)],
 }
 
-ATLAS_SOURCE = ("identifiers cited by the GenAI Red Teaming Manual v1.0 "
-                "(OWASP, October 2026)")
+#: Identifiers that DO NOT EXIST any more, kept so nothing re-introduces them.
+#: Both are what the manual's generation of material points at, so they are
+#: the two a future reader is most likely to reach for.
+ATLAS_RETIRED = {
+    "AML.T0056": "Extract LLM System Prompt → now AML.T0085.003",
+    "AML.T0057": "LLM Data Leakage → now AML.T0085.002",
+}
+
+ATLAS_SOURCE = ("MITRE ATLAS 2026.10 (dist/v6/ATLAS-2026.10.yaml, "
+                "mitre-atlas/atlas-data, modified 2026-10-28), read "
+                "2026-11-20; LLM01's two identifiers are also those cited by "
+                "the GenAI Red Teaming Manual v1.0 (OWASP, October 2026)")
+
+#: How each provenance reads in the report. Spelled out rather than hinted:
+#: the difference between a cross-reference in the primary source and our own
+#: reading of a description is the difference between a checked mapping and a
+#: defensible guess, and a reader cannot see it unless it is written.
+ATLAS_PROVENANCE = {
+    ATLAS_CITES_OWASP: "ATLAS itself cites this OWASP entry",
+    MANUAL_CITES: "cited by the OWASP manual",
+    OUR_READING: "our reading of the ATLAS description, NOT a sourced mapping",
+}
 
 
 def atlas_for(owasp_family):
@@ -334,7 +381,12 @@ def _atlas_block(families):
 
     lines = ["", "**MITRE ATLAS mapping**", ""]
     for family, techniques in sorted(mapped.items()):
-        names = ", ".join(f"`{identifier}` ({nom})" for identifier, nom in techniques)
+        # The provenance travels WITH the identifier. A mapping ATLAS itself
+        # states and one we read off a description are not the same claim, and
+        # a reader who cannot tell them apart has to trust both equally.
+        names = ", ".join(
+            f"`{identifier}` ({name} — {ATLAS_PROVENANCE[provenance]})"
+            for identifier, name, provenance in techniques)
         lines.append(f"- {family} → {names}")
     if unmapped:
         lines.append(
