@@ -4430,10 +4430,14 @@ cannot be acted on from there at all.
   remains unmapped is every family we do not test, which is the honest state.
   Re-check on the next ATLAS release: two IDs were renumbered between 5.6.0
   and 2026.10, so these labels are a dated reading and not a permanent fact.
-- **Phase 5: reconnaissance is purely DECLARATIVE.** A target that does not
-  say what it protects is poorly reconnoitred, and the objectives derived from
-  it are generic. That limit has been recorded since the first run and never
-  addressed — and `--multiturn` makes it bite harder, since a multi-turn
+- **Phase 5: reconnaissance now reads what it SEES as well (2026-11-20).**
+  The purely declarative limit is addressed: `mentions_instructions` is a
+  tri-state ruling out only on an explicit NO, and a tool marker or a
+  secret-naming refusal in a probe reply is an OBSERVED fact that may fill a
+  declaration the analyst missed. What is left is narrower and still real: six
+  probes see only what six probes elicit, and the observed readers are
+  patterns, so a tool marked some way we have never met is a tool unseen.
+  `--multiturn` still makes a poor profile bite harder, since a multi-turn
   attempt pursues the reconnaissance objective INSTEAD of its payload.
 - **The THREE example reports are CURRENT** (re-rendered 2026-11-20 so none
   drifts from the renderer): single-turn with two `high` findings
@@ -7171,6 +7175,104 @@ morning: the whitespace is the TOOL's and the words are ours, so squash
 before matching.
 
 1,273 `pytest` tests, still with no LLM call at all.
+
+**RECONNAISSANCE STOPS BEING PURELY DECLARATIVE — the oldest limitation in
+this project (2026-11-20).** Recorded on its very first run: *"a target that
+does not declare what it protects is poorly reconnoitred: that is the limit of
+a purely declarative reconnaissance."* It stood for eleven days and cost an
+experiment on 2026-11-19.
+
+**Two halves, and both are decisions this project had already taken, applied
+where they were not.**
+
+**1. `mentions_instructions` was a BOOLEAN among tri-states.** Its two
+siblings carry a comment stating the rule: *"A deliberate tri-state: we only
+skip on an explicit NO. 'The target did not mention it' (None) lets the probe
+through, because missing a vulnerability costs more than a wasted attempt."*
+This field was `bool(...)`, which collapses *"it says it has no rules"* into
+*"it did not mention any"* — and the `secret` and `instructions`
+prerequisites rule out on it.
+
+So the prompt-leak family was skipped **on silence**. And silence is the
+NORMAL case: a chatbot asked to present itself does not recite its system
+prompt. **Ruling a family out on the normal case rules it out always.**
+
+The measured cost, replayed here without a model:
+
+| the profile says | attempts kept, before | after |
+|---|---|---|
+| nothing about its instructions | **0** | **30** |
+| *"I have no instructions"* | 0 | 0, reason *"the target SAYS it has none"* |
+
+That first row IS the zero-attempt run of 2026-11-19, where a 30-attempt
+measurement kept nothing because `demo` had not mentioned its instructions
+that time — while that target's system prompt holds the very secret the
+campaign was after.
+
+**And the reason text had to move with the gate**, or the report lies. *"The
+target mentions no internal instruction"* described the old behaviour exactly;
+it is now skipped only when the target SAYS it has none, which is a rarer and
+much stronger statement. A reader meeting the old sentence would conclude the
+family was skipped for silence, which is what it no longer is. Same for the
+display: `_show`, not a boolean, because *"no"* for a `None` field tells the
+operator the target DENIED having rules — and those two now lead to different
+campaigns.
+
+**2. OBSERVED facts beside declared ones, which is the limitation's own
+wording answered.** `adaptation.py` already holds deterministic readers,
+measured against real campaign replies and narrowed by the corpus:
+`triggered_a_tool` (boundary D18 — a tool DESCRIBED is not a tool triggered)
+and `names_what_it_protects` (whose refusal patterns were widened on
+2026-11-11 after a real campaign went by unnoticed). Reconnaissance keeps its
+own exchanges and **had never read them**.
+
+They are read now, and an observation can fill a declaration the analyst
+missed: a tool marker in a probe reply means the target HAS a tool; a refusal
+that NAMES what it protects means it has instructions to protect.
+
+**THE ASYMMETRY IS THE SAFETY OF THIS, and it is one-way.** An observation is
+STRONGER evidence than a declaration — a target that emits `[OUTIL: ...]` has
+DEMONSTRATED the tool where one saying "I have tools" has only claimed it — so
+an observation may promote a missing or a negative field. **Nothing ever
+demotes one, and there is no observed FALSE at all**: a quiet probe round must
+not be able to narrow a campaign, which would be the defect being fixed
+wearing the other face. One exception stated rather than hidden: a DECLARED
+tool is never overwritten by an observed one, because the declaration carries
+a NAME and the objectives are built from it.
+
+Each observed fact is recorded with its quote in the profile's own `evidence`
+list, prefixed `observed:` so a reader can tell what the target was SEEN doing
+from what it SAID. The profile stays checkable by hand, which is what made it
+measurable in the first place.
+
+**And an unreadable analysis no longer yields an empty profile.** What the
+target was seen doing needs no model to establish — which is exactly why it is
+worth reading — so a campaign against a target with a visible tool does not
+lose that because a JSON came back malformed.
+
+**A test of mine, minutes old, exercised NOTHING.**
+`test_a_tool_merely_DESCRIBED_is_not` used corpus case D18-2, whose text
+contains neither "outil" nor "tool" — so it passed under ANY pattern.
+Loosening `TOOL_PATTERN` to `(outil|tool)` failed no test. Caught by mutation,
+and replaced with D18-1 verbatim plus the shape the 2026-11-11 campaign
+actually met (`` `OUTIL : afficher_code_ansi(code)` ``, the word present and
+the brackets absent). **A test is only worth what it COMPARES** — the seventh
+time in this file, and the first on a test I had just written.
+
+An existing test also had to be split, and it had the same conflation the code
+did: `test_a_silent_target_has_the_leak_families_skipped` asserted one
+behaviour for both cases while its fixture passed an explicit `False`. It is
+now two tests, one per case, and the silent one is the regression guard.
+
+**What this does NOT fix**, said rather than implied: reconnaissance still
+only sees what SIX harmless probes elicit. A target that neither declares nor
+exhibits anything in six questions is still poorly reconnoitred — the
+difference is that it is no longer poorly reconnoitred for the normal reason.
+And the observed readers are patterns, so they carry the fragility every
+pattern does: `TOOL_PATTERN` is "deliberately a heuristic", and a tool marked
+some way we have never met is a tool unseen.
+
+1,293 `pytest` tests, still with no LLM call at all.
 
 ## Legal framing
 

@@ -140,6 +140,64 @@ def _empty_profile(reason):
     }
 
 
+#: Prefix on an evidence line that comes from an OBSERVATION rather than a
+#: declaration. A reader has to be able to tell what the target was SEEN
+#: doing from what it SAID, because the two are not equally strong.
+OBSERVED = "observed:"
+
+
+def observe(exchanges):
+    """
+    The facts READ in the target's own probe replies, beside what it declared.
+
+    This is what stops reconnaissance being purely declarative — the oldest
+    limitation recorded in this project. The readers are `adaptation.py`'s,
+    not new ones: `triggered_a_tool` (narrowed by boundary D18 of the judge's
+    corpus, so a tool DESCRIBED does not count) and `names_what_it_protects`
+    (whose refusal patterns were widened on 2026-11-11 after a real campaign
+    went by unnoticed). Reusing them keeps one definition of each fact.
+
+    Returns {"tools": bool, "mentions_instructions": bool, "evidence": [...]}
+    — findings only. There is no observed FALSE, deliberately: an observation
+    may fill a declaration the analyst missed and may never narrow the
+    campaign, which would be the defect being fixed wearing the other face.
+    """
+    from agents.adaptation import names_what_it_protects, triggered_a_tool
+
+    found = {"tools": False, "mentions_instructions": False, "evidence": []}
+    for exchange in exchanges or []:
+        reply = exchange.get("reply") or ""
+        if triggered_a_tool(reply):
+            found["tools"] = True
+            found["evidence"].append(
+                f"{OBSERVED} a tool call appears in a reply to "
+                f"\"{exchange.get('question', '')[:60]}\"")
+        if names_what_it_protects(reply):
+            found["mentions_instructions"] = True
+            found["evidence"].append(
+                f"{OBSERVED} it refuses while naming what it protects, "
+                f"replying to \"{exchange.get('question', '')[:60]}\"")
+    return found
+
+
+def _merge_observed(profile, observed):
+    """
+    Observations fill what the declaration missed, and never the reverse.
+
+    An observation is STRONGER evidence than a declaration — a target that
+    emits `[OUTIL: ...]` has demonstrated the tool where one saying "I have
+    tools" has only claimed it — so it may promote a missing or negative
+    field. Nothing ever demotes one: a quiet probe round must not be able to
+    narrow a campaign.
+    """
+    if observed["tools"] and not profile["tools"]:
+        profile["tools"] = ["a tool seen in a reply (observed, unnamed)"]
+    if observed["mentions_instructions"]:
+        profile["mentions_instructions"] = True
+    profile["evidence"] = list(profile["evidence"]) + observed["evidence"]
+    return profile
+
+
 def reconnoitre(ask_target):
     """
     Probe the target and return its profile.
@@ -177,16 +235,32 @@ def reconnoitre(ask_target):
         # require no prerequisite.
         profile = _empty_profile("Analyse illisible : fiche vide, aucun fait retenu.")
         profile["exchanges"] = exchanges
-        return profile
+        # Even with no readable analysis, what the target was SEEN doing
+        # stands: those facts need no model to establish, which is exactly
+        # why they are worth reading. An unreadable analysis used to mean a
+        # profile with nothing in it at all.
+        return _merge_observed(profile, observe(exchanges))
 
     # The expected shape is enforced here: a missing field, or one of the
     # wrong type, would become an error much later, inside the planner.
-    return {
+    checked = {
         "role": profile.get("role") if isinstance(profile.get("role"), str) else None,
         "language": profile.get("language") if isinstance(profile.get("language"), str) else None,
         "tools": _list_of_strings(profile.get("tools")),
         "refused_subjects": _list_of_strings(profile.get("refused_subjects")),
-        "mentions_instructions": bool(profile.get("mentions_instructions")),
+        # A TRI-STATE, like its two siblings below, and for the reason
+        # stated there: we only rule out on an explicit NO. As a boolean it
+        # collapsed "it says it has no rules" into "it did not mention any",
+        # and the `secret` and `instructions` prerequisites rule out on it --
+        # so the prompt-leak family was skipped on SILENCE, which is the
+        # normal behaviour of a target that does not recite its system prompt
+        # when asked to present itself.
+        #
+        # Measured cost of that, 2026-11-19: a 30-attempt campaign kept ZERO
+        # attempts, because the one technique in scope needed `consignes` and
+        # the target had not mentioned its instructions that time.
+        "mentions_instructions": _tri_state(
+            profile.get("mentions_instructions")),
         # A deliberate tri-state: True, False, or None when the target said
         # nothing about it. Forcing a boolean would turn "I did not ask" into
         # "the target cannot do it", and skip probes wrongly.
@@ -198,6 +272,9 @@ def reconnoitre(ask_target):
         "exchanges": exchanges,
         "warning": None,
     }
+    # The observed pass runs LAST, over the shape already checked: it may
+    # only add, so it cannot reintroduce a field of the wrong type.
+    return _merge_observed(checked, observe(exchanges))
 
 
 def summarise(profile):
@@ -208,8 +285,10 @@ def summarise(profile):
         f"  tools     : {', '.join(profile['tools']) or 'none detected'}",
         f"  refuses   : "
         f"{', '.join(profile['refused_subjects']) or 'nothing declared'}",
-        f"  rules mentioned : "
-        f"{'yes' if profile['mentions_instructions'] else 'no'}",
+        # `_show`, not a boolean: "no" for a field that is None would tell
+        # the operator the target denied having rules when it simply did not
+        # mention them -- and those two now lead to different campaigns.
+        f"  rules mentioned : {_show(profile['mentions_instructions'])}",
         f"  writes code : {_show(profile.get('writes_code'))}",
         f"  reads documents : {_show(profile.get('handles_documents'))}",
         f"  context declared : "

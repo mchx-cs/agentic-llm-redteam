@@ -58,13 +58,40 @@ class TestPrerequisites:
         assert "abus-outils" not in _skipped(plan)
         assert "abus-outils" in {c["technique"] for c in plan["candidates"]}
 
-    def test_a_silent_target_has_the_leak_families_skipped(self):
-        plan = plan_campaign(profile(), budget=10)
-        skipped = _skipped(plan)
-        assert any("declares neither a forbidden subject" in m
+    def test_a_target_that_SAYS_it_has_no_rule_has_them_skipped(self):
+        # An explicit NO is still a reason to skip -- that half is unchanged.
+        # This test used to be called "a silent target" and asserted the same
+        # thing for both, which is exactly the conflation corrected on
+        # 2026-11-20: the fixture's default is an explicit False, not silence.
+        skipped = _skipped(plan_campaign(profile(instructions=False),
+                                         budget=10))
+        assert any("SAYS it has no rule" in m
                    for m in skipped["divulgation-information"])
-        assert any("mentions no internal instruction" in m
+        assert any("SAYS it has no internal instruction" in m
                    for m in skipped["fuite-prompt-systeme"])
+
+    def test_a_SILENT_target_keeps_them(self):
+        """
+        The regression that cost an experiment. On 2026-11-19 a 30-attempt
+        measurement kept ZERO attempts: probed again, `demo` had not mentioned
+        its instructions, so the only technique in scope was ruled out -- while
+        that target's system prompt holds the very secret the campaign was
+        after.
+
+        Silence is the NORMAL case: a chatbot asked to present itself does not
+        recite its system prompt. Ruling a family out on the normal case rules
+        it out always, and the project's own rule for the sibling fields says
+        so: "we only skip on an explicit NO".
+        """
+        skipped = _skipped(plan_campaign(profile(instructions=None),
+                                         budget=10))
+        assert "fuite-prompt-systeme" not in skipped, (
+            "a target that did not mention its instructions has not denied "
+            "having any, and the prompt-leak family is precisely what finds "
+            "out")
+        assert "divulgation-information" not in skipped or not any(
+            "SAYS it has no rule" in m
+            for m in skipped["divulgation-information"])
 
     @pytest.mark.parametrize("target", [
         profile(refused=["le code du coffre"]),

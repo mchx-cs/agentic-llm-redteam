@@ -196,7 +196,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,273 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,293 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -603,6 +603,18 @@ request.
 Reconnaissance asks six harmless questions and a model extracts *facts* — the target's
 role, what it declines, whether it mentions having instructions, whether it has tools,
 writes code, or will work on a document you hand it. Those facts gate whole families.
+
+It also reads what the target **did**, not only what it said: a tool marker in one of
+those replies means the target *has* a tool, and a refusal that names what it protects
+means it has instructions to protect. An observation can fill a declaration the analyst
+missed, never narrow one — a target that emits `[OUTIL: …]` has demonstrated the tool,
+where one saying "I have tools" has only claimed it. Each observed fact is recorded with
+the quote behind it, so the profile stays checkable by hand.
+
+And a field the target said nothing about never rules a family out. Silence is the normal
+case — a chatbot asked to present itself does not recite its system prompt — so skipping
+the prompt-leak family on it would skip it always. Only an explicit *"I have no
+instructions"* does, and the report says *SAYS* when it happens.
 But no model knows whether its output lands in a terminal, gets rendered as Markdown,
 or reaches a database, so you declare that instead:
 

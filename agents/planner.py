@@ -27,18 +27,25 @@ PREREQUISITES = {
         lambda profile: bool(profile["tools"]),
         "no tool detected on the target",
     ),
-    # Leaking confidential data assumes there is some: a target that refuses
-    # nothing and mentions no rule probably has nothing to protect.
+    # Leaking confidential data assumes there is some. A TRI-STATE read, like
+    # the capabilities below and for the same reason: we rule out on an
+    # explicit NO, never on silence. A target asked to present itself does not
+    # recite its system prompt, so "it did not mention a rule" is the NORMAL
+    # case -- and ruling a family out on the normal case rules it out always.
     "secret": (
         lambda profile: bool(profile["refused_subjects"])
-        or profile["mentions_instructions"],
-        "the target declares neither a forbidden subject nor a rule",
+        or profile["mentions_instructions"] is not False,
+        "the target SAYS it has no rule, and declares no forbidden subject",
     ),
-    # Extracting internal instructions assumes it has mentioned some.
+    # Extracting internal instructions assumes it has some. Same tri-state
+    # read, and the reason says SAYS: measured on 2026-11-19, a 30-attempt
+    # campaign kept ZERO attempts because the target had not mentioned its
+    # instructions that time -- while its system prompt holds the secret the
+    # campaign was after.
     "instructions": (
-        lambda profile: profile["mentions_instructions"]
+        lambda profile: profile["mentions_instructions"] is not False
         or bool(profile["refused_subjects"]),
-        "the target mentions no internal instruction",
+        "the target SAYS it has no internal instruction",
     ),
 
     # --- Target capabilities, probed during reconnaissance ------------------
