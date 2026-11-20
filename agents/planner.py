@@ -173,7 +173,7 @@ def filter_techniques(techniques, only=(), excluding=()):
     return kept, skipped
 
 
-def plan_campaign(profile, budget, only=(), excluding=()):
+def plan_campaign(profile, budget, only=(), excluding=(), repeat=False):
     """
     Returns {"essais": [...], "candidats": [...], "ecartees": [...]}.
 
@@ -189,6 +189,14 @@ def plan_campaign(profile, budget, only=(), excluding=()):
     - ecartees  : the techniques not kept AND why. A security tool that does
                   not say what it did NOT test gives a false impression of
                   coverage.
+
+    `repeat` is pass@k: the pool becomes ONE combination, repeated to the
+    budget, instead of a sweep. It is what makes an i.i.d. measurement
+    possible at all -- a sweep over one technique still crosses several
+    objectives and transformations, which `stats.py` calls heterogeneous, so
+    the bound it would print would be over different Bernoulli variables. The
+    attempt chosen is the pool's own head, so the choice stays the planner's
+    priority order and not a second rule nobody can audit.
     """
     library = load_library()
     objectives = objectives_for(profile, library)
@@ -280,6 +288,28 @@ def plan_campaign(profile, budget, only=(), excluding=()):
     # Stable sort: on an equal priority the library's order is kept, so two
     # identical campaigns produce the same list.
     attempts.sort(key=lambda attempt: attempt["priority"])
+
+    if repeat and attempts:
+        # ONE combination, `budget` times. The list is built rather than the
+        # same dict repeated: the campaign stamps adaptation reasons on what
+        # it draws, and a shared dict would see every turn's annotations.
+        #
+        # `candidates` is normally the untruncated pool, because a relegated
+        # attempt must be able to climb back. Here there is nothing to climb
+        # over, and leaving the others in would let the campaign wander off
+        # the one combination it was told to measure.
+        chosen = attempts[0]
+        attempts = [dict(chosen) for _ in range(budget)]
+        return {"attempts": attempts, "candidates": attempts,
+                "skipped": skipped,
+                # WHAT was repeated, so the bound is auditable in the document
+                # that prints it. On 2026-11-19 the report claimed
+                # independence while `result.json` kept no attempt list at
+                # all, and the triples had to be counted from stdout.
+                "repeated": {"technique": chosen["technique"],
+                             "objective": chosen["objective"],
+                             "transformation": chosen["transformation"]}}
+
     return {"attempts": _share_budget(attempts, budget),
             "candidates": attempts,
             "skipped": skipped}

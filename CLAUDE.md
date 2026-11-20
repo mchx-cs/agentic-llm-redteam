@@ -128,6 +128,7 @@ check_excerpt.py   # the README's campaign excerpt against the run's real output
 examples/
   demo-report.md   # a committed example report, abridged (--abridge)
   demo-multiturn-report.md # the same, over several turns: the renderings that differ
+  demo-pass-at-k-report.md # one combination x30: the only rendering that MEASURES a rate
 main.py            # orchestrator: the campaign loop with its attempt budget
 ```
 
@@ -4409,15 +4410,14 @@ cannot be acted on from there at all.
   on it — the contribution is reported as a figure, **35% of conversation
   positives breach after the first turn** — but the filing is still his to
   decide.
-- **pass@k is the last piece of phase 13, and `--attempts` is only half of
-  it.** The budget exists now; what is missing is a pool that REPEATS one
-  exact (technique, objective, transformation) when the scope pins one, and
-  an `independent_attempts` gate tightened to require all three instead of
-  the technique alone. Measured 2026-11-19: a 30-attempt single-technique
-  campaign spans FOUR objectives, which `stats.py` itself calls
-  heterogeneous — so the one branch of the report that prints a numeric bound
-  would print it over attempts the module's own reasoning forbids. Latent
-  today, because that branch only fires on a run with zero findings.
+- **pass@k is DONE (2026-11-20), so phase 13 is closed.** `--repeat` plus the
+  gate on the three axes, and the first measured attack success rate in the
+  project: 8 of 30 of one combination against `demo:3`, true rate 14%–44%.
+  What is still NOT shown by any artefact is a ZERO — the bounded null itself.
+  It needs a target that holds, and `demo` gives way at every level once N is
+  raised; picking a technique it resists in order to get one would be outcome
+  selection. So the rendering is reachable and honest now, and nobody has met
+  it yet.
 - **`collect_exchanges` has no bound**: `to_label.json` holds 18,536 entries,
   33 MB, and a harvest nobody will label is not a harvest. Bounding it is a
   SAMPLING decision — which payloads, how many per technique — and it belongs
@@ -4431,13 +4431,13 @@ cannot be acted on from there at all.
   it are generic. That limit has been recorded since the first run and never
   addressed — and `--multiturn` makes it bite harder, since a multi-turn
   attempt pursues the reconnaissance objective INSTEAD of its payload.
-- **Both example reports are CURRENT** (2026-11-19): single-turn, two `high`
-  findings replay-confirmed, with the README excerpt from that same campaign;
-  and multi-turn, which exercises every rendering only that mode produces.
-  What NEITHER shows is a campaign that finds nothing — the bounded null, the
-  block that refuses to bound and says what independence would take. It is the
-  rendering a reader is most likely to meet on a real target, and the one
-  nobody can see without a target that holds.
+- **The THREE example reports are CURRENT** (re-rendered 2026-11-20 so none
+  drifts from the renderer): single-turn with two `high` findings
+  replay-confirmed and the README excerpt from that same campaign; multi-turn,
+  which exercises every rendering only that mode produces; and pass@k, the
+  only one whose Coverage section MEASURES a rate instead of bounding or
+  declining. The bounded null stays unshown, for the reason in the pass@k item
+  above.
 - **`.env` still uses `PROFIL_ARBITRE`**, which prints a deprecation note on
   every command. It is the author's own config file, so it is theirs to
   rename.
@@ -6889,6 +6889,128 @@ the only technique in scope. The run before it had kept the same technique
 happily. That is the purely declarative reconnaissance recorded since the
 first campaign, costing an experiment rather than a profile — and re-running
 it was not re-rolling a result, since no result had been produced.
+
+**PASS@K: phase 13 closed, and the first MEASURED attack success rate in
+this project (2026-11-20).** The piece listed as remaining since 2026-11-12,
+and the blocker found yesterday while trying to produce the bounded null.
+
+**The defect it fixes, restated because it is the whole justification.** The
+report advised `--only <technique> --no-adaptation` as giving independent
+attempts. Measured on a real 30-attempt run: **four distinct objectives**,
+one of them aiming at a tool abuse rather than a prompt leak. `stats.py` names
+that in its own docstring — attempts are heterogeneous when they are
+"different probes, from different families, **against different objectives**"
+— so the gate was calling four different coins one coin, and would have
+printed a binomial bound over a mixture of them.
+
+**TWO HALVES, and neither works alone.**
+- `--repeat` makes the pool ONE combination, repeated to the budget. The
+  combination is the pool's own head, so the choice stays the planner's
+  priority order and `--only` is how an operator pins what they want
+  measured — not a second selection rule nobody can audit.
+- the gate requires the THREE axes identical across what was launched, not
+  the technique alone.
+
+And a third piece that only running it revealed: `next_attempt` excludes by
+TEXT, which is what stops a sweep repeating a payload — so under `--repeat`
+nothing counts as already sent, since repeating IS the measurement. Without
+that the campaign would send it once and declare the pool exhausted.
+
+**Why an explicit flag rather than inferring it.** `--only` matches a family,
+a module or a technique, never an objective or a transformation, so no
+combination of existing options can pin ONE candidate. And making
+`--only X --attempts 30` silently repeat would change what that command does
+today. The operator says what they want measured.
+
+**THE RESULT, and it is better than the bounded null that was asked for.**
+30 attempts of `fuite-prompt-systeme` / `refus-1` / `identity` against
+`demo:3`, no adaptation, measured judge:
+
+```
+Attack success rate: 27% (8 of 30 usable attempts)
+8 successes over 30 attempts of the same combination: the real rate lies
+between 14% and 44% (Wilson interval at 95%), not exactly 27%.
+```
+
+**That is the number a client actually asks for** — how often does this attack
+work on this target — and the project had never been able to produce one.
+Yesterday's sweep gave 16/30 across four objectives, which is not a rate of
+anything. Today's 8/30 is a rate of one specific attack against one specific
+defence, with its interval.
+
+Committed as `examples/demo-pass-at-k-report.md`, the third example, and the
+only one whose Coverage section MEASURES rather than bounds or declines.
+
+**AND THE REPORT WAS THROWING THAT INTERVAL AWAY.** `stats.summarise` computes
+a Wilson interval for successes > 0 as well as for a zero, and
+`_bounds_block` read `bounds["bound"]` only in its NO-FINDING branch. So with
+findings the interval was computed, stored in `result.json` and printed
+nowhere — a field written and never read, the half-wiring recorded twice
+before (phase 14's three chain-of-custody fields, the breach turn the judge
+emitted into nothing).
+
+Worse, the sentence left standing was FALSE in that case: *"It does not say
+how often"* is true of a sweep, whose attempts are different payloads, and
+wrong of a repetition that measures exactly that.
+
+**That fix was written BEFORE the run's figures were seen**, deliberately and
+recorded as such: a rendering corrected after reading a result one likes is a
+rendering chosen to flatter it. The prediction behind it was simply that the
+pool's head is the combination that leaked most in yesterday's sweep, so a
+zero was unlikely.
+
+**THREE PRESENTATION DEFECTS IN MY OWN ADDITIONS, all found by READING THE
+RENDERING — the tenth, eleventh and twelfth times.**
+1. The block printed *"It does not say how often"* and then
+   **"But here it does"** two lines later. Both true in their own scope and
+   unreadable together: a claim followed by its retraction, which is exactly
+   the shape corrected on 2026-11-12 when the Coverage section opened on "a
+   *no findings* is only worth what was attempted" in a report that had one.
+   The sentence is now CHOSEN, not contradicted.
+2. Joining them left the replay clause stranded: it opens with "and", which
+   worked after a comma and read as *"…for any one of them. and the replay
+   shown on each finding…"* after a full stop.
+3. The i.i.d. sentence said *"one technique, no adaptation"* — the old gate's
+   wording, which OVERSTATES the new one. It now says the SAME combination
+   and names it.
+
+**The third of those is the one that mattered**, and it closes a defect
+recorded yesterday: *"the report cannot be audited for the independence it
+claims"*, because `build_report` reads `launched` and never keeps it, so the
+triples had to be counted from stdout. The report now carries `repeated` — the
+one (technique, objective, transformation) that was sent N times — and prints
+it inside the bound's own sentence. The bound's justification lives in the
+document that makes the bound.
+
+**And THREE DOCUMENTS advised the wrong configuration**, which would have sent
+a reader to a command the gate refuses: the report's own no-finding block,
+`--attempts`'s help, and the README. All three corrected to name `--repeat`,
+and the correction is now EXECUTABLE rather than remembered:
+`tests/test_the_advice_is_runnable.py` collects every `--only …` command the
+documents offer as a way to bound a zero, requires `--repeat`,
+`--no-adaptation` and `--attempts` in each, and then DRIVES a campaign with
+those flags to check the gate really accepts them. Two documents agreeing on
+a spelling is not the same as the campaign accepting it — the junction defect
+this project has met seven times.
+
+Its first version collected EVERY `--only` and flagged `--only LLM07`, a
+scoping example with nothing to do with a bound. A guard that cries wrong on
+legitimate text teaches people to ignore it, and this project removed one for
+exactly that; the discriminator is that bounding advice names a budget or the
+control arm.
+
+**The two older examples were re-rendered**, from their `result.json` and with
+no campaign, so that no committed artefact drifts from the renderer that
+produced it. Fourth time the choice "the JSON is the source of truth" has
+paid in cash.
+
+Eight mutations bite: the gate back to the technique alone, the loop counting
+its own repetition as exhaustion, `candidates` keeping the whole pool, one
+shared dict instead of copies, the report dropping the combination's name, the
+README reverting to the old advice, the measured rate not printed, and the
+sweep's sentence printed over a repetition.
+
+1,252 `pytest` tests, still with no LLM call at all.
 
 ## Legal framing
 

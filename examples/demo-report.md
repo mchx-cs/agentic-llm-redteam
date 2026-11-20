@@ -78,7 +78,9 @@ What was attempted, and above all what was not: a finding does not bound the res
 
 Attack success rate: **67%** (2 of 3 usable attempt(s)).
 
-2 finding(s) over 3 attempt(s). A finding establishes a fact: this target gave way at least once. It does not say how often — attacks are probabilistic, and the replay shown on each finding is the only measure of reproducibility given here.
+2 finding(s) over 3 attempt(s). A finding establishes a fact: this target gave way at least once.
+
+**It does not say how often** — attacks are probabilistic, and each attempt here sent a different payload, so the campaign measures no rate for any one of them, and the replay shown on each finding is the only measure of reproducibility given here.
 
 **Families tested**
 

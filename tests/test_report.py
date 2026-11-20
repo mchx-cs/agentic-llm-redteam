@@ -791,9 +791,21 @@ class TestTheDataSchemaIsPINNED:
     will name the offending key.
     """
 
+    # `repeated` was ADDED on 2026-11-20 with pass@k, and this test failed
+    # first -- which is what it is for. Additive, like `delivery` before it:
+    # an older `result.json` has no such key, `build_report` reads it from the
+    # plan where a sweep leaves it absent, and nothing readable stops being
+    # readable.
+    #
+    # It is not cosmetic either. It carries the one (technique, objective,
+    # transformation) a pass@k campaign repeated, which is the bound's own
+    # justification -- and `launched` is read by `build_report` and never
+    # kept, so without this key the claim "the attempts ARE independent" could
+    # only be checked against the audit trail and not against the document
+    # that makes it.
     SCHEMA_RAPPORT = {"campaign", "target_profile", "coverage", "findings",
                       "call_log", "adaptation", "scope", "bounds",
-                      "success_rate"}
+                      "success_rate", "repeated"}
 
     # `delivery` and `multiturn_attack` were ADDED on 2026-11-17 with phase
     # 3b's orchestrator, and this test failed first -- which is what it is

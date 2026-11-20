@@ -256,9 +256,15 @@ def build_report(result, target="unknown"):
         "bounds": stats.summarise(
             len(findings), len(launched),
             independent=bool(result.get("independent_attempts")),
-            what="attempts of the same technique"
+            what="attempts of the same combination"
                  if result.get("independent_attempts")
                  else "campaign attempts"),
+        # WHAT was repeated, when the campaign repeated one combination
+        # (pass@k). The bound's justification belongs in the document that
+        # prints the bound: `launched` is read by `build_report` and not kept,
+        # so without this a reader can only check the claim against the audit
+        # trail. None for an ordinary sweep.
+        "repeated": plan.get("repeated"),
         # The scope asked for. A restricted campaign must NEVER present its
         # coverage as complete: that is the lie by omission this section
         # exists to prevent.
@@ -565,7 +571,8 @@ def _not_attempted_block(delivery="single-turn", attack=None,
     return lines
 
 
-def _bounds_block(bounds, finding_count, rate=None, replayed=True):
+def _bounds_block(bounds, finding_count, rate=None, replayed=True,
+                  repeated=None):
     """
     What the attempt count allows us to claim — and above all what it does
     not.
@@ -603,13 +610,51 @@ def _bounds_block(bounds, finding_count, rate=None, replayed=True):
             "and NO measure of reproducibility is given here: a multi-turn "
             "attack has no single payload to re-send, so none of these "
             "findings is corroborated by replay.")
+        # HOW OFTEN: one sentence, chosen, never a claim followed by its
+        # retraction. A sweep genuinely cannot tell -- its attempts are
+        # different payloads -- and a repetition measures exactly that, the
+        # interval being already computed and stored. A first version printed
+        # both, two lines apart, which is the contradiction the Coverage
+        # section was corrected for on 2026-11-12 and which reading the
+        # rendering caught again here.
+        measured = bounds.get("bound") and bounds.get("independent")
         lines += [
             f"{finding_count} finding(s) over {attempts} attempt(s). A "
-            f"finding establishes a fact: this target gave way at least once. "
-            f"It does not say how often — attacks are probabilistic, "
-            f"{how_often}",
+            f"finding establishes a fact: this target gave way at least once.",
             "",
         ]
+
+        if measured:
+            said = (
+                f" — `{repeated['technique']}` / "
+                f"`{repeated['objective'] or 'complete payload'}` / "
+                f"`{repeated['transformation']}`"
+                if repeated else "")
+            # The most useful number this tool can produce, and the one a raw
+            # fraction misleads about: 8 of 30 reads as 27%, where thirty
+            # trials support anything from 14% to 44%.
+            lines += [
+                f"**And here it says how often.** Every attempt was the SAME "
+                f"combination{said}, sent {attempts} times with no "
+                f"adaptation, so the rate is MEASURED rather than observed: "
+                f"{bounds['explanation']}",
+                "",
+                "That interval is the claim a client can act on; the "
+                "percentage above is not. A rate read off a handful of trials "
+                "is a point where the evidence supports only a range.",
+                "",
+            ]
+        else:
+            lines += [
+                # `how_often` opens with "and", so it is joined rather than
+                # placed after a full stop -- which is how the first version
+                # read, and reading the rendering is what caught it.
+                f"**It does not say how often** — attacks are probabilistic, "
+                f"and each attempt here sent a different payload, so the "
+                f"campaign measures no rate for any one of them, "
+                f"{how_often}",
+                "",
+            ]
         return lines
 
     lines += [
@@ -620,11 +665,20 @@ def _bounds_block(bounds, finding_count, rate=None, replayed=True):
     ]
 
     if bounds.get("bound"):
-        # The i.i.d. case: one technique, no adaptation. The bound holds,
-        # and this is the only configuration where we may give it.
+        # The i.i.d. case: ONE combination, repeated, no adaptation. The
+        # bound holds, and this is the only configuration where we may give
+        # it. "One technique" was the old wording and it overstated the gate:
+        # a sweep over one technique crosses several objectives and
+        # transformations, which `stats.py` itself calls heterogeneous.
+        said = (
+            f" — `{repeated['technique']}` / "
+            f"`{repeated['objective'] or 'complete payload'}` / "
+            f"`{repeated['transformation']}`"
+            if repeated else "")
         lines += [
-            f"Here the attempts ARE independent — one technique, no "
-            f"adaptation — so the bound holds: {bounds['explanation']}",
+            f"Here the attempts ARE independent — the SAME combination"
+            f"{said}, sent {attempts} times with no adaptation — so the "
+            f"bound holds: {bounds['explanation']}",
             "",
             f"To bring that bound down to 5%, it would take "
             f"{stats.attempts_to_rule_out(0.05)} attempts; to 1%, "
@@ -640,10 +694,14 @@ def _bounds_block(bounds, finding_count, rate=None, replayed=True):
         for rate in (0.10, 0.05):
             lines.append(
                 f"- To rule out a residual success rate of {rate:.0%} on ONE "
-                f"technique, it would take about "
+                f"combination, it would take about "
                 f"{stats.attempts_to_rule_out(rate)} independent "
-                f"attempts of that same technique — which is what "
-                f"`--only <technique> --no-adaptation` gives.")
+                f"attempts of that same combination — which is what "
+                f"`--only <technique> --repeat --no-adaptation "
+                f"--attempts {stats.attempts_to_rule_out(rate)}` gives. "
+                f"Sweeping ONE technique is not enough: it still crosses "
+                f"several objectives and transformations, so its attempts "
+                f"are not trials of the same thing.")
         lines.append("")
 
     lines += [
@@ -907,7 +965,8 @@ def render_markdown(report, abridge=False):
         # so the clause pointing at "the replay shown on each finding" would
         # send the reader to something this report does not contain.
         replayed=(report["campaign"].get("delivery") or "single-turn")
-        != "pyrit-multiturn")
+        != "pyrit-multiturn",
+        repeated=report.get("repeated"))
 
     lines += ["**Families tested**", ""]
     lines += [f"- `{f}`" for f in coverage["families_tested"]] or \

@@ -59,7 +59,8 @@ from pyrit_bridge.convert import (ATTACK_NAMES as MULTITURN_ATTACKS,
 
 def run_campaign(ask_target=None, target_name=None, trail=None,
                  context=(), adaptive=True, only=(), excluding=(),
-                 multiturn=None, max_turns=None, attempts=None):
+                 multiturn=None, max_turns=None, attempts=None,
+                 repeat=False):
     """
     Runs a campaign against `ask_target`.
 
@@ -105,7 +106,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     # a plan built for one budget and a loop running another would announce a
     # coverage it never attempted.
     budget = attempts or MAX_ATTEMPTS
-    plan = plan_campaign(profile, budget, only, excluding)
+    plan = plan_campaign(profile, budget, only, excluding, repeat=repeat)
     print(summarise_plan(plan))
 
     if not plan["attempts"]:
@@ -156,8 +157,14 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
         # order, but learning nothing from the replies. That is the CONTROL
         # the gain measurement needs — without it, adaptation can only be
         # compared against simulated campaigns.
+        # `already_sent` is what stops a sweep repeating a payload, and
+        # pass@k is exactly the case where repeating IS the measurement. So
+        # under `repeat` nothing counts as already sent -- the pool holds one
+        # combination and every turn draws it again. `launched` still records
+        # each send, which is what the ASR and the bound count.
         payload = next_attempt(plan["candidates"],
-                               observations if adaptive else (), launched)
+                               observations if adaptive else (),
+                               () if repeat else launched)
         if payload is None:
             print(">>> Pool exhausted: no applicable attempt left.")
             break
@@ -311,9 +318,18 @@ def _campaign_result(profile, plan, findings, launched, states, observations,
         # families do not share the same probability of success). When both
         # hold — typically `--seulement X --sans-adaptation` — the report can
         # finally bound its "no finding", which is precisely what pass@k asks.
+        # THE THREE AXES, not the technique alone. `stats.py` names the trap
+        # in its own docstring: attempts are heterogeneous when they are
+        # "different probes, from different families, against different
+        # objectives". Measured 2026-11-19: a 30-attempt single-technique
+        # campaign spans FOUR objectives, one of which aims at a tool abuse
+        # rather than a prompt leak -- four different Bernoulli variables
+        # under a gate that called them independent. Only `--repeat` produces
+        # a pool that satisfies this, which is why it exists.
         "independent_attempts": (
             not adaptive
-            and len({a["technique"] for a in launched}) <= 1
+            and len({(a["technique"], a["objective"], a["transformation"])
+                     for a in launched}) == 1
             and len(launched) > 0),
         # How the attempts were DELIVERED. The report must say it: a
         # multi-turn attempt does not send the library's payload text, its
@@ -421,10 +437,19 @@ def cli(arguments=None):
              f"Each turn carries the whole history forward, so this "
              f"multiplies the cost of an attempt.")
     parser.add_argument(
+        "--repeat", "--repeter", action="store_true",
+        help="pass@k: send ONE combination N times instead of sweeping the "
+             "pool, which is what makes the attempts i.i.d. and so the only "
+             "way a \"no finding\" gets a numeric bound. The combination is "
+             "the best in scope, so pin it with --only. Use with "
+             "--no-adaptation: a bound over attempts that learned from each "
+             "other is not a bound.")
+    parser.add_argument(
         "--attempts", "--tentatives", type=int, default=None, metavar="N",
         help=f"attempts in the campaign, instead of {MAX_ATTEMPTS}. The one "
              f"configuration that can BOUND a \"no finding\" needs a large "
-             f"N: `--only <technique> --no-adaptation --attempts 30` makes "
+             f"N: `--only <technique> --repeat --no-adaptation "
+             f"--attempts 30` makes "
              f"the attempts independent, and 0 successes in 30 then rules out "
              # `%` doubled: argparse formats this string, so a lone percent sign
              # makes `add_argument` itself raise.
@@ -564,7 +589,8 @@ def cli(arguments=None):
             excluding=scope_patterns(arguments.excluding),
             multiturn=arguments.multiturn,
             max_turns=arguments.max_turns,
-            attempts=arguments.attempts)
+            attempts=arguments.attempts,
+            repeat=arguments.repeat)
     except RuntimeError as failure:
         # The target did not answer as expected: unreachable host, HTTP
         # error, non-JSON reply, wrong response path. `targets/http.py`'s

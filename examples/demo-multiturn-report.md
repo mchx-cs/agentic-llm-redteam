@@ -54,7 +54,9 @@ What was attempted, and above all what was not: a finding does not bound the res
 
 Attack success rate: **33%** (1 of 3 usable attempt(s)).
 
-1 finding(s) over 3 attempt(s). A finding establishes a fact: this target gave way at least once. It does not say how often — attacks are probabilistic, and NO measure of reproducibility is given here: a multi-turn attack has no single payload to re-send, so none of these findings is corroborated by replay.
+1 finding(s) over 3 attempt(s). A finding establishes a fact: this target gave way at least once.
+
+**It does not say how often** — attacks are probabilistic, and each attempt here sent a different payload, so the campaign measures no rate for any one of them, and NO measure of reproducibility is given here: a multi-turn attack has no single payload to re-send, so none of these findings is corroborated by replay.
 
 **Families tested**
 

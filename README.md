@@ -162,7 +162,8 @@ and coverage that states what was never attempted.
 │   └── label.py                     # hand-labelling, one question at a time
 ├── examples/
 │   ├── demo-report.md   # a committed example report, abridged, rendered by GitHub
-│   └── demo-multiturn-report.md  # the same target, attacked over several turns
+│   ├── demo-multiturn-report.md  # the same target, attacked over several turns
+│   └── demo-pass-at-k-report.md  # one payload thirty times: a measured rate, with its interval
 ├── audit.py             # authorisation gate + append-as-you-go JSONL audit trail
 ├── stats.py             # what a result bounds — and the refusal to bound dependent trials
 ├── migration.py         # reads data written before the names were translated
@@ -652,11 +653,25 @@ actually run:
   the binomial model doesn't apply, and a number that looked rigorous without being so
   would be worse than none. The report says what *would* let you claim something: about
   30 independent attempts of one technique to rule out a 10% residual rate;
-- `--only <technique> --no-adaptation --attempts 30` makes the attempts i.i.d. — same
-  technique, no learning — and then the bound is real: *"0 of 30 proves nothing; the
-  true rate could still reach 10%. To push that to 5%, 60 attempts; to 1%, 300."*
-  `--attempts` is what makes that reachable: the default is 3, where the rule of three
-  bounds 3/3 = 100% and so bounds nothing at all.
+- `--only <technique> --repeat --no-adaptation --attempts 30` makes the attempts
+  i.i.d. — the **same combination**, sent thirty times, no learning — and then the bound
+  is real: *"0 of 30 proves nothing; the true rate could still reach 10%. To push that
+  to 5%, 60 attempts; to 1%, 300."* The report names the combination it bounded, so the
+  claim is checkable in the document that makes it.
+
+  Both flags are needed, and the reason is measured rather than assumed. `--attempts`
+  because the default is 3, where the rule of three bounds 3/3 = 100% and so bounds
+  nothing at all. `--repeat` because a sweep over one *technique* still crosses several
+  objectives and transformations: counted on a real 30-attempt run, four distinct
+  objectives, one of which aims at a tool abuse rather than a prompt leak. Those are
+  four different coins, and no binomial bound applies to a mixture of them.
+
+And when a pass@k run DOES find something, the same arithmetic gives the number a
+client actually asks for — how often does this attack work?
+[A committed example](examples/demo-pass-at-k-report.md): one payload against defence
+level 3, thirty times, no adaptation → **8 of 30, so a true rate of 14% to 44%**, not
+the 27% the fraction reads as. The report names the combination it measured, so the
+claim is checkable in the document that makes it.
 
 The replay check is bounded too, and that one matters to a client: "the value came back
 2 times out of 3" reads as 67%, when three trials only support a range of 21–94%.
