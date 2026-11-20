@@ -21,6 +21,7 @@ imported and nothing is executed, so it cannot call a model.
 
 import ast
 import pathlib
+import re
 import subprocess
 
 import pytest
@@ -202,3 +203,114 @@ class TestNoTestReadsTheAmbientJudge:
         assert '"JUDGE_PROFILE"' in pinned
         assert '"JUDGE_PROFILE"' not in unpinned
 
+
+class TestWhatGetsSHIPPED:
+    """
+    A top-level module imported by the code must be in `py-modules`.
+
+    THE DEFECT, found on 2026-11-20 while wiring the transports: `console.py`
+    arrived on 2026-11-19, 21 files import it, `main` among them -- and it was
+    not in `pyproject.toml`'s module list. So `pip install .` produced a
+    `redteam` command that died at import, and phase 10's whole deliverable
+    is that packaged command.
+
+    Nothing in the repository could see it, because the tests run from the
+    CHECKOUT, where the file is simply there. Same shape as the gitignored
+    garak snapshot that turned CI red for six days: **an environment richer
+    than the one the artefact runs in.**
+
+    Static, like the rest of this file: nothing is imported, nothing runs.
+    """
+
+    #: Packages are found by `packages.find`, so only top-level MODULES need
+    #: listing. These are not modules of ours.
+    STANDARD_LIBRARY_AND_FRIENDS = {"openai", "pytest", "pyrit", "garak"}
+
+    @staticmethod
+    def _shipped():
+        text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        inside = re.search(r"py-modules\s*=\s*\[(.*?)\]", text, re.S)
+        assert inside, "pyproject.toml no longer declares py-modules"
+        return set(re.findall(r'"([^"]+)"', inside.group(1)))
+
+    @staticmethod
+    def _top_level_modules():
+        return {path.stem for path in ROOT.glob("*.py")}
+
+    @classmethod
+    def _imported_by_anyone(cls):
+        """
+        Top-level modules of ours that some other SHIPPED file imports.
+
+        `tests/` is skipped, and that boundary is the rule rather than a
+        convenience: the package ships what the RUNTIME needs, and tests are
+        not shipped. Its first version counted them, and flagged
+        `check_excerpt` -- a hand-run helper imported by nothing but its own
+        test. A guard that cries wrong on legitimate files teaches people to
+        ignore it, which this project has removed a guard for once already.
+        """
+        ours = cls._top_level_modules()
+        found = {}
+        for path in ROOT.rglob("*.py"):
+            if any(part.startswith(".venv") for part in path.parts):
+                continue
+            if "tests" in path.parts:
+                continue
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except SyntaxError:                            # pragma: no cover
+                continue
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.ImportFrom) and node.level == 0:
+                    names = [(node.module or "").split(".")[0]]
+                elif isinstance(node, ast.Import):
+                    names = [alias.name.split(".")[0] for alias in node.names]
+                for name in names:
+                    if name in ours and name != path.stem:
+                        found.setdefault(name, path.relative_to(ROOT))
+        return found
+
+    def test_every_module_the_code_imports_is_shipped(self):
+        shipped = self._shipped()
+        missing = {name: by for name, by
+                   in self._imported_by_anyone().items()
+                   if name not in shipped}
+        assert not missing, (
+            "these top-level modules are imported but not shipped, so an "
+            "installed `redteam` dies at import: "
+            + ", ".join(f"{name} (imported by {by})"
+                        for name, by in sorted(missing.items())))
+
+    def test_and_the_guard_would_have_caught_console(self):
+        """
+        Not a second copy of the test above: it checks the guard's INPUT is
+        what it is supposed to be. If `console` ever stopped being seen as
+        imported, the test above would pass while shipping nothing -- the
+        tautology this project keeps finding in its own guards.
+        """
+        assert "console" in self._imported_by_anyone(), (
+            "console is imported by main and 20 others; a guard that cannot "
+            "see that is not guarding")
+
+    def test_a_module_NOBODY_imports_need_not_be_shipped(self):
+        """
+        The rule has to have a boundary, or it becomes a list to maintain.
+        `check_excerpt.py` and `check_rename_damage.py` are run by hand and
+        imported by nothing, so they are not part of the installed package --
+        and a guard that demanded them would cry wrong on legitimate files,
+        which this project has removed a guard for once already.
+        """
+        imported = self._imported_by_anyone()
+        standalone = [name for name in ("check_excerpt",
+                                        "check_rename_damage")
+                      if name in self._top_level_modules()]
+        assert standalone, "neither helper exists any more"
+        for name in standalone:
+            assert name not in imported, (
+                f"{name} is run by hand and imported by no shipped file, so "
+                f"it is not part of the installed package")
+        # And the boundary is load-bearing rather than cosmetic: a TEST does
+        # import `check_excerpt`, which is what made the rule's first
+        # version demand it be shipped.
+        assert (ROOT / "tests" / "test_check_excerpt.py").exists()

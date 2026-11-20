@@ -35,7 +35,8 @@ Repository = "https://github.com/mchx-cs/agentic-llm-redteam"
 redteam = "main:cli"
 
 [tool.setuptools]
-py-modules = ["main", "config", "llm_client", "report", "stats", "audit", "migration"]
+py-modules = ["main", "config", "llm_client", "report", "stats", "audit",
+              "migration", "console"]
 
 [tool.setuptools.packages.find]
 include = ["agents*", "targets*", "payloads*", "evaluation*", "pyrit_bridge*"]

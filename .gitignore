@@ -46,3 +46,10 @@ autorisation.json
 
 # Resume cache for an interrupted evaluation: regenerable, per-run.
 evaluation/.verdicts-*.jsonl
+
+# Build artefacts. Produced by `pip install .` / `python -m build`, and the
+# packaging guard in tests/test_cli_wiring.py means that command now gets
+# run: the install is the one configuration the checkout cannot stand in for.
+build/
+dist/
+*.egg-info/

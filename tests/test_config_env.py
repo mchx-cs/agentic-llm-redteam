@@ -34,7 +34,25 @@ KEYS = {
     "TARGET_RESPONSE_PATH": ("a.b", "a.b",
                              lambda c: c.HTTP_TARGET["response_path"]),
     "TARGET_TIMEOUT": ("3", 3.0, lambda c: c.HTTP_TARGET["timeout"]),
+    "TARGET_TRANSPORT": ("get", "get",
+                         lambda c: c.HTTP_TARGET["transport"]),
+    "TARGET_URL_LIMIT": ("8000", 8000,
+                         lambda c: c.HTTP_TARGET["url_limit"]),
+    "TARGET_WS_QUIET": ("0.5", 0.5, lambda c: c.HTTP_TARGET["ws_quiet"]),
 }
+
+
+def test_the_three_transport_keys_default_to_NONE():
+    """
+    Unset, they must be None rather than a number.
+
+    The defaults live in `targets/http.py`, beside the code that explains
+    why 2,000 characters and why 2 seconds. Restating them here would be two
+    definitions of one figure, and the one that drifts is always the copy.
+    """
+    for key in ("transport", "url_limit", "ws_quiet"):
+        assert config.HTTP_TARGET[key] is None, (
+            f"{key} unset must be None: the default belongs to the adapter")
 
 
 @pytest.fixture(autouse=True)
@@ -47,12 +65,32 @@ def configuration_put_back():
     importlib.reload(config)
 
 
-@pytest.mark.parametrize("new", sorted(KEYS))
+#: Keys born AFTER the switch to English of 2026-11-15, so with no French
+#: predecessor to keep working. Listed rather than skipped silently: the
+#: point of the table is that every key is wired, and "this one has no old
+#: name" is a fact about its age, not a gap in the test.
+BORN_IN_ENGLISH = {"TARGET_TRANSPORT", "TARGET_URL_LIMIT", "TARGET_WS_QUIET"}
+
+
+@pytest.mark.parametrize("new", sorted(set(KEYS) - BORN_IN_ENGLISH))
 def test_the_old_french_name_still_works(new, monkeypatch):
     probe, expected, read = KEYS[new]
     monkeypatch.setenv(config.LEGACY_ENV[new], probe)
     reloaded = importlib.reload(config)
     assert read(reloaded) == expected
+
+
+def test_and_the_newer_keys_never_HAD_a_french_name():
+    """
+    The other half, so the exemption cannot quietly grow: a key listed as
+    born in English must really be absent from the migration table. Adding
+    an OLD key to that set would hide a broken migration, which is the one
+    thing this file exists to catch.
+    """
+    for key in BORN_IN_ENGLISH:
+        assert key in KEYS, f"{key} is not a key at all"
+        assert key not in config.LEGACY_ENV, (
+            f"{key} does have an old name: it belongs in the migration test")
 
 
 @pytest.mark.parametrize("new", sorted(KEYS))

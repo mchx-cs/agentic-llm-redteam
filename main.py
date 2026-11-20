@@ -32,8 +32,9 @@ from agents.planner import plan_campaign, summarise as summarise_plan
 from agents.reconnaissance import (KNOWN_CONTEXTS, reconnoitre,
                                    summarise as summarise_profile)
 from agents.verifier import verify_by_replay
-from targets import choose_target
-from targets.http import TARGET_PROFILES, probe_target as probe_http_target
+from targets import choose_target, is_url_target
+from targets.http import (TARGET_PROFILES, TRANSPORTS, PayloadTooLong,
+                          probe_target as probe_http_target, transport_for)
 from config import CALL_BUDGET, TOKEN_BUDGET, TARGET
 from llm_client import BudgetExceeded, call_log, reset_call_log
 from report import save_report
@@ -251,6 +252,16 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
                     states.append("hallucination")
                     print("  >>> Value invented by the target: moving on.\n")
                     continue
+        except PayloadTooLong as refusal:
+            # The payload never left: too long for the URL this transport
+            # builds. NOT a resistance -- no oracle saw anything, so it is a
+            # missing measurement and it leaves the ASR denominator. The
+            # campaign goes on, exactly as it does for an attacker model that
+            # gives up mid-attempt: one undeliverable payload out of 1,160 has
+            # no business ending a run halfway through.
+            print(f"  /!\\        {refusal}\n")
+            states.append("not_sent")
+            continue
         except BudgetExceeded as stop:
             # A NORMAL stop, not a failure: we keep what has been found so
             # far, and we will say plainly that the plan did not run to its
@@ -463,6 +474,14 @@ def cli(arguments=None):
              "Serves as the control for measuring what adaptation adds; of "
              "no use in normal operation.")
     parser.add_argument(
+        "--target-transport", default=None, metavar="NAME",
+        dest="target_transport",
+        help="how the request is CARRIED: " + ", ".join(TRANSPORTS)
+             + ". Unset means a JSON POST, except on a ws:// or wss:// URL, "
+               "which can only be a WebSocket. Wins over TARGET_TRANSPORT "
+               "in .env. Use it with a hand-written TARGET_BODY; a profile "
+               "already brings its own.")
+    parser.add_argument(
         "--target-profile", "--profil-cible", default=None, metavar="NAME",
         dest="target_profile",
         help="the target's API shape, instead of describing TARGET_BODY and "
@@ -544,14 +563,15 @@ def cli(arguments=None):
     # matters — discovering a configuration typo must not cost an entry in a
     # client's audit trail.
     if arguments.probe_target:
-        if not target_name.startswith(("http://", "https://")):
-            print(f"--probe-target aims at an http(s) URL; '{target_name}' is "
-                  f"a bundled target, with nothing to configure.",
+        if not is_url_target(target_name):
+            print(f"--probe-target aims at an endpoint URL; '{target_name}' "
+                  f"is a bundled target, with nothing to configure.",
                   file=sys.stderr)
             raise SystemExit(2)
         try:
             ok = probe_http_target(target_name,
-                                   profile=arguments.target_profile)
+                                   profile=arguments.target_profile,
+                                   transport=arguments.target_transport)
         except RuntimeError as refusal:
             print(refusal, file=sys.stderr)
             raise SystemExit(2)
@@ -572,17 +592,28 @@ def cli(arguments=None):
               f"authorised by {authorisation['authorised_by']}, "
               f"from {authorisation['start']} to {authorisation['end']}.\n")
 
+    # Resolved ONCE, and asked of the adapter rather than read off the
+    # command line: a profile or a ws:// URL sets no flag, so the flag alone
+    # would have left the trail of every socket campaign silent about how it
+    # reached the target. Both telemetry calls below use this.
+    transport = (transport_for(target_name, arguments.target_profile,
+                               arguments.target_transport)
+                 if is_url_target(target_name) else None)
+
     folder = arguments.report or "reports"
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     # The audit trail is ALWAYS written, even without --rapport: it is the
     # trace of what we sent, not an optional deliverable.
     trail = AuditTrail(Path(folder) / f"{timestamp}-trail.jsonl",
                        target_name, authorisation,
-                       context=telemetry(target_name, arguments.target_profile))
+                       context=telemetry(target_name,
+                                         arguments.target_profile,
+                                         transport))
 
     try:
         result = run_campaign(
-            choose_target(arguments.target, arguments.target_profile),
+            choose_target(arguments.target, arguments.target_profile,
+                          arguments.target_transport),
             target_name, trail, context,
             adaptive=not arguments.no_adaptation,
             only=scope_patterns(arguments.only),
@@ -619,7 +650,8 @@ def cli(arguments=None):
     result["case_id"] = trail.case_id
     result["trail"] = str(trail.path)
     result["trail_seal"] = seal
-    result["telemetry"] = telemetry(target_name, arguments.target_profile)
+    result["telemetry"] = telemetry(target_name, arguments.target_profile,
+                                    transport)
     print(f"\nFinal result: {result['status']}")
     print(f"Audit trail: {trail.path}")
 

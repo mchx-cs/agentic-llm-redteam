@@ -119,7 +119,8 @@ and coverage that states what was never attempted.
 │   ├── mock.py          # deterministic, no LLM: free end-to-end tests
 │   ├── records.py       # a retrieval desk over reader records: the third-party target
 │   ├── conversation.py  # the multi-turn contract, and the refusal to fake it
-│   └── http.py          # a real endpoint, described in .env (urllib, no new dependency)
+│   ├── http.py          # a real endpoint, described in .env (urllib, no new dependency)
+│   └── websocket.py     # RFC 6455 on the standard library: ws:// and wss:// endpoints
 ├── agents/
 │   ├── reconnaissance.py  # probes the target with harmless questions, builds a profile
 │   ├── planner.py         # picks families, objectives and order from that profile (rules)
@@ -551,8 +552,62 @@ turn up in practice:
 | `simple` | `reply` — a bespoke app |
 | `openai-flux` | `@flux:choices.0.delta.content` — an SSE stream, reassembled |
 | `text` | `@brut` — the whole body, unparsed |
+| `get` | `reply` — and the payload goes in the query string |
+| `multipart` | `reply` — and the payload goes in a form field |
+| `websocket` | `reply` — one frame over `ws://` or `wss://` |
 
 Precedence is the usual one: command line, then profile, then `.env`.
+
+**Transports** are how the request is *carried*, as opposed to what it contains. A JSON
+POST covers almost every LLM API and stays the default; the last three profiles above
+bring one of the other shapes, and `--target-transport get|multipart|websocket|json-post`
+sets it when you have written `TARGET_BODY` yourself. A `ws://` URL needs nothing: it can
+only be a WebSocket, and a transport contradicting the scheme is refused rather than
+resolved quietly.
+
+Each has one thing worth knowing before you point it at a client's system.
+
+**GET refuses a payload it cannot deliver.** garak payloads run past 2,500 characters and
+servers cap the request line — by *truncating* it. A payload cut in half draws a harmless
+answer, the judge says "no finding", the report calls the target safe, and nothing flags
+it: the silent false negative in its purest form. So an over-long URL is refused, that
+attempt is recorded as a *missing* measurement rather than a resistance, and the campaign
+carries on. `--probe-target` says how much room a payload has, before you spend a mandate
+finding out; `TARGET_URL_LIMIT` raises the 2,000-character default if you know what your
+server accepts.
+
+**multipart picks a boundary the payload does not contain.** A form body is delimited by
+a text marker, nothing escapes it, and an attack payload is text we did not write — one
+carrying our boundary would have the target parse something else entirely. The boundary
+is drawn at random and *verified* against the payload rather than assumed.
+
+**WebSocket adds no dependency.** RFC 6455 on the standard library, for two reasons: the
+protocol has been frozen since 2011, unlike PyRIT, which is an optional extra precisely
+because an alpha API renaming its abstractions costs attention indefinitely — and the
+framing is then checkable in continuous integration, which an extra never is. The
+handshake digest is asserted against the value the RFC publishes for its own example,
+and that test earned its keep immediately: the magic GUID had been written from memory
+with the last group's leading `C` moved to its end — `…95CA-5AB0DC85B11C` for
+`…95CA-C5AB0DC85B11` — which would have made every handshake fail its own check, and the
+message blames the *target* for it.
+
+It carries one heuristic, stated because it can cost a measurement: a socket chatbot
+usually streams and sends no end marker, so a reply ends either on the server's close
+frame (certain) or after a window of silence (a guess — `TARGET_WS_QUIET`, 2s by
+default). A tail slower than that window is lost, and a leak cut in half reads as a clean
+refusal, so `--probe-target` reports which of the two ended the reply.
+
+**Multi-turn, per transport.** The conversation capability is declared from the body, as
+it has been since the adapter learned to hold one: a flat `get` or `multipart` body has
+no list of turns, so it answers *no* and a single-turn campaign is what runs. Over a
+WebSocket a body shaped as turns works — but the *other* multi-turn shape a socket
+allows, the dialogue kept open on one connection, is not supported: each attempt gets a
+fresh socket, and pretending otherwise would flatten a dialogue the way this adapter has
+always refused to.
+
+Still out of reach: a *file* part, which is what an indirect-injection test would need —
+and that is a register the judge cannot score yet, so building the transport for it would
+be building the wrong half first — and WebSocket subprotocol negotiation.
 
 **Streaming matters more than it looks.** "Just set `stream: false`" assumes you control
 the request body — which you often don't when the thing under test is a client's own

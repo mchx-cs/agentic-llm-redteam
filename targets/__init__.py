@@ -117,13 +117,30 @@ def is_bundled_target(name):
                    for base in LEVELLED_TARGETS))
 
 
-def choose_target(name=None, profile=None):
+#: The URL schemes a target name may carry. `ws://` and `wss://` arrived on
+#: 2026-11-20 with the WebSocket transport.
+#:
+#: In ONE place because three separate gates were deciding "is this a URL?"
+#: by looking for "http", and widening two of three is how a ws:// endpoint
+#: ends up refused by `--probe-target` as "a bundled target, with nothing to
+#: configure" -- blaming the operator for a gate we forgot. The same reason
+#: the PyRIT bridge reads `stats.STATES` and `label.py` reads
+#: `split_sets.imposed_set()` instead of restating them.
+URL_SCHEMES = ("http://", "https://", "ws://", "wss://")
+
+
+def is_url_target(name):
+    """Is this target name an endpoint to configure, rather than a bundled one?"""
+    return str(name).startswith(URL_SCHEMES)
+
+
+def choose_target(name=None, profile=None, transport=None):
     """
     Return the asking function matching `name`.
 
     - a known name ("decoy", "mock");
     - "demo" or "records", with ":N" to pick the defence level (1, 2 or 3);
-    - a URL (http:// or https://) → the HTTP adapter configured from `.env`,
+    - a URL (http(s):// or ws(s)://) → the HTTP adapter configured from `.env`,
       or from `profil` (see targets.http.TARGET_PROFILES) for a known API shape:
       describing the JSON body by hand is the most tedious part of wiring a
       target, and for the common case it is entirely predictable;
@@ -137,11 +154,12 @@ def choose_target(name=None, profile=None):
     # Placed lower down, this check was unreachable — the named targets return
     # before it — and the profile was silently ignored, exactly what it was
     # meant to prevent. A test showed it.
-    if profile and not name.startswith(("http://", "https://")):
+    if (profile or transport) and not is_url_target(name):
+        said = f'profile "{profile}"' if profile else f'transport "{transport}"'
         raise ValueError(
-            f'The target profile "{profile}" describes the shape of an '
-            f"http(s) API; the target '{name}' ships with the project and "
-            f"has nothing to configure.")
+            f"The target {said} describes how to reach an endpoint; the "
+            f"target '{name}' ships with the project and has nothing to "
+            f"configure.")
 
     if name in NAMED_TARGETS:
         return NAMED_TARGETS[name]
@@ -161,12 +179,12 @@ def choose_target(name=None, profile=None):
                 f"{{{', '.join(str(n) for n in levels)}}}."
             ) from error
 
-    if name.startswith(("http://", "https://")):
-        return build_http_target(name, profile=profile)
+    if is_url_target(name):
+        return build_http_target(name, profile=profile, transport=transport)
 
     raise ValueError(
         f"Unknown target: '{name}'. Expected: "
         f"{', '.join(PUBLIC_TARGET_NAMES)}, "
         f"{', '.join(f'{base}[:N]' for base in LEVELLED_TARGETS)}, "
-        f"or an http(s) URL."
+        f"or a URL ({', '.join(URL_SCHEMES)})."
     )

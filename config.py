@@ -189,6 +189,13 @@ def _json_from_env(name, default):
 # Description of an HTTP target. Every application exposes a different shape:
 # rather than guessing, we describe it here. The defaults match the simplest
 # case, {"message": "..."} → {"reply": "..."}.
+# Read before the dictionary so an unset key stays None: the DEFAULTS live
+# in `targets/http.py`, beside the code that explains them, and restating
+# them here would be two definitions of one number.
+_transport = _from_env("TARGET_TRANSPORT")
+_url_limit = _from_env("TARGET_URL_LIMIT")
+_ws_quiet = _from_env("TARGET_WS_QUIET")
+
 HTTP_TARGET = {
     # Headers, authentication included. Example in .env:
     #   TARGET_HEADERS={"Authorization": "Bearer xxx"}
@@ -201,6 +208,19 @@ HTTP_TARGET = {
     "response_path": _from_env("TARGET_RESPONSE_PATH", "reply"),
     # Without a timeout, a silent target would block the campaign for ever.
     "timeout": float(_from_env("TARGET_TIMEOUT", "60")),
+    # How the request is CARRIED. Unset means a JSON POST, except on a ws://
+    # URL, which can only be a WebSocket. See `targets/http.TRANSPORTS`.
+    #   TARGET_TRANSPORT=get | multipart | websocket | json-post
+    "transport": _transport,
+    # GET only: the longest URL an attempt may build before it is REFUSED.
+    # Raise it if you know what your server accepts -- a limit set too low
+    # costs coverage, and a payload truncated by a server is a false negative
+    # nothing flags.
+    "url_limit": int(_url_limit) if _url_limit else None,
+    # WebSocket only: seconds of silence after which a reply is taken as
+    # finished. A tail slower than this is LOST, so raise it if replies look
+    # cut; `--probe-target` says which of the two ended the reply.
+    "ws_quiet": float(_ws_quiet) if _ws_quiet else None,
 }
 
 

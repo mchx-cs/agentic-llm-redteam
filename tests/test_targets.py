@@ -230,8 +230,31 @@ class TestTargetProfiles:
             assert name in str(failure.value)
 
     def test_a_profile_does_not_apply_to_a_bundled_target(self):
-        with pytest.raises(ValueError, match="http"):
+        # Matched on "http" until 2026-11-20, which was incidental: a target
+        # URL may now be ws:// too, so the message says "endpoint". The
+        # property is what it always was -- a bundled target has nothing to
+        # configure, and the option must not be silently ignored.
+        with pytest.raises(ValueError, match="nothing to configure"):
             choose_target("leurre", profile="openai")
+
+    def test_nor_does_a_TRANSPORT(self):
+        """
+        The other half of the same guard, added with the transports. The
+        defect it prevents has happened here before: this very check sat
+        BELOW the named-target branch, so it was unreachable and a profile
+        passed to `--target demo` was silently ignored -- exactly what it
+        existed to prevent.
+        """
+        with pytest.raises(ValueError, match="nothing to configure"):
+            choose_target("demo", transport="get")
+
+    def test_a_ws_url_IS_a_url_target(self):
+        # Three separate gates decided this by looking for "http", and one
+        # told an operator their ws:// endpoint ships with the project.
+        from targets import is_url_target
+        assert is_url_target("wss://client.fr/chat")
+        assert is_url_target("ws://localhost:8080/chat")
+        assert not is_url_target("demo:3")
 
 
 class TestCheckingTheWiring:

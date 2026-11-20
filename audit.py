@@ -345,7 +345,7 @@ class AuditTrail:
 # we DECLARE what we do not, because unexplained variance on replay would
 # otherwise read as a defect of the measurement.
 
-def telemetry(target_name, target_profile=None):
+def telemetry(target_name, target_profile=None, target_transport=None):
     """The test environment, known side and unknown side."""
     from agents.judge import VOTE_COUNT
     from agents.verifier import REPLAY_COUNT
@@ -367,6 +367,12 @@ def telemetry(target_name, target_profile=None):
         "target": {
             "name": target_name,
             "http_profile": target_profile,
+            # HOW it was reached, not just where. A GET refuses payloads over
+            # a URL length, and a WebSocket reply may stop on a silence
+            # window: the transport changes what was actually sent and what
+            # came back, so a contested report has to be able to say which
+            # one carried the campaign.
+            "transport": target_transport,
             # The target's generation parameters are OUT of our reach in a
             # black-box test. Saying so is information; omitting it would
             # suggest we had pinned them.

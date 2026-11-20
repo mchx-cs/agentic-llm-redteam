@@ -41,6 +41,11 @@ class TestLocalTarget:
     @pytest.mark.parametrize("name", [
         "leurre", "mock", "http://127.0.0.1:8000/chat",
         "http://localhost:11434/v1",
+        # The WebSocket transport, 2026-11-20. `is_local` works on
+        # substrings, so these pass without it knowing about schemes -- but
+        # a gate that decides whether a request may leave at all is checked,
+        # never reasoned about.
+        "ws://127.0.0.1:8080/chat", "ws://localhost:8080/chat",
     ])
     def test_a_local_target_needs_no_mandate(self, name):
         # Imposing the same form everywhere would teach clicking without
@@ -50,11 +55,28 @@ class TestLocalTarget:
 
     @pytest.mark.parametrize("name", [
         "https://client.fr/chat", "http://198.51.100.7/api",
+        "wss://chatbot.client.fr/ws", "ws://198.51.100.7/socket",
     ])
     def test_a_remote_target_needs_one(self, name):
         assert not is_local(name)
         with pytest.raises(MissingAuthorisation):
             require_mandate(name, "no-such-file.json")
+
+    def test_and_a_mandate_covers_a_SOCKET_target_by_its_host(self):
+        """
+        Both directions, because a scope check that only ever accepts is not
+        a scope check. `check_scope` matches the declared target as a
+        substring, so a ws:// URL works without it knowing about schemes --
+        and this is the gate that decides whether anything leaves at all.
+        """
+        mandate = {"reference": "R-1", "authorised_by": "x",
+                   "start": "2026-01-01", "end": "2027-01-01",
+                   "target": "chatbot.client.fr"}
+        assert check_scope(mandate, "wss://chatbot.client.fr/ws",
+                           date(2026, 6, 1)) is mandate
+        with pytest.raises(MissingAuthorisation):
+            check_scope(mandate, "wss://autre-client.fr/ws",
+                        date(2026, 6, 1))
 
 
 class TestLoading:

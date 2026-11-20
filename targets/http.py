@@ -25,11 +25,46 @@ move with the coordinated data-key pass, with a documented migration. See
 
 import copy
 import json
+import secrets
 import urllib.error
+import urllib.parse
 import urllib.request
+
+# NOTE: `targets/websocket.py` is imported LAZILY, inside the one function
+# that sends over a socket. `targets/__init__.py` imports THIS module at
+# import time, so a module-level import of a sibling would be circular --
+# `targets` would be half-initialised and the attribute not yet bound. Same
+# reason `from config import HTTP_TARGET` sits inside its callers here.
 
 # Token replaced by the payload inside the request body.
 MESSAGE_MARKER = "{message}"
+
+
+# --- Transports: the request shapes other than "a JSON POST" ----------------
+# A JSON POST covers almost every LLM endpoint, and it stays the default. But
+# three other shapes really do sit in front of a chatbot, and all three were
+# recorded in this project as out of reach:
+#
+#   - GET, payload in the query string: a small bespoke service, or a chatbot
+#     behind a gateway that only exposes reads;
+#   - multipart/form-data: an application that accepts a prompt beside a file;
+#   - WebSocket: what a browser chat widget usually opens.
+#
+# The transport is DECLARED, like everything else in this adapter: a profile
+# names it, `.env` can set it, the command line wins. See `resolve_transport`
+# for the one case that is derived rather than declared, and why that one is
+# not a guess.
+JSON_POST = "json-post"
+GET_QUERY = "get"
+MULTIPART = "multipart"
+WEBSOCKET = "websocket"
+
+TRANSPORTS = {
+    JSON_POST: "POST, a JSON body (the default: almost every LLM API)",
+    GET_QUERY: "GET, the payload in the query string",
+    MULTIPART: "POST, multipart/form-data (a form, not JSON)",
+    WEBSOCKET: "WebSocket, ws:// or wss://, one frame per turn",
+}
 
 
 # --- Target profiles: the shapes met in practice -----------------------------
@@ -78,6 +113,27 @@ TARGET_PROFILES = {
         "body": {"message": MESSAGE_MARKER},
         "response_path": "@brut",
         "description": "plain-text reply, no JSON around it",
+    },
+    # The three transports other than a JSON POST. Their bodies are FLAT on
+    # purpose: a query string and a form body are key-to-value, so a nested
+    # template has no meaning there and is refused rather than flattened.
+    "get": {
+        "body": {"q": MESSAGE_MARKER},
+        "response_path": "reply",
+        "transport": GET_QUERY,
+        "description": "GET with the payload in the query string",
+    },
+    "multipart": {
+        "body": {"message": MESSAGE_MARKER},
+        "response_path": "reply",
+        "transport": MULTIPART,
+        "description": "multipart/form-data POST, as an HTML form sends",
+    },
+    "websocket": {
+        "body": {"message": MESSAGE_MARKER},
+        "response_path": "reply",
+        "transport": WEBSOCKET,
+        "description": "WebSocket (ws:// or wss://), one JSON frame per turn",
     },
 }
 
@@ -133,6 +189,233 @@ def _inject(template, message):
     return template
 
 
+class PayloadTooLong(RuntimeError):
+    """
+    A payload that cannot be DELIVERED by the chosen transport.
+
+    Distinct from a wiring failure, and for the same reason `BudgetExceeded`
+    is distinct from an error: it is not the target refusing, and it is not
+    the campaign broken. It is one attempt that never happened, so the
+    orchestrator records it as a MISSING measurement -- outside the ASR
+    denominator -- and carries on with the next.
+    """
+
+
+#: The longest URL a GET attempt may build before it is refused.
+#:
+#: THE DEFECT THIS EXISTS FOR, because the number matters less than the
+#: refusal: garak payloads run past 2,500 characters and percent-encoding can
+#: add half again. Servers cap the request line -- 2,083 was Internet
+#: Explorer's historical floor and gateways still use figures of that order --
+#: and a cap is enforced by TRUNCATING. So the target would receive a payload
+#: cut in half, answer something harmless, the judge would say "no finding"
+#: and the report would conclude the target is safe.
+#:
+#: That is the silent false negative this project hunts, in its purest form:
+#: nothing raises, nothing is missing, and the conclusion is INVERTED. Worse
+#: than the truncated-reply case, where the reply at least carries the sign of
+#: its own truncation -- here nothing does.
+#:
+#: Hence a REFUSAL, never a truncation, and a conservative default. An
+#: operator who knows their server takes 8 kB raises TARGET_URL_LIMIT rather
+#: than losing the long payloads: a limit set too low costs coverage, and
+#: silently dropping a quarter of the library would be its own lie.
+URL_LIMIT = 2000
+
+#: Draws allowed when looking for a multipart boundary absent from the
+#: payload. Bounded, like every loop in this project.
+BOUNDARY_DRAWS = 8
+
+
+def _flat_fields(structure, transport):
+    """
+    The body as key-to-value pairs, or a refusal.
+
+    A query string and a form body are flat by nature. A nested template has
+    no meaning in either, and flattening one ourselves would be inventing a
+    convention the target never declared -- the thing this adapter refuses
+    everywhere else. So it refuses, and names the shape that works.
+
+    Non-string values go through `json.dumps`, so `False` becomes `false` and
+    not Python's `False`: an API reading a form field expects the former.
+    """
+    if not isinstance(structure, dict) or not structure:
+        raise RuntimeError(
+            f"The {transport} transport needs a FLAT body of named fields.\n"
+            f"  Template read: {json.dumps(structure, ensure_ascii=False)}\n"
+            f'  Expected, for instance: {{"q": "{MESSAGE_MARKER}"}}')
+
+    fields = {}
+    for name, value in structure.items():
+        if isinstance(value, (dict, list)):
+            raise RuntimeError(
+                f"The {transport} transport cannot carry a nested body: the "
+                f"field '{name}' holds a "
+                f"{'list' if isinstance(value, list) else 'object'}.\n"
+                f"  A query string and a form body are key-to-value; "
+                f"flattening this one\n"
+                f"  ourselves would invent a convention the target never "
+                f"declared.\n"
+                f"  Use a flat TARGET_BODY, or the json-post transport, "
+                f"which does carry nesting.")
+        fields[str(name)] = (value if isinstance(value, str)
+                             else json.dumps(value))
+    return fields
+
+
+def _query_url(url, fields):
+    """
+    The URL with the fields added to its query string.
+
+    `urlencode` does the percent-encoding, which is this transport's whole
+    safety argument: the recorded rule is that what we SEND stays structured,
+    "because an attack payload is designed to twist escaping". A query string
+    is not JSON, but the escaping is still delegated to the standard library
+    rather than done by hand -- and an existing query in the URL is kept,
+    not overwritten.
+    """
+    parts = urllib.parse.urlsplit(url)
+    added = urllib.parse.urlencode(fields)
+    query = f"{parts.query}&{added}" if parts.query else added
+    return urllib.parse.urlunsplit(parts._replace(query=query))
+
+
+def _refuse_a_long_url(full, limit):
+    """Refuse a URL over the limit, rather than let a server truncate it."""
+    if len(full) <= limit:
+        return
+    raise PayloadTooLong(
+        f"Payload NOT SENT: the URL it builds is {len(full)} characters, "
+        f"over the {limit} this transport allows.\n"
+        f"  It is refused rather than truncated: a server that cuts the "
+        f"request line would\n"
+        f"  deliver half a payload, the target would answer harmlessly, and "
+        f"the report would\n"
+        f"  conclude the target is safe. Nothing would flag it.\n"
+        f"  Ways out: an endpoint that takes a POST (--target-profile "
+        f"simple), raising\n"
+        f"  TARGET_URL_LIMIT if you know what your server accepts, or "
+        f"--excluding on the\n"
+        f"  technique whose payloads are this long.")
+
+
+def _boundary_for(values):
+    """
+    A multipart boundary that appears in none of the values.
+
+    THE DEFECT THIS GUARDS, and it is the one real injection risk among the
+    three transports: a multipart body is delimited by a text marker, nothing
+    escapes it, and an attack payload is text we did not write. A payload
+    carrying our boundary would end its part early and the target would parse
+    something other than what we meant to send.
+
+    `report._fence()` met the same problem in Markdown and answered by
+    LENGTHENING the marker with NO CAP -- a first version capped it at twelve
+    backticks and recreated the bug it was meant to prevent. The lesson
+    holds; the mechanism cannot, because RFC 2046 caps a boundary at 70
+    characters. So: draw at random, VERIFY rather than assume, re-draw on a
+    collision, and REFUSE if it somehow persists. A corrupt body is never
+    sent.
+    """
+    for _ in range(BOUNDARY_DRAWS):
+        boundary = "----pentestllm" + secrets.token_hex(20)
+        if not any(boundary in value for value in values):
+            return boundary
+    raise RuntimeError(                                    # pragma: no cover
+        "multipart: no boundary found that the payload does not contain. "
+        "The body is NOT sent: a boundary inside the payload would make the "
+        "target parse something other than what we meant to send.")
+
+
+def _multipart_body(fields):
+    """
+    A `multipart/form-data` body, and the Content-Type that describes it.
+
+    Fields only, and that boundary is worth stating: a FILE part is what an
+    indirect-injection test would need -- a payload reaching the model through
+    a document rather than from the user -- and indirect injection is one of
+    the registers the judge cannot score at all. Building the transport for a
+    measurement that cannot be made would be building the wrong half first.
+    """
+    boundary = _boundary_for(fields.values())
+    pieces = []
+    for name, value in fields.items():
+        if any(character in name for character in '"\r\n'):
+            raise RuntimeError(
+                f"multipart: the field name {name!r} holds a quote or a line "
+                f"break, which cannot be written into a Content-Disposition "
+                f"header. Rename it in TARGET_BODY.")
+        pieces.append(f"--{boundary}\r\n"
+                      f'Content-Disposition: form-data; name="{name}"\r\n'
+                      f"\r\n{value}\r\n")
+    pieces.append(f"--{boundary}--\r\n")
+    return ("".join(pieces).encode("utf-8"),
+            f"multipart/form-data; boundary={boundary}")
+
+
+def _frame_text(structure):
+    """
+    What one WebSocket frame carries.
+
+    A dict goes as JSON, like every other transport here. But a template that
+    is JUST the marker sends the payload BARE, and that is a deliberate
+    exception to "the outgoing side stays JSON, always".
+
+    The rule's reason is escaping: in a raw HTTP body "you would have to
+    escape by hand, and an attack payload is designed to twist escaping". A
+    WebSocket frame is LENGTH-prefixed -- no delimiter, no terminator,
+    nothing to escape and so nothing to twist. Refusing the bare form would
+    be applying the rule's letter against its reason, and plenty of chat
+    sockets take a bare sentence.
+    """
+    return (structure if isinstance(structure, str)
+            else json.dumps(structure, ensure_ascii=False))
+
+
+def resolve_transport(url, transport, from_profile, from_env):
+    """
+    Which transport to use: the command line, then the profile, then `.env`.
+
+    One case is DERIVED rather than declared: a `ws://` or `wss://` URL with
+    nothing else said means WebSocket. That is not the kind of guess this
+    adapter refuses elsewhere -- a `Content-Type` is a CLAIM about content and
+    plenty of gateways lie in it, which is why it only ever advises here,
+    whereas a URL scheme IS the protocol. You cannot POST to a `ws://`
+    address.
+
+    And a contradiction RAISES rather than being resolved quietly: a declared
+    transport the scheme cannot carry is a mistake, and picking a winner for
+    the operator would hide it.
+    """
+    chosen = _first_defined(transport, from_profile, from_env)
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if chosen is None:
+        chosen = WEBSOCKET if scheme in ("ws", "wss") else JSON_POST
+
+    if chosen not in TRANSPORTS:
+        raise RuntimeError(
+            f"Unknown transport: « {chosen} ».\n"
+            + "\n".join(f"  {name} — {what}"
+                        for name, what in TRANSPORTS.items()))
+
+    if chosen == WEBSOCKET and scheme not in ("ws", "wss"):
+        raise RuntimeError(
+            f"The websocket transport needs a ws:// or wss:// URL, and this "
+            f"one is {scheme}://.\n"
+            f"  The two cannot be mixed: a WebSocket is not an HTTP request "
+            f"with a header on it.\n"
+            f"  Find the right address in the browser's developer tools, "
+            f"Network tab, filter WS.")
+    if chosen != WEBSOCKET and scheme in ("ws", "wss"):
+        raise RuntimeError(
+            f"This URL is a WebSocket ({scheme}://) and the {chosen} "
+            f"transport speaks HTTP.\n"
+            f"  Nothing can POST to a ws:// address. Either use "
+            f"--target-profile websocket,\n"
+            f"  or give the endpoint's http(s):// address if it has one.")
+    return chosen
+
+
 # --- Reply shapes other than "a JSON object" --------------------------------
 # The adapter only accepted JSON, and that is the right default: working on the
 # deserialised structure is what makes payload injection SAFE — the marker is
@@ -170,9 +453,15 @@ def _text_from_stream(brut, inner_path):
     pieces = []
     for line in brut.splitlines():
         line = line.strip()
-        if not line.startswith("data:"):
+        # An SSE stream labels each line `data:`. A WEBSOCKET sends the very
+        # same JSON objects as frames, with no label to carry -- so a line
+        # that parses as JSON on its own counts too, and one reader serves
+        # both. Nothing else loosens: a line that does not parse is still
+        # ignored, which is what keeps comments, pings and `[DONE]` out.
+        if not line.startswith("data:") and not line.startswith("{"):
             continue
-        payload_line = line[len("data:"):].strip()
+        payload_line = line[len("data:"):].strip() \
+            if line.startswith("data:") else line
         if not payload_line or payload_line == "[DONE]":
             continue
         try:
@@ -235,7 +524,7 @@ def _advised_profile(declared_type):
     return PROFILE_BY_DECLARED_TYPE.get(base)
 
 
-def _diagnose(brut, declared_type=""):
+def _diagnose(brut, declared_type="", transport=JSON_POST):
     """
     Name the likely cause of a reply that is not JSON.
 
@@ -290,9 +579,19 @@ def _diagnose(brut, declared_type=""):
                 "  which does not always offer to switch the stream off.")
 
     if not start:
-        return ("  The reply is EMPTY. Check that the URL really is the "
-                "endpoint's, and that\n"
-                "  the expected method is a POST.")
+        if transport == WEBSOCKET:
+            # "the expected method is a POST" is wrong advice on a socket,
+            # and wrong advice costs more than none: it sends the operator
+            # to check a thing that does not apply.
+            return ("  The reply is EMPTY. The handshake worked, so the "
+                    "address is right: the\n"
+                    "  endpoint probably expects a different frame SHAPE "
+                    "(check TARGET_BODY), or\n"
+                    "  an authentication frame this client does not send.")
+        return (f"  The reply is EMPTY. Check that the URL really is the "
+                f"endpoint's, and that\n"
+                f"  the expected method is a "
+                f"{'GET' if transport == GET_QUERY else 'POST'}.")
 
     return ("  Check that this URL is the API's endpoint, and not a page or "
             "a proxy.")
@@ -457,8 +756,77 @@ def check_template(body):
     )
 
 
+def _raw_reply(transport, url, headers, structure, timeout, quiet, limit,
+               stream=False):
+    """
+    The target's reply, undecoded, whatever transport carries it.
+
+    Returns `(body, declared_type, ended)`. `ended` only means something over
+    a WebSocket, where a reply stops either on the server's close frame or on
+    the silence window -- and the difference is a diagnosis `probe_target`
+    passes on, because the second may have lost a tail.
+
+    One function for the four transports, used by the campaign AND by
+    `probe_target`'s path suggestion. Two copies would have drifted on the
+    first transport added, and the suggestion would then have been POSTing
+    JSON at an endpoint the campaign reaches by GET.
+    """
+    if transport == WEBSOCKET:
+        # Imported here, not at module level: see the note by the imports.
+        from targets import websocket as ws
+
+        reply = ws.ask_over_websocket(
+            url, _frame_text(structure), headers=headers, timeout=timeout,
+            quiet=ws.QUIET_SECONDS if quiet is None else quiet)
+        # The frames hold one JSON object each when the endpoint streams, so
+        # the stream reader needs them on separate lines; a plain-text bot
+        # sends its sentence in pieces, where a newline between them would
+        # corrupt it. The TRANSPORT reports what arrived, the READER decides
+        # how to read it -- as with the declared Content-Type.
+        return (("\n".join(reply.frames) if stream else reply.text),
+                "", reply.ended)
+
+    if transport == GET_QUERY:
+        full = _query_url(url, _flat_fields(structure, GET_QUERY))
+        _refuse_a_long_url(full, URL_LIMIT if limit is None else limit)
+        # No Content-Type: a GET carries no body, and announcing one would
+        # describe something that is not there.
+        request = urllib.request.Request(full, method="GET", headers=headers)
+    elif transport == MULTIPART:
+        data, content_type = _multipart_body(
+            _flat_fields(structure, MULTIPART))
+        request = urllib.request.Request(
+            url, data=data, method="POST",
+            headers={"Content-Type": content_type, **headers})
+    else:
+        data = json.dumps(structure).encode("utf-8")
+        request = urllib.request.Request(
+            url, data=data, method="POST",
+            headers={"Content-Type": "application/json", **headers})
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as reply:
+            return (reply.read().decode("utf-8"),
+                    # What the target DECLARES its format to be. Never used
+                    # to change reading mode -- only to explain a failure
+                    # better. See `_diagnose`.
+                    reply.headers.get("Content-Type", ""), "close")
+    except urllib.error.HTTPError as error:
+        # The body of an HTTP error often holds the useful explanation
+        # (rejected key, invalid format, quota): we surface it.
+        detail = error.read().decode("utf-8", "replace")[:300]
+        raise RuntimeError(
+            f"Target {url}: HTTP error {error.code}.\n  {detail}"
+        ) from error
+    except urllib.error.URLError as error:
+        raise RuntimeError(
+            f"Target {url}: unreachable ({error.reason}).\n"
+            f"  Check the URL, the network, and that the target is up."
+        ) from error
+
+
 def build_http_target(url, headers=None, body=None, response_path=None,
-                          timeout=None, profile=None):
+                          timeout=None, profile=None, transport=None):
     """
     Return an `interroger(message) -> str` function aimed at `url`.
 
@@ -489,38 +857,35 @@ def build_http_target(url, headers=None, body=None, response_path=None,
         response_path, settings.get("response_path"),
         HTTP_TARGET["response_path"])
     timeout = timeout or HTTP_TARGET["timeout"]
+    transport = resolve_transport(url, transport, settings.get("transport"),
+                                  HTTP_TARGET["transport"])
+    limit = HTTP_TARGET["url_limit"]
+    quiet = HTTP_TARGET["ws_quiet"]
 
     # BEFORE the first call: a whole campaign on a mute template would
     # conclude "no finding" without having sent any of what we believed.
     check_template(body)
+    # And before the first call too, for the same reason: a flat-body
+    # transport given a nested template must refuse at STARTUP, not after a
+    # payload has gone out and a client's throughput has been spent.
+    if transport in (GET_QUERY, MULTIPART):
+        _flat_fields(_inject(body, "probe"), transport)
 
     def interroger(message, history=None):
-        data = json.dumps(
-            _inject(with_history(body, history), message)).encode("utf-8")
-        request = urllib.request.Request(
-            url, data=data, method="POST",
-            headers={"Content-Type": "application/json", **headers},
-        )
+        brut, declared_type, ended = _raw_reply(
+            transport, url, headers,
+            _inject(with_history(body, history), message),
+            timeout, quiet, limit,
+            stream=str(response_path).startswith(STREAM_PATH))
 
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as reply:
-                brut = reply.read().decode("utf-8")
-                # What the target DECLARES its format to be. Never used to
-                # change reading mode — only to explain a failure better.
-                # See `_diagnose`.
-                declared_type = reply.headers.get("Content-Type", "")
-        except urllib.error.HTTPError as error:
-            # The body of an HTTP error often holds the useful explanation
-            # (rejected key, invalid format, quota): we surface it.
-            detail = error.read().decode("utf-8", "replace")[:300]
-            raise RuntimeError(
-                f"Target {url}: HTTP error {error.code}.\n  {detail}"
-            ) from error
-        except urllib.error.URLError as error:
-            raise RuntimeError(
-                f"Target {url}: unreachable ({error.reason}).\n"
-                f"  Check the URL, the network, and that the target is up."
-            ) from error
+        # HOW the exchange ended, recorded on the function rather than
+        # returned: the contract is `ask(message) -> str` and every caller
+        # depends on it. `probe_target` reads it to say whether a WebSocket
+        # reply stopped on a close frame or on the silence window -- WITHOUT
+        # asking a second time. A first version re-sent the probe message to
+        # find out, which quietly doubled what a verification leaves in a
+        # client's logs, against PROBE_MESSAGE's own stated contract.
+        interroger.ended = ended
 
         try:
             texte = read_reply(brut, response_path)
@@ -529,7 +894,7 @@ def build_http_target(url, headers=None, body=None, response_path=None,
                 f"Target {url}: unreadable reply (JSON expected).\n"
                 f"  Declared by the target: {declared_type or 'nothing'}\n"
                 f"  Received: {brut[:200]}\n"
-                f"{_diagnose(brut, declared_type)}"
+                f"{_diagnose(brut, declared_type, transport)}"
             ) from error
         except ValueError as error:
             # Chemin de réponse mal décrit : l'error dit déjà quoi corriger.
@@ -553,6 +918,15 @@ def build_http_target(url, headers=None, body=None, response_path=None,
     # endpoint keeps refusing. And the refusal keeps its reason: we do not
     # flatten a dialogue into one message, because a model can refuse a role
     # attributed to it in a transcript after accepting it turn by turn.
+    #
+    # The three transports added on 2026-11-20 inherit this unchanged, and
+    # for GET and multipart it answers NO on its own: a flat body has no list
+    # of turns. Over a WebSocket a body that IS a list of turns works, while
+    # the OTHER multi-turn shape a socket allows -- the dialogue kept on the
+    # connection, turn after turn on one socket -- is NOT supported: our
+    # contract hands each attempt a history and opens a fresh socket.
+    # Pretending otherwise would be the flattened-transcript defect in
+    # another costume.
     interroger.conversation = history_slot(body) is not None
 
     return interroger
@@ -595,8 +969,28 @@ def _plausible_paths(data, prefix="", depth=4):
     return trouves
 
 
+def transport_for(url, profile=None, transport=None):
+    """
+    The transport a target WOULD be reached by, resolved as the adapter does.
+
+    For the telemetry, which has to record how the campaign reached the
+    target and not merely what was typed: a `--target-profile websocket` or a
+    `ws://` URL sets no flag, so reading the flag would have left the trail
+    of every socket campaign saying nothing.
+
+    One function rather than a second copy of the precedence -- the reason
+    the PyRIT bridge reads `stats.STATES` and `label.py` reads
+    `split_sets.imposed_set()`.
+    """
+    from config import HTTP_TARGET
+
+    settings = TARGET_PROFILES.get(profile, {})
+    return resolve_transport(url, transport, settings.get("transport"),
+                             HTTP_TARGET["transport"])
+
+
 def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
-           profile=None, show=print):
+           profile=None, show=print, transport=None):
     """
     Envoie UN message anodin et rend compte, sans rien juger.
 
@@ -622,8 +1016,34 @@ def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
     show(f"Target   : {url}")
     if profile:
         show(f"Profile  : {profile} — {settings['description']}")
+    transport_final = resolve_transport(url, transport,
+                                       settings.get("transport"),
+                                       HTTP_TARGET["transport"])
+    show(f"Transport: {transport_final} — "
+         f"{TRANSPORTS[transport_final]}")
     show(f"Body     : {json.dumps(corps_final, ensure_ascii=False)}")
     show(f"Path     : {chemin_final}")
+    if transport_final == GET_QUERY:
+        # Said BEFORE the campaign, because a payload refused mid-campaign is
+        # an attempt that never happened: an operator should know how much
+        # room a payload has before spending a mandate on finding out.
+        limit = HTTP_TARGET["url_limit"] or URL_LIMIT
+        try:
+            spare = limit - len(_query_url(url, _flat_fields(
+                _inject(corps_final, ""), GET_QUERY)))
+        except RuntimeError:
+            # A nested body on a flat transport. The line is skipped rather
+            # than allowed to raise mid-display: `build_http_target` below
+            # refuses with the same reason, and reports it as FAILED with
+            # every config line already shown.
+            spare = None
+        if spare is not None:
+            show(f"URL room : {spare} characters for the payload, before "
+                 f"percent-encoding (limit {limit}).")
+            show("           Longer payloads are REFUSED, never truncated: "
+                 "a server that cut one\n"
+                 "           would have the target answer harmlessly and "
+                 "the report call it safe.")
     entetes_finaux = {**HTTP_TARGET["headers"], **(headers or {})}
     # On nomme les en-têtes sans montrer leur valeur : un jeton n'a rien à
     # faire dans une sortie de terminal qu'on colle dans un rapport ou un chat.
@@ -650,30 +1070,72 @@ def probe_target(url, headers=None, body=None, response_path=None, timeout=None,
         return False
 
     interroger = build_http_target(url, headers, corps_final,
-                                       chemin_final, timeout, profile=None)
+                                       chemin_final, timeout, profile=None,
+                                       transport=transport_final)
     show(f"Sending  : {PROBE_MESSAGE}")
     try:
         reply = interroger(PROBE_MESSAGE)
     except RuntimeError as error:
         show(f"\nFAILED — {error}")
-        _suggest(url, entetes_finaux, corps_final, timeout, show)
+        _suggest(url, entetes_finaux, corps_final, timeout, show,
+                 transport_final)
         return False
 
     show(f"Reply    : {reply[:300]}"
          + (" […]" if len(reply) > 300 else ""))
+    if transport_final == WEBSOCKET:
+        _how_the_socket_ended(getattr(interroger, "ended", None), show)
     show("\nWiring VALID: the target answers and the text reads correctly.")
     return True
 
 
-def _suggest(url, headers, body, timeout, show):
-    """Relit la réponse brute pour proposer un path qui mène à du texte."""
-    request = urllib.request.Request(
-        url, data=json.dumps(_inject(body, PROBE_MESSAGE)).encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "application/json", **headers})
+def _how_the_socket_ended(ended, show):
+    """
+    Say whether the reply ended on a close frame or on the silence window.
+
+    This is the one heuristic in the WebSocket client, and the one place it
+    can be shown to an operator before it costs them a measurement: a reply
+    that stopped on silence may have LOST A TAIL, and a tail holding the
+    second half of a leak reads as a clean refusal. Said here, it is a knob
+    to turn; discovered during a campaign, it is a false negative nobody
+    sees.
+
+    It takes the ending the probe's own call recorded. Asking the target a
+    second time to find out would double what a verification leaves in a
+    client's logs, and `--probe-target` promises exactly one message.
+    """
+    from config import HTTP_TARGET
+    from targets import websocket as ws
+
+    if ended == "close":
+        show("Ends on  : the server's close frame — the reply is "
+             "complete.")
+    elif ended is not None:
+        quiet = HTTP_TARGET["ws_quiet"] or ws.QUIET_SECONDS
+        show(f"Ends on  : {quiet:g}s of SILENCE, not a close frame — so "
+             f"a slower tail would be\n"
+             f"           lost, and a cut reply reads as a clean refusal. "
+             f"Raise TARGET_WS_QUIET\n"
+             f"           if the reply above looks truncated.")
+
+
+def _suggest(url, headers, body, timeout, show, transport=JSON_POST):
+    """
+    Relit la réponse brute pour proposer un path qui mène à du texte.
+
+    Through `_raw_reply`, so the suggestion reaches the target the same way
+    the campaign does. It used to POST JSON unconditionally: against a GET or
+    a WebSocket endpoint it would have failed for its own reasons and the
+    operator would have lost the most useful diagnosis in this file.
+    """
+    from config import HTTP_TARGET
+
     try:
-        with urllib.request.urlopen(request, timeout=timeout or 60) as reply:
-            data = json.loads(reply.read().decode("utf-8"))
+        brut, _, _ = _raw_reply(transport, url, headers,
+                                _inject(body, PROBE_MESSAGE), timeout or 60,
+                                HTTP_TARGET["ws_quiet"],
+                                HTTP_TARGET["url_limit"])
+        data = json.loads(brut)
     except Exception:
         # La suggestion est un bonus : si elle échoue, l'error d'origine
         # reste affichée et c'est elle qui compte.

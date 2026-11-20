@@ -146,6 +146,13 @@ STATES = {
                         "majority"),
     "reply_truncated": (False, None,
                         "reply cut off: the verdict is worth nothing"),
+    # Added 2026-11-20, with the GET transport. A payload too long for the
+    # URL it would build is REFUSED rather than truncated, so the attempt
+    # never happened: no oracle saw anything. Counting it as a resistance
+    # would be the same seventeen-point error measured on 2026-11-12 --
+    # a missing measurement credited to the defence.
+    "not_sent": (False, None,
+                 "the payload could not be delivered by this transport"),
 }
 
 
