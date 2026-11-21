@@ -98,3 +98,116 @@ def test_and_the_promise_beside_it_is_still_there(collected):
     ne dirait plus rien.
     """
     assert "never calls a model" in _readme()
+
+
+def _claude_md():
+    return (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+
+
+#: La ligne de CLAUDE.md qui prétend décrire l'état ACTUEL, et la seule.
+PHASE_10 = re.compile(r"- \*\*Phase 10\*\*: ([\d,]+) `pytest` tests")
+
+
+def test_the_CLAUDE_md_header_counts_the_real_tests(collected):
+    """
+    L'en-tête de CLAUDE.md annonçait 776 tests pour 1 408 le 2026-11-21, et
+    trois autres affirmations fausses avec — dont une qui contredisait la
+    table de roadmap du même fichier.
+
+    C'est le premier écran lu, y compris par l'assistant au démarrage de
+    chaque session : un en-tête périmé désinforme le lecteur ET l'outil.
+    """
+    found = PHASE_10.search(_claude_md())
+    assert found, "la ligne de la phase 10 n'annonce plus de nombre de tests"
+    announced = int(found.group(1).replace(",", ""))
+    assert announced == collected, (
+        f"CLAUDE.md annonce {announced} tests, pytest en collecte "
+        f"{collected}. Corriger l'en-tête, pas ce test.")
+
+
+def test_and_the_DATED_journal_entries_are_exempt():
+    """
+    Le piège de ce garde, dit plutôt que laissé à découvrir.
+
+    Chaque entrée du journal finit par « N pytest tests », vrai de SA date.
+    Un garde qui les couvrirait toutes échouerait sur le journal entier et
+    serait désarmé le jour même — ou pousserait à réécrire des entrées
+    datées, ce que ce projet refuse comme il refuse de réécrire les 91
+    commits français et les 18 pistes scellées.
+
+    Ce test tient la propriété qui JUSTIFIE l'ancre : il y a bien plusieurs
+    chiffres dans le fichier, et ils ne sont pas tous égaux. Sans ça,
+    viser la phase 10 serait une précaution décorative.
+    """
+    every = re.findall(r"([\d,]+) `pytest` tests", _claude_md())
+    assert len(every) > 5, (
+        "le journal ne porte plus ses comptes datés : l'ancre ciblée n'a "
+        "plus de raison d'être")
+    assert len(set(every)) > 1, (
+        "tous les comptes du fichier sont égaux, donc rien ne distingue "
+        "l'en-tête d'une entrée datée — ce garde ne comparerait rien")
+
+
+def test_the_header_does_not_contradict_the_ROADMAP_table():
+    """
+    La contradiction trouvée le 2026-11-21, et elle était interne au fichier.
+
+    Le titre annonçait « 2, 3b and 5 in progress » quand la table de roadmap,
+    deux cents lignes plus bas, marque 3b **Done** — mesuré négativement.
+    Un lecteur qui survole le titre n'avait pas la même histoire qu'un
+    lecteur qui lit la table, et c'est la forme de défaut que ce projet
+    traque le plus souvent.
+    """
+    text = _claude_md()
+    title = [line for line in text.splitlines()
+             if line.startswith("## Current state")]
+    assert len(title) == 1, "l'en-tête d'état a disparu ou s'est dupliqué"
+
+    # Les phases que le TITRE dit ouvertes, et celles que la TABLE dit
+    # ouvertes, doivent être les mêmes. La table est la source : elle porte
+    # le statut phase par phase.
+    open_in_table = {
+        row.split("|")[1].strip()
+        for row in text.splitlines()
+        if re.match(r"^\| [0-9]+[ab]? \|", row) and "In progress" in row}
+    for phase in open_in_table:
+        assert phase in title[0], (
+            f"la table dit la phase {phase} ouverte, le titre ne la nomme "
+            f"pas : {title[0]}")
+    for named in re.findall(r"\b([0-9]+[ab]?)\b", title[0].split(":", 1)[1]):
+        if named in {"14"}:        # le compte de phases closes
+            continue
+        assert named in open_in_table, (
+            f"le titre dit la phase {named} ouverte, la table ne la marque "
+            f"pas « In progress »")
+
+
+def test_the_TWO_roadmaps_agree_on_what_is_open():
+    """
+    CLAUDE.md et le README portent chacun une table de roadmap, tenue à la
+    main, et rien ne les lie. Elles ont déjà divergé le 2026-11-17, où il a
+    fallu corriger « both roadmaps, 3b ».
+
+    Ce sont les phases OUVERTES qui sont comparées, pas la prose des
+    cellules : les deux documents ne formulent pas pareil et n'ont pas le
+    même détail, et exiger l'égalité du texte serait un garde qui crie faux
+    à chaque reformulation — ce que ce projet a déjà retiré un garde pour
+    avoir fait.
+    """
+    def open_phases(text):
+        found = set()
+        for line in text.splitlines():
+            cells = [cell.strip() for cell in line.split("|")]
+            if len(cells) < 4:
+                continue
+            phase = cells[1].strip("*").strip()
+            if re.fullmatch(r"[0-9]+[ab]?", phase) and "In progress" in line:
+                found.add(phase)
+        return found
+
+    in_claude = open_phases(_claude_md())
+    in_readme = open_phases(_readme())
+    assert in_claude, "CLAUDE.md ne marque plus aucune phase ouverte"
+    assert in_claude == in_readme, (
+        f"les deux roadmaps divergent : CLAUDE.md ouvre {sorted(in_claude)}, "
+        f"le README {sorted(in_readme)}")

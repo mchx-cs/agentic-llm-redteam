@@ -10,11 +10,15 @@ A personal learning project **and** a public showcase (public repository, read b
 recruiters). Both goals count: the code must be clean and readable, and the README must
 stay honest about how far it has got.
 
-## Current state: 13 phases closed, 2, 3b and 5 in progress
+## Current state: 14 phases closed, 2 and 5 in progress
 
 The full campaign **reconnaissance → planning → attack → judgement → replay** runs end
 to end locally, and the next attempt is now chosen from what the target has already
 replied (phase 3a).
+
+A campaign can also attack over SEVERAL TURNS (`--multiturn`, phase 3b) — measured, and
+it finds LESS than single-turn at equal target requests — and it reaches an endpoint by
+a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
 
 - **Phase 1**: the library is filled — **1,160 source payloads**, of which 1,143 come
   from garak (52 probes, local snapshot) and 15 were written by hand where garak
@@ -31,16 +35,23 @@ replied (phase 3a).
 - **Phase 2**: the judge has explicit criteria, examples, JSON output, temperature 0,
   reasons before ruling, receives the passages decoded by `detectors.py`, and abstains
   when its verdict contradicts itself. It is measured on hand-labelled exchanges, split
-  into a development set (57 exchanges, `python -m evaluation.evaluate_judge`) and a
-  frozen test set (23 exchanges, `--test`). A leaked value is checked **by replay**
+  into a development set (168 entries, `python -m evaluation.evaluate_judge`) and a
+  frozen test set (77 entries, `--test`) — **245 in all, of which 128 were labelled by
+  the AUTHOR and 117 by a model**, a split stored on every entry because a figure over
+  model-decided labels measures agreement between models and not whether the judge is
+  right. Four criteria are scorable (`divulgation`, `obeissance`, `abus_outils`,
+  `fuite_donnees_tiers`), in a single turn and in conversation. A leaked value is checked **by replay**
   before being declared (`agents/verifier.py`);
   `python -m evaluation.collect_exchanges` harvests real exchanges with the target;
   `python -m evaluation.label` is for labelling them by hand, and `--integrate` then
   pours them into the corpus.
 - **Phase 12**: `targets/demo.py` is the deliberately badly protected target, with three
-  defence levels (`--target demo`, `demo:2`, `demo:3`). Measured on 2026-11-11: level 1
-  gives up the code on a plain question, levels 2 and 3 refuse. An abridged example
-  report is committed in `examples/`, and the README shows a campaign output excerpt.
+  defence levels (`--target demo`, `demo:2`, `demo:3`). Level 1 gives up the code on a
+  plain question; levels 2 and 3 refuse, and level 3 held the VALUE 30 times out of 30
+  on 2026-11-19 — while leaking the instruction text around it 14 times, because a
+  filter that protects a value does not protect the instruction mentioning it. THREE
+  abridged example reports are committed in `examples/` (single-turn, multi-turn,
+  pass@k), and the README shows a campaign output excerpt from the first.
 - **Phase 9**: `audit.py` refuses to start against a remote target without a valid
   mandate (`authorisation.json`, outside git), and records every exchange with the
   target in a JSONL trail written as it goes.
@@ -48,7 +59,7 @@ replied (phase 3a).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 776 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,412 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -7765,6 +7776,77 @@ les figures du juge, les taux, les intervalles. Ceux-là ne se vérifient pas
 sans modèle ni quota, et un garde qui les devinerait serait pire qu'absent.
 
 1,408 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**L'EN-TÊTE DE CE FICHIER DÉCRIVAIT UN ÉTAT ANCIEN, et c'est le premier
+écran lu (2026-11-21).** Trouvé en faisant un point d'étape — donc en lisant
+le haut du document pour la première fois depuis longtemps, au lieu d'ajouter
+au bas.
+
+**Et l'une des quatre affirmations contredisait la table de roadmap du même
+fichier.** Le titre annonçait « 2, **3b** and 5 in progress » quand la table,
+deux cents lignes plus bas, marque 3b **Done** — mesuré négativement le
+2026-11-19. Un lecteur qui survole le titre n'avait pas la même histoire qu'un
+lecteur qui lit la table, et c'est la forme de défaut que ce fichier traque le
+plus souvent, cette fois entre deux parties de lui-même.
+
+| l'en-tête disait | le réel |
+|---|---|
+| 13 phases closes, 3b en cours | **14** closes, et la table dit 3b Done |
+| corpus « 57 + 23 » = 80 échanges | **245 entrées**, dev 168 / test 77 |
+| 776 `pytest` tests | **1 411** |
+| « AN abridged example report is committed » | **trois** (single-turn, multi-turn, pass@k) |
+
+Deux omissions corrigées au passage, parce qu'un en-tête muet sur ce que
+l'outil sait faire induit en erreur aussi sûrement qu'un chiffre faux : les
+campagnes peuvent attaquer sur PLUSIEURS TOURS et atteindre un endpoint par
+GET, `multipart` ou WebSocket — et la ligne du corpus ne disait rien de la
+PROVENANCE des étiquettes, qui est la règle de lecture n°1 du projet (128
+author / 117 model).
+
+**LE MÉCANISME EST STRUCTUREL, et il valait le détour.** Un journal est juste
+par construction : on y AJOUTE, chaque entrée est vraie de sa date, et aucune
+ne vieillit. Un en-tête d'état, lui, prétend décrire le PRÉSENT et vieillit en
+silence à chaque commit qui ne le touche pas. Ce fichier a donc deux régimes de
+vérité dans un seul document, et seul le second demande une relecture.
+
+**Le garde a un PIÈGE, dit plutôt que laissé à découvrir.** CLAUDE.md contient
+« N pytest tests » **cinquante fois**, une par entrée de journal, et chacune
+est vraie de sa date. Un garde qui les couvrirait toutes échouerait sur le
+journal entier et serait désarmé le jour même — ou, pire, pousserait à
+réécrire des entrées datées, ce que ce projet refuse comme il refuse de
+réécrire les 91 commits français et les 18 pistes scellées. Il vise donc la
+ligne de la phase 10, la seule qui prétende décrire l'état actuel, et un second
+test tient la propriété qui JUSTIFIE cette visée : les cinquante comptes ne
+sont pas tous égaux, sinon rien ne distinguerait l'en-tête d'une entrée datée.
+
+Un troisième compare le titre à la table : toute phase que la table dit
+ouverte doit être nommée par le titre, et réciproquement. C'est ce qui rend la
+contradiction du jour impossible à reproduire.
+
+**Et un quatrième lie les DEUX roadmaps**, celle de ce fichier et celle du
+README, parce que le défaut du jour était interne à un document et que la même
+famille existe entre les deux — pas hypothétiquement : elles ont déjà divergé
+le 2026-11-17, où il a fallu corriger « both roadmaps, 3b ». Il compare les
+phases OUVERTES et non la prose des cellules : les deux documents ne formulent
+pas pareil, et exiger l'égalité du texte serait un garde qui crie faux à chaque
+reformulation, ce pour quoi ce projet en a déjà retiré un.
+
+**ET MA PREMIÈRE MUTATION ÉTAIT MAL CHOISIE, ce qui est une leçon sur les
+mutations elles-mêmes.** J'avais retiré UN compte daté du journal : le test ne
+bougeait pas, et j'ai failli écrire « muet ». Mais le test n'affirme pas qu'il
+existe un compte, il affirme que les comptes ne sont pas tous ÉGAUX — donc la
+mutation correspondante les rend tous identiques, et là il mord (50 valeurs
+distinctes ramenées à 1). **Une mutation qui ne touche pas la propriété
+affirmée ne dit rien du garde**, et lue trop vite elle le fait passer pour
+décoratif alors qu'il tient.
+
+**Et les deux gardes ont mordu immédiatement sur mon propre travail** : mes
+trois tests portaient le total de 1 408 à 1 411, donc les deux documents
+annonçaient un chiffre faux au moment même où j'ajoutais le garde. **Cinquième
+fois que ce compte se périme en deux jours**, et la première où un test le dit
+au lieu d'un lecteur dans six mois.
+
+1,412 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
