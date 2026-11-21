@@ -177,8 +177,13 @@ included. Completed on 2026-11-15.** The previous convention (code and comments 
 French) is abandoned.
 
 - Code, comments, docstrings and identifiers **in English**.
-- Commit messages **in English** from now on. The 91 existing commits stay in French:
-  rewriting public history would change every hash.
+- Commit messages: **French for now**, on the author's decision of 2026-11-21.
+  English had been the convention since 2026-11-13, and it stays the target; the
+  decision is recorded as provisional because that is how it was given. The
+  history therefore has STRATA — the 91 original French commits, the English
+  ones of the switch, and the French ones since — and none is rewritten:
+  rewriting public history would change every hash. A reader meeting a
+  language they did not expect is reading a date, not an inconsistency.
 - README **in English** (it already was).
 - `GLOSSARY.md` is the single source of truth for the terminology. **Nothing gets
   renamed unless it appears there**: 1,064 functions and classes across 61 files cannot
@@ -192,7 +197,8 @@ French) is abandoned.
 What stays French, each for a stated reason (see `GLOSSARY.md`): the judge's instruction
 and the eight data names inside it, the demo target's system prompt and replies, the
 refusal patterns, the labelling categories, the recorded corpus exchanges, the 18 sealed
-trails and the 91 commits.
+trails, and the commit messages — the 91 original ones, and those written since
+2026-11-21.
 
 ## Development environment
 
