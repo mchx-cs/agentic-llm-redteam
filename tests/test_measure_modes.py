@@ -295,3 +295,160 @@ class TestTheBreakdownIsREADThroughTheReport:
         assert got["aimed_from_objective"] == 0, (
             "an attempt pursuing the payload's own text DOES exercise the "
             "family it names: counting it here would warn about nothing")
+
+
+class TestTheGENERALITYProtocol:
+    """
+    The reservation this project recorded against its own result: the mode
+    comparison settled the question for ONE target at ONE defence level, and
+    `TARGET` was a module constant that `one_campaign` read as a GLOBAL.
+
+    So the instrument could not ask the question its own docstring named as
+    open, and the protocol declaring `demo:2` and `demo:3` would have been
+    prose. The tests below are what makes it executable.
+    """
+
+    @staticmethod
+    def _raw():
+        return TestTheBreakdownIsREADThroughTheReport._raw()
+
+    def test_the_target_REACHES_the_campaign(self, monkeypatch):
+        """
+        The junction, DRIVEN and not read.
+
+        On 2026-11-19 an argument was spliced into `tuple(arguments.only)`
+        instead of the call it was meant for, and thirteen tests passed over
+        it because not one of them drove `main()`. A `--target` that reaches
+        argparse and not `run_campaign` would measure level 1 under a level-3
+        heading — the worst shape available here, since the output would be
+        internally consistent and wrong.
+        """
+        seen = []
+        import main as orchestrator
+        monkeypatch.setattr(
+            orchestrator, "run_campaign",
+            lambda **kwargs: seen.append(kwargs) or self._raw())
+        modes.main(["--target", "demo:3", "--pairs", "1"])
+
+        assert seen, "no campaign ran at all"
+        assert {kwargs["target_name"] for kwargs in seen} == {"demo:3"}, (
+            "the measured target must reach run_campaign; reading the module "
+            "constant there makes every level measure level 1")
+
+    def test_ONE_run_measures_ONE_level(self, monkeypatch):
+        """
+        Levels are NEVER pooled. Putting targets of different resistances in
+        one test makes no sense, and this project recorded that twice before
+        declaring it here — the multi-turn harvest's leaks came almost
+        entirely from level 1.
+
+        A run that alternated levels would still produce a sign test, and
+        nothing in the output would say what it was over.
+        """
+        seen = []
+        import main as orchestrator
+        monkeypatch.setattr(
+            orchestrator, "run_campaign",
+            lambda **kwargs: seen.append(kwargs) or self._raw())
+        modes.measure(pairs=3, multi_attempts=1, turns=1, target="demo:2",
+                      show=lambda *_: None)
+
+        assert len(seen) == 6, "three pairs, two modes each"
+        assert {kwargs["target_name"] for kwargs in seen} == {"demo:2"}
+
+    def test_the_target_reaches_the_REPORT_too(self, monkeypatch):
+        # The breakdown is read through `build_report`, which is the one place
+        # in this project that grades. Handing it the constant while the
+        # campaign ran elsewhere would be the two halves disagreeing about
+        # which target was measured.
+        seen = []
+        import main as orchestrator
+        import report
+        monkeypatch.setattr(orchestrator, "run_campaign",
+                            lambda **kwargs: self._raw())
+        built = report.build_report
+        monkeypatch.setattr(report, "build_report",
+                            lambda result, **kwargs: seen.append(kwargs)
+                            or built(result, **kwargs))
+        modes.one_campaign(lambda m, h=None: "r", multiturn=None, attempts=1,
+                           turns=None, show=lambda *_: None,
+                           target_name="demo:2")
+        assert [kwargs["target"] for kwargs in seen] == ["demo:2"]
+
+    def test_a_DECLARED_level_is_not_flagged_exploratory(self, monkeypatch,
+                                                         capsys):
+        """
+        `demo:2` and `demo:3` are declared in a protocol committed before
+        either was run, so they are confirmatory. Flagging them would teach
+        the reader to ignore the flag — and this project has removed a guard
+        for crying wrong twice in four.
+        """
+        monkeypatch.setattr(modes, "measure", lambda *a, **k: [])
+        for level in modes.GENERALITY_LEVELS:
+            modes.main(["--target", level])
+            out = capsys.readouterr().out
+            assert "Protocol CHANGED" not in out, (
+                f"{level} is declared by the generality protocol")
+            assert "Confirmatory under the GENERALITY protocol" in out
+            assert level in out
+
+    def test_but_an_UNDECLARED_target_says_so(self, monkeypatch, capsys):
+        # The other half, and without it the test above would pass on a module
+        # that flags nothing at all. Deciding after the fact which targets
+        # "count" is the post hoc selection the string protocol refused on
+        # 2026-11-17.
+        monkeypatch.setattr(modes, "measure", lambda *a, **k: [])
+        modes.main(["--target", "records"])
+        out = capsys.readouterr().out
+        assert "Protocol CHANGED" in out and "exploratory" in out
+        assert "records" in out
+
+    def test_the_output_file_records_its_own_QUESTION(self, monkeypatch,
+                                                      tmp_path):
+        """
+        A run killed at pair 28 on 2026-11-17 could not be shown to be the
+        same measurement as the next one, because its log never said what it
+        had asked. With three levels producing three files, two of them would
+        otherwise be distinguishable only by their filename.
+        """
+        import json
+
+        import main as orchestrator
+        monkeypatch.setattr(orchestrator, "run_campaign",
+                            lambda **kwargs: self._raw())
+        path = tmp_path / "modes.json"
+        modes.measure(pairs=1, multi_attempts=1, turns=1, output=str(path),
+                      target="demo:2", show=lambda *_: None)
+
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        assert saved["target"] == "demo:2"
+        assert saved["protocol"]["pairs"] == 1
+        assert saved["protocol"]["declared"] is False, (
+            "one pair is not the declared protocol, and the file has to say "
+            "so: a figure nobody can place is not a measurement")
+
+    def test_and_a_declared_run_is_recorded_as_declared(self, monkeypatch,
+                                                        tmp_path):
+        # The contrast that makes the field mean something. A file where
+        # `declared` is always False would carry no information at all.
+        import json
+
+        import main as orchestrator
+        monkeypatch.setattr(orchestrator, "run_campaign",
+                            lambda **kwargs: self._raw())
+        path = tmp_path / "modes.json"
+        modes.measure(pairs=modes.PAIRS, multi_attempts=modes.MULTI_ATTEMPTS,
+                      turns=modes.TURNS, output=str(path), target="demo:3",
+                      show=lambda *_: None)
+        assert json.loads(path.read_text(encoding="utf-8"))[
+            "protocol"]["declared"] is True
+
+    def test_the_summary_NAMES_the_level_it_is_over(self, capsys):
+        # Three summaries identical in shape, and a reader comparing two of
+        # them must not have to trust the filename. The same reason
+        # `evaluate_judge` announces a restriction ABOVE its figures.
+        empty = {"findings": 0, "requests": 9, "criteria": [],
+                 "severities": [], "families": [], "aimed_from_objective": 0}
+        results = [{"multi": dict(empty, findings=1), "single": dict(empty)}]
+        modes._summary(results, target="demo:3")
+        assert "demo:3" in capsys.readouterr().out

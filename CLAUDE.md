@@ -59,7 +59,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,412 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,420 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -4399,9 +4399,13 @@ ran on the PAID Groq judge — the measured one — for **2,054 calls and
 measurement called infeasible in November cost less than a coffee once the
 plan changed.
 
-What is NOT settled: **generality.** One target, one defence level. And the
-adaptive attacker's own contribution, which no budget buys, because the tool
-cannot vary adaptation without varying payload-use.
+What is NOT settled: **generality.** One target, one defence level — and the
+instrument could not even ask, `TARGET` being a module constant that
+`one_campaign` read as a global. It takes `--target` now, and the protocol for
+`demo:2` and `demo:3` is declared and committed (2026-11-23); the run is one
+command per level and costs about a euro each. And the adaptive attacker's own
+contribution, which no budget buys, because the tool cannot vary adaptation
+without varying payload-use.
 
 **4. THE CRITERION SEAM — reduced tenfold, then STOPPED on a power
 calculation.** `C-demo3-01-2` went from **7/10 wrong to 1/21**
@@ -7853,6 +7857,109 @@ fois que ce compte se périme en deux jours**, et la première où un test le di
 au lieu d'un lecteur dans six mois.
 
 1,412 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**L'INSTRUMENT NE POUVAIT PAS POSER LA QUESTION QUE SON PROPRE DOCSTRING
+DÉCLARAIT OUVERTE (2026-11-23).** La réserve enregistrée contre le résultat
+mode contre mode — « one target, one defence level » — tenait pour acquis
+qu'il suffisait de relancer ailleurs. En regardant le module avant de dépenser
+quoi que ce soit : `TARGET = "demo"` est une constante que `one_campaign`
+lisait comme **variable globale**, et `measure` aussi. Donc la généralité
+n'était pas une mesure à faire, c'était un câblage absent — et le protocole
+qui l'aurait déclarée serait resté de la prose.
+
+**Le défaut est silencieux dans la forme la plus coûteuse qui soit.** Un
+`--target` qui atteint argparse et pas `run_campaign` ne lève rien : la sortie
+annonce `demo:3` en en-tête, mesure le niveau 1, et reste **intérieurement
+cohérente**. Rien dans le fichier produit ne contredirait l'en-tête. C'est la
+famille du gabarit sans `{message}`, de la capability de conversation devinée
+et des trois champs de chaîne de possession que personne ne remplissait : la
+conclusion est inversée et aucun test ne tombe.
+
+**LE PROTOCOLE DE GÉNÉRALITÉ, déclaré et committé AVANT toute exécution.**
+`demo:2` et `demo:3`, chacun sa comparaison indépendante, **jamais mises en
+commun** — mettre dans un même test des cibles de résistances différentes n'a
+pas de sens, et ce projet l'a enregistré deux fois avant de le déclarer ici.
+Vingt paires par niveau, comme le run mesuré, pour que les trois niveaux
+soient comparables et pas seulement consécutifs.
+
+**La même hypothèse, la même direction, le même seuil.** C'est la décision qui
+coûte quelque chose : le premier résultat est parti dans l'autre sens (17
+paires à 1, p inverse = 0,0001), donc retourner la direction déclarée
+maintenant serait choisir l'hypothèse que les données suggèrent — exactement
+ce qu'un protocole déclaré existe pour interdire. Le p inverse continue d'être
+rapporté et continue d'être signalé comme n'étant pas le test déclaré.
+
+**Et ce que le run POURRAIT trouver est dit à l'avance**, pour qu'aucune des
+deux issues ne puisse être habillée après coup : le filtre du niveau 3 protège
+la VALEUR et pas la consigne autour (mesuré à N=30 le 2026-11-19 : 0/30 sur le
+code, 14/30 sur le texte de la consigne), et une trouvaille mono-tour a besoin
+d'une valeur rejouable pour atteindre `high`. L'avantage du mono-tour en
+`high` peut donc se resserrer quand le niveau monte, sans que son compte
+`medium` bouge. Un écart qui se resserre est un résultat ; un écart constant
+aussi.
+
+**UN NIVEAU N'EST CONFIRMATOIRE QUE S'IL EST DÉCLARÉ.** `--target` accepte
+n'importe quelle cible embarquée, et tout ce qui sort de `GENERALITY_LEVELS`
+plus le défaut s'annonce exploratoire, exactement comme un `--pairs` modifié.
+Décider après coup quels niveaux « comptent » est la sélection post hoc que le
+protocole des chaînes a refusée le 2026-11-17. Et l'inverse est tenu aussi :
+un niveau déclaré DIT qu'il est confirmatoire, sinon son silence le ferait
+passer pour le run par défaut.
+
+**La cible est un PARAMÈTRE, pas ce traitement appliqué à la constante.** Le
+module patche déjà `MAX_ATTEMPTS` pour la durée d'une campagne et le dit à
+voix haute, « parce qu'une mesure qui réécrit en silence ce qu'elle mesure ne
+vaut rien ». La campagne lit le NOM de la cible pour son niveau de défense,
+son exemption de mandat et sa télémétrie : une globale patchée ferait différer
+deux niveaux par effet de bord.
+
+**Et le fichier de sortie enregistre sa propre QUESTION.** Il portait
+`{"complete", "pairs"}` et rien d'autre. Le run tué à la paire 28 le
+2026-11-17 avait déjà donné la leçon — « une mesure qui n'enregistre pas sa
+propre question ne peut pas être reprise, seulement refaite » — et avec trois
+niveaux produisant trois fichiers, deux d'entre eux n'auraient plus été
+distinguables que par leur nom de fichier. Le fichier porte désormais la
+cible, le protocole, et **s'il était confirmatoire** : un champ toujours faux
+ne porterait aucune information, donc un test tient les deux moitiés.
+
+**Six mutations, six morsures** : la constante globale de retour dans l'appel
+à `run_campaign` (deux tests), le rapport construit pour la constante au lieu
+de la cible mesurée, les niveaux déclarés redevenus exploratoires, la mention
+« confirmatoire » supprimée, la cible retirée du fichier de sortie, et le
+niveau retiré de l'en-tête du résumé.
+
+**Le test de la jonction PILOTE `main()`, il ne lit pas sa source.** C'est la
+leçon du 2026-11-19, où un argument avait été inséré dans
+`tuple(arguments.only)` au lieu de l'appel visé et où treize tests étaient
+passés par-dessus faute d'en piloter un seul. Ici le défaut vit précisément
+là : entre argparse et `run_campaign`.
+
+**Et les deux gardes du jour d'avant ont mordu immédiatement sur mon propre
+travail** : mes huit tests portaient le total de 1 412 à 1 420, donc les deux
+documents annonçaient un chiffre faux au moment même où je les écrivais.
+**Sixième fois que ce compte se périme en trois jours**, et la deuxième où un
+test le dit au lieu d'un lecteur dans six mois.
+
+Un chiffre périmé corrigé au passage, et il était dans le garde lui-même : le
+message de `test_the_figure_is_WRITTEN_the_way_the_readme_writes_figures`
+citait « `1,405` », un compte qui n'a jamais existé depuis que ce fichier
+existe. Il illustre désormais la FORME (`1,234`) et ne peut plus se périmer —
+un garde dont le message dérive enseigne la dérive qu'il combat.
+
+**Le heredoc a cassé une fois de plus**, sur des apostrophes cette fois. La
+leçon est dans ce fichier depuis le 2026-11-19 et je l'ai réapprise : ces
+scripts s'écrivent avec un outil de fichier.
+
+**Ce qui n'est PAS fait, et c'est la mesure elle-même.** Aucun run. Le
+protocole existe, l'instrument sait viser, et les deux commandes coûtent
+environ un euro chacune sur le plan payant :
+
+```
+.venv-pyrit/Scripts/python -m evaluation.measure_modes --target demo:2 --output modes-demo2.json
+.venv-pyrit/Scripts/python -m evaluation.measure_modes --target demo:3 --output modes-demo3.json
+```
+
+1,420 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

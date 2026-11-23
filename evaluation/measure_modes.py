@@ -25,6 +25,8 @@ exactly what is compared here.
 PROTOCOL, declared BEFORE running (2026-11-19)
 -----------------------------------------------
   * TARGET: `demo`, ONE defence level, as every multi-turn measurement here.
+    Which level a run covers is DECLARED, never pooled — see the generality
+    protocol below.
 
   * NORMALISATION — EQUAL TARGET REQUESTS, and this is the decision that
     shapes the result. Not equal attempts, which would hand multi-turn ~4.5
@@ -67,6 +69,48 @@ PROTOCOL, declared BEFORE running (2026-11-19)
   * NO STOPPING RULE. Stopping once a p crosses the threshold is optional
     stopping, and it inflates the error this protocol exists to avoid.
 
+THE GENERALITY PROTOCOL, declared BEFORE running (2026-11-23)
+--------------------------------------------------------------
+The run of 2026-11-19 settled the question for ONE target at ONE defence
+level: single-turn won 17 pairs to 1, reverse p = 0.0001, and 26 `high`
+findings against none. What it could not say was whether that holds when the
+defence hardens — and "one target, one defence level" is the reservation this
+project recorded against its own result.
+
+  * LEVELS: `demo:2` and `demo:3`, each its own independent comparison.
+    Level 1 is already measured, so the three together cover the gradient the
+    demonstration target was built to be.
+
+  * NEVER POOLED. Putting targets of different resistances into one test
+    makes no sense, and this project has recorded that twice — once for the
+    multi-turn harvest, where the leaks came almost entirely from level 1,
+    and once in the protocol above. Each level gets its own sign test, its
+    own counts and its own output file.
+
+  * THE SAME HYPOTHESIS, THE SAME DIRECTION, THE SAME THRESHOLD as the
+    measured run: one-sided, "multi-turn finds MORE", at 0.05. Flipping the
+    declared direction now that the first result has run the other way would
+    be choosing the hypothesis the data suggests, which is precisely what a
+    declared protocol exists to forbid. The reverse p keeps being reported
+    and keeps being flagged as not the declared test.
+
+  * `PAIRS` pairs per level, the same count as the measured run, so the three
+    levels are comparable rather than merely consecutive.
+
+  * A LEVEL IS CONFIRMATORY ONLY IF IT IS DECLARED. `--target` accepts any
+    bundled target, and anything outside `GENERALITY_LEVELS` plus the default
+    is announced as exploratory, exactly as a changed `--pairs` is. Deciding
+    after the fact which levels "count" is the post hoc selection the string
+    protocol refused on 2026-11-17.
+
+  * WHAT IT MIGHT FIND, said beforehand so neither outcome can be dressed up
+    afterwards. Level 3's filter protects the VALUE and not the instruction
+    around it (measured at N=30 on 2026-11-19: 0/30 on the code, 14/30 on the
+    instruction text), and a single-turn finding needs a replayable value to
+    reach `high`. So the single-turn arm's `high` advantage may well shrink
+    as the level rises, while its `medium` count need not. A narrowing gap is
+    a result; so is a constant one.
+
 REPORTED BESIDE THE TEST, descriptive and NEVER tested
 -------------------------------------------------------
   * target requests actually spent by each mode, which is the normalisation's
@@ -82,13 +126,17 @@ REPORTED BESIDE THE TEST, descriptive and NEVER tested
 
 WHAT IT CANNOT SAY
 ------------------
-Nothing about a target other than `demo` at one level, nothing about
-adaptation in isolation, and nothing about an engagement's economics beyond
-the request count — a client billed per token would normalise differently,
-and the module says so rather than pretending the choice is neutral.
+Nothing about a target other than `demo` — the three defence levels are one
+target wearing three guardrails, so they measure the GRADIENT and not
+generality across applications. Nothing about adaptation in isolation. And
+nothing about an engagement's economics beyond the request count — a client
+billed per token would normalise differently, and the module says so rather
+than pretending the choice is neutral.
 
 Run it from the project root, in PyRIT's venv:
     .venv-pyrit/Scripts/python -m evaluation.measure_modes
+    .venv-pyrit/Scripts/python -m evaluation.measure_modes --target demo:2 \
+        --output modes-demo2.json
 """
 
 import argparse
@@ -107,6 +155,9 @@ MULTI_ATTEMPTS = 3
 TURNS = 3
 PAIRS = 20
 THRESHOLD = 0.05
+#: The defence levels the generality protocol declares, beside the default.
+#: A target outside this set is exploratory and says so — see the docstring.
+GENERALITY_LEVELS = ("demo:2", "demo:3")
 
 
 def sign_test(favourable, unfavourable):
@@ -115,6 +166,28 @@ def sign_test(favourable, unfavourable):
     if not n:
         return 1.0
     return sum(math.comb(n, k) for k in range(favourable, n + 1)) / 2 ** n
+
+
+def departures_from_the_protocol(target=TARGET, pairs=PAIRS,
+                                 attempts=MULTI_ATTEMPTS, turns=TURNS):
+    """
+    What this run changed from the declared protocol, in words.
+
+    Empty means confirmatory. `GENERALITY_LEVELS` is NOT a departure: those
+    levels are declared, in a protocol committed before any of them was run.
+    Any other target is — a result on a target nobody declared is
+    exploratory, and the alternative is deciding afterwards which targets
+    "count", which is the post hoc selection this module refuses elsewhere.
+    """
+    allowed = (TARGET,) + tuple(GENERALITY_LEVELS)
+    return [text for text, changed in (
+        (f"the target {target}, which the protocol does not declare "
+         f"(declared: {', '.join(allowed)})", target not in allowed),
+        (f"{pairs} pairs instead of {PAIRS}", pairs != PAIRS),
+        (f"{attempts} attempts instead of {MULTI_ATTEMPTS}",
+         attempts != MULTI_ATTEMPTS),
+        (f"{turns} turns instead of {TURNS}", turns != TURNS),
+    ) if changed]
 
 
 def counting(ask_target):
@@ -136,7 +209,8 @@ def counting(ask_target):
     return ask, calls
 
 
-def one_campaign(ask_target, *, multiturn, attempts, turns, show):
+def one_campaign(ask_target, *, multiturn, attempts, turns, show,
+                 target_name=TARGET):
     """
     One campaign, driven through `main.run_campaign` and nothing else.
 
@@ -144,6 +218,12 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show):
     patched for the duration and restored — stated here rather than hidden,
     because a measurement that quietly rewrites the thing it measures is
     worth nothing.
+
+    `target_name` is a PARAMETER and not that treatment applied to `TARGET`.
+    The campaign reads the name to pick its defence level, its mandate
+    exemption and its telemetry, so a global patched for the duration would
+    make two levels differ by a side effect — and the one patch this module
+    does make it says out loud, because it rewrites what it measures.
     """
     import main
     import report
@@ -153,7 +233,7 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show):
     main.MAX_ATTEMPTS = attempts
     try:
         result = main.run_campaign(
-            ask_target=counted, target_name=TARGET,
+            ask_target=counted, target_name=target_name,
             multiturn=multiturn or None,
             max_turns=turns if multiturn else None)
     finally:
@@ -176,7 +256,7 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show):
     # rather than re-derived by hand: the JSON is the source of truth, every
     # rendering follows from it, and a second copy of the severity rule here
     # would drift from the one the operator's report shows.
-    built = report.build_report(result, target=TARGET)
+    built = report.build_report(result, target=target_name)
     findings = built["findings"]
     return {
         "findings": len(findings),
@@ -190,15 +270,17 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show):
 
 
 def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
-            output=None, show=print):
+            output=None, show=print, target=TARGET):
     from targets import choose_target
     from targets.conversation import require_conversation
 
-    ask_target = choose_target(TARGET)
-    require_conversation(ask_target, TARGET)
+    ask_target = choose_target(target)
+    require_conversation(ask_target, target)
 
+    declared = not departures_from_the_protocol(target, pairs, multi_attempts,
+                                                turns)
     single_attempts = multi_attempts * turns
-    show(f"Protocol: {pairs} pair(s) against {TARGET}, one-sided paired sign "
+    show(f"Protocol: {pairs} pair(s) against {target}, one-sided paired sign "
          f"test at {THRESHOLD}.")
     show(f"Equal TARGET REQUESTS: multi-turn {multi_attempts} x {turns} "
          f"turns, single-turn {single_attempts} x 1 message.")
@@ -212,23 +294,40 @@ def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
     for number in range(1, pairs + 1):
         # Multi-turn FIRST, then single-turn, back to back: the target drifts.
         multi = one_campaign(ask_target, multiturn="redteaming",
-                             attempts=multi_attempts, turns=turns, show=show)
+                             attempts=multi_attempts, turns=turns, show=show,
+                             target_name=target)
         single = one_campaign(ask_target, multiturn=None,
-                              attempts=single_attempts, turns=None, show=show)
+                              attempts=single_attempts, turns=None, show=show,
+                              target_name=target)
         results.append({"multi": multi, "single": single})
         show(f"  pair {number}/{pairs}  multi {multi['findings']} finding(s) "
              f"in {multi['requests']} request(s)   single "
              f"{single['findings']} in {single['requests']}")
         if output:
+            # The file records its own QUESTION, not only its answer. A run
+            # killed at pair 28 on 2026-11-17 could not be shown to be the
+            # same measurement as the next one, because its log never said
+            # what it had asked: "a measurement that does not record its own
+            # question cannot be resumed, only repeated." With three defence
+            # levels about to produce three files, that is no longer a
+            # hypothetical — two of them would otherwise be distinguishable
+            # only by their filename.
             Path(output).write_text(
-                json.dumps({"complete": number == pairs, "pairs": results},
+                json.dumps({"complete": number == pairs,
+                            "target": target,
+                            "protocol": {"pairs": pairs,
+                                         "multi_attempts": multi_attempts,
+                                         "turns": turns,
+                                         "threshold": THRESHOLD,
+                                         "declared": declared},
+                            "pairs": results},
                            ensure_ascii=False, indent=2), encoding="utf-8")
 
-    _summary(results, show)
+    _summary(results, show, target=target)
     return results
 
 
-def _summary(results, show=print):
+def _summary(results, show=print, target=TARGET):
     import collections
 
     if not results:
@@ -239,7 +338,10 @@ def _summary(results, show=print):
                 if r["multi"]["findings"] < r["single"]["findings"])
     ties = len(results) - better - worse
 
-    show(f"\n=== Summary over {len(results)} pair(s) ===\n")
+    # The target is in the HEADING, because the generality protocol produces
+    # three summaries that are otherwise identical in shape and must never be
+    # read as one another — levels are never pooled.
+    show(f"\n=== Summary over {len(results)} pair(s) against {target} ===\n")
     show(f"  multi-turn finds more : {better}")
     show(f"  single-turn finds more: {worse}")
     show(f"  tie                   : {ties}")
@@ -281,6 +383,12 @@ def main(arguments=None):
     parser = argparse.ArgumentParser(
         description="`--multiturn` against a single-turn campaign, at equal "
                     "cost to the target.")
+    parser.add_argument("--target", default=TARGET,
+                        help=f"the bundled target to measure (protocol: "
+                             f"{TARGET}; the generality protocol also "
+                             f"declares {', '.join(GENERALITY_LEVELS)}). "
+                             f"Levels are NEVER pooled: one run, one level, "
+                             f"one output file.")
     parser.add_argument("--pairs", type=int, default=PAIRS)
     parser.add_argument("--attempts", type=int, default=MULTI_ATTEMPTS,
                         help=f"multi-turn attempts (protocol: "
@@ -290,24 +398,23 @@ def main(arguments=None):
     parser.add_argument("--output", default=None, metavar="FILE")
     arguments = parser.parse_args(arguments)
 
-    departures = [
-        text for text, changed in (
-            (f"{arguments.pairs} pairs instead of {PAIRS}",
-             arguments.pairs != PAIRS),
-            (f"{arguments.attempts} attempts instead of {MULTI_ATTEMPTS}",
-             arguments.attempts != MULTI_ATTEMPTS),
-            (f"{arguments.turns} turns instead of {TURNS}",
-             arguments.turns != TURNS),
-        ) if changed]
+    departures = departures_from_the_protocol(
+        arguments.target, arguments.pairs, arguments.attempts,
+        arguments.turns)
     if departures:
         print("/!\\ Protocol CHANGED on the command line — exploratory "
               "result, not confirmatory:")
         for departure in departures:
             print(f"    {departure}")
         print()
+    elif arguments.target in GENERALITY_LEVELS:
+        # Said rather than left to be inferred: a run at a declared level is
+        # confirmatory, and silence here would look like the default run.
+        print(f"Confirmatory under the GENERALITY protocol: {arguments.target}"
+              f", measured on its own and never pooled with another level.\n")
 
     measure(arguments.pairs, arguments.attempts, arguments.turns,
-            arguments.output)
+            arguments.output, target=arguments.target)
     return 0
 
 

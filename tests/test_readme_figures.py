@@ -84,8 +84,8 @@ def test_the_figure_is_WRITTEN_the_way_the_readme_writes_figures():
     # ne comparant rien, ce qui est la tautologie que ce projet a rencontrée
     # cinq fois dans ses propres gardes.
     assert re.search(r"\d,\d{3} pytest tests", _readme()), (
-        "le nombre de tests doit rester écrit `1,405` : c'est ce que "
-        "l'expression du garde reconnaît")
+        "le nombre de tests doit rester écrit avec une virgule, `1,234` "
+        "dans cette forme : c'est ce que l'expression du garde reconnaît")
 
 
 def test_and_the_promise_beside_it_is_still_there(collected):
