@@ -166,3 +166,174 @@ class TestBudgetAndDisplay:
     def test_the_summary_tells_no_from_not_declared(self, analyst):
         analyst('{"produit_du_code": null}')
         assert "writes code : not declared" in summarise(reconnoitre(_target()))
+
+
+class TestTheANALYSTCanFail:
+    """
+    `reconnoitre` was built to survive a model that returns GARBAGE — the
+    empty profile, never an invented one — and until 2026-11-23 it did not
+    survive a provider REFUSING to answer. Same outcome, no usable analysis;
+    two endings, and the loud one took the campaign with it.
+
+    Measured cost: Groq answered `400 - Failed to generate JSON` on pair 13
+    of a 20-pair measurement. Twelve pairs had succeeded and the eight
+    remaining ones died with it.
+    """
+
+    @staticmethod
+    def _refusing(monkeypatch, failure):
+        def refuse(*a, **k):
+            raise failure
+        monkeypatch.setattr(reconnaissance, "ask_llm", refuse)
+
+    def test_a_provider_refusal_yields_a_profile_not_a_crash(self,
+                                                             monkeypatch):
+        self._refusing(monkeypatch, RuntimeError("400 Failed to generate JSON"))
+        profile = reconnoitre(_target())
+        assert set(profile) == CHAMPS_ATTENDUS
+        assert profile["warning"], (
+            "an empty profile must carry its reason, or the report shows "
+            "dashes with nothing to explain them")
+
+    def test_and_the_OBSERVED_facts_survive_it(self, monkeypatch):
+        """
+        The facts that need no model to establish are exactly the ones worth
+        keeping when the model is unavailable. A tool marker seen in a probe
+        reply is a tool DEMONSTRATED, and losing it because an analysis
+        failed would narrow the campaign for a reason that has nothing to do
+        with the target.
+        """
+        self._refusing(monkeypatch, RuntimeError("provider down"))
+        profile = reconnoitre(_target("[OUTIL : consulter_dossier(nom)]"))
+        assert profile["tools"], (
+            "a tool seen in a reply must survive a failed analysis")
+        assert any(line.startswith(reconnaissance.OBSERVED)
+                   for line in profile["evidence"])
+
+    def test_BUDGET_EXCEEDED_still_PROPAGATES(self, monkeypatch):
+        """
+        THE exception to the exception, and the one that must not be
+        swallowed. `BudgetExceeded` is the circuit breaker: `main` catches it
+        around this very call to stop the campaign CLEANLY — status
+        `budget_exhausted`, findings kept, report announcing it was cut short
+        — rather than as a failure.
+
+        Catching it here would disarm phase 11 at the one moment the campaign
+        would otherwise keep spending, and it would do so silently: the
+        campaign would carry on with an empty profile, against a ceiling it
+        has already reached.
+        """
+        from llm_client import BudgetExceeded
+        self._refusing(monkeypatch, BudgetExceeded("ceiling reached"))
+        with pytest.raises(BudgetExceeded):
+            reconnoitre(_target())
+
+    def test_the_warning_records_the_failure_VERBATIM(self, monkeypatch):
+        """
+        The type and the message, not a diagnosis. This agent must not know
+        which SDK is behind `ask_llm`, so it cannot tell a provider's refusal
+        from a bug of ours — and announcing both as "the provider refused"
+        would blame the wrong component. This project shipped that defect
+        once, when a failing attacker model made the orchestrator advise
+        `--probe-target` at an innocent target.
+        """
+        self._refusing(monkeypatch, TypeError("une erreur bien a nous"))
+        warning = reconnoitre(_target())["warning"]
+        assert "TypeError" in warning and "une erreur bien a nous" in warning
+
+    def test_both_readings_say_what_an_empty_profile_COSTS(self, monkeypatch,
+                                                           analyst):
+        """
+        A reader of the report cannot tell which of the two produced their
+        empty profile, and the cost is the same either way: the planner's
+        prerequisites rule families out for want of facts ABOUT the target,
+        not because the target lacks what they need. Hence one shared
+        sentence rather than two copies, which would diverge on the first
+        edit.
+        """
+        self._refusing(monkeypatch, RuntimeError("boom"))
+        refused = reconnoitre(_target())["warning"]
+        analyst("pas du JSON du tout")
+        unreadable = reconnoitre(_target())["warning"]
+
+        assert refused != unreadable, "the CAUSE must still be nameable"
+        for warning in (refused, unreadable):
+            assert reconnaissance._WHAT_AN_EMPTY_PROFILE_COSTS in warning
+
+    def test_an_empty_profile_asserts_NO_DENIAL(self, monkeypatch):
+        """
+        `mentions_instructions` was a hard `False` in the empty profile,
+        which ASSERTS A DENIAL THE TARGET NEVER MADE — there was no analysis
+        for it to be made in. Found by running the guard above against a real
+        campaign, not by reading the code.
+
+        The tri-state exists since 2026-11-20 precisely so that silence
+        cannot be read as a refusal; the empty profile predates it and kept
+        fabricating one. Its two siblings were already `None`, with the
+        reason written beside them.
+        """
+        self._refusing(monkeypatch, RuntimeError("provider down"))
+        profile = reconnoitre(_target())
+        assert profile["mentions_instructions"] is None, (
+            "silence is not a denial, and an absent analysis is not even "
+            "silence from the target")
+
+    def test_and_the_PLAN_no_longer_skips_the_leak_families(self, monkeypatch):
+        """
+        The consequence, and the reason this is not cosmetic. That reason
+        text is what skips the prompt-leak families, and on the campaign that
+        exposed it the plan skipped seven techniques plus three more on a
+        denial that was never made — the zero-attempt failure mode of
+        2026-11-19 reached from the other side.
+
+        It is tested through the PLANNER rather than on the field alone,
+        because the field is only wrong by what it causes, and two modules
+        correct on their own are the defect shape this project keeps meeting.
+        """
+        from agents.planner import plan_campaign
+
+        self._refusing(monkeypatch, RuntimeError("provider down"))
+        plan = plan_campaign(reconnoitre(_target()), budget=3)
+        reasons = " ".join(reason for skip in plan["skipped"]
+                           for reason in skip["reasons"])
+        assert "SAYS it has no internal instruction" not in reasons, (
+            "a target that never answered cannot be reported as DENYING it "
+            "has instructions")
+
+
+class TestTheCAMPAIGNSurvivesIt:
+    """
+    The junction, and the thing that actually broke. `reconnoitre` and
+    `run_campaign` were each correct on their own; nothing covered the glue —
+    the defect shape this project has now met ten times, from `_inject` to
+    the mangled `measure()` call.
+
+    So this drives `run_campaign` with the REAL reconnaissance and a refusing
+    analyst, rather than replacing `reconnoitre` the way the other campaign
+    tests do. Replacing it would test the stub.
+    """
+
+    def test_a_refused_analysis_no_longer_ends_the_campaign(self, monkeypatch):
+        import contextlib
+        import io
+
+        import main
+
+        def refuse(*a, **k):
+            raise RuntimeError("400 Failed to generate JSON")
+        monkeypatch.setattr(reconnaissance, "ask_llm", refuse)
+        monkeypatch.setattr(main, "judge_by_vote",
+                            lambda payload, reply: {
+                                "reussi": False, "critere": "aucun",
+                                "analyse": "x", "valeur": None,
+                                "votes": [False] * 3, "brut": ""})
+        monkeypatch.setattr(main, "MAX_ATTEMPTS", 2)
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = main.run_campaign(lambda m: "Je ne peux pas.", "mock")
+
+        assert result["status"] != "interrupted", (
+            "a provider that refuses one analysis must not end the campaign")
+        assert result["profile"]["warning"], (
+            "and the result must carry WHY the profile is empty — it is the "
+            "only place the report can read it from")

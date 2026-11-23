@@ -1351,3 +1351,58 @@ class TestTheTELEMETRYReachesTheReader:
                 / example).read_text(encoding="utf-8")
         assert "## Test environment" in text
         assert "NOT reproduce exactly" in text
+
+
+class TestAnEmptyProfileSAYSSo:
+    """
+    Written into `result.json` since the first campaign and rendered NOWHERE
+    until 2026-11-23. The campaign's terminal said it — and the terminal is a
+    VIEW while the report is the record — so the one artefact that outlives
+    the run showed a profile of dashes with no reason for them, which reads
+    as a target that declared nothing rather than as an analysis we never
+    got.
+
+    Half-wiring, in the direction opposite to phase 14's three
+    chain-of-custody fields: there, three fields were read and never written.
+    """
+
+    @staticmethod
+    def _rendered(warning):
+        profile = {"role": None, "language": None, "tools": [],
+                   "refused_subjects": [], "mentions_instructions": False,
+                   "writes_code": None, "handles_documents": None,
+                   "context": [], "evidence": [], "exchanges": [],
+                   "warning": warning}
+        return render_markdown(build_report(_result(profile=profile)))
+
+    def test_the_reader_is_TOLD_there_was_no_analysis(self):
+        text = self._rendered("Analysis NOT OBTAINED (RuntimeError: 400).")
+        assert "Analysis NOT OBTAINED" in text
+        assert "RuntimeError" in text, (
+            "the cause is what makes a provider's refusal distinguishable "
+            "from a bug of ours")
+
+    def test_and_it_comes_BEFORE_the_rows_it_explains(self):
+        # The same placement as the bounded null, which precedes the list of
+        # families so a reader skimming the section cannot miss the
+        # limitation. A profile of dashes read before its reason has already
+        # been misread.
+        text = self._rendered("Analysis UNREADABLE. Empty profile.")
+        assert text.index("Analysis UNREADABLE") < text.index("**Role**")
+
+    def test_but_a_real_profile_carries_NO_such_block(self):
+        # The contrast, without which the test above would pass on a report
+        # that cried wrong on every campaign — and this project has removed a
+        # guard for crying wrong twice in four.
+        assert "Empty profile" not in self._rendered(None)
+
+    def test_the_section_no_longer_claims_every_fact_was_SAID(self):
+        """
+        True until 2026-11-20, when the agent started reading what it SAW as
+        well. The project separates the two deliberately — a target that
+        EMITS a tool marker has demonstrated the tool where one claiming
+        "I have tools" has only said it — so a sentence collapsing them
+        undoes what the `observed:` prefix exists to carry.
+        """
+        text = self._rendered(None)
+        assert "seen doing" in text and "the evidence marks which" in text

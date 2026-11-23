@@ -1190,8 +1190,40 @@ def render_markdown(report, abridge=False):
         profile = report["target_profile"]
         lines += [
             "", "## Target profile", "",
+            # "Every fact comes from what the target said" was true until
+            # 2026-11-20, when the agent started reading what it SAW as well
+            # -- a tool marker, a refusal naming what it protects. The
+            # project distinguishes the two deliberately, because a target
+            # that EMITS a tool marker has demonstrated the tool where one
+            # saying "I have tools" has only claimed it, so a sentence
+            # collapsing them undoes what the `observed:` prefix carries.
             "Built by the reconnaissance agent, from harmless questions. "
-            "Every fact comes from what the target said.", "",
+            "Every fact comes from what the target said, or from what it was "
+            "seen doing in a reply — the evidence marks which.", "",
+        ]
+
+        # A profile built on NO analysis changes what everything below it
+        # means, so the reader meets that FIRST -- the same placement as the
+        # bounded null, which precedes the list of families precisely so that
+        # a reader skimming the section cannot miss the limitation.
+        #
+        # Until 2026-11-23 this was written into `result.json` and rendered
+        # NOWHERE. The campaign's terminal said it, and the terminal is a
+        # VIEW while the report is the record -- so the one artefact that
+        # outlives the run showed a profile of dashes with no reason for
+        # them, which reads as a target that declared nothing rather than as
+        # an analysis we never got.
+        if profile.get("warning"):
+            lines += [
+                f"> **{profile['warning']}**", "",
+                "> So the rows below are not a measurement of the target: "
+                "they are what survives when the analysis is missing, which "
+                "is the OBSERVED facts — the ones needing no model to "
+                "establish. Coverage is narrower for a reason that is about "
+                "this tool, not about the target.", "",
+            ]
+
+        lines += [
             f"- **Role** : {profile.get('role') or '—'}",
             f"- **Language** : {profile.get('language') or '—'}",
             f"- **Declared tools** : "

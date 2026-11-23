@@ -27,7 +27,7 @@ dedicated apparatus step. See `GLOSSARY.md`.
 import json
 
 from config import JUDGE_PROFILE
-from llm_client import ask_llm
+from llm_client import BudgetExceeded, ask_llm
 
 # An attempt limit of its own, separate from MAX_ATTEMPTS. Raised from 4 to 6 on
 # 2026-11-11: two more probes for the capabilities that gate whole families of
@@ -122,13 +122,39 @@ def _show(tri_state):
     return {True: "yes", False: "no", None: "not declared"}[tri_state]
 
 
+#: What an empty profile costs the CAMPAIGN, said in both the readings that
+#: produce one. The cost is the same whatever the cause -- the planner's
+#: prerequisites rule families out for want of facts -- and a reader of the
+#: report cannot tell which reading they have, so the sentence is shared
+#: rather than copied: two copies would diverge on the first edit.
+_WHAT_AN_EMPTY_PROFILE_COSTS = (
+    "Empty profile: no fact retained from the analysis, so the families "
+    "needing one were skipped for want of facts ABOUT the target, not "
+    "because the target lacks what they need.")
+
+
 def _empty_profile(reason):
     return {
         "role": None,
         "language": None,
         "tools": [],
         "refused_subjects": [],
-        "mentions_instructions": False,
+        # None, and NOT False, for the same reason as the two fields below
+        # -- and this one had it wrong until 2026-11-23, which the
+        # provider-refusal guard made visible by producing an empty profile
+        # on a real campaign. `False` here ASSERTS A DENIAL THE TARGET NEVER
+        # MADE: the planner's reason then reads "the target SAYS it has no
+        # internal instruction" about a target that said nothing at all,
+        # because there was no analysis to say it in.
+        #
+        # It is not cosmetic. That reason is what skips the leak families,
+        # and on the campaign that showed this it skipped seven techniques
+        # plus three more on a denial that was never made -- the zero-attempt
+        # failure mode of 2026-11-19, reached from the other side. The
+        # tri-state was introduced on 2026-11-20 precisely so that silence
+        # could not be read as a refusal; the empty profile predates it and
+        # kept fabricating one.
+        "mentions_instructions": None,
         # None, not False: "it did not mention it" is not "it cannot do it".
         # The planner distinguishes the two.
         "writes_code": None,
@@ -217,13 +243,50 @@ def reconnoitre(ask_target):
         for e in exchanges
     )
 
-    raw = ask_llm(
-        f"Voici les réponses du chatbot :\n\n{transcript}",
-        system=ANALYST_SYSTEM_PROMPT,
-        temperature=0,
-        json_format=True,
-        profile=JUDGE_PROFILE,
-    )
+    # The analyst's call is the ONE place where a provider failure used to
+    # bring the whole campaign down. This function is built to survive a
+    # model that returns GARBAGE -- the empty profile below, never an
+    # invented one -- and until 2026-11-23 it did not survive a provider
+    # REFUSING to answer: the same outcome (no usable analysis), two
+    # different endings, and the loud one took the campaign with it.
+    #
+    # Measured cost: Groq answered `400 - Failed to generate JSON` on pair 13
+    # of a 20-pair measurement, and the campaign died before it had a plan.
+    # Twelve pairs had succeeded; the eight remaining ones died with it.
+    #
+    # `BudgetExceeded` PROPAGATES, and that is the exception to the
+    # exception: it is the circuit breaker, `main` catches it around this
+    # very call to stop the campaign CLEANLY rather than as a failure, and
+    # swallowing it here would disarm phase 11 at the one moment the campaign
+    # would otherwise keep spending.
+    #
+    # Everything else is caught WITHOUT being interpreted, and the breadth is
+    # deliberate: this agent must not know which SDK is behind `ask_llm` --
+    # that is what makes the local/API switch one line in `config.py` -- so it
+    # cannot enumerate a provider's exception classes without importing them,
+    # which the "no direct call to an LLM provider" rule forbids. Hence the
+    # type and the message recorded VERBATIM instead of a diagnosis: a
+    # provider's refusal and a bug of ours then read differently in the
+    # report, where announcing both as "the provider refused" would blame the
+    # wrong component. This project shipped that defect once already, on
+    # 2026-11-17, when a failing attacker model made the orchestrator advise
+    # `--probe-target` at an innocent target.
+    try:
+        raw = ask_llm(
+            f"Voici les réponses du chatbot :\n\n{transcript}",
+            system=ANALYST_SYSTEM_PROMPT,
+            temperature=0,
+            json_format=True,
+            profile=JUDGE_PROFILE,
+        )
+    except BudgetExceeded:
+        raise
+    except Exception as failure:
+        profile = _empty_profile(
+            f"Analysis NOT OBTAINED ({type(failure).__name__}: {failure}). "
+            f"{_WHAT_AN_EMPTY_PROFILE_COSTS}")
+        profile["exchanges"] = exchanges
+        return _merge_observed(profile, observe(exchanges))
 
     try:
         profile = json.loads(raw)
@@ -233,7 +296,8 @@ def reconnoitre(ask_target):
         # An unreadable profile must not bring the campaign down: we return an
         # empty profile, and the planner falls back on the families that
         # require no prerequisite.
-        profile = _empty_profile("Analyse illisible : fiche vide, aucun fait retenu.")
+        profile = _empty_profile(
+            f"Analysis UNREADABLE. {_WHAT_AN_EMPTY_PROFILE_COSTS}")
         profile["exchanges"] = exchanges
         # Even with no readable analysis, what the target was SEEN doing
         # stands: those facts need no model to establish, which is exactly

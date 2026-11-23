@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,428 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,440 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -8106,6 +8106,110 @@ travail** : les huit tests de la reprise portaient le total de 1 420 à 1 428.
 test le dit au lieu d'un lecteur dans six mois.
 
 1,428 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LA RECONNAISSANCE SURVIT A UN FOURNISSEUR QUI REFUSE — et le garde a
+révélé deux défauts plus graves que lui (2026-11-23).**
+
+`reconnoitre` est construit pour survivre à un modèle qui rend du
+CHARABIA — profil vide, jamais inventé — et ne survivait pas à un
+fournisseur qui REFUSE de répondre. Même panne (aucune analyse
+exploitable), deux issues, et la bruyante emportait la campagne : Groq a
+rendu `400 — Failed to generate JSON` à la paire 13 d'une mesure de vingt,
+et les huit paires restantes sont mortes avec.
+
+**`BudgetExceeded` PROPAGE, et c'est l'exception à l'exception.** C'est le
+coupe-circuit, `main` l'attrape autour de cet appel précis pour arrêter la
+campagne PROPREMENT — statut `budget_exhausted`, trouvailles conservées,
+rapport qui annonce qu'elle a été écourtée — et l'avaler ici désarmerait la
+phase 11 au seul moment où la campagne continuerait à dépenser, en silence.
+
+**Tout le reste est attrapé SANS être interprété, et la largeur est
+voulue.** Cet agent ne doit pas savoir quel SDK est derrière `ask_llm` — c'est
+ce qui fait du passage local/API une ligne de `config.py` — donc il ne peut
+pas énumérer les classes d'exception d'un fournisseur sans les importer, ce
+que la règle « aucun appel direct » interdit. D'où le TYPE et le message
+enregistrés VERBATIM au lieu d'un diagnostic : le refus d'un fournisseur et
+un bug à nous se lisent alors différemment dans le rapport, là où annoncer
+les deux comme « le fournisseur a refusé » accuserait le mauvais composant.
+Ce projet a déjà livré ce défaut une fois, le 2026-11-17, quand un modèle
+attaquant en échec faisait conseiller `--probe-target` à une cible innocente.
+
+**DÉFAUT 1 : l'avertissement était écrit dans `result.json` et rendu NULLE
+PART.** La campagne le dit sur le terminal — et le terminal est une VUE
+quand le rapport est le RECORD — donc le seul artefact qui survit au run
+montrait un profil de tirets sans aucune raison à côté, ce qui se lit comme
+une cible qui n'a rien déclaré plutôt que comme une analyse qu'on n'a pas
+obtenue. Demi-câblage, dans le sens inverse des trois champs de chaîne de
+possession de la phase 14 : là, trois champs étaient lus et jamais écrits.
+
+Le bloc est placé AVANT les champs qu'il explique — le même placement que le
+bounded null, qui précède la liste des familles précisément pour qu'un
+lecteur qui survole ne puisse pas manquer la limitation — et il dit ce que
+ça COÛTE : les familles sautées le sont par manque de faits SUR la cible, pas
+parce que la cible manque de ce qu'elles demandent. La phrase est partagée
+entre les deux lectures plutôt que recopiée, puisqu'un lecteur du rapport ne
+sait pas laquelle il a sous les yeux et que deux copies divergeraient à la
+première retouche.
+
+**DÉFAUT 2, et c'est le vrai : le profil vide FABRIQUAIT UNE DÉNÉGATION.**
+`mentions_instructions` y valait `False` en dur — donc le plan annonçait
+« the target SAYS it has no internal instruction » à propos d'une cible qui
+n'avait rien dit du tout, puisqu'il n'y avait pas eu d'analyse pour le dire.
+
+Ce n'est pas cosmétique : cette raison est ce qui saute les familles de
+fuite. Sur la campagne qui l'a montré, le plan sautait **sept techniques plus
+trois autres** sur une dénégation jamais prononcée — le mode d'échec à zéro
+tentative du 2026-11-19, atteint par l'autre bout. Le tri-état existe depuis
+le 2026-11-20 exactement pour que le silence ne puisse pas se lire comme un
+refus ; le profil vide lui est antérieur et en fabriquait un, alors que ses
+deux champs voisins étaient déjà `None` **avec la raison écrite à côté
+d'eux**.
+
+Corrigé, et la différence est visible sur la même commande : le plan passe de
+trois tentatives `encoding` / `goodside` / `latentinjection` à
+`fuite-prompt-systeme` et les sondes `dan` en tête.
+
+**AUCUN TEST EXISTANT N'A CASSÉ en le corrigeant**, ce qui veut dire que rien
+ne couvrait un comportement qui décidait quelles familles partent. Deux tests
+le tiennent maintenant, dont celui qui compte : la conséquence est vérifiée
+**à travers le PLANIFICATEUR** et pas sur le champ seul, parce que le champ
+n'est faux que par ce qu'il cause, et que deux modules corrects séparément
+sont la forme de défaut que ce projet rencontre sans arrêt.
+
+**ET LES DEUX DÉFAUTS SONT SORTIS EN LANÇANT LA COMMANDE POUR DE VRAI**, pas
+en lisant le code et pas par un test : une campagne contre `mock` avec
+`GROQ_MODEL` pointé sur un modèle inexistant, c'est-à-dire la panne elle-même
+plutôt qu'une simulation. La méthode est celle que ce fichier enregistre
+depuis le gabarit sans `{message}`.
+
+**Huit mutations, huit morsures**, plus les deux de la dénégation. Et **ma
+première mutation ne disait rien** : supprimer les deux clauses `except`
+laisse un `try:` sans `except`, donc pytest ÉCHOUE À COLLECTER, et mon script
+— qui ne cherchait que des lignes `FAILED` — l'a lue comme MUETTE. **Une
+mutation qui casse le fichier ne dit rien du garde**, exactement comme une
+mutation qui ne touche pas la propriété affirmée, leçon du 2026-11-21. La
+version valide (`except Exception: raise`, qui restaure l'ancien
+comportement) fait tomber quatre tests.
+
+**CE QUI RESTE, trouvé par la même sortie et non corrigé : en MONO-TOUR, un
+juge qui échoue tue la campagne et le message accuse la CIBLE.**
+
+```
+Campaign INTERRUPTED: the target did not answer as expected.
+  python main.py --target mock --probe-target
+```
+
+— alors que la cible `mock` est déterministe et n'a rien à se reprocher :
+c'est notre juge qui n'a pas répondu. Le 2026-11-17 a corrigé exactement ça
+pour le MULTI-TOUR (`_component()` dans `pyrit_bridge/campaign.py`, une
+tentative en échec enregistrée `judge_undecided` et la campagne qui
+continue), et le chemin mono-tour ne l'a jamais eu. C'est **l'asymétrie que
+je viens de corriger pour la reconnaissance**, un étage plus bas — et le
+mono-tour est le chemin PAR DÉFAUT, celui qui atteint tous les endpoints,
+celui de tous les bornages et de tous les pass@k. Une pièce à part, et elle
+n'est pas faite.
+
+1,440 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
