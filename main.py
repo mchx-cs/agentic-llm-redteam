@@ -38,6 +38,7 @@ from targets.http import (TARGET_PROFILES, TRANSPORTS, PayloadTooLong,
 from config import CALL_BUDGET, TOKEN_BUDGET, TARGET
 from llm_client import BudgetExceeded, call_log, reset_call_log
 from report import save_report
+from stats import is_scorable
 
 # The stopping rule: we do not attack indefinitely.
 MAX_ATTEMPTS = 3
@@ -202,7 +203,39 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
             # Voting: the judge is not deterministic on borderline cases, and
             # a vulnerability that appears with the draw has no business in a
             # report.
-            verdict = judge_by_vote(payload["text"], reply)
+            # OUR judge failing is not THE TARGET failing, and until
+            # 2026-11-23 the single-turn path could not tell them apart: a
+            # judge that gave up propagated out of the campaign, and the
+            # orchestrator's generic handler announced "the target did not
+            # answer as expected" and advised `--probe-target` -- at a
+            # deterministic `mock` target that had answered perfectly.
+            #
+            # The multi-turn path was given this on 2026-11-17 (`_component`
+            # in `pyrit_bridge/campaign.py`) and the DEFAULT path never had
+            # it: the one that reaches every endpoint shape, and the only one
+            # that can afford the N a bound requires.
+            #
+            # Here the attribution is POSITIONAL, not inferred, and that is
+            # strictly better than the multi-turn version: PyRIT hides the
+            # call, so there `_component` has to read the component's name
+            # out of an error message, while this line calls our judge and
+            # nothing else. No sniffing, no heuristic.
+            #
+            # And it is `judge_undecided`, NEVER a resistance. No oracle
+            # ruled, so it is a MISSING measurement and it leaves the ASR
+            # denominator -- the conflation measured on 2026-11-12, which
+            # moved an ASR seventeen points in the target's favour.
+            try:
+                verdict = judge_by_vote(payload["text"], reply)
+            except BudgetExceeded:
+                raise
+            except Exception as failure:
+                print(f"  /!\\        our judge GAVE UP "
+                      f"({type(failure).__name__}: {failure}).")
+                print("  >>> No verdict: a missing measurement, not a "
+                      "resistance. Moving on.\n")
+                states.append("judge_undecided")
+                continue
             if trail:
                 trail.record_verdict(number, verdict)
             print(f"  [Judge]     enfreint={verdict['reussi']} "
@@ -236,12 +269,41 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
                 # The replay gets `judge` without voting: it already queries
                 # the target several times, which smooths the noise. Voting on
                 # top would cost nine calls where three are enough.
-                replay_check = verify_by_replay(
-                    payload["text"], verdict["valeur"],
-                    trail.trace("rejeu", ask_target) if trail
-                    else ask_target,
-                    judge,
-                )
+                # A replay that cannot complete must not cost the FINDING:
+                # the judge has already ruled there was a disclosure, and
+                # what is missing is its corroboration. So the finding
+                # stands, uncorroborated, which the severity table grades
+                # strictly below a confirmed leak.
+                #
+                # `not_obtained` and not `None`: `None` means no replay was
+                # ever POSSIBLE (a conversation has no single payload to
+                # re-send), and its caveat says exactly that. Reusing it here
+                # would print that sentence over a single-turn finding, where
+                # it is false -- the payload exists, the replay just did not
+                # finish.
+                #
+                # No component is named, deliberately. The replay queries the
+                # TARGET and the JUDGE, so unlike the verdict above the
+                # attribution is not positional, and naming one of the two
+                # would be the misattribution this guard exists to end. The
+                # failure is recorded verbatim instead.
+                try:
+                    replay_check = verify_by_replay(
+                        payload["text"], verdict["valeur"],
+                        trail.trace("rejeu", ask_target) if trail
+                        else ask_target,
+                        judge,
+                    )
+                except BudgetExceeded:
+                    raise
+                except Exception as failure:
+                    replay_check = {
+                        "status": "not_obtained",
+                        "explanation": (
+                            f"the replay did not complete "
+                            f"({type(failure).__name__}: {failure}). The "
+                            f"finding stands; its corroboration does not."),
+                    }
                 print(f"  [Replay]    {replay_check['status']}: "
                       f"{replay_check['explanation']}")
 
@@ -303,11 +365,31 @@ def _campaign_result(profile, plan, findings, launched, states, observations,
     added — while `report.py` reads every one of them. The same reason
     `stats.STATES` is read rather than restated.
     """
+    # The same reasoning as the line below, one step further, and the route
+    # to it was opened on 2026-11-23: before the judge guard, a campaign
+    # whose judge gave up on every attempt DIED as `interrupted`; now it
+    # finishes, and `no_finding` is the status a target that held three times
+    # also gets. Those are not the same outcome.
+    #
+    # The OWASP manual's rule is about exactly this -- "a missing trace must
+    # never be recorded as a defensive pass" -- and the project already
+    # applies it to the ASR, which prints "not computable" rather than 0%.
+    # It has to hold for the STATUS too: that is what a reader skims, and
+    # `result.json` is what a later run is compared against.
+    #
+    # `stats.is_scorable` is READ, not restated: a state's scorability is
+    # declared in one place, and a second copy here would be the drift that
+    # made the bridge read `stats.STATES` rather than spell it out.
+    nothing_scorable = bool(states) and not any(
+        is_scorable(state) for state in states)
+
     return {
         # A plan cut short must NEVER present itself as a finished plan:
         # "no finding" does not mean the same thing in the two cases.
         "status": ("budget_exhausted" if cut_short
-                   else "findings" if findings else "no_finding"),
+                   else "findings" if findings
+                   else "nothing_scorable" if nothing_scorable
+                   else "no_finding"),
         "profile": profile,
         "plan": plan,
         "findings": findings,

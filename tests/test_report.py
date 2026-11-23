@@ -1406,3 +1406,73 @@ class TestAnEmptyProfileSAYSSo:
         """
         text = self._rendered(None)
         assert "seen doing" in text and "the evidence marks which" in text
+
+
+class TestAnInterruptedREPLAYIsGradedOnItsOwn:
+    """
+    `not_obtained` -- a replay ATTEMPTED and stopped -- is distinct from
+    `None`, which means no replay was ever POSSIBLE. Collapsing them would
+    print the multi-turn caveat ("a multi-turn attack has no single payload
+    to re-send") over a single-turn finding, where the payload exists and the
+    replay merely did not finish.
+    """
+
+    @staticmethod
+    def _graded(status):
+        return assess_severity(
+            {"reussi": True, "critere": "divulgation", "valeur": "X"},
+            {"status": status, "explanation": "..."} if status else None,
+            False)
+
+    def test_it_is_GRADED_and_not_left_to_the_fall_through(self):
+        # The fall-through says "a case the severity rules do not foresee",
+        # which is a confession of a missing rule printed as a grading in a
+        # security report. It fired on every multi-turn disclosure until the
+        # `None` row existed, and it would fire here.
+        severity, caveat = self._graded("not_obtained")
+        assert severity == "medium"
+        assert "do not foresee" not in caveat
+
+    def test_strictly_below_a_replay_CONFIRMED_leak(self):
+        # `high` is reserved for a value that COMES BACK. A finding whose
+        # corroboration was never obtained is real and uncorroborated.
+        assert (SEVERITY_ORDER[self._graded("confirmed")[0]]
+                < SEVERITY_ORDER[self._graded("not_obtained")[0]])
+
+    def test_and_its_caveat_does_NOT_give_the_multi_turn_reason(self):
+        # The whole point of the new row. A single-turn finding does have a
+        # payload to re-send.
+        assert "multi-turn" not in self._graded("not_obtained")[1]
+        assert "multi-turn" in self._graded(None)[1], (
+            "and the `None` row must keep it, or the distinction is moot")
+
+
+class TestACampaignThatMeasuredNothingSAYSSo:
+    """
+    A reader who sees "Findings : 0" in the header and nothing else concludes
+    the target held. The Coverage section already says "not computable ... an
+    absence of measurement"; what the header could not do was stop the reader
+    before they drew the wrong conclusion. The same placement, and the same
+    argument, as the CUT SHORT block.
+    """
+
+    @staticmethod
+    def _rendered(status, states):
+        return render_markdown(build_report(
+            _result(status=status, states=states,
+                    launched=[{"technique": "t", "owasp_family": "LLM01",
+                               "objective": None,
+                               "transformation": "identity"}])))
+
+    def test_the_header_stops_the_reader(self):
+        text = self._rendered("nothing_scorable",
+                              ["judge_undecided", "judge_undecided"])
+        assert "NOTHING WAS MEASURED" in text
+        assert text.index("NOTHING WAS MEASURED") < text.index("## Coverage")
+
+    def test_but_a_measured_campaign_carries_NO_such_block(self):
+        # The contrast. A block on every report would teach the reader to
+        # skip it, and this project has removed a guard for crying wrong
+        # twice in four.
+        assert "NOTHING WAS MEASURED" not in self._rendered(
+            "no_finding", ["resisted", "resisted"])

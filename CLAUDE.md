@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,440 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,458 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -8210,6 +8210,102 @@ celui de tous les bornages et de tous les pass@k. Une pièce à part, et elle
 n'est pas faite.
 
 1,440 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**UN JUGE QUI ÉCHOUE N'ACCUSE PLUS LA CIBLE — et le corriger a ouvert deux
+routes qu'il fallait fermer avec lui (2026-11-23).** Le pendant du garde de
+reconnaissance, un étage plus haut, trouvé par la sortie de ce même garde.
+
+```
+Campaign INTERRUPTED: the target did not answer as expected.
+  python main.py --target mock --probe-target
+```
+
+`mock` est déterministe et avait répondu parfaitement : c'est notre juge qui
+n'avait pas répondu. Le 2026-11-17 a corrigé exactement ça pour le MULTI-TOUR
+(`_component`, une tentative enregistrée `judge_undecided`, la campagne qui
+continue) et le chemin MONO-TOUR ne l'a jamais eu — celui qui atteint toutes
+les formes d'endpoint, et le seul qui puisse se payer le N qu'un bornage
+demande. **Un mauvais conseil coûte plus que pas de conseil** : il envoie
+l'opérateur vérifier une chose qui n'est pas cassée.
+
+**L'ATTRIBUTION EST POSITIONNELLE, et c'est strictement mieux que la version
+multi-tour.** PyRIT cache l'appel, donc `_component` doit lire le nom du
+composant dans un message d'erreur ; ici la ligne appelle notre juge et rien
+d'autre. Aucun reniflage, aucune heuristique. D'où un `try` resserré autour du
+seul appel au juge, et une défaillance de la CIBLE qui garde son comportement
+— là, `--probe-target` est le bon conseil.
+
+Et c'est `judge_undecided`, **jamais une résistance** : aucun oracle n'a
+tranché, donc la tentative quitte le dénominateur de l'ASR — la confusion
+mesurée le 2026-11-12, qui déplaçait un ASR de dix-sept points en faveur de la
+cible.
+
+**CONSÉQUENCE 1 : un rejeu qui ne peut pas finir ne doit plus coûter la
+TROUVAILLE.** Le juge a déjà tranché qu'il y avait divulgation ; ce qui manque
+est la corroboration. La trouvaille tient donc, non corroborée, et la table de
+sévérité la classe strictement sous une fuite confirmée.
+
+**Et il lui fallait un statut à elle, `not_obtained`, pas `None`.** `None`
+signifie qu'aucun rejeu n'était POSSIBLE — une conversation n'a pas de payload
+unique à renvoyer — et sa mise en garde dit exactement ça. La réutiliser ici
+imprimerait une raison multi-tour sur une trouvaille mono-tour, **où elle est
+fausse** : le payload existe, le rejeu n'a simplement pas terminé. C'est le
+motif déjà rencontré neuf fois — une route nouvelle rend fausse une phrase
+qui ne l'était pas — et cette fois il était prévisible avant de livrer.
+
+**Aucun composant n'est nommé là, et c'est voulu.** Le rejeu interroge la
+CIBLE *et* le JUGE, donc contrairement au verdict l'attribution n'est pas
+positionnelle, et nommer l'un des deux serait la mésattribution que ce garde
+existe pour supprimer. L'échec est enregistré verbatim, sans diagnostic.
+
+**CONSÉQUENCE 2, et c'est la plus importante : une campagne dont RIEN n'était
+scorable s'annonçait « no finding ».** Avant le garde, une campagne dont le
+juge lâchait à chaque tentative MOURAIT. Maintenant elle finit — et
+`no_finding` est le statut qu'obtient aussi une cible qui a tenu trois fois.
+Ce ne sont pas le même résultat.
+
+La règle du manuel OWASP porte exactement là-dessus — *« a missing trace must
+never be recorded as a defensive pass »* — et le projet l'applique déjà à
+l'ASR, qui imprime « not computable » plutôt que 0 %. Elle doit tenir pour le
+STATUT aussi : c'est ce qu'un lecteur survole, et `result.json` est ce à quoi
+un run ultérieur est comparé. D'où `nothing_scorable`, dérivé de
+`stats.is_scorable` **lu et non recopié**, et un avertissement en TÊTE du
+rapport — même placement et même argument que le bloc « CUT SHORT », parce
+qu'un lecteur qui voit « Findings : 0 » dans l'en-tête et rien d'autre conclut
+que la cible a tenu.
+
+Trois frontières valaient d'être tenues plutôt que supposées : **une seule
+tentative scorable suffit** à faire une mesure (mince, pas absente — l'appeler
+absente sous-estimerait ce qui a été fait), **un plan vide reste
+`no_attempt`** (là le planificateur n'a rien gardé, il n'y a jamais eu
+d'oracle à défaillir), et **une cible qui a tenu reste `no_finding`** — sans
+ce contraste le garde passerait sur un module qui ne dit plus jamais
+`no_finding`.
+
+**VÉRIFIÉ EN LANÇANT LA PANNE, pas en la simulant** : une campagne contre
+`mock` avec `GROQ_MODEL` sur un modèle inexistant. Trois tentatives envoyées,
+trois `judge_undecided`, `Final result: nothing_scorable`, rapport produit
+avec son avertissement en tête — et plus une ligne accusant la cible.
+
+**Onze mutations, onze morsures**, dont les quatre qui comptent : le verdict
+manquant crédité à la défense, `BudgetExceeded` avalé par l'un ou l'autre des
+deux gardes, et l'avertissement d'en-tête rendu inconditionnel.
+
+**Et deux leçons de la session appliquées à mon propre outillage.** Pour
+neutraliser un `except` sans casser la syntaxe, la mutation installe une
+exception qui ne survient jamais (`_NeverRaised`) : supprimer la clause
+laisserait un `try:` nu, donc une SyntaxError, et une mutation qui casse le
+fichier ne dit rien du garde — c'est la lecture fausse que j'ai faite quelques
+heures plus tôt. Et le script de mutation distingue désormais « MORD », « CASSE
+le fichier » et « MUET » au lieu de ne chercher que des lignes `FAILED`.
+
+Un défaut de mon propre balayage au passage : l'une des onze ancres
+correspondait **deux fois** (`states.append("judge_undecided")` existe aussi
+dans la branche du verdict illisible), donc elle a été signalée NON TESTÉE
+plutôt que passée en silence — puis rejouée sur une ancre unique. Un balayage
+qui ne dit pas qu'il n'a pas testé est pire qu'un balayage absent.
+
+1,458 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
