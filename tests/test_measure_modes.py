@@ -452,3 +452,184 @@ class TestTheGENERALITYProtocol:
         results = [{"multi": dict(empty, findings=1), "single": dict(empty)}]
         modes._summary(results, target="demo:3")
         assert "demo:3" in capsys.readouterr().out
+
+
+class TestTheMeasurementRESUMES:
+    """
+    Forty campaigns is an hour of wall clock and a euro of quota, and the
+    demo:3 generality run died at pair 13 of 20 on a provider 400 — Groq
+    refusing to produce JSON for the reconnaissance analyst. Re-spending the
+    twelve pairs that had succeeded buys nothing.
+
+    The property that makes a resume acceptable on a MEASUREMENT is that it
+    is INVISIBLE in the result, which is the test `resume.py` holds for the
+    judge's evaluation. The rest of this class is the four ways the figure
+    could be corrupted instead of merely stale.
+    """
+
+    @staticmethod
+    def _raw():
+        return TestTheBreakdownIsREADThroughTheReport._raw()
+
+    def _no_model(self, monkeypatch):
+        """A campaign that runs without a model, and counts how many ran."""
+        ran = []
+        import main as orchestrator
+        monkeypatch.setattr(
+            orchestrator, "run_campaign",
+            lambda **kwargs: ran.append(kwargs) or self._raw())
+        return ran
+
+    def _interrupted(self, path, pairs, *, target="demo:3", complete=False,
+                     protocol=None):
+        import json
+
+        from evaluation.evaluate_judge import judge_identity
+        declared = {"pairs": modes.PAIRS,
+                    "multi_attempts": modes.MULTI_ATTEMPTS,
+                    "turns": modes.TURNS, "threshold": modes.THRESHOLD,
+                    "judge": judge_identity(), "declared": True}
+        declared.update(protocol or {})
+        empty = {"findings": 0, "requests": 9, "criteria": [],
+                 "severities": [], "families": [], "aimed_from_objective": 0}
+        path.write_text(json.dumps(
+            {"complete": complete, "target": target, "protocol": declared,
+             "pairs": [{"multi": dict(empty), "single": dict(empty)}
+                       for _ in range(pairs)]}), encoding="utf-8")
+        return path
+
+    def _resume(self, path, target="demo:3", **override):
+        kwargs = {"pairs": modes.PAIRS,
+                  "multi_attempts": modes.MULTI_ATTEMPTS,
+                  "turns": modes.TURNS}
+        kwargs.update(override)
+        return modes.measure(output=str(path), target=target,
+                             show=lambda *_: None, **kwargs)
+
+    def test_an_interrupted_run_CONTINUES_where_it_stopped(self, monkeypatch,
+                                                           tmp_path):
+        # The pairs already on disk are NOT re-measured: that would be a
+        # second measurement rather than a repair, and it would cost what one
+        # costs.
+        ran = self._no_model(monkeypatch)
+        self._resume(self._interrupted(tmp_path / "m.json", 18))
+        assert len(ran) == 4, (
+            "two pairs left of twenty, two campaigns each — a resume that "
+            "re-measured the eighteen would spend the quota it exists to save")
+
+    def test_and_the_resume_is_INVISIBLE_in_the_result(self, monkeypatch,
+                                                       tmp_path):
+        """
+        An interrupted-then-resumed run and an uninterrupted one produce the
+        same pairs. Without that the file would be a second source of truth,
+        and the resume would be a figure of its own.
+        """
+        import json
+
+        self._no_model(monkeypatch)
+        whole = tmp_path / "whole.json"
+        modes.measure(pairs=4, multi_attempts=1, turns=1, output=str(whole),
+                      target="demo:3", show=lambda *_: None)
+
+        # Two REAL pairs, then the file forced back to the shape an
+        # interruption leaves: incomplete, and asking for four. Placeholder
+        # pairs would compare nothing — the point is that a resumed run and
+        # an uninterrupted one agree pair for pair.
+        halfway = tmp_path / "part.json"
+        modes.measure(pairs=2, multi_attempts=1, turns=1, output=str(halfway),
+                      target="demo:3", show=lambda *_: None)
+        killed = json.loads(halfway.read_text(encoding="utf-8"))
+        killed["complete"] = False
+        killed["protocol"]["pairs"] = 4
+        halfway.write_text(json.dumps(killed), encoding="utf-8")
+
+        self._resume(halfway, pairs=4, multi_attempts=1, turns=1)
+        assert (json.loads(halfway.read_text(encoding="utf-8"))["pairs"]
+                == json.loads(whole.read_text(encoding="utf-8"))["pairs"])
+
+    def test_a_COMPLETE_file_is_REFUSED(self, monkeypatch, tmp_path):
+        """
+        Resuming is a repair; repeating a finished measurement is a NEW
+        measurement. The same refusal `resume.py` makes by discarding its
+        cache on a normal finish — the judge is not deterministic, and a
+        cache that outlived a completed run would make every rerun reproduce
+        the first instead of resampling.
+        """
+        self._no_model(monkeypatch)
+        with pytest.raises(SystemExit) as refused:
+            self._resume(self._interrupted(tmp_path / "m.json", modes.PAIRS,
+                                           complete=True))
+        assert "COMPLETE" in str(refused.value)
+
+    def test_another_LEVEL_is_refused(self, monkeypatch, tmp_path):
+        # Levels are never pooled. A file whose pairs came from two defence
+        # levels would carry a sign test over nothing at all.
+        self._no_model(monkeypatch)
+        with pytest.raises(SystemExit) as refused:
+            self._resume(self._interrupted(tmp_path / "m.json", 5,
+                                           target="demo:2"))
+        assert "never pooled" in str(refused.value)
+
+    def test_another_PROTOCOL_is_refused(self, monkeypatch, tmp_path):
+        # Eight pairs of twenty and eight of forty are not two halves of one
+        # thing, and the turn count changes what a pair even costs.
+        self._no_model(monkeypatch)
+        with pytest.raises(SystemExit) as refused:
+            self._resume(self._interrupted(tmp_path / "m.json", 5,
+                                           protocol={"turns": 1}))
+        assert "turns" in str(refused.value)
+
+    def test_another_JUDGE_is_refused(self, monkeypatch, tmp_path):
+        """
+        The first key `resume.py` invalidates on, and for the same reason:
+        resuming across a change of judge blends two models in one figure.
+        This project has changed judge model before — llama3.2 to
+        gpt-oss-120b lifted recall from 50% to 100% — so it will happen again.
+        """
+        self._no_model(monkeypatch)
+        with pytest.raises(SystemExit) as refused:
+            self._resume(self._interrupted(
+                tmp_path / "m.json", 5,
+                protocol={"judge": "local/llama3.2"}))
+        assert "change of judge" in str(refused.value)
+
+    def test_a_file_with_NO_judge_resumes_but_SAYS_so(self, monkeypatch,
+                                                      tmp_path):
+        """
+        The field arrived on 2026-11-23, after the demo:2 and demo:3 runs. A
+        file written before it cannot be checked, so it SAYS so rather than
+        passing silently — the machine flags, the human decides, as with the
+        snapshot's age and the authorisation mandate. Self-liquidating: every
+        file written from here on carries the field.
+        """
+        import json
+
+        self._no_model(monkeypatch)
+        path = self._interrupted(tmp_path / "m.json", 19)
+        stale = json.loads(path.read_text(encoding="utf-8"))
+        del stale["protocol"]["judge"]
+        path.write_text(json.dumps(stale), encoding="utf-8")
+
+        said = []
+        modes.measure(pairs=modes.PAIRS, multi_attempts=modes.MULTI_ATTEMPTS,
+                      turns=modes.TURNS, output=str(path), target="demo:3",
+                      show=said.append)
+        assert any("predates the `judge` field" in line for line in said), (
+            "an unchecked judge must be announced, not assumed")
+
+    def test_the_JUDGE_is_recorded_so_the_next_resume_can_check_it(
+            self, monkeypatch, tmp_path):
+        # The contrast that makes the branch above self-liquidating. A field
+        # nothing writes is a field nothing can ever check — the half-wiring
+        # this project has met in both directions: phase 14's three
+        # chain-of-custody fields, read and never written, and the breach
+        # turn, emitted into nothing.
+        import json
+
+        from evaluation.evaluate_judge import judge_identity
+        self._no_model(monkeypatch)
+        path = tmp_path / "m.json"
+        modes.measure(pairs=1, multi_attempts=1, turns=1, output=str(path),
+                      target="demo:3", show=lambda *_: None)
+        assert json.loads(path.read_text(encoding="utf-8"))[
+            "protocol"]["judge"] == judge_identity()

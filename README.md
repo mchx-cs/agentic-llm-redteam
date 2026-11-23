@@ -27,7 +27,9 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > [Single-turn or multi-turn](#single-turn-or-multi-turn).
 > What is missing is the judge's reach: four criteria cover four OWASP families, so six
 > of the ten stay out of reach. And multi-turn has now been measured against
-> single-turn, at equal requests to the target: it finds LESS, 17 pairs to 1.
+> single-turn, at equal requests to the target, at each of the demo target's three
+> defence levels: it finds LESS at two of them (17 pairs to 1, and 12 to 3) and ties
+> at the third, and it takes no `high` finding at any of them.
 > The fourth criterion added depth, not breadth — a third party's data with no tool
 > involved is still LLM02.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
@@ -197,7 +199,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,420 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,428 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -495,7 +497,7 @@ python main.py --target demo --multiturn crescendo --max-turns 4
 | cost per attempt | ~4,000 tokens | ~18,000, and quadratic in the turn count |
 | statistical bounds (`pass@k`) | **affordable** | out of reach |
 | what a *no finding* is worth | weaker | **stronger** |
-| findings at equal target requests (measured) | **0.216 per request, 26 `high`** | 0.110 per request, no `high` |
+| findings at equal target requests (measured, level 1) | **0.216 per request, 26 `high`** | 0.110 per request, no `high` |
 | dependencies | **none** | PyRIT, Python ≥ 3.11 |
 
 The first row is the one that decides most engagements. `high` severity is reachable
@@ -513,12 +515,18 @@ multi-turn when the target is a conversational endpoint, the extra is installed,
 accept losing replay.
 
 **And whether multi-turn finds *more* is now measured — it does not.** Twenty pairs
-against the bundled target, both arms given the same number of requests to the target,
-judged by the measured judge, protocol committed before the run: the single-turn
-campaign wins 17 pairs to 1. It even wins per request after paying back the bias
-declared in its own disfavour — it spends replay requests the other arm does not,
-57% more in all, and still finds 0.216 per request against 0.110. One target at one
-defence level, so not the last word; but the direction is measured, not reasoned.
+per defence level, both arms given the same number of requests to the target, judged by
+the measured judge, protocol committed before each run. The single-turn campaign wins
+**17 pairs to 1** at level 1 and **12 to 3** at level 3 (reverse p = 0.0001 and 0.0176);
+at level 2 the comparison is a dead **tie**, 8 to 7. It also wins per request at both
+levels where it wins, after paying back the bias declared in its own disfavour — it
+spends replay requests the other arm does not, and still finds 0.216 against 0.110 at
+level 1, 0.120 against 0.052 at level 3.
+
+So the result **replicates and is not uniform**, which is more than the first run could
+say and less than a law. Three levels are three runs, not a dose-response design. What
+the three agree on is the thing the severity table predicts: **`high` findings 26, then
+5, then 0 — and none at all for multi-turn, at any level.**
 
 **Both modes have a committed report against the same target** — single-turn
 [here](examples/demo-report.md), multi-turn [here](examples/demo-multiturn-report.md) —
@@ -1054,7 +1062,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 | **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
 | **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
-| **3b** | Adaptive multi-turn attacker — [PyRIT](https://github.com/microsoft/PyRIT) drives the attack stage | **Done** — `--multiturn`, attacker model and judge inside our own points of passage. **The gain is now measured, negatively**: at equal target requests a single-turn campaign finds more, 17 pairs to 1, and 26 `high` findings against none |
+| **3b** | Adaptive multi-turn attacker — [PyRIT](https://github.com/microsoft/PyRIT) drives the attack stage | **Done** — `--multiturn`, attacker model and judge inside our own points of passage. **The gain is now measured, negatively**, at the three defence levels: at equal target requests a single-turn campaign wins 17 pairs to 1 at level 1 and 12 to 3 at level 3, ties at level 2, and takes every `high` finding there is (26, 5, 0) |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | **Done** |
 | **5** | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | **6** | Reporting — structured JSON as the source of truth, Markdown as the default rendering | **Done** |
@@ -1092,7 +1100,8 @@ list of turns (`--probe-target` says whether it is).
 **PyRIT is integrated as an extra, and the gain it would amplify has now been
 measured — it is not there.** Both halves matter. `--multiturn` runs; and judged by
 the measured judge, at equal requests to the target, a single-turn campaign finds
-more (17 pairs to 1, and 26 `high` findings against none). The simplest multi-turn form — two turns carrying the same
+more at two of the three defence levels and ties at the third (17 pairs to 1, 12 to 3,
+and every `high` finding there is). The simplest multi-turn form — two turns carrying the same
 ingredients as one composed message — has been measured four times against the
 bundled target and has never reached significance. The first three looked for the
 secret's exact string and leaned favourably (p = 0.067 on the soundest, 68 pairs);

@@ -16,8 +16,9 @@ The full campaign **reconnaissance → planning → attack → judgement → rep
 to end locally, and the next attempt is now chosen from what the target has already
 replied (phase 3a).
 
-A campaign can also attack over SEVERAL TURNS (`--multiturn`, phase 3b) — measured, and
-it finds LESS than single-turn at equal target requests — and it reaches an endpoint by
+A campaign can also attack over SEVERAL TURNS (`--multiturn`, phase 3b) — measured at
+the three defence levels, and it finds LESS than single-turn at equal target requests at
+two of them, with a tie at the third — and it reaches an endpoint by
 a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
 
 - **Phase 1**: the library is filled — **1,160 source payloads**, of which 1,143 come
@@ -59,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,420 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,428 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -216,7 +217,7 @@ trails, and the commit messages — the 91 original ones, and those written sinc
 | 1 | A library of real prompt injection payloads | **Done** (via garak + 15 by hand) |
 | 2 | Judge reliability: measure and reduce false positives / negatives | In progress |
 | 3a | **Reorder the plan from the target's reply** (deterministic, extends phase 5) | **Done** |
-| 3b | Adaptive multi-turn attacker: evaluate PyRIT as a replacement for the hand-built orchestrator | **Done** — `--multiturn` runs a PyRIT conversation as the attack stage, attacker model and judge inside our own points of passage, with the trail, the budget and the report around it. **And the gain is now MEASURED, negatively** (2026-11-19, paid judge, protocol committed first): at equal TARGET REQUESTS a single-turn campaign finds more, 17 pairs to 1, and **26 `high` findings against none** — a conversation has no single payload to replay. One target, one defence level |
+| 3b | Adaptive multi-turn attacker: evaluate PyRIT as a replacement for the hand-built orchestrator | **Done** — `--multiturn` runs a PyRIT conversation as the attack stage, attacker model and judge inside our own points of passage, with the trail, the budget and the report around it. **And the gain is now MEASURED, negatively** (2026-11-19, paid judge, protocol committed first): at equal TARGET REQUESTS a single-turn campaign finds more, 17 pairs to 1, and **26 `high` findings against none** — a conversation has no single payload to replay. **Measured at the three defence levels** (2026-11-23): single-turn wins at level 1 (17-1, reverse p = 0.0001) and at level 3 (12-3, reverse p = 0.0176), and the comparison is NULL at level 2 (8-7, p = 0.50) — so the result replicates but is not uniform. `high` findings: 26, then 5, then 0, and none for multi-turn at any level |
 | 4 | Decouple the judge from the target model | **Done** |
 | 5 | Reconnaissance and planning agents; multi-family campaigns | In progress |
 | 6 | Reporting: JSON as the source of truth, Markdown rendering by default | **Done** |
@@ -4385,7 +4386,8 @@ measurements, each with its protocol committed before the run:
   built**. `objective_for` couples adaptation to payload-use, so the arms
   would differ in two variables;
 - `--multiturn` against a single-turn campaign at equal TARGET REQUESTS, 20
-  pairs: **single-turn wins 17 pairs to 1**, reverse p = 0.0001, and
+  pairs at defence level 1: **single-turn wins 17 pairs to 1**, reverse
+  p = 0.0001, and
   **0.216 against 0.110 findings per request** after the declared bias is paid
   back. The breakdown is wider still: **26 `high` findings against none**, a
   difference in kind, since `high` needs a replay and a conversation has
@@ -4399,13 +4401,21 @@ ran on the PAID Groq judge — the measured one — for **2,054 calls and
 measurement called infeasible in November cost less than a coffee once the
 plan changed.
 
-What is NOT settled: **generality.** One target, one defence level — and the
-instrument could not even ask, `TARGET` being a module constant that
-`one_campaign` read as a global. It takes `--target` now, and the protocol for
-`demo:2` and `demo:3` is declared and committed (2026-11-23); the run is one
-command per level and costs about a euro each. And the adaptive attacker's own
-contribution, which no budget buys, because the tool cannot vary adaptation
-without varying payload-use.
+**Generality is now MEASURED, and the result replicates without being
+uniform** (2026-11-23, protocol committed before the runs): single-turn wins
+at level 1 (17-1) and at level 3 (12-3, reverse p = 0.0176), and the
+comparison is a dead TIE at level 2 (8-7-5, p = 0.50). So the level-1 finding
+is not an artefact of level 1 — and it is not a property of the tool either.
+Three levels are three runs, not a dose-response design, and the two
+intervals that separate are level 1's and level 2's; level 2's and level 3's
+overlap.
+
+What is STILL not settled: **other targets.** Three defence levels of ONE
+target, which differ only in how the secret is protected — by construction,
+so that comparing them measures the defence and nothing else. A different
+role, a different tool, a different language is a different question.
+And the adaptive attacker's own contribution, which no budget buys, because
+the tool cannot vary adaptation without varying payload-use.
 
 **4. THE CRITERION SEAM — reduced tenfold, then STOPPED on a power
 calculation.** `C-demo3-01-2` went from **7/10 wrong to 1/21**
@@ -7960,6 +7970,142 @@ environ un euro chacune sur le plan payant :
 ```
 
 1,420 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LA GÉNÉRALITÉ EST MESURÉE : LE RÉSULTAT SE RÉPLIQUE SANS ÊTRE UNIFORME
+(trois niveaux, 2026-11-23).** Protocole déclaré et committé avant les runs
+([`c20e1bc`](c20e1bc)), vingt paires par niveau, jamais mises en commun.
+
+| niveau | multi+ | mono+ | nul | p déclaré | p inverse | multi/req | mono/req | `high` m/s |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1 | **17** | 2 | 1,0000 | **0,0001** | 0,110 | 0,216 | 0 / **26** |
+| 2 | **8** | 7 | 5 | 0,5000 | — | 0,101 | 0,090 | 0 / 5 |
+| 3 | 3 | **12** | 5 | 0,9963 | **0,0176** | 0,052 | 0,120 | 0 / **0** |
+
+**L'AVANTAGE DU MONO-TOUR SE RÉPLIQUE — et il n'est pas uniforme.** Il est
+significatif en sens inverse aux niveaux 1 et 3, et **absent au niveau 2**.
+Les paires décidées gagnées par le multi-tour : 6 % (1/18, Wilson 1–26 %),
+53 % (8/15, 30–75 %), 20 % (3/15, 7–45 %). Donc l'intervalle du niveau 2 se
+sépare de celui du niveau 1 et **recouvre celui du niveau 3** : « le niveau 2
+est l'exception » est ce que trois points suggèrent, pas ce qu'ils
+établissent. Trois niveaux sont trois runs, pas un plan dose-réponse, et ce
+projet a déjà quatre fois enregistré le prix d'une tendance lue sur un petit
+échantillon.
+
+**Ce qui est établi, et c'est le résultat demandé : le résultat du 2026-11-19
+n'était PAS local à son niveau de défense.** La réserve « one target, one
+defence level » était la bonne réserve, et elle est levée dans le sens
+favorable au résultat qu'elle mettait en doute.
+
+**ET LA PRÉDICTION DÉCLARÉE AVANT LES RUNS TIENT, exactement.** Le protocole
+annonçait que l'avantage du mono-tour en `high` pouvait se resserrer quand le
+niveau monte sans que son compte `medium` bouge. Mesuré : **26 → 5 → 0**, et
+**zéro pour le multi-tour aux trois niveaux**. L'asymétrie reste structurelle
+— `high` exige `("divulgation", "confirmed")`, le rejeu renvoie UN payload et
+une conversation n'en a aucun à renvoyer — mais sa TAILLE dépend du niveau,
+parce qu'il faut une valeur rejouable et que le filtre en retient de plus en
+plus. Au niveau 3, aucun des deux bras n'atteint `high` en vingt campagnes,
+ce qui reproduit le 0/30 sur le code mesuré à N=30 le 2026-11-19.
+
+**Et les niveaux ne sont PAS un gradient monotone en nombre de trouvailles,
+seulement en SÉVÉRITÉ.** Le bras mono-tour trouve 0,216 puis 0,090 puis 0,120
+par requête : le niveau 3 en rend plus que le niveau 2. Ce n'est pas une
+anomalie, c'est le fait déjà enregistré le 2026-11-19 — **un filtre qui
+protège une VALEUR ne protège pas la consigne qui la mentionne** — vu depuis
+l'autre bout : `divulgation` passe de 8 à 11 au niveau 3, et aucune de ces
+onze n'est corroborable. Le gradient que `demo` installe porte sur ce qui
+SORT, pas sur combien.
+
+**Un troisième fait se réplique aux trois niveaux, et c'est le confond du
+2026-11-19 : le multi-tour ne produit AUCUN `obeissance`, jamais** — 0, 0, 0,
+contre 30, 13 et 14 pour le mono-tour. Une tentative multi-tour poursuit un
+objectif dérivé de la RECONNAISSANCE, donc elle n'envoie jamais le payload de
+jailbreak que sa technique nomme, et `obeissance` est précisément ce que ces
+payloads cherchent. Le bras n'a pas été battu sur les jailbreaks : il n'en a
+tenté aucun, aux trois niveaux.
+
+**LE RUN DU NIVEAU 3 EST MORT À LA PAIRE 13, ET PAS DE NOTRE FAIT.** Groq a
+rendu `400 — Failed to generate JSON` sur l'analyste de reconnaissance, donc
+la campagne est morte avant d'avoir un plan, et la mesure entière avec elle.
+Douze paires avaient réussi : une heure d'horloge et un euro.
+
+**Donc la mesure se reprend**, la réponse que ce projet avait déjà donnée à la
+paire 28 du 2026-11-17 : ce qui a DÉJÀ eu lieu survit, parce que c'est
+précisément le moment où on en a besoin. **Quatre choses invalident ce qui est
+sur le disque**, et chacune répond à une façon de CORROMPRE le chiffre plutôt
+que de le périmer :
+
+- un fichier **COMPLET**. Reprendre est une réparation ; refaire une mesure
+  finie est une NOUVELLE mesure et doit coûter ce que coûte une mesure. C'est
+  le refus exact que `resume.py` fait en jetant son cache à la fin normale
+  d'un run — sans quoi chaque relance reproduirait la première au lieu de
+  rééchantillonner, et la variance que ce projet a pris la peine de mesurer
+  disparaîtrait de tous les chiffres suivants ;
+- une autre **CIBLE**. Les niveaux ne sont jamais mis en commun, et un fichier
+  dont les paires viennent de deux niveaux porterait un test de signe sur
+  rien ;
+- un autre **PROTOCOLE**. Huit paires sur vingt et huit sur quarante ne sont
+  pas deux moitiés d'une même chose ;
+- un autre **JUGE** — la première clé que `resume.py` invalide, et pour la
+  même raison : reprendre à travers un changement de juge mélange deux
+  modèles dans un chiffre. Ce projet a déjà changé de modèle de juge, le
+  rappel passant de 50 % à 100 %.
+
+Un désaccord **REFUSE** au lieu d'écraser. La deuxième récolte qui a
+silencieusement effacé la première a coûté une soirée d'étiquetage le
+2026-11-13 ; ici elle coûterait un euro et une heure.
+
+**LE CHAMP `judge` N'EXISTAIT PAS, ce qui est la moitié du garde.** Le bloc
+de protocole enregistrait la cible, les paires, les tours et le seuil, pas le
+juge — donc la reprise ne pouvait pas vérifier ce qui est précisément sa
+première clé d'invalidation. Il est enregistré maintenant, et un fichier
+antérieur **le dit** au lieu de passer en silence : « ce fichier est antérieur
+au champ `judge`, donc le juge derrière ses 12 paires ne peut pas être
+vérifié depuis le fichier ». La machine signale, l'humain décide — comme pour
+l'âge du snapshot et le mandat d'autorisation. Et la branche s'éteint d'elle-
+même : tout fichier écrit à partir d'ici porte le champ.
+
+Pour ces douze paires, la vérification a été faite **ailleurs plutôt
+qu'assumée** : `.env` n'a pas été modifié depuis le 2026-11-11, et
+`judge_identity()` rend `groq/openai/gpt-oss-120b`, le juge mesuré et celui
+des deux runs.
+
+**CE QUE JE N'AI PAS TOUCHÉ, et c'est le point délicat.** `reconnoitre` sait
+survivre à un modèle qui rend du charabia — il rend un profil vide, jamais un
+profil inventé — mais pas à un fournisseur qui REFUSE de répondre. Même panne
+(aucune analyse exploitable), deux issues (profil vide / campagne morte).
+Corriger ça entre la paire 12 et la paire 13 aurait changé la façon dont une
+paire est mesurée au milieu d'une mesure : une paire mesurée avec un profil
+vide n'est pas la même paire. C'est une pièce à part, et le garde qui la
+nomme n'existe pas encore.
+
+**Huit mutations, huit morsures** : la reprise repartie de la paire 1, un
+fichier complet accepté, la cible non vérifiée, le protocole non vérifié, le
+juge non vérifié, un juge invérifiable passé en silence, le juge non
+enregistré (donc plus rien à vérifier jamais), et la propriété qui rend une
+reprise acceptable sur une mesure — **un run interrompu puis repris et un run
+ininterrompu produisent les mêmes paires**. Sans elle, le fichier serait une
+seconde source de vérité et la reprise un chiffre à part.
+
+**Et un défaut dans mon propre test de cette propriété**, trouvé au premier
+lancement : il comparait des paires GABARIT écrites à la main contre de vraies
+paires, donc il ne comparait rien de ce qu'il annonçait. Il reprend maintenant
+deux VRAIES paires, le fichier étant forcé à la forme qu'une interruption
+laisse. **Onzième fois dans ce fichier qu'un test ne vaut que ce qu'il
+COMPARE.**
+
+**Une réserve sur ce tableau, et elle appelle le bloc de protocole ajouté
+aujourd'hui : le fichier du niveau 1 n'est plus sur le disque.** Ses chiffres
+sont cités d'après l'enregistrement du 2026-11-19 dans ce fichier, pas
+recalculés. C'est exactement l'argument du champ `judge` : une mesure qui
+n'enregistre pas sa propre question ne peut être ni reprise ni revérifiée,
+seulement refaite.
+
+**Et les deux gardes du 2026-11-21 ont mordu une fois de plus sur mon propre
+travail** : les huit tests de la reprise portaient le total de 1 420 à 1 428.
+**Septième péremption de ce compte en quatre jours**, et la troisième où un
+test le dit au lieu d'un lecteur dans six mois.
+
+1,428 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

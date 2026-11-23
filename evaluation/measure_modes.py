@@ -111,6 +111,43 @@ project recorded against its own result.
     as the level rises, while its `medium` count need not. A narrowing gap is
     a result; so is a constant one.
 
+RESULT OF THE GENERALITY PROTOCOL (three levels, 2026-11-23)
+-------------------------------------------------------------
+| level | multi+ | single+ | tie | declared p | reverse p | multi/req | single/req | `high` m/s |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1 | 17 | 2 | 1.0000 | 0.0001 | 0.110 | 0.216 | 0 / 26 |
+| 2 | 8 | 7 | 5 | 0.5000 | — | 0.101 | 0.090 | 0 / 5 |
+| 3 | 3 | 12 | 5 | 0.9963 | 0.0176 | 0.052 | 0.120 | 0 / 0 |
+
+**The single-turn advantage REPLICATES and is NOT uniform.** Significant in
+the reverse direction at levels 1 and 3, absent at level 2. Decided pairs won
+by multi-turn: 6% (1/18, Wilson 1-26%), 53% (8/15, 30-75%), 20% (3/15,
+7-45%) — so level 2 separates from level 1 and OVERLAPS level 3. "Level 2 is
+the exception" is what three points suggest, not what they establish: three
+levels are three runs, not a dose-response design.
+
+**The prediction above held, exactly.** `high` findings 26, then 5, then 0,
+and zero for multi-turn at every level. The asymmetry stays structural, and
+its SIZE depends on the level, because `high` needs a replayable value and
+the filter keeps more of them as it hardens. At level 3 NEITHER arm reaches
+`high` in twenty campaigns.
+
+**And the levels are not a monotone gradient in COUNT, only in SEVERITY.**
+The single-turn arm finds 0.216, then 0.090, then 0.120 per request — level 3
+yields more than level 2. That is the fact recorded on 2026-11-19 seen from
+the other end: a filter that protects a VALUE does not protect the
+instruction that mentions it, so `divulgation` rises from 8 to 11 at level 3
+and not one of those eleven can be corroborated.
+
+**A third fact replicates at all three levels: multi-turn produces NO
+`obeissance`, ever** — 0, 0, 0 against 30, 13 and 14. A multi-turn attempt
+pursues a RECONNAISSANCE objective, so it never sends the jailbreak payload
+its technique names. The arm was not beaten on jailbreaks; it attempted none.
+
+A reservation that argues for the `judge` field in the output file: the
+LEVEL 1 run's file is no longer on disk, so its figures above are cited from
+the record in CLAUDE.md rather than recomputed.
+
 REPORTED BESIDE THE TEST, descriptive and NEVER tested
 -------------------------------------------------------
   * target requests actually spent by each mode, which is the normalisation's
@@ -269,6 +306,79 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show,
     }
 
 
+def already_measured(output, target, protocol, show=print):
+    """
+    The pairs an interrupted run of THIS measurement already produced.
+
+    A long run dies: a provider 400, a closed terminal, a laptop asleep. It
+    happened at pair 28 of `measure_multiturn` on 2026-11-17 and again at
+    pair 13 of the demo:3 generality run, and the answer is the audit
+    trail's — what has ALREADY happened survives, because that is exactly
+    the moment you need it. Forty campaigns is an hour of wall clock and a
+    euro of quota; re-spending them because the 400 landed on pair 13 of 20
+    buys nothing.
+
+    FOUR things invalidate what is on disk, and each answers a way the
+    figure could be CORRUPTED rather than merely stale:
+
+    - a COMPLETE file. Resuming is a repair; repeating a finished
+      measurement is a NEW measurement and must cost what one costs. The
+      same refusal `evaluation/resume.py` makes by discarding its cache on a
+      normal finish — without it every rerun would reproduce the first
+      instead of resampling, and the variance this project went to the
+      trouble of measuring would quietly vanish from every figure after it.
+    - another TARGET. Levels are NEVER pooled, and a file whose pairs came
+      from two defence levels would carry a sign test over nothing.
+    - another PROTOCOL. Eight pairs of twenty and eight of forty are not
+      two halves of one thing.
+    - another JUDGE. Resuming across a change of judge blends two models in
+      one figure — the blending this project refuses for defence levels, for
+      formats and for languages, and the first key `resume.py` invalidates on.
+
+    A mismatch REFUSES rather than overwriting. The second harvest that
+    silently erased the first cost an evening of labelling on 2026-11-13,
+    and here it would cost a euro and an hour.
+    """
+    saved = json.loads(Path(output).read_text(encoding="utf-8"))
+    done = saved.get("pairs", [])
+
+    def refuse(why):
+        raise SystemExit(
+            f"{output} holds {len(done)} pair(s) that are NOT this "
+            f"measurement:\n  {why}\n"
+            f"Resuming would pool two measurements in one figure. Write to "
+            f"another --output, or move this file aside if you mean to "
+            f"start over.")
+
+    if saved.get("complete"):
+        refuse(f"it is COMPLETE ({len(done)} pair(s) against "
+               f"{saved.get('target')}). Repeating a finished measurement is "
+               f"a new one, and it must cost what one costs.")
+    if saved.get("target") != target:
+        refuse(f"they were measured against {saved.get('target')}, not "
+               f"{target} — levels are never pooled.")
+
+    was = saved.get("protocol", {})
+    for field in ("pairs", "multi_attempts", "turns"):
+        if was.get(field) != protocol[field]:
+            refuse(f"its protocol says {field}={was.get(field)}, this run "
+                   f"says {protocol[field]}.")
+
+    # The judge was not recorded before 2026-11-23, so a file written then
+    # cannot be checked and SAYS so rather than passing silently: the
+    # machine flags, the human decides. Every file written from here on
+    # carries it, so this branch is self-liquidating.
+    if "judge" not in was:
+        show(f"/!\\ {output} predates the `judge` field, so the judge behind "
+             f"its {len(done)} pair(s) cannot be checked from the file. "
+             f"Resuming assumes it is still {protocol['judge']}.")
+    elif was["judge"] != protocol["judge"]:
+        refuse(f"they were judged by {was['judge']}, this run by "
+               f"{protocol['judge']} — a change of judge is a change of "
+               f"measurement, not a check of one.")
+    return done
+
+
 def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
             output=None, show=print, target=TARGET):
     from targets import choose_target
@@ -277,8 +387,16 @@ def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
     ask_target = choose_target(target)
     require_conversation(ask_target, target)
 
+    from evaluation.evaluate_judge import judge_identity
+
     declared = not departures_from_the_protocol(target, pairs, multi_attempts,
                                                 turns)
+    # ONE place, because this block is what makes the file resumable: a
+    # protocol written here and compared field by field somewhere else would
+    # drift, and the field that drifted would be the one nothing checked.
+    protocol = {"pairs": pairs, "multi_attempts": multi_attempts,
+                "turns": turns, "threshold": THRESHOLD,
+                "judge": judge_identity(), "declared": declared}
     single_attempts = multi_attempts * turns
     show(f"Protocol: {pairs} pair(s) against {target}, one-sided paired sign "
          f"test at {THRESHOLD}.")
@@ -291,7 +409,15 @@ def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
     show("requests actually spent are measured below rather than assumed.\n")
 
     results = []
-    for number in range(1, pairs + 1):
+    if output and Path(output).exists():
+        results = already_measured(output, target, protocol, show)
+        show(f"RESUMING: {len(results)} pair(s) already measured, on disk in "
+             f"{output}.")
+        show(f"  Measuring pair(s) {len(results) + 1} to {pairs}. The ones "
+             f"already done are NOT re-measured:")
+        show("  that would be a second measurement, not a repair.\n")
+
+    for number in range(len(results) + 1, pairs + 1):
         # Multi-turn FIRST, then single-turn, back to back: the target drifts.
         multi = one_campaign(ask_target, multiturn="redteaming",
                              attempts=multi_attempts, turns=turns, show=show,
@@ -315,11 +441,7 @@ def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
             Path(output).write_text(
                 json.dumps({"complete": number == pairs,
                             "target": target,
-                            "protocol": {"pairs": pairs,
-                                         "multi_attempts": multi_attempts,
-                                         "turns": turns,
-                                         "threshold": THRESHOLD,
-                                         "declared": declared},
+                            "protocol": protocol,
                             "pairs": results},
                            ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -395,7 +517,12 @@ def main(arguments=None):
                              f"{MULTI_ATTEMPTS}); the single-turn arm gets "
                              f"this times the turns")
     parser.add_argument("--turns", type=int, default=TURNS)
-    parser.add_argument("--output", default=None, metavar="FILE")
+    parser.add_argument("--output", default=None, metavar="FILE",
+                        help="where the pairs are written as they come. An "
+                             "INCOMPLETE file here is RESUMED, provided its "
+                             "target, protocol and judge match; a complete "
+                             "one is refused, because repeating a finished "
+                             "measurement is a new measurement.")
     arguments = parser.parse_args(arguments)
 
     departures = departures_from_the_protocol(
