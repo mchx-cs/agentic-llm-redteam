@@ -175,6 +175,23 @@ class TestNoTestReadsTheAmbientJudge:
     The check is static: a test file may name `JUDGE_PROFILE` only if it also
     monkeypatches it. Reading it to build a fixture is fine; reading it to
     decide an assertion is what breaks.
+
+    WHAT IT DOES NOT REACH, said rather than left to be discovered -- it was
+    discovered, on 2026-11-23, by a test of mine that failed in CI and not
+    here. The check looks for the NAME `JUDGE_PROFILE`; the same defect wears
+    a second shape, a hardcoded judge IDENTITY (`"local/llama3.2"`) supplied
+    as the "other" judge, which happens to BE the ambient one wherever `.env`
+    is absent. Nothing is named, so nothing is flagged.
+
+    No static rule was added for it, deliberately: three test files carry such
+    a literal legitimately -- one pins `MEASURED_ON`, one supplies telemetry
+    as data, one keys a cache with the SAME identity on both sides -- so the
+    rule would cry wrong three times in four, and this project has removed a
+    guard for crying wrong twice in four. The answer is structural instead:
+    derive the other judge from `judge_identity()`, so the test is right
+    under any configuration. And the reproduction that catches the whole
+    class costs two commands: run the suite with `.env` moved aside, then
+    with the garak snapshot moved aside too.
     """
 
     def test_a_test_naming_the_judge_profile_also_pins_it(self):

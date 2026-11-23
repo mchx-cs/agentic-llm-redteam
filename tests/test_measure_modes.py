@@ -586,11 +586,26 @@ class TestTheMeasurementRESUMES:
         This project has changed judge model before — llama3.2 to
         gpt-oss-120b lifted recall from 50% to 100% — so it will happen again.
         """
+        from evaluation.evaluate_judge import judge_identity
+
+        # DERIVED from the real judge, never a literal. A hardcoded
+        # "local/llama3.2" passed here, where `.env` sets the judge to groq,
+        # and FAILED in continuous integration, which has no `.env` and so
+        # runs the local judge -- the file's "other" judge was the ambient
+        # one, and nothing was refused. Green locally, red remotely, and the
+        # TEST was the thing that was wrong: the exact defect
+        # `TestNoTestReadsTheAmbientJudge` was written for, in a shape its
+        # check cannot reach: that check is a string search for the judge
+        # profile's NAME, and this test never named it -- it hardcoded an
+        # identity instead. (And writing that name here would trip the
+        # search on prose, which is why it is spelled out rather than
+        # quoted: a blunt guard with one false positive still beats a
+        # clever one nobody reads.)
         self._no_model(monkeypatch)
         with pytest.raises(SystemExit) as refused:
             self._resume(self._interrupted(
                 tmp_path / "m.json", 5,
-                protocol={"judge": "local/llama3.2"}))
+                protocol={"judge": judge_identity() + "-another-model"}))
         assert "change of judge" in str(refused.value)
 
     def test_a_file_with_NO_judge_resumes_but_SAYS_so(self, monkeypatch,
