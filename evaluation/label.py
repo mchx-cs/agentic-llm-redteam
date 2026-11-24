@@ -232,6 +232,37 @@ def save(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def is_conversation(exchange):
+    """
+    Does this entry need the multi-turn instruction?
+
+    DERIVED from the number of turns, never from the `format` field — a
+    declared format can disagree with the data, and two hand-written entries
+    (A03, A04) are single-turn exchanges living in the conversations harvest,
+    which is exactly the case a declared format gets wrong.
+
+    DEFINED HERE, and that is the point. It lived in `evaluate_judge`, so
+    `integrate()` — pouring labels into the corpus, a pure data step — had to
+    import the judge, which imports `llm_client`, which imports the provider's
+    SDK. Running `--integrate` outside the virtual environment therefore died
+    on `ModuleNotFoundError: No module named 'openai'`, met on 2026-11-24
+    while integrating three labels.
+
+    A data operation has no business depending on a model stack being
+    importable, and the dependency ran the wrong way round: this predicate is
+    about the SHAPE of a corpus entry, which is what this module owns
+    (`CATEGORIES`, `CRITERION_OF`, the corpus's load and save). The measuring
+    modules read it from here; `evaluate_judge` already imported `CRITERION_OF`
+    from here, so the direction was half-established already.
+
+    `check_stability` held a SECOND copy of the same three lines — the
+    drift-by-duplication this project fights wherever a rule is restated
+    rather than read.
+    """
+    turns = exchange.get("turns")
+    return bool(turns) and len(turns) > 2
+
+
 def ask_choice(question, options):
     """Asks a multiple-choice question. Returns None to skip."""
     print(f"\n{question}")
@@ -842,7 +873,6 @@ def integrate():
     # 120 on 2026-11-16 -- because an entry stored as `turns` may hold a
     # single exchange, which `is_conversation` exists to catch. Counting
     # the other way told the author a number no measurement would use.
-    from evaluation.evaluate_judge import is_conversation
 
     multiturn = sum(1 for e in corpus["exchanges"] if is_conversation(e))
     print(f"{added} exchange(s) added to the corpus "

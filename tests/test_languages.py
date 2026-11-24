@@ -173,21 +173,35 @@ class TestTheRealCorpus:
         for entry in self._corpus():
             assert entry["languages"] == language_pair(entry), entry["id"]
 
-    def test_the_crossed_population_came_in_with_the_harvest(self):
+    def test_the_crossed_population_is_still_traceable(self):
         """
-        THIS TEST CHANGED when the 119 were integrated, and the change is the
-        integration rather than a convenience.
+        THIS TEST HAS CHANGED TWICE, and each time because the corpus did.
 
-        It used to assert that `en->fr` is absent from the corpus — true of
-        the 90 single-turn exchanges, and the fact that made the multi-turn
-        harvest a genuinely new population. Integration made it false, as it
-        had to.
+        First it asserted `en->fr` was absent from the corpus — true of the
+        90 single-turn exchanges, and the fact that made the multi-turn
+        harvest a genuinely new population. Integrating the 119 made it
+        false, as it had to.
 
-        What endures, and is the reason the pair was recorded in the first
-        place: the crossed population is traceable. Every `en->fr` entry came
-        in with the harvest, so the AUTHOR-labelled population still has
-        none — and a figure measured over the author's 90 is still a figure
-        about one language population.
+        It then asserted the AUTHOR-labelled population had none, so that a
+        figure over the author's entries was a figure about ONE language
+        population. On 2026-11-24 that stopped being true, deliberately: the
+        author labelled W01, A11 and A12 — the criterion-attribution cases —
+        and all three are `en->fr`, because a garak DAN payload is English
+        and the request that follows is French.
+
+        That is a GAIN rather than a loss, and it is why the change is
+        recorded here instead of the assertion being quietly dropped. The
+        crossed population had **no positive at all** (recorded 2026-11-15:
+        "the forty English-attacker entries hold no leak"), so it could never
+        yield a recall — `evaluate_judge` printed `n/a (no vulnerability in
+        this pair)`. Three author-validated positives is the first time it
+        can.
+
+        What endures is the property that protects the PUBLISHED figures:
+        the author's half of the FROZEN set still holds no crossed entry, so
+        the frozen-set consultations remain about one language population.
+        The new ones are all in `dev`, which is where a case written to
+        expose a trap belongs.
         """
         corpus = self._corpus()
         by_author = [e for e in corpus if e["labelled_by"] == "author"]
@@ -196,11 +210,22 @@ class TestTheRealCorpus:
         pairs = {e["languages"] for e in by_author}
         assert "fr->fr" in pairs
         assert "en->en" in pairs          # the 13 deliberate translations
-        assert "en->fr" not in pairs
 
-        # And the crossed pair does exist in the corpus now, among the
-        # entries the harvest brought.
-        assert any(e["languages"] == "en->fr" for e in corpus)
+        # The frozen set is what the published figures describe, and it is
+        # the half that must stay a single population.
+        frozen = {e["languages"] for e in by_author if e["dataset"] == "test"}
+        assert "en->fr" not in frozen, (
+            "an author-labelled `en->fr` entry reached the FROZEN set: the "
+            "logged consultations stop being about one language population, "
+            "and that is a decision to take deliberately, not to inherit")
+
+        # And the crossed pair now carries author-validated POSITIVES, which
+        # it never did: that is what makes a recall on it possible at all.
+        crossed = [e for e in by_author
+                   if e["languages"] == "en->fr" and e["expected"]]
+        assert crossed, (
+            "the crossed population has lost its author-labelled positives: "
+            "its recall goes back to n/a")
 
     def test_no_entry_is_unclear_on_both_sides(self):
         # One such entry would be unsplittable, and worth looking at by hand.

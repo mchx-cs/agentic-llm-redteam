@@ -14,6 +14,7 @@ The data survived, the closing message did not, and nothing reported it.
 """
 
 import json
+import pathlib
 
 import pytest
 
@@ -604,3 +605,88 @@ class TestAPartialHarvestEntryIsLABELLABLE:
         entry = labelling._harvests()[0]["entrees"][0]
         assert entry["expected"] is True
         assert entry["category"] == "fuite-directe"
+
+
+class TestIntegratingNeedsNoMODELStack:
+    """
+    `--integrate` pours labels into the corpus. It reads JSON, filters, and
+    writes JSON: a pure data step. It nonetheless died on
+    `ModuleNotFoundError: No module named 'openai'` when run outside the
+    virtual environment, because `integrate()` imported `is_conversation`
+    from `evaluate_judge`, which imports the judge, which imports
+    `llm_client`, which imports the provider's SDK.
+
+    Met for real on 2026-11-24 while integrating three labels. The author
+    was simply outside the venv -- which is exactly the state in which a data
+    step should still work, and the state continuous integration is in for
+    every module it does not install.
+
+    The check RUNS it with `openai` made unimportable, rather than reading
+    the imports: two modules whose imports look fine is the junction defect
+    this project has met ten times, and only driving the thing proves the
+    chain.
+    """
+
+    @staticmethod
+    def _script(tmp_path):
+        return f"""
+import sys, json, pathlib
+
+class Blocked:
+    def find_module(self, name, path=None):
+        return self if name == "openai" or name.startswith("openai.") else None
+    def find_spec(self, name, path=None, target=None):
+        if name == "openai" or name.startswith("openai."):
+            raise ImportError("blocked on purpose: a data step must not need it")
+        return None
+
+sys.meta_path.insert(0, Blocked())
+sys.path.insert(0, {str(pathlib.Path.cwd())!r})
+
+import evaluation.label as label
+root = pathlib.Path({str(tmp_path)!r})
+harvest = root / "to_label.json"
+corpus = root / "labelled_exchanges.json"
+harvest.write_text(json.dumps({{"exchanges": [{{
+    "id": "Z01", "group": "Z", "payload": "p", "reply": "r",
+    "expected": False, "category": "controle", "dataset": "dev",
+    "trap": "t", "secret": None}}]}}), encoding="utf-8")
+corpus.write_text(json.dumps({{"exchanges": []}}), encoding="utf-8")
+
+label.TO_LABEL_FILE = harvest
+label.CONVERSATIONS_FILE = root / "absent.json"
+label.CORPUS_FILE = corpus
+label.SOURCES = ((harvest, "exchanges"),)
+label.integrate()
+
+poured = json.loads(corpus.read_text(encoding="utf-8"))["exchanges"]
+assert [e["id"] for e in poured] == ["Z01"], poured
+assert "openai" not in sys.modules
+print("OK")
+"""
+
+    def test_it_integrates_with_openai_UNIMPORTABLE(self, tmp_path):
+        import subprocess
+        import sys
+
+        done = subprocess.run([sys.executable, "-c", self._script(tmp_path)],
+                              capture_output=True, text=True, timeout=180)
+        assert done.returncode == 0, (
+            f"integrating needs the model stack again:\n{done.stderr[-1200:]}")
+        assert "OK" in done.stdout
+
+    def test_and_the_predicate_has_ONE_definition(self):
+        # It had two: `evaluate_judge` and `check_stability` each held the
+        # same three lines, and this one decides which INSTRUCTION an entry
+        # is judged by -- the drift this project refuses wherever a rule is
+        # restated rather than read.
+        import inspect
+
+        import evaluation.check_stability as stability
+        import evaluation.evaluate_judge as evaluator
+        import evaluation.label as labelling
+
+        assert evaluator.is_conversation is labelling.is_conversation
+        assert stability.is_conversation is labelling.is_conversation
+        assert inspect.getmodule(
+            labelling.is_conversation).__name__ == "evaluation.label"

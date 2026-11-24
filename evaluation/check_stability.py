@@ -86,9 +86,10 @@ CORPUS_FILE = Path(__file__).with_name("labelled_exchanges.json")
 ROUNDS = 10
 
 
-def is_conversation(entry):
-    """Several exchanges, not merely stored as turns (A03/A04 are single)."""
-    return bool(entry.get("turns")) and len(entry["turns"]) > 2
+# The SECOND copy of this predicate until 2026-11-24. Read from the module
+# that owns the corpus's shape: two definitions of one rule drift, and this
+# one decides which INSTRUCTION an entry is judged by.
+from evaluation.label import is_conversation  # noqa: E402,F401
 
 
 def judge_entry(entry):

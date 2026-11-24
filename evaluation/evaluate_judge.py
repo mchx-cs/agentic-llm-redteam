@@ -87,21 +87,14 @@ def load_exchanges(dataset):
     return in_dataset
 
 
-def is_conversation(exchange):
-    """
-    Does this entry need the multi-turn instruction?
-
-    DERIVED from the number of turns, never from the `format` field — a
-    declared format can disagree with the data, and two hand-written entries
-    (A03, A04) are single-turn exchanges living in the conversations harvest,
-    which is exactly the case a declared format gets wrong.
-
-    One turn means the SINGLE-TURN instruction, which is the frozen artefact:
-    an entry stored as `turns` but holding one exchange must be judged by the
-    same bytes as the 90 exchanges the 89 / 100 / 96 were measured on.
-    """
-    turns = exchange.get("turns")
-    return bool(turns) and len(turns) > 2
+# READ from `label`, never restated. One turn means the SINGLE-TURN
+# instruction, which is the frozen artefact: an entry stored as `turns` but
+# holding one exchange must be judged by the same bytes as the 90 exchanges
+# the published figures were measured on.
+#
+# It moved there on 2026-11-24 so that `integrate()` — a pure data step —
+# stops importing this module, and with it the judge and a provider's SDK.
+from evaluation.label import is_conversation  # noqa: F401  (re-exported)
 
 
 def question_asked(exchange):

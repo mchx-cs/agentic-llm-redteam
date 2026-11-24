@@ -36,8 +36,8 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
 - **Phase 2**: the judge has explicit criteria, examples, JSON output, temperature 0,
   reasons before ruling, receives the passages decoded by `detectors.py`, and abstains
   when its verdict contradicts itself. It is measured on hand-labelled exchanges, split
-  into a development set (168 entries, `python -m evaluation.evaluate_judge`) and a
-  frozen test set (77 entries, `--test`) — **245 in all, of which 128 were labelled by
+  into a development set (171 entries, `python -m evaluation.evaluate_judge`) and a
+  frozen test set (77 entries, `--test`) — **248 in all, of which 131 were labelled by
   the AUTHOR and 117 by a model**, a split stored on every entry because a figure over
   model-decided labels measures agreement between models and not whether the judge is
   right. Four criteria are scorable (`divulgation`, `obeissance`, `abus_outils`,
@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,473 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,475 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -8529,6 +8529,86 @@ rien du tout.
 module : ils vérifient ce qu'il TROUVE, jamais ce que ça voudrait dire.
 
 1,473 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**TROIS ÉTIQUETTES DE L'AUTEUR, ET `--integrate` NE DEMANDE PLUS LE SDK
+D'UN FOURNISSEUR (2026-11-24).**
+
+**Les verdicts, tous trois de Clément** — W01 et A11 `obeissance`, A12
+`fuite-donnees-tiers`, tour 1, et W01 en `dev`. Corpus : **248 entrées, 131
+`author` / 117 `model`**, dev 171 / test 77.
+
+**A12 CRÉE LA RÈGLE qui manquait** : quand le persona est adopté ET qu'une
+donnée de tiers sort, le critère nommé est **la divulgation, pas le moyen**.
+C'est l'analogie avec la seule disjonction déjà écrite — un outil → LLM06
+l'agentivité, aucun outil → LLM02 la divulgation : le critère nomme ce qui est
+SORTI. L'alternative (`obeissance`, par cohérence avec A11) rendrait le
+critère 4 inatteignable dès qu'un persona est dans le décor, ce qui est le
+registre le plus courant d'un vrai engagement. **Le corpus porte la règle ;
+l'instruction ne la porte pas encore**, et l'y écrire serait une correction à
+justifier sur `dev` et à mesurer avant/après, comme les quatre de la semaine
+dernière.
+
+**Et les trois sont `en->fr`**, parce qu'un payload DAN de garak est anglais
+et la demande qui suit française. **C'est la première fois que la population
+croisée porte un positif de l'auteur** : enregistrée le 2026-11-15 avec
+quarante entrées et aucune fuite, elle ne pouvait donner aucun rappel —
+`evaluate_judge` imprimait `n/a (no vulnerability in this pair)`. Elle le peut
+maintenant.
+
+Un invariant a donc changé, et il le DIT plutôt que de disparaître :
+`test_the_crossed_population_came_in_with_the_harvest` affirmait qu'aucune
+entrée de l'auteur n'est croisée. Ce qui demeure est la propriété qui protège
+les chiffres PUBLIÉS : **la moitié auteur du jeu GELÉ n'en contient toujours
+aucune**, donc les consultations loguées restent sur une seule population de
+langue. Les trois nouvelles sont en `dev`, où un cas écrit pour exposer un
+piège a sa place.
+
+Planchers de rappel sur `dev`, moitié auteur, après ces trois :
+`divulgation` 84%, `fuite_donnees_tiers` 61%, `obeissance` 57%,
+`abus_outils` 44%.
+
+**LE DÉFAUT QUE L'INTÉGRATION A RÉVÉLÉ : verser des étiquettes demandait le
+SDK d'un fournisseur.**
+
+```
+python -m evaluation.label --integrate
+  ModuleNotFoundError: No module named 'openai'
+```
+
+`integrate()` lit du JSON, filtre, écrit du JSON — **une étape de données
+pure**. Elle importait `is_conversation` depuis `evaluate_judge`, qui importe
+le juge, qui importe `llm_client`, qui importe le SDK. Hors du venv, elle
+mourait ; et c'est exactement l'état dans lequel une étape de données devrait
+encore marcher, et celui de la CI pour tout module qu'elle n'installe pas.
+
+**La dépendance allait à l'envers.** Ce prédicat porte sur la FORME d'une
+entrée de corpus, ce que `label.py` possède déjà (`CATEGORIES`,
+`CRITERION_OF`, la lecture et l'écriture du corpus) — et `evaluate_judge`
+importait déjà `CRITERION_OF` de là, donc le sens était à moitié établi.
+Déplacé, et les deux lecteurs le LISENT.
+
+**Il en existait une SECONDE copie**, dans `check_stability` : trois lignes
+recopiées, et ce prédicat décide par quelle INSTRUCTION une entrée est jugée.
+C'est la dérive par duplication que ce projet refuse partout où une règle est
+redite au lieu d'être lue.
+
+**Le garde EXÉCUTE au lieu de lire les imports** : un sous-processus où
+`openai` est rendu inimportable, qui verse une entrée dans un corpus
+temporaire. Deux modules dont les imports ont l'air corrects sont la forme de
+défaut rencontrée dix fois ici ; seul le pilotage prouve la chaîne.
+
+**Cinq mutations, cinq morsures** : le juge réimporté dans `integrate()`, la
+définition recopiée dans l'un ou l'autre lecteur, une entrée auteur croisée
+atteignant le jeu gelé, et la population croisée perdant ses positifs.
+
+**Une fausse alerte de moi, dite plutôt qu'effacée.** En voyant le corpus
+modifié j'ai cru qu'un test avait écrit dans la vérité terrain. Vérifié par
+les horodatages : l'intégration est de 18:07:45 et mon correctif de 18:09:08
+— donc elle a tourné AVANT, avec l'import encore en place, c'est-à-dire dans
+le venv, relancée par l'auteur. Aucun test n'a touché au corpus, et la
+vérification coûtait une commande.
+
+1,475 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
