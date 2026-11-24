@@ -20,9 +20,16 @@ import json
 
 import pytest
 
+import evaluation.resume as resume
 from evaluation.resume import Cache, digest, path_for
 
 JUDGE = "groq/openai/gpt-oss-120b"
+#: The prompt these tests pretend to have judged with. A constant rather
+#: than the real instruction: what is under test is the KEY, not the
+#: prompt, and a test reading the real one would change meaning every
+#: time the prompt does.
+INSTRUCTION = "the instruction these verdicts were measured on"
+
 VERDICT = {"reussi": True, "critere": "divulgation", "analyse": "a",
            "valeur": "X", "tour": 1, "brut": "{}"}
 
@@ -36,25 +43,25 @@ def cache(tmp_path, monkeypatch):
 
 class TestItRemembers:
     def test_a_verdict_comes_back(self, cache):
-        cache.put("D01", "Utilisateur : x", VERDICT)
-        assert cache.get("D01", "Utilisateur : x") == VERDICT
+        cache.put("D01", "Utilisateur : x", VERDICT, INSTRUCTION)
+        assert cache.get("D01", "Utilisateur : x", INSTRUCTION) == VERDICT
 
     def test_an_unknown_entry_returns_None(self, cache):
-        assert cache.get("D01", "Utilisateur : x") is None
+        assert cache.get("D01", "Utilisateur : x", INSTRUCTION) is None
 
     def test_it_is_FLUSHED_not_buffered(self, cache):
         """
         The whole point: an interruption must keep what already happened.
         Buffered writes would lose precisely the run the cache exists for.
         """
-        cache.put("D01", "q", VERDICT)
+        cache.put("D01", "q", VERDICT, INSTRUCTION)
         assert path_for and cache.path.exists()
         assert "D01" in cache.path.read_text(encoding="utf-8")
 
     def test_a_new_cache_reads_what_the_old_one_wrote(self, cache):
-        cache.put("D01", "q", VERDICT)
+        cache.put("D01", "q", VERDICT, INSTRUCTION)
         resumed = Cache("dev", JUDGE, "fr")
-        assert resumed.get("D01", "q") == VERDICT
+        assert resumed.get("D01", "q", INSTRUCTION) == VERDICT
 
 
 class TestWhatInvalidatesAVerdict:
@@ -64,36 +71,36 @@ class TestWhatInvalidatesAVerdict:
         figure — the blending the project refuses for defence levels, for
         formats and for languages alike.
         """
-        cache.put("D01", "q", VERDICT)
-        assert Cache("dev", "other/model", "fr").get("D01", "q") is None
+        cache.put("D01", "q", VERDICT, INSTRUCTION)
+        assert Cache("dev", "other/model", "fr").get("D01", "q", INSTRUCTION) is None
 
     def test_a_different_LANGUAGE_is_not_reused(self, cache):
         # `--language fr` and `--language en` are the two arms of a
         # comparison; mixing them would destroy it.
-        cache.put("D01", "q", VERDICT)
-        assert Cache("dev", JUDGE, "en").get("D01", "q") is None
+        cache.put("D01", "q", VERDICT, INSTRUCTION)
+        assert Cache("dev", JUDGE, "en").get("D01", "q", INSTRUCTION) is None
 
     def test_a_CHANGED_QUESTION_is_not_reused(self, cache):
         # A verdict is about the text the judge was sent. If the exchange
         # changed, the cached verdict is about something else — and the id
         # alone would not have caught it.
-        cache.put("D01", "Utilisateur : x", VERDICT)
-        assert cache.get("D01", "Utilisateur : y") is None
+        cache.put("D01", "Utilisateur : x", VERDICT, INSTRUCTION)
+        assert cache.get("D01", "Utilisateur : y", INSTRUCTION) is None
 
     def test_a_different_SET_has_its_own_cache(self, cache):
-        cache.put("D01", "q", VERDICT)
-        assert Cache("test", JUDGE, "fr").get("D01", "q") is None
+        cache.put("D01", "q", VERDICT, INSTRUCTION)
+        assert Cache("test", JUDGE, "fr").get("D01", "q", INSTRUCTION) is None
 
     def test_a_half_written_last_line_is_skipped(self, cache):
         """
         Exactly what an interruption leaves behind, and the reason the format
         is JSONL: one broken line costs one verdict, not the whole run.
         """
-        cache.put("D01", "q", VERDICT)
+        cache.put("D01", "q", VERDICT, INSTRUCTION)
         with cache.path.open("a", encoding="utf-8") as f:
             f.write('{"id": "D02", "dig')
         resumed = Cache("dev", JUDGE, "fr")
-        assert resumed.get("D01", "q") == VERDICT
+        assert resumed.get("D01", "q", INSTRUCTION) == VERDICT
         assert len(resumed) == 1
 
 
@@ -108,7 +115,7 @@ class TestItDoesNotSurviveAFinishedRun:
     """
 
     def test_discard_removes_it(self, cache):
-        cache.put("D01", "q", VERDICT)
+        cache.put("D01", "q", VERDICT, INSTRUCTION)
         assert cache.path.exists()
         cache.discard()
         assert not cache.path.exists()
@@ -174,7 +181,15 @@ class TestTheFiguresDoNotMove:
         # is written under -- and it would read the ambient configuration,
         # which no test in this repository may do.
         cache = evaluation.resume.Cache("dev", evaluator.judge_identity(), "fr")
-        cache.put("A", evaluator.question_asked(exchanges[0]), verdicts["p1"])
+        # The INSTRUCTION too comes from the function the evaluation
+        # uses, for the reason the comment above gives about the
+        # judge: a placeholder here would make the test agree with a
+        # key of its own invention, the cache would miss, and the
+        # test would fail for a reason that is about itself.
+        cache.put("A", evaluator.question_asked(exchanges[0]),
+                  verdicts["p1"],
+                  evaluator.system_prompt_for(
+                      evaluator.is_conversation(exchanges[0]), "fr"))
         calls.clear()
 
         second_counts, second_metrics = evaluator.evaluate("dev")
@@ -212,3 +227,69 @@ class TestTheCacheIsGitignored:
         assert "evaluation/.verdicts-" in ignored, (
             "a run's verdicts are a working file; committing them would put "
             "a model's output where the corpus lives")
+
+
+class TestTheINSTRUCTIONInvalidatesToo:
+    """
+    "A verdict is a function of the instruction and the question" was written
+    in this module's docstring from the first day, and only the question half
+    was keyed on until 2026-11-24.
+
+    So a run interrupted BEFORE a prompt correction and resumed AFTER it
+    would have served verdicts measured on the old instruction, silently,
+    inside a figure presented as one measurement. Nothing stale was ever
+    served -- checked rather than assumed before the re-measurement of
+    2026-11-24, where no cache existed -- but the correction of that day
+    (7,592 -> 8,821 characters) is exactly the event that would have
+    triggered it.
+    """
+
+    def test_a_verdict_measured_on_ANOTHER_instruction_is_not_reused(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(resume, "FOLDER", tmp_path)
+        cache = Cache("dev", JUDGE, "fr")
+        cache.put("D01", "q", VERDICT, "instruction A")
+        assert cache.get("D01", "q", "instruction B") is None, (
+            "a prompt correction between an interruption and its resume must "
+            "not be papered over: the cached verdict is about another "
+            "artefact")
+
+    def test_but_the_SAME_instruction_still_is(self, tmp_path, monkeypatch):
+        # The contrast, without which the guard above would pass on a cache
+        # that reuses nothing at all -- and resuming would stop working while
+        # looking correct.
+        monkeypatch.setattr(resume, "FOLDER", tmp_path)
+        cache = Cache("dev", JUDGE, "fr")
+        cache.put("D01", "q", VERDICT, "instruction A")
+        assert cache.get("D01", "q", "instruction A") == VERDICT
+
+    def test_a_row_written_BEFORE_the_field_existed_is_dropped(
+            self, tmp_path, monkeypatch):
+        """
+        Such a row says nothing about which instruction produced it, so it is
+        dropped rather than trusted. Dropping costs a re-judgement; trusting
+        costs the measurement, and this cache's one job is never to serve a
+        stale verdict into a figure.
+        """
+        import json
+
+        monkeypatch.setattr(resume, "FOLDER", tmp_path)
+        stale = {"id": "D01", "digest": resume.digest("q"),
+                 "judge": JUDGE, "language": "fr", "verdict": VERDICT}
+        resume.path_for("dev").write_text(
+            json.dumps(stale) + "\n", encoding="utf-8")
+        assert Cache("dev", JUDGE, "fr").get("D01", "q", INSTRUCTION) is None
+
+    def test_the_row_stores_a_DIGEST_not_the_prompt(self, tmp_path,
+                                                    monkeypatch):
+        # Nine thousand characters per verdict would make the working file
+        # unusable, and only equality is ever asked of it.
+        import json
+
+        monkeypatch.setattr(resume, "FOLDER", tmp_path)
+        long_prompt = "x" * 9000
+        Cache("dev", JUDGE, "fr").put("D01", "q", VERDICT, long_prompt)
+        row = json.loads(
+            resume.path_for("dev").read_text(encoding="utf-8").splitlines()[0])
+        assert row["instruction"] == resume.digest(long_prompt)
+        assert long_prompt not in json.dumps(row)

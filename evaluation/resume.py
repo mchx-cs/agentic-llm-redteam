@@ -31,10 +31,23 @@ WHAT INVALIDATES AN ENTRY, and why each one matters:
 - **the instruction's language**. Same argument: `--language en` and
   `--language fr` are the two arms of a comparison, and mixing them would
   destroy it.
-- **the QUESTION's digest**. A verdict is a function of the instruction and
-  the question. If the exchange's text changed — a corpus edit, a relabelled
-  entry re-harvested — the cached verdict is about something else. The digest
-  catches that; the entry's id alone would not.
+- **the QUESTION's digest**. If the exchange's text changed — a corpus edit,
+  a relabelled entry re-harvested — the cached verdict is about something
+  else. The digest catches that; the entry's id alone would not.
+- **the INSTRUCTION's digest**, added 2026-11-24. "A verdict is a function of
+  the instruction and the question" was written here from the first day, and
+  only the question half was keyed on. So a run interrupted before a prompt
+  correction and resumed after it would have served verdicts measured on the
+  OLD instruction, silently, inside a figure presented as one measurement.
+  Nothing stale was ever served — checked rather than assumed before the
+  re-measurement of 2026-11-24, where no cache existed — but the gap was
+  real, and the correction of that day (7,592 → 8,821 characters) is exactly
+  the event that would have triggered it.
+
+  It is keyed PER ENTRY and not per run, because the instruction depends on
+  the format: a single-turn entry is judged by the base, a conversation by
+  base plus addendum. Keying the whole run on one digest would re-judge 121
+  intact single-turn verdicts whenever only the addendum moved.
 
 A label change does NOT invalidate anything, deliberately: the verdict is
 about the exchange, not about what the author decided it means. Re-judging
@@ -75,6 +88,17 @@ class Cache:
         self._done = {}
         self._load()
 
+    @staticmethod
+    def _key(identifier, question, instruction):
+        """
+        What makes a cached verdict THIS verdict.
+
+        The instruction is digested rather than stored: a row carrying nine
+        thousand characters per verdict would make the working file unusable,
+        and only equality is ever asked of it.
+        """
+        return (identifier, digest(question), digest(instruction))
+
     def _load(self):
         if not self.path.exists():
             return
@@ -91,21 +115,31 @@ class Cache:
                 continue
             if row.get("language") != self.language:
                 continue
-            self._done[(row["id"], row["digest"])] = row["verdict"]
+            # A row written before the instruction was keyed on carries no
+            # `instruction` field. It is DROPPED rather than trusted: its
+            # verdict may have been measured on another instruction, and the
+            # one thing this cache must never do is serve a stale verdict
+            # into a figure. Dropping costs a re-judgement; trusting costs
+            # the measurement.
+            if "instruction" not in row:
+                continue
+            self._done[(row["id"], row["digest"],
+                        row["instruction"])] = row["verdict"]
 
-    def get(self, identifier, question):
+    def get(self, identifier, question, instruction):
         """The verdict already obtained for this exact question, or None."""
-        return self._done.get((identifier, digest(question)))
+        return self._done.get(self._key(identifier, question, instruction))
 
-    def put(self, identifier, question, verdict):
+    def put(self, identifier, question, verdict, instruction):
         """Records a verdict and FLUSHES: an interruption must keep it."""
         row = {"id": identifier, "digest": digest(question),
+               "instruction": digest(instruction),
                "judge": self.judge, "language": self.language,
                "verdict": verdict}
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
-        self._done[(identifier, digest(question))] = verdict
+        self._done[self._key(identifier, question, instruction)] = verdict
 
     def discard(self):
         """

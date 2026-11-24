@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,482 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,489 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -8910,17 +8910,9 @@ moitié auteur : `abus_outils` tient sur **3 positifs** (plancher 44 %),
 cas écrits et étiquetés à la main. `abus_outils` est la ligne la plus mince
 des quatre, des deux côtés.
 
-**2. Deux dettes d'outillage, petites et à moi.**
-- **La clé du cache de reprise** ne couvre pas le CONTENU de l'instruction,
-  alors que son propre docstring dit qu'un verdict est fonction de
-  l'instruction et de la question. Rien de périmé n'a été servi le
-  2026-11-24 — vérifié avant le lancement, pas supposé — mais un run
-  interrompu puis repris après une retouche servirait des verdicts de
-  l'ancienne instruction.
-- **`evaluate_judge` ne nomme pas les désaccords de critère.** Il dit 57/60
-  et jamais lesquels, le même défaut que le journal du jeu gelé qui
-  enregistre des comptes et jamais les cas — et c'est ce qui a rendu
-  impossible de dire quels trois cas divergent aujourd'hui.
+**2. Deux dettes d'outillage — FAITES le 2026-11-24.** La clé du cache de
+reprise couvre désormais l'instruction, par entrée ; `criterion_agreement`
+nomme les désaccords au lieu de les compter.
 
 **3. Ce qui ne bouge pas, et pourquoi** — consigné pour ne pas être rouvert
 depuis zéro :
@@ -9025,6 +9017,69 @@ et étiqueté par l'auteur en `dev` ; une correction pourra alors s'y
 justifier, et le jeu gelé la vérifiera après.
 
 1,482 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LES DEUX DETTES D'OUTILLAGE DU PLAN, RÉGLÉES (2026-11-24).**
+
+**1. LA CLÉ DU CACHE DE REPRISE COUVRE ENFIN L'INSTRUCTION.** Son propre
+docstring le disait depuis le premier jour — « a verdict is a function of the
+instruction and the question » — et seule la moitié « question » était dans
+la clé. Un run interrompu AVANT une correction de prompt et repris APRÈS
+aurait donc servi des verdicts mesurés sur l'ancienne instruction, en
+silence, à l'intérieur d'une figure présentée comme une seule mesure.
+
+Rien de périmé n'a jamais été servi — **vérifié et non supposé** avant la
+remesure du jour, où aucun cache n'existait — mais la correction du jour
+(7,592 → 8,821) est exactement l'événement qui l'aurait déclenché.
+
+**Clé PAR ENTRÉE et non par run**, parce que l'instruction dépend du format :
+une entrée mono-tour est jugée par la base, une conversation par base plus
+addendum. Une clé globale rejugerait 121 verdicts mono-tour intacts dès que
+seul l'addendum bouge.
+
+**Et une ligne écrite avant l'existence du champ est JETÉE, pas crue.** Elle
+ne dit rien de l'instruction qui l'a produite ; la jeter coûte un
+re-jugement, la croire coûte la mesure, et le seul travail de ce cache est de
+ne jamais servir un verdict périmé dans une figure.
+
+Le prompt est **digéré, pas stocké** : neuf mille caractères par verdict
+rendraient le fichier de travail inutilisable, et seule l'égalité lui est
+demandée.
+
+**2. UN DÉSACCORD DE CRITÈRE EST NOMMÉ, PAS SEULEMENT COMPTÉ.** « 57/60 »
+était tout ce que `criterion_agreement` imprimait, et le 2026-11-24 ça a
+rendu les trois désaccords d'un run `dev` **inidentifiables sans rejuger 171
+entrées**. C'est le même défaut que le journal du jeu gelé, qui enregistre
+des comptes et jamais les cas — celui qui avait rendu le parcours de `R07-2`
+sur cinq consultations reconstructible seulement depuis la prose de ce
+fichier.
+
+Chaque ligne porte **les deux critères**, pas seulement l'identifiant : le
+couple EST le diagnostic, puisque le même compte sous deux critères
+différents est deux défauts différents.
+
+**UNE MUTATION MAL CHOISIE, et c'est la leçon du balayage.** Retirer
+l'instruction de `_key` seul casse le MÉCANISME — les clés d'écriture et de
+lecture ne s'accordent plus, donc plus rien n'est réutilisé — et fait tomber
+deux tests qui ne sont pas le garde dédié, tandis que celui-ci reste vert.
+Elle ne disait donc rien de la propriété. La version COHÉRENTE (la clé oublie
+l'instruction des deux côtés, le cache reste fonctionnel) fait tomber
+exactement `test_a_verdict_measured_on_ANOTHER_instruction_is_not_reused`.
+**Une mutation qui ne touche pas la propriété affirmée ne dit rien du
+garde**, leçon du 2026-11-21, et c'est la deuxième fois qu'elle se présente
+sous la forme « ma mutation casse le mécanisme ».
+
+**ET UN TEST EXISTANT A ÉCHOUÉ POUR LA RAISON QU'IL ÉNONÇAIT LUI-MÊME.**
+`test_a_cached_run_and_a_fresh_run_agree` amorce le cache à la main, et son
+commentaire disait déjà, à propos du juge : « reassembling it here would have
+made the test agree with a key of its own invention rather than with the one
+the cache is written under ». J'ai fait exactement ça avec l'instruction — une
+constante de test — donc le cache ratait et le test échouait pour une raison
+qui parlait de lui-même. Il lit désormais l'instruction par la fonction que
+l'évaluation utilise.
+
+Cinq mutations mordent, plus la version cohérente de la sixième.
+
+1,489 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

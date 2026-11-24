@@ -30,7 +30,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from agents.judge import judge, judge_conversation
+from agents.judge import judge, judge_conversation, system_prompt_for
 from config import JUDGE_PROFILE, PROFILES
 from evaluation.resume import Cache
 from console import write_in_utf8
@@ -284,10 +284,18 @@ def criterion_agreement(exchanges, results_by_id):
 
     None rather than 0 when there is nothing to score -- a 0% would read as a
     judge that always picks the wrong criterion.
+
+    And it returns WHICH ones disagree, not only how many. "57/60" was all
+    this printed until 2026-11-24, and on that day it made the three
+    disagreements of a dev run unidentifiable: naming them would have taken
+    re-judging 171 entries. It is the same defect as the frozen-set log,
+    which records counts and never which cases, and which made `R07-2`'s
+    five-draw record recoverable only from this file's prose.
     """
     from evaluation.label import CRITERION_OF
 
     agreed = total = 0
+    disagreed = []
     for exchange in exchanges:
         if not exchange["expected"]:
             continue
@@ -297,8 +305,13 @@ def criterion_agreement(exchanges, results_by_id):
         if expected is None or verdict["reussi"] is not True or not said:
             continue
         total += 1
-        agreed += (said == expected)
-    return (agreed, total) if total else (None, 0)
+        if said == expected:
+            agreed += 1
+        else:
+            disagreed.append((exchange["id"], expected, said))
+    if not total:
+        return None, 0, []
+    return agreed, total, disagreed
 
 
 def _per_criterion(exchanges, results_by_id):
@@ -535,12 +548,20 @@ def _print_criterion_agreement(exchanges, results_by_id):
     blind spot became visible only once false positives were attributed by the
     verdict, which is when the verdict's criterion started being read at all.
     """
-    agreed, total = criterion_agreement(exchanges, results_by_id)
+    agreed, total, disagreed = criterion_agreement(exchanges, results_by_id)
     if agreed is None:
         return
     print(f"Criterion agreement: {agreed}/{total} "
           f"({agreed / total:.0%}) - of the breaches both sides saw, how "
           f"many under the same criterion.")
+    # NAMED, not merely counted. "57/60" was all this said until 2026-11-24,
+    # and it made that run's three disagreements unidentifiable without
+    # re-judging 171 entries. Each line says what the label implies and what
+    # the judge said instead, because the pair is the diagnosis: the same
+    # count under two different criteria is two different defects.
+    for identifier, expected, said in disagreed:
+        print(f"    {identifier:22s} label says {expected}, "
+              f"judge said {said}")
 
 
 def format_contribution(exchanges):
@@ -632,9 +653,10 @@ def evaluate(dataset="dev", language="fr", only=None):
               "results. This consultation is logged.\n")
 
     # Verdicts already obtained, if a previous run was interrupted. Keyed on
-    # the judge, the instruction's language AND the question's digest, so a
-    # cache can never blend two judges or serve a verdict about text that has
-    # since changed. See evaluation/resume.py.
+    # the judge, the instruction's language, the question's digest AND the
+    # INSTRUCTION's digest, so a cache can never blend two judges, two
+    # languages, two versions of an exchange, or two versions of the prompt.
+    # See evaluation/resume.py.
     cache = Cache(f"{dataset}+{only}" if only else dataset,
                   judge_identity(), language)
     if len(cache):
@@ -645,10 +667,15 @@ def evaluate(dataset="dev", language="fr", only=None):
     # Bounded by nature: one call to the judge per labelled exchange.
     for exchange in exchanges:
         question = question_asked(exchange)
-        result = cache.get(exchange["id"], question)
+        # The instruction this entry is actually judged by: the base for a
+        # single-turn exchange, base plus addendum for a conversation. Asked
+        # per entry rather than per run, so a change to the addendum alone
+        # does not throw away intact single-turn verdicts.
+        instruction = system_prompt_for(is_conversation(exchange), language)
+        result = cache.get(exchange["id"], question, instruction)
         if result is None:
             result = ask_the_judge(exchange, language)
-            cache.put(exchange["id"], question, result)
+            cache.put(exchange["id"], question, result, instruction)
         else:
             reused += 1
         results_by_id[exchange["id"]] = result
