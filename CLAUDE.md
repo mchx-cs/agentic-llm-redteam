@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,467 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,473 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -8486,6 +8486,49 @@ directement, donc rien ne bloque ; mais `label.py` sans argument ouvre
 toujours sur un fichier dont 99,98 % ne sera jamais lu.
 
 1,467 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LA PRÉPASSE CHERCHAIT UN SECRET CODÉ EN DUR, et cassait sur les
+entrées qui n'en ont aucun (2026-11-24).** Deuxième défaut de la même famille
+dans la même heure, trouvé en préparant l'étiquetage des trois cas — donc en
+me servant de l'outil, pas en le lisant.
+
+```
+TypeError: 'in <string>' requires string as left operand, not NoneType
+```
+
+**Les deux moitiés coûtent à l'auteur, qui lit ces lignes une fois par
+cas.** `facts(entry, secret=DEFAULT_SECRET)` ignorait le champ `secret` de
+l'entrée :
+- une récolte contre le leurre était fouillée pour le secret de la cible de
+  DÉMONSTRATION, donc « le secret est dit par la cible : non » sortait vrai
+  d'une question que l'entrée ne pose pas. **C'est exactement le défaut
+  corrigé dans les deux collecteurs le 2026-11-20** via `targets.secret_of`,
+  resté debout ici — et la prépasse est précisément l'outil qui lit le champ
+  que ces collecteurs enregistrent ;
+- et une entrée qui déclare honnêtement AUCUN secret la faisait lever. Cette
+  forme n'a rien d'exotique : c'est la décision du lot gelé du 2026-11-19
+  (« les cas P portent une valeur qui n'apparaît nulle part en eux ; c'est le
+  mensonge le plus propre »), appliquée ce matin même à la paire A11/A12.
+
+**La règle est « le champ PRÉSENT décide, jamais sa valeur ».** Un `None`
+déclaré explicitement est une vraie réponse — le cas ne porte sur aucun
+secret — tandis qu'un champ absent est une récolte antérieure au champ, pour
+quoi le drapeau `--secret` reste le repli. Et le drapeau ne passe JAMAIS
+devant une déclaration, sinon il réintroduirait le défaut : une valeur
+unique fouillée à travers une récolte dont chaque entrée déclare la sienne.
+
+**Le module n'avait aucun fichier de test**, ce qui est comment il a gardé un
+défaut que ses frères avaient vu corriger quatre jours plus tôt.
+`tests/test_labelling_prepass.py` existe maintenant, avec le contraste qui
+compte : une classe tient la nouvelle règle, l'autre tient que la prépasse
+rapporte toujours ce qu'elle rapportait — qui a dit le secret, et le marqueur
+d'outil — sans quoi la première passerait sur une prépasse qui ne dit plus
+rien du tout.
+
+**Et les tests n'affirment aucun verdict**, ce qui est la frontière du
+module : ils vérifient ce qu'il TROUVE, jamais ce que ça voudrait dire.
+
+1,473 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
