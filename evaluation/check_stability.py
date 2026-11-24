@@ -104,6 +104,45 @@ def judge_entry(entry):
     return judge(entry["payload"], entry["reply"])
 
 
+def expected_criterion(entry):
+    """
+    The criterion the LABEL implies, or None when there is nothing to score.
+
+    Read from `CRITERION_OF`, never restated — the same table that maps a
+    category to a criterion for `evaluate_judge`, so the two cannot drift on
+    the question of what a case is ABOUT.
+
+    None for a negative (no criterion is breached) and None for a control
+    (its category maps to no criterion). Those are not failures to score,
+    they are cases where the question does not arise, and the caller must
+    tell the two apart.
+    """
+    from evaluation.label import CRITERION_OF
+
+    if not entry.get("expected"):
+        return None
+    return CRITERION_OF.get(entry.get("category"))
+
+
+def score_criterion(verdict, wanted):
+    """
+    Did this round name the right criterion? None when it did not commit.
+
+    THE RULE IS `criterion_agreement()`'s, and it is read the same way: a
+    round is scored only where BOTH sides committed. The judge finding no
+    breach is a disagreement about the BREACH, which the verdict reading
+    already counts — scoring it here too would count one error twice, and
+    would make a criterion figure quietly become a recall figure.
+
+    So an uncommitted round is EXCLUDED, and the caller reports how many
+    were: without that, thirty rounds could silently become three and the
+    bound would be computed over a denominator nobody saw.
+    """
+    if not verdict.get("reussi"):
+        return None
+    return verdict.get("critere") == wanted
+
+
 def read_corpus(path=CORPUS_FILE):
     return {e["id"]: e for e in
             json.loads(Path(path).read_text(encoding="utf-8"))["exchanges"]}
@@ -138,7 +177,8 @@ def reading(votes, expected, rounds):
     return f"FLIPS ({wrong}/{rounds}, {low:.0%}-{high:.0%})", wrong
 
 
-def check(ids, rounds=ROUNDS, corpus=None, show=print, judge_one=None):
+def check(ids, rounds=ROUNDS, corpus=None, show=print, judge_one=None,
+          criterion=False):
     """
     Judge each named entry `rounds` times and report what is stable.
 
@@ -162,16 +202,47 @@ def check(ids, rounds=ROUNDS, corpus=None, show=print, judge_one=None):
         if entry is None:
             show(f"  {identifier:26s} ABSENT from the corpus")
             continue
-        votes = [judge_one(entry)["reussi"] for _ in range(rounds)]
-        verdict, wrong = reading(votes, entry["expected"], rounds)
-        marks = "".join("." if v is entry["expected"] else "X" for v in votes)
-        low, high = stats.wilson_interval(rounds - wrong, rounds)
-        show(f"  {identifier:26s} label={str(entry['expected']):5s} "
+        rulings = [judge_one(entry) for _ in range(rounds)]
+
+        if criterion:
+            wanted = expected_criterion(entry)
+            if wanted is None:
+                show(f"  {identifier:26s} NOT SCORABLE on the criterion "
+                     f"(negative, or a control naming none)")
+                continue
+            scored = [score_criterion(r, wanted) for r in rulings]
+            committed = [s for s in scored if s is not None]
+            if not committed:
+                show(f"  {identifier:26s} the judge found NO breach in any "
+                     f"of {rounds}: nothing to score, and that is a recall "
+                     f"question, not a criterion one")
+                continue
+            votes, expected, total = committed, True, len(committed)
+            label = f"criterion={wanted}"
+            skipped = rounds - total
+        else:
+            votes = [r["reussi"] for r in rulings]
+            expected, total = entry["expected"], rounds
+            label = f"label={entry['expected']}"
+            skipped = 0
+
+        verdict, wrong = reading(votes, expected, total)
+        marks = "".join("." if v is expected else "X" for v in votes)
+        low, high = stats.wilson_interval(total - wrong, total)
+        # The skipped rounds are PRINTED, never folded in: a bound over a
+        # denominator nobody saw is the defect `report.py` refuses when it
+        # prints "not calculable" rather than 0%.
+        aside = f"  [{skipped} round(s) with no breach, excluded]" if skipped \
+            else ""
+        show(f"  {identifier:26s} {label:28s} "
              f"{marks:8s} {verdict:24s} "
-             f"correct {rounds - wrong}/{rounds} "
-             f"(Wilson {low:.0%}–{high:.0%})")
+             f"correct {total - wrong}/{total} "
+             f"(Wilson {low:.0%}–{high:.0%}){aside}")
         results[identifier] = {"votes": votes, "wrong": wrong,
-                               "reading": verdict}
+                               "reading": verdict, "rounds": total,
+                               "skipped": skipped,
+                               "criteria": [r.get("critere")
+                                            for r in rulings]}
 
     unstable = [i for i, r in results.items() if "FLIPS" in r["reading"]]
     if unstable:
@@ -192,8 +263,15 @@ def main(arguments=None):
                         help="corpus entry identifiers (E08, P11, …)")
     parser.add_argument("--rounds", type=int, default=ROUNDS,
                         help=f"judgements per case (default {ROUNDS})")
+    parser.add_argument("--criterion", action="store_true",
+                        help="score WHICH CRITERION the judge names, instead "
+                             "of whether it finds a breach. A judge that "
+                             "finds every breach and names the wrong "
+                             "criterion scores 100%% on precision, recall "
+                             "and accuracy, so nothing published can see it.")
     arguments = parser.parse_args(arguments)
-    check(arguments.ids, rounds=arguments.rounds)
+    check(arguments.ids, rounds=arguments.rounds,
+          criterion=arguments.criterion)
     return 0
 
 
