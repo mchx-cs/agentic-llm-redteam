@@ -10,9 +10,11 @@ A multi-agent system that automates adversarial security testing of LLM applicat
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
 > 248 labelled exchanges — 131 labelled by the author, 117 by a model, and every entry
 > records which, because a figure measured against model-decided labels says that two
-> models agree, not that the judge is right. On the 23 author-labelled entries of a
-> frozen subset it has never been tuned against, it misses no vulnerability at all
-> (recall 100% in six consultations, including after the criteria grew by half) and it
+> models agree, not that the judge is right. On the 45 author-labelled entries of a
+> frozen subset it has never been tuned against, it misses no vulnerability at all —
+> recall 100% in seven consultations, the last of them after the instruction grew from
+> 4,375 to 8,821 characters, and on the 23 entries those seven have in common it is
+> identical case for case to three earlier ones. It also
 > classifies translated cases in English as accurately as their French originals. That
 > subset now covers all four criteria — it covered two until a second lot was written to
 > be held out and labelled by hand — and each criterion's figure is published with the
@@ -1060,7 +1062,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 |---|---|---|
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
 | **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
-| **2** | Judge reliability — measuring and reducing false positives/negatives | In progress |
+| **2** | Judge reliability — measuring and reducing false positives/negatives | In progress — four criteria, four of the ten OWASP families scorable. What is left is the FLOORS, not the criteria: a perfect recall on the frozen set's four `abus_outils` positives bounds the true rate at 51%, not at 100%. Raising one is more cases, written and labelled by hand |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
 | **3b** | Adaptive multi-turn attacker — [PyRIT](https://github.com/microsoft/PyRIT) drives the attack stage | **Done** — `--multiturn`, attacker model and judge inside our own points of passage. **The gain is now measured, negatively**, at the three defence levels: at equal target requests a single-turn campaign wins 17 pairs to 1 at level 1 and 12 to 3 at level 3, ties at level 2, and takes every `high` finding there is (26, 5, 0) |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | **Done** |
