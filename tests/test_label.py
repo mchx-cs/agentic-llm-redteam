@@ -533,3 +533,74 @@ class TestTheTrapFieldIsNotDestroyed:
         saved = json.loads(
             harvests["conversations"].read_text(encoding="utf-8"))
         assert saved["conversations"][0]["trap"] == "a better sentence"
+
+
+class TestAPartialHarvestEntryIsLABELLABLE:
+    """
+    `label.py` died on `KeyError: 'expected'` before labelling anything, so
+    ONE entry written off-schema blocked every other id in the file. Met for
+    real on 2026-11-24: an exchange from a live campaign had been saved into
+    the harvest on 2026-11-19 by an ad-hoc script, without the three fields
+    `entries()` fills in.
+
+    A missing verdict field means exactly what `expected: None` means -- that
+    nobody has labelled it -- so the loader fills it and SAYS it did.
+    """
+
+    @staticmethod
+    def _harvest(tmp_path, monkeypatch, entries):
+        import json
+
+        import evaluation.label as labelling
+        path = tmp_path / "to_label.json"
+        path.write_text(json.dumps({"exchanges": entries}),
+                        encoding="utf-8")
+        monkeypatch.setattr(labelling, "SOURCES", ((path, "exchanges"),))
+        return labelling
+
+    def test_an_entry_with_no_verdict_field_does_not_CRASH(self, tmp_path,
+                                                           monkeypatch):
+        labelling = self._harvest(tmp_path, monkeypatch, [
+            {"id": "W01", "group": "W-x", "payload": "p", "reply": "r"},
+        ])
+        harvests = labelling._harvests()
+        entry = harvests[0]["entrees"][0]
+        assert entry["expected"] is None
+        assert entry["category"] is None and entry["dataset"] is None
+
+    def test_and_it_says_which_entries_it_filled(self, tmp_path, monkeypatch,
+                                                 capsys):
+        # Flagged, never swallowed: an off-schema entry says something about
+        # whatever wrote it, and only the author can decide whether that
+        # matters. The machine flags, the human decides.
+        labelling = self._harvest(tmp_path, monkeypatch, [
+            {"id": "W01", "group": "W-x", "payload": "p", "reply": "r"},
+        ])
+        labelling._harvests()
+        out = capsys.readouterr().out
+        assert "W01" in out and "no verdict field" in out
+
+    def test_but_a_WELL_FORMED_harvest_says_nothing(self, tmp_path,
+                                                    monkeypatch, capsys):
+        # The contrast. A note on every run would be noise, and this project
+        # has removed a guard for crying wrong on legitimate data.
+        labelling = self._harvest(tmp_path, monkeypatch, [
+            {"id": "H01", "group": "H-x", "payload": "p", "reply": "r",
+             "expected": None, "category": None, "dataset": None},
+        ])
+        labelling._harvests()
+        assert "no verdict field" not in capsys.readouterr().out
+
+    def test_and_an_ALREADY_LABELLED_entry_is_untouched(self, tmp_path,
+                                                        monkeypatch):
+        # The filling must never overwrite a verdict: a harvest holds
+        # labelled entries until `--integrate` pours them into the corpus,
+        # and an evening of labelling lives in that file.
+        labelling = self._harvest(tmp_path, monkeypatch, [
+            {"id": "H02", "group": "H-x", "payload": "p", "reply": "r",
+             "expected": True, "category": "fuite-directe",
+             "dataset": "dev"},
+        ])
+        entry = labelling._harvests()[0]["entrees"][0]
+        assert entry["expected"] is True
+        assert entry["category"] == "fuite-directe"

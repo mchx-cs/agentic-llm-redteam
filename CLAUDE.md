@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,463 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,467 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -8415,6 +8415,77 @@ Et A12 n'est pas qu'une étiquette : son verdict **décide la règle de priorit�
 entre le critère 2 et le critère 4**, qui n'existe pas encore.
 
 1,463 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**`label.py` MOURAIT SUR UNE SEULE ENTRÉE MAL FORMÉE — et l'entrée en
+question était le cas que je venais de réécrire (2026-11-24).** Trouvé par
+l'auteur en lançant la commande que je lui avais donnée une heure plus tôt.
+
+```
+File "evaluation/label.py", line 420, in label
+    if e["expected"] is None and e["id"] not in integrated]
+KeyError: 'expected'
+```
+
+**Le défaut est pire que son message : UNE entrée bloque TOUT le fichier.**
+`label(ids)` filtre l'ensemble des récoltes avant de regarder les ids
+demandés, donc une entrée écrite hors schéma empêche d'étiqueter les autres —
+y compris deux cas parfaitement formés nommés explicitement sur la ligne de
+commande. C'est la forme de panne la plus coûteuse pour un outil dont le
+travail se compte en soirées d'étiquetage.
+
+**ET L'ENTRÉE FAUTIVE EST DE MOI : `W01`.** Un échange d'une VRAIE campagne
+contre `demo:3`, sauvé dans la récolte le 2026-11-19 par un script ad hoc qui
+n'écrivait pas les trois champs que `entries()` remplit. Son `trap` porte la
+mesure sur dix tours — `reussi` 10/10, `critere=fuite_donnees_tiers` 8/10 —
+et il n'est déclaré dans aucun module du dépôt.
+
+**Donc le cas que je devais écrire existait déjà, et je ne l'ai pas
+cherché.** J'ai écrit A11 ce matin sans regarder le fichier de travail où il
+dormait depuis cinq jours. La leçon est étroite et je l'ai méritée : **avant
+d'écrire un cas, lire la récolte**, qui est précisément l'endroit où les cas
+trouvés en campagne sont déposés.
+
+Les deux ne font pas double emploi, et il faut le dire des deux côtés :
+- **`W01` est la preuve réelle** — la réponse que la cible a vraiment
+  produite — et il est local, hors git ;
+- **A11 est fabriqué avec des lecteurs fictifs**, parce qu'il est COMMITTÉ
+  dans un dépôt public et que la réponse réelle nomme des personnalités
+  vivantes ;
+- **A12 n'existe que dans la paire**, et c'est lui qui a révélé qu'aucune
+  règle de priorité ne sépare le critère 2 du critère 4. `W01` n'a pas de
+  jumeau.
+
+**LA CORRECTION EST DANS LE CHARGEUR, pas dans quatorze lectures.** Une
+entrée sans champ de verdict est une entrée que personne n'a étiquetée, ce
+qui est exactement ce que `expected: None` veut dire — donc `_harvests()` le
+remplit une fois, et les quatorze `e["expected"]` qui suivent sont justes par
+construction. Un balayage de `.get()` aurait répandu du code défensif dans
+tout le module **et** masqué qu'une récolte a été écrite hors schéma.
+
+**Et c'est SIGNALÉ, jamais avalé** : le nombre et les ids, parce qu'une
+entrée hors schéma dit quelque chose de ce qui l'a écrite et que seul
+l'auteur peut décider si ça compte. La machine signale, l'humain décide —
+comme pour l'âge du snapshot et le juge invérifiable d'hier.
+
+Le chargeur ne touche jamais un verdict déjà posé, et c'est tenu par un test
+à part : une récolte contient des entrées étiquetées jusqu'à `--integrate`,
+et une soirée d'étiquetage vit dans ce fichier.
+
+**Quatre tests**, dont les deux contrastes sans lesquels le premier ne
+comparerait rien : une récolte bien formée ne dit RIEN (une note à chaque run
+serait du bruit, et ce projet a retiré un garde pour avoir crié faux), et une
+entrée déjà étiquetée ressort intacte.
+
+**Ce que la correction rend visible, et qui reste à l'auteur :** la commande
+offre maintenant **18 515** entrées à étiqueter, dont **18 512** viennent de
+l'ancienne récolte non bornée. C'est l'item déjà enregistré le 2026-11-20 —
+« whether the existing 18,536-entry harvest is worth keeping at all now that
+a fresh one is 120 entries » — et il n'est plus théorique : il est entre
+l'auteur et les trois cas qu'il veut étiqueter. `--ids` les atteint
+directement, donc rien ne bloque ; mais `label.py` sans argument ouvre
+toujours sur un fichier dont 99,98 % ne sera jamais lu.
+
+1,467 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

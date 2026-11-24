@@ -366,12 +366,48 @@ def _harvests():
     not always have both.
     """
     harvests = []
+    partial = []
     for path, key in SOURCES:
         if not path.exists():
             continue
         data = load(path)
+        entries = data.get(key, [])
+        # An entry with NO verdict field is one nobody has labelled, which is
+        # exactly what `expected: None` means -- so it is filled in here,
+        # once, rather than guarded at each of the fourteen places that read
+        # it. Those reads are then correct by construction, and the
+        # alternative (a `.get()` sweep) would have spread defensive code
+        # through the module while hiding that a harvest was written
+        # off-schema.
+        #
+        # It was a CRASH until 2026-11-24, and the worst kind: `label.py`
+        # died on `KeyError: 'expected'` before labelling anything, so ONE
+        # malformed entry blocked every other id in the file. The harvests
+        # are working files outside git, written by two collectors, by
+        # `--add` and -- in this case -- by an ad-hoc script of mine on
+        # 2026-11-19 that saved a live campaign exchange without the three
+        # fields `entries()` fills.
+        for entry in entries:
+            missing = [field for field in ("expected", "category", "dataset")
+                       if field not in entry]
+            if missing:
+                partial.append(entry.get("id", "?"))
+                for field in missing:
+                    entry[field] = None
         harvests.append({"fichier": path, "donnees": data,
-                         "entrees": data.get(key, [])})
+                         "entrees": entries})
+
+    # Flagged, never swallowed: filling the field is the truthful reading,
+    # but an entry written off-schema says something about whatever wrote it,
+    # and the author is the only one who can decide whether that matters.
+    if partial:
+        shown = ", ".join(sorted(partial)[:5])
+        more = "" if len(partial) <= 5 else f" (+{len(partial) - 5})"
+        print(f"/!\\ {len(partial)} harvest entry/entries carried no verdict "
+              f"field: {shown}{more}.")
+        print("    Treated as unlabelled, which is what a missing verdict "
+              "means. They were written by something other than the "
+              "collectors.")
     return harvests
 
 
