@@ -4361,15 +4361,19 @@ author's ground truth in the frozen set: `divulgation` 65%, `fuite_donnees_tiers
 bounds the true rate at 57% and no higher. Raising any of them is more cases,
 written and labelled by the author.
 
-**And the published figures now describe an instruction that no longer
-exists**: `dev` at 95 / 98 / 98 and the frozen set's original 23 at
-100 / 100 / 100 were measured on a base of 7,592 characters, which the
-criterion correction of 2026-11-24 took to **8,821** (the addendum is
-untouched at 1,706, so no CONVERSATION figure moves). The correction was
-measured per case rather than by a dev run, and it touches which CRITERION is
-named, not whether a breach is found — so a change to those three numbers
-would be a surprise rather than the point. Re-measuring `dev` is the next
-act, and the frozen set only afterwards, as a CHECK.
+**The published figures describe an instruction of 8,821 characters (base)
+plus a 1,706-character addendum, re-measured on 2026-11-24 after the
+criterion correction**: `dev` at **95 / 100 / 98** over 171 entries, where
+the ONLY three errors are the hallucinations E08, E08-b and E08-en — no false
+negative at all. Conversations 100 / 100 / 100 on 50 entries, turn agreement
+17/17, and **criterion agreement 57/60**, which is the first figure of its
+kind and has no predecessor to be compared with.
+
+**The FROZEN set has not been re-consulted**, so its 100 / 100 / 100 on the
+original 23 still describes the 7,592-character instruction. That
+consultation is a key moment in the sense of the project's rule — the
+measured artefact grew by a sixth — and it is a decision to take, not a step
+to chain.
 
 **2. THE CORPUS'S PROVENANCE — closed as a blocker, permanent as a caveat.**
 The frozen lot was written (22 cases, 19 groups), labelled BY THE AUTHOR, and
@@ -8737,8 +8741,10 @@ D14 pour la mention spontanée.
 Les ÉCHANGES restent en français dans les deux bras et seule l'`analyse` est
 traduite : la règle du 2026-11-14, qui fait de la langue de l'instruction la
 seule variable. Base 7,592 → **8,821** ; bras anglais 7,448 → **8,650** ;
-12 → **14** exemples de chaque côté. L'addendum n'est pas touché, donc aucune
-figure de CONVERSATION ne bouge.
+12 → **14** exemples de chaque côté. L'addendum n'est pas touché (1,706) —
+**mais l'instruction de conversation est base PLUS addendum**, donc elle bouge
+aussi, 9,298 → 10,527. J'avais écrit l'inverse une heure plus tôt dans la
+section d'état : corrigé. Les deux formats sont à remesurer, pas un seul.
 
 **RÉSULTAT, 30 manches de chaque côté, Fisher unilatéral :**
 
@@ -8786,6 +8792,67 @@ passé en tampon par BLOCS : rien n'était lisible pendant toute sa durée, et u
 `check_stability` n'a pas de reprise. La mesure APRÈS a tourné avec
 `PYTHONUNBUFFERED=1`. Le projet enregistre cette leçon pour les moniteurs
 depuis longtemps ; je l'ai réapprise sur ma propre commande.
+
+1,482 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**REMESURE DU `dev` SUR L'INSTRUCTION CORRIGÉE : les trois hallucinations
+sont les SEULES erreurs (2026-11-24).** 171 entrées, juge
+`groq/openai/gpt-oss-120b`, instruction `fr`, `judge()` direct sans vote.
+
+```
+dev 171     TP=60  FP=3  TN=108  FN=0      95 / 100 / 98
+  single-turn   121 (43 vuln)   93 / 100 /  98
+  conversation   50 (17 vuln)  100 / 100 / 100
+  author         86 (34 vuln)   92 / 100 /  97
+  model          85 (26 vuln)  100 / 100 / 100
+Accord de tour     17/17
+Accord de critere  57/60
+```
+
+**Zéro faux négatif, et les trois faux positifs sont E08, E08-b, E08-en** —
+les hallucinations, la limite structurelle d'un juge aveugle que seul le
+rejeu adresse. Rien d'autre ne casse : ni la couture, ni l'écho, ni
+l'agrégation, ni `D16-1`, ni `C-demo2-04-1`.
+
+**Ce qui N'EST PAS attribuable à la correction du jour, et il faut le dire
+avant de citer le chiffre.** La comparaison avec le run précédent
+(95 / 98 / 98, TP=56 FP=3 TN=108 FN=1) **n'est pas à périmètre égal** : le
+corpus est passé de 168 à 171 entrées, et une correction du 2026-11-19 — la
+règle 1 de l'addendum généralisée — a atterri entre les deux et visait
+précisément le faux négatif qui a disparu. Le rappel 98 → 100 lui revient,
+pas à celle d'aujourd'hui.
+
+Ce que la remesure établit est donc plus modeste et plus sûr : **l'instruction
+a grossi d'un sixième et rien ne s'est cassé**, sur un corpus où quatorze
+cas ont été écrits exprès pour attraper ce genre de régression.
+
+**ET L'ACCORD DE CRITÈRE N'A PAS DE PRÉCÉDENT.** 57/60 est la **première**
+valeur de cette métrique sur `dev` : elle a été ajoutée le 2026-11-19 et
+aucune entrée de ce fichier n'en cite de figure avant celle-ci. Donc **elle
+ne mesure pas le gain de la correction** — le gain est mesuré ailleurs, par
+cas, avant/après, sur `W01` et `A11`. Citer 95 % comme un résultat de la
+journée serait exactement le genre d'attribution que ce projet refuse.
+
+**Et le run ne dit pas QUELS trois désaccords**, ce qui est le même défaut que
+le journal du jeu gelé qui enregistre des comptes et jamais les cas :
+reconstruire la liste demanderait de rejuger. `W01` et `A11` en sont
+vraisemblablement deux — ils restent faux 80 % et 40 % du temps — mais
+« vraisemblablement » n'est pas une mesure, et le troisième est inconnu.
+
+**Le jeu gelé n'est PAS consulté**, et c'est une décision et non un oubli. Ses
+100 / 100 / 100 sur les 23 d'origine décrivent toujours l'instruction de
+7,592 caractères. La consulter est un « moment clé » au sens de la règle —
+l'artefact mesuré a grossi d'un sixième — donc c'est une dépense à décider,
+jamais un pas à enchaîner.
+
+**Une dette d'outillage que cette mesure a frôlée.** Le cache de reprise
+s'invalide sur le juge, la langue et le digest de la QUESTION — pas sur le
+contenu de l'instruction, alors que son propre docstring dit qu'un verdict
+est fonction de l'instruction et de la question. Aucun cache n'existait (il
+a été vérifié avant le lancement, pas supposé), donc rien de périmé n'a été
+servi ; mais un run interrompu puis repris après une retouche servirait des
+verdicts de l'ancienne instruction. La clé est la bonne place pour le
+corriger.
 
 1,482 `pytest` tests, toujours sans aucun appel à un modèle.
 
