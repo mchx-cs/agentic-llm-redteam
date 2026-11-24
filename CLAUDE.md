@@ -8856,6 +8856,94 @@ corriger.
 
 1,482 `pytest` tests, toujours sans aucun appel à un modèle.
 
+**PROTOCOLE DÉCLARÉ pour la SEPTIÈME consultation du jeu gelé
+(2026-11-24), avant de la lancer.**
+
+**Pourquoi elle est légitime**, au sens de la règle du projet : l'artefact
+mesuré a changé. La base est passée de **7,592 à 8,821 caractères** (la paire
+d'exemples du critère), et comme l'instruction de conversation est base PLUS
+addendum, elle a bougé aussi — **9,298 → 10,527**. Les deux formats sont
+concernés. La correction a été justifiée sur `dev`, comme la règle l'exige,
+et le jeu gelé vient APRÈS, en vérification.
+
+- **tout le jeu gelé, 77 entrées** (45 étiquetées par l'auteur, 32 par un
+  modèle ; 22 conversations) ;
+- juge `groq/openai/gpt-oss-120b`, instruction `fr`, `judge()` direct **sans
+  vote** — l'évaluation doit mesurer le juge tel qu'il est ;
+- **TROIS POPULATIONS, lues séparément**, et la séparation est le point :
+  les **23 d'origine** (8 positifs) sont la seule ligne comparable aux
+  figures publiées ; le **lot gelé, 22** (11 positifs) a été consulté une
+  seule fois ; les **45 ensemble** forment une référence qui n'a qu'un
+  précédent. Comparer une figure sur 45 avec les publiées serait l'erreur de
+  population que la coupe par provenance existe pour empêcher, et que j'ai
+  commise en conversation le 2026-11-17 ;
+- **seuils PAR MÉTRIQUE sur les 23 d'origine** : un cas y vaut **4,3 points
+  d'exactitude, 12,5 de rappel et ~12 de précision**. Rien en dessous de deux
+  cas déplacés ne sera interprété. Par métrique et non globalement, la
+  correction que le bras anglais a imposée le 2026-11-14 ;
+- c'est une **VÉRIFICATION, jamais une raison**. Ce qui y serait trouvé ne
+  peut pas justifier d'ajuster un critère : ce serait régler sur le jeu de
+  test, l'interdit le plus souvent répété de ce projet.
+
+**Ce que cette consultation NE PEUT PAS mesurer, déclaré avant les chiffres
+plutôt qu'offert après comme excuse.** Le jeu gelé **ne contient aucun cas de
+confusion de critère** — c'est précisément le trou que `W01`, `A11` et `A12`
+viennent combler, et les trois sont en `dev`. Elle mesure donc la
+NON-RÉGRESSION sous une instruction qui a grossi d'un sixième, et ne dit rien
+de la correction elle-même sur des cas jamais regardés.
+
+**Prédiction, posée avant les chiffres** : les trois hallucinations restent
+la seule famille d'erreur des 23 d'origine, et les trois ratés
+modèle-étiquetés (`C-demo3-02-1-mono`, `C-demo2-05-1-mono`,
+`C-demo2-05-2-mono`) restent les mêmes pour la quatrième consultation de
+suite. Un écart marqué sur le lot gelé signifierait que la paire d'exemples
+ne généralise pas — ce qui est exactement ce que `W01` a déjà laissé
+entrevoir sur `dev`, où il reste faux 24 fois sur 30 contre 12 pour `A11`.
+
+**LE PLAN D'ACTION, CONSIGNÉ** — ce qui suit cette consultation, dans
+l'ordre de ce qui débloque quoi.
+
+**1. Les planchers de rappel, et c'est le travail de l'AUTEUR.** Sur `dev`,
+moitié auteur : `abus_outils` tient sur **3 positifs** (plancher 44 %),
+`fuite_donnees_tiers` sur 6 (61 %). Côté gelé : `abus_outils` 4 positifs
+(51 %), `obeissance` 3 (44 %). Aucun outillage ne les relève — seulement des
+cas écrits et étiquetés à la main. `abus_outils` est la ligne la plus mince
+des quatre, des deux côtés.
+
+**2. Deux dettes d'outillage, petites et à moi.**
+- **La clé du cache de reprise** ne couvre pas le CONTENU de l'instruction,
+  alors que son propre docstring dit qu'un verdict est fonction de
+  l'instruction et de la question. Rien de périmé n'a été servi le
+  2026-11-24 — vérifié avant le lancement, pas supposé — mais un run
+  interrompu puis repris après une retouche servirait des verdicts de
+  l'ancienne instruction.
+- **`evaluate_judge` ne nomme pas les désaccords de critère.** Il dit 57/60
+  et jamais lesquels, le même défaut que le journal du jeu gelé qui
+  enregistre des comptes et jamais les cas — et c'est ce qui a rendu
+  impossible de dire quels trois cas divergent aujourd'hui.
+
+**3. Ce qui ne bouge pas, et pourquoi** — consigné pour ne pas être rouvert
+depuis zéro :
+- **la généralité au-delà de `demo`** demande une CIBLE, pas un run : trois
+  niveaux d'une seule cible qui ne diffèrent que par la protection du
+  secret ;
+- **le bounded null** demande une cible qui tient, et `demo` cède à tous les
+  niveaux dès qu'on monte N. Choisir une technique qu'elle résiste serait de
+  la sélection sur le résultat ;
+- **le filing de `F19`/`F20`** et le sort de la **vieille récolte**
+  (18 554 entrées, offertes par `label.py` sans argument) sont des décisions
+  de l'auteur ;
+- **`PROFIL_ARBITRE`** dans son `.env`, qui imprime une note à chaque
+  commande.
+
+**4. Et une question que la journée a ouverte sans la fermer** : `A11` est
+réparé à 60 % et `W01` à 20 %, alors que les deux portent le même piège. Le
+juge généraliserait mal de l'exemple vers le cas réel — hypothèse, rien ne
+l'isole. La mesurer demanderait d'écrire un troisième cas du même piège, plus
+éloigné de l'exemple encore, et de comparer les trois.
+
+1,482 `pytest` tests, toujours sans aucun appel à un modèle.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
