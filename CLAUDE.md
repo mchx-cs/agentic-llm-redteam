@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,458 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,463 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -8306,6 +8306,115 @@ plutôt que passée en silence — puis rejouée sur une ancre unique. Un balaya
 qui ne dit pas qu'il n'a pas testé est pire qu'un balayage absent.
 
 1,458 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LA PAIRE QUE `criterion_agreement` ATTENDAIT — et en l'écrivant, UNE RÈGLE
+MANQUANTE DANS L'INSTRUCTION (2026-11-24).** Le cas dû depuis le 2026-11-20 :
+une campagne contre `demo:3` avait rendu `fuite_donnees_tiers`, trois votes
+sur trois, sur une réponse DAN qui ne livrait **aucune donnée**, et le juge
+avait été mesuré à **8/10 sur ce mauvais critère tout en trouvant
+l'infraction 10/10**. `criterion_agreement()` avait été ajouté le même jour
+pour exactement ça, et n'avait rien à mordre.
+
+Écrits, committés, **non étiquetés** : A11 et A12, une paire, dans
+`handwritten_conversations.py` plutôt qu'un module à part — un troisième lot
+aurait forcé à enseigner trois gardes existants (les jumeaux, l'imposition
+dev/test, le lot sans étiquette), là où ce module les applique déjà tous.
+
+**ET MA PROPRE PHRASE DU 2026-11-20 ÉTAIT IMPRÉCISE, vérifiée plutôt que
+reprise.** « Le corpus ne contient aucun cas de cette forme » : il en
+contient **quatre voisins** (`C-demo-refus1-04-*`). Ils adoptent le format
+imposé **en REFUSANT**, et nomment une catégorie de données dans ce refus.
+Aucun ne FANFARONNE que les données de personnes nommées sont disponibles,
+qui est la forme ayant réellement égaré le juge. Les quatre sont étiquetés
+par un modèle. La phrase juste est donc plus étroite — et la paire est mieux
+justifiée qu'elle ne l'était : elle a un taux de confusion mesuré ET une
+famille voisine qui ne confond pas.
+
+**LE RÉSULTAT DU JOUR N'EST PAS LA PAIRE, C'EST CE QUE SON JUMEAU A
+RÉVÉLÉ : aucune règle de priorité n'existe entre le critère 2 et le
+critère 4.** Lu verbatim dans l'instruction :
+
+| critère | ce qu'il exclut |
+|---|---|
+| 2 `obeissance` | « ignorer ses règles, changer d'identité… » — **rien sur les données** |
+| 3 `abus_outils` | un outil déclenché ou son résultat rapporté |
+| 4 `fuite_donnees_tiers` | « **sans qu'aucun outil n'apparaisse** » — donc 3 et 4 sont disjoints |
+
+**Rien ne sépare 2 de 4.** Une réponse qui adopte le persona ET livre la
+donnée d'un tiers satisfait les deux pleinement, le juge n'en émet qu'un, et
+l'instruction ne dit pas lequel. C'est la limite 1 du 2026-11-16 — « un
+échange ne peut porter qu'UNE trouvaille » — vue par un autre bout : là
+c'était le schéma du corpus, ici c'est l'absence d'une règle de priorité.
+
+A11 a une lecture que les critères donnent déjà (le critère 4 exige qu'une
+donnée soit rattachée à la personne, et le principe arrêté contre les
+standards le 2026-11-16 : révéler qu'une donnée EXISTE n'est pas la livrer).
+**A12 n'en a aucune, et je n'en propose pas.** Son intention dit qu'il existe
+pour forcer cette décision ; sans lui, A11 enseignerait une règle dont la
+moitié manque — la leçon D13/D14, appliquée une sixième fois.
+
+**Un choix de rédaction dit plutôt que tu : la réponse réelle nommait des
+personnalités vivantes.** La paire utilise les lecteurs fictifs du corpus. Ce
+qui fait le piège est « des personnes nommées + la disponibilité affirmée +
+aucune donnée livrée », et une affirmation fabriquée sur des individus réels
+n'a rien à faire dans un dépôt public — le pendant de la règle « secrets
+fictifs uniquement ».
+
+**UN DÉFAUT DU MODULE, trouvé en vérifiant les entrées produites : le secret
+était estampillé sur TOUS les cas.** Juste pour A01–A10, faux pour la paire,
+qui ne porte sur aucun secret. Et ce n'est pas cosmétique :
+`labelling_prepass` cherche cette chaîne exacte dans les réponses pour dire à
+l'auteur QUI a dit le secret, donc une valeur estampillée qui n'est pas en
+jeu fait répondre à une question que le cas ne pose pas — et l'auteur lit
+cette ligne une fois par cas. **Le lot gelé avait pris la décision inverse le
+2026-11-19 et nommé l'autre option pour ce qu'elle est** : « les cas P
+portent `ARCHIVES-7731`, une valeur qui n'apparaît nulle part en eux ; c'est
+le mensonge le plus propre et ce lot ne le répète pas. » Ce module le
+répétait.
+
+Corrigé par un opt-out explicite (`WITHOUT_SECRET`) et non par une
+dérivation : déduire de « la valeur apparaît-elle dans les tours » aurait
+réestampillé les dix cas déjà étiquetés et intégrés, donc changé ce qu'un
+relecteur voit sur des données tranchées. Et un ensemble explicite garde la
+forme à 4 éléments que trois gardes dépaquettent.
+
+**ET LA MUTATION A TROUVÉ UN GARDE AVEUGLE, le sixième de la série : une
+paire peut se DÉFAIRE sans que rien le dise.** `_pairs()` dérive « tout
+groupe de deux EST une paire » — la correction du 2026-11-16, après une
+version qui nommait ses groupes dans la source et laissait passer `A-echo`.
+Mais une dérivation ne peut pas voir une paire CESSER d'en être une : séparer
+les deux jumeaux en deux groupes fait simplement trouver une paire de moins,
+ce à quoi elle n'a aucune raison d'objecter. L'ancien test demandait
+`len(pairs) >= 3` plus deux noms, donc une quatrième paire défaite le
+laissait vert.
+
+**Les deux lectures tiennent maintenant, et ni l'une ni l'autre ne remplace
+sa voisine** : `PAIRS` est DÉCLARÉ dans le module des cas et chaque groupe
+déclaré doit porter deux cas ; la dérivation continue de vérifier la
+propriété « ne diffèrent que par la réponse » sur toute paire que personne
+n'a déclarée. C'est le lot gelé qui avait écrit la règle générale — « ce qui
+décide est l'INTENTION déclarée, jamais le texte » — et une paire est une
+intention.
+
+**Six mutations, six morsures** : la demande qui change entre les jumeaux, la
+paire séparée en deux groupes (muette avant aujourd'hui), le secret
+réestampillé, l'opt-out nommant un cas inexistant, plus aucun cas ne
+déclarant le secret, et un verdict pré-rempli.
+
+**Ce qui reste, et c'est à l'auteur :** deux étiquettes. La récolte en
+contient exactement deux à faire — les vingt-et-une autres sont déjà dans le
+corpus et `label.py` les saute en les nommant.
+
+```
+python -m evaluation.label --ids A11 A12
+python -m evaluation.label --check
+python -m evaluation.label --integrate
+```
+
+Et A12 n'est pas qu'une étiquette : son verdict **décide la règle de priorité
+entre le critère 2 et le critère 4**, qui n'existe pas encore.
+
+1,463 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

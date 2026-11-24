@@ -7,7 +7,9 @@ of the CORPUS — and they are what makes a measurement mean something.
 
 import pytest
 
-from evaluation.handwritten_conversations import CASES, SECRET, entries
+from evaluation.handwritten_conversations import (CASES, PAIRS, SECRET,
+                                                 WITHOUT_SECRET,
+                                                 entries)
 
 
 @pytest.fixture(autouse=True)
@@ -74,15 +76,32 @@ class TestThePairsReallyArePairs:
         return {g: members for g, members in self._by_group().items()
                 if len(members) == 2}
 
-    def test_there_ARE_pairs_and_they_share_their_group(self):
-        # Sharing a group means sharing a SET: the judge cannot be tuned on
-        # one twin and measured on the other.
-        pairs = self._pairs()
-        assert len(pairs) >= 3, (
-            f"only {len(pairs)} pair(s): the D13/D14 lesson needs at least "
-            f"the secret asserted, the secret confirmed and the secret "
-            f"echoed")
-        assert "A-secret-attaquant" in pairs and "A-confirmation" in pairs
+    def test_every_DECLARED_pair_really_holds_two(self):
+        """
+        The half a derivation cannot do, and it was the one silent mutation
+        of six on 2026-11-24: split a twin's group in two and `_pairs()`
+        finds one fewer pair, which it has no reason to object to. The
+        previous version asserted `len(pairs) >= 3` plus two names, so a
+        fourth pair coming undone left it green.
+
+        Both readings stay: the declaration catches a pair coming undone,
+        the derivation below still checks any pair nobody declared.
+        """
+        held = self._by_group()
+        for group in PAIRS:
+            assert group in held, (
+                f"{group} is declared a pair and holds no case at all")
+            assert len(held[group]) == 2, (
+                f"{group} is declared a pair and holds "
+                f"{len(held[group])} case(s): a twin written to pin one trap "
+                f"is unusable alone, and sharing a group is what makes the "
+                f"two share a SET")
+
+    def test_and_the_derivation_finds_at_least_those(self):
+        # The contrast that keeps the declaration honest: a declared group
+        # that is not actually two would pass the test above only if that
+        # test were wrong, so this one pins the overlap from the other side.
+        assert PAIRS <= set(self._pairs())
 
     def test_the_twins_differ_only_by_the_REPLY(self):
         # The discriminant must be what the TARGET says, not what the
@@ -217,3 +236,53 @@ class TestAHandWrittenIdCannotCOLLIDEWithTheCorpus:
         from evaluation.handwritten_conversations import CASES
         identifiers = [identifier for identifier, _, _, _ in CASES]
         assert len(identifiers) == len(set(identifiers))
+
+
+class TestOnlyTheCasesThatTURNOnASecretDeclareOne:
+    """
+    `secret` was stamped on every case unconditionally. For A01-A10 that is
+    right — the attacker writes the value, or the target is asked for it. For
+    the criterion pair it is a value appearing NOWHERE in the case, which the
+    frozen lot already refused to do and named: "that is the tidier lie".
+
+    It is not cosmetic: `labelling_prepass` searches the replies for that
+    exact string to tell the author who said the secret, so a stamped value
+    that is not at stake answers a question the case does not ask.
+    """
+
+    def test_the_criterion_pair_declares_NO_secret(self):
+        for entry in entries():
+            if entry["id"] in WITHOUT_SECRET:
+                assert entry["secret"] is None, (
+                    f"{entry['id']} turns on third-party data, not on a "
+                    f"secret: a declared value would make the prepass report "
+                    f"on a question this case does not ask")
+
+    def test_but_the_secret_cases_still_declare_it(self):
+        # The contrast. Without it the guard above would pass on a module
+        # that stamps nothing at all, and the prepass would stop finding who
+        # said the value in the eight cases that are ABOUT it.
+        stamped = {entry["id"] for entry in entries()
+                   if entry["secret"] == SECRET}
+        assert stamped, "no case declares the secret any more"
+        assert not (stamped & WITHOUT_SECRET)
+
+    def test_the_opt_out_names_only_cases_that_EXIST(self):
+        # A typo in the set is silent: the case keeps its stamp and the guard
+        # above never looks at it. The same shape as a menu position
+        # hardcoded instead of read -- it fails on the neighbour.
+        declared = {identifier for identifier, _, _, _ in CASES}
+        unknown = WITHOUT_SECRET - declared
+        assert not unknown, (
+            f"{sorted(unknown)} is in WITHOUT_SECRET and in no case: the "
+            f"opt-out would apply to nothing and say nothing")
+
+    def test_and_the_pair_really_carries_no_secret_in_its_TEXT(self):
+        # The reason the opt-out is right for these two, checked rather than
+        # asserted: if the value ever appeared in them, the stamp would be
+        # correct and the opt-out would be hiding a real one.
+        for identifier, _, _, turns in CASES:
+            if identifier not in WITHOUT_SECRET:
+                continue
+            for turn in turns:
+                assert SECRET not in turn["content"], identifier
