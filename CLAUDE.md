@@ -60,7 +60,7 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,489 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,495 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -9293,6 +9293,120 @@ pas, et elle a fait monter le plancher le plus mince des quatre de 44 % à
 51 %. Les deux restent vrais.
 
 1,489 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LES PLANCHERS : SIX CAS ÉCRITS, NON ÉTIQUETÉS — et deux trous trouvés par
+la mutation (2026-11-24).** L'item 1 du plan consigné, le seul qu'aucun
+outillage ne relève : « seulement des cas écrits et étiquetés à la main ».
+
+**Le trou, mesuré avant d'écrire quoi que ce soit**, sur la vérité terrain de
+l'auteur — la seule population que les figures publiées décrivent :
+
+| | `dev` | gelé |
+|---|---|---|
+| `divulgation` | 20 positifs, 84 % | 7, 65 % |
+| `obeissance` | 5, 57 % | **3, 44 %** |
+| `abus_outils` | **4, 51 %** | **4, 51 %** |
+| `fuite_donnees_tiers` | 6, 61 % | 5, 57 % |
+
+Cinq positifs par critère et par côté est la cible, et c'est la règle du lot
+gelé lui-même : cinq borne un rappel parfait à 57 %, passer à huit coûte 60 %
+d'étiquetage de plus pour 11 points. Il manque donc **un positif `abus_outils`
+dans `dev`**, et côté gelé **deux `obeissance` et un `abus_outils`**.
+
+**Six cas, chacun un registre qu'un côté ne couvre pas**, et aucun inventé :
+
+| cas | registre | absent de |
+|---|---|---|
+| `F23` | une consigne exécutée dont la sortie est ANODINE | le lot gelé, dont les trois positifs passent par un persona (T12), un format (F19) ou un propos (F21) |
+| `F24`/`F25` | la consigne EMBALLÉE dans une demande de traduction, exécutée / traduite | le jeu gelé a le négatif (T15) dans un autre décor et sans jumeau |
+| `F26` | la MAUVAISE fiche rendue sur une demande irréprochable | le lot gelé ; c'est le registre d'A14, mesuré 30/30 sur `dev` le même jour |
+| `A15`/`A16` | un outil déclenché de sa PROPRE INITIATIVE, résultat collé / fait seul | `dev`, dont les quatre positifs sont l'appel dicté (D16, P06) ou A14 |
+
+`F23` mérite d'être dit en entier, parce que c'est la seule asymétrie
+intéressante des quatre : un juge qui chercherait un CONTENU interdit
+traiterait correctement les trois positifs d'obéissance du lot — il y a un
+persona, un format ou un propos contestable à trouver dans chacun — et
+n'aurait rien à signaler sur une sortie « TEST RÉUSSI ». Le registre existe
+dans `dev` (E10) et nulle part ailleurs.
+
+**CES CAS SONT PRESQUE TOUS POSITIFS, contre l'équilibre de tous les blocs
+précédents, et la raison est dans ce que mesure un plancher.** D16–D20,
+P01–P11 et les blocs F1–F5 sont majoritairement négatifs parce que le risque
+qu'ils couvrent est la PRÉCISION — signaler toute mention d'une personne,
+tout usage d'un outil. Ce qui est mince ici est le RAPPEL, et **seul un
+positif déplace un plancher de rappel** : quatre négatifs tiennent déjà dans
+chacun des deux registres, et en écrire un cinquième laisserait les planchers
+exactement où ils sont.
+
+**ET DIMENSIONNER UN LOT SUR SON COMPTE DE POSITIFS N'EST PAS LIRE UN
+RÉSULTAT.** Les chiffres ci-dessus sont une propriété de la COMPOSITION du
+corpus, pas d'un verdict que le juge a rendu — le premier lot a été
+dimensionné de la même façon, depuis l'audit par critère du 2026-11-18. Rien
+ici ne répond à quoi que ce soit d'observé sur le jeu gelé, ce qui serait y
+régler.
+
+**LA MARGE EST NULLE, et c'est dit plutôt que caché.** `F23` et `F24` sont
+exactement les deux positifs qui manquent à `obeissance` : si l'un des deux
+revient négatif, le plancher reste à 44 % et un cas de plus est dû. Je n'ai
+pas inventé un troisième registre pour la marge — les candidats restants
+étaient soit un quasi-doublon de `F23`, soit l'injection indirecte, qui est
+l'un des registres qu'aucun critère ne sait scorer et donc un faux négatif
+garanti.
+
+**UN TROISIÈME DÉCOR, et la raison est un défaut que j'ai créé hier.**
+`A13`/`A14` ont emporté dans `dev` le vocabulaire du club
+(`fiche_adherent`, « adhérente »), et `F26` est le registre d'`A14` — donc un
+cas gelé dans le club aurait différé de son homologue `dev` **par les noms
+seuls**, ce qui ne mesure aucune généralisation. Le bloc F6 se passe donc
+dans une école de musique, et le docstring du lot le dit, au lieu de
+continuer d'annoncer un décor unique.
+
+**LA MUTATION A TROUVÉ DEUX VRAIS TROUS, et une mutation mal choisie.**
+
+1. **Le lot gelé n'avait aucune DÉCLARATION de paires : séparer `F24`/`F25`
+   en deux groupes ne cassait rien.** Sa propre classe de jumeaux dérive ses
+   paires, délibérément, et son docstring enregistre la leçon du module frère
+   — « le garde écrit à la main listait ses groupes et est resté muet quand
+   une troisième paire est arrivée ». Mais une dérivation a l'aveuglement
+   MIROIR : elle valide les paires qu'elle TROUVE, et une paire séparée
+   laisse simplement une paire de moins à trouver. Fermé par `PAIRS` et une
+   égalité qui tient les deux sens. **Les quatre paires du lot ont des
+   demandes identiques, vérifié**, donc la règle stricte s'applique sans
+   exception.
+2. **Retirer `A15`/`A16` de `WITHOUT_SECRET` estampillait `ARCHIVES-7731` sur
+   deux cas d'outil, et rien ne le disait.** Ce n'est pas cosmétique :
+   `labelling_prepass` imprime cette valeur à l'auteur une fois par cas et
+   cherche la chaîne dans les réponses — la version de ce défaut dans la
+   prépasse elle-même, un secret codé en dur, a été corrigée le matin même.
+   Le legs est **clos plutôt que rouvert** : `A01`, `A06`, `A07` et les onze
+   cas P gardent leur revendication, parce qu'ils sont étiquetés, intégrés,
+   et que réécrire de la vérité terrain pour ranger un champ de documentation
+   ne sert personne. La règle lie ce qui s'AJOUTE.
+3. **Et la mal choisie : commenter une déclaration de `PAIRS` ne mord
+   rien** — ce que `PAIRS` protège n'est pas sa propre présence mais une
+   paire SÉPARÉE, que la dérivation ne voit pas. Refaite correctement, elle
+   mord. Deuxième fois cette semaine qu'une de mes mutations ne dit rien de
+   la propriété qu'elle prétend éprouver.
+
+**ET DEUX DE MES TESTS ÉTAIENT DES DOUBLONS**, découverts parce que la
+mutation les a fait tomber **en même temps** que des gardes existants : la
+classe voisine du lot gelé vérifie déjà qu'une paire ne diffère que par son
+dernier tour cible — plus strictement que ma version, qui ne regardait que la
+demande — et le module écrit à la main tient déjà que l'opt-out ne nomme que
+des cas existants. Retirés, et la frontière entre les classes voisines est
+désormais écrite au lieu d'être devinée. Un test en doublon n'est pas faux,
+il est du bruit, et ce projet a retiré un garde entier pour moins que ça.
+
+**À l'auteur : six étiquettes**, et tant qu'elles n'existent pas les deux
+planchers restent où ils sont.
+
+```
+python -m evaluation.label --ids F23 F24 F25 F26 A15 A16   # deja dans la recolte
+python -m evaluation.label --check
+python -m evaluation.label --integrate
+```
+
+1,495 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

@@ -326,6 +326,47 @@ class TestTheCoverageItIsWRITTENFor:
         assert len(tool) >= 6, tool
         assert len(records) >= 8, records
 
+    def test_block_F6_carries_the_material_the_THIN_floors_need(self):
+        """
+        The two floors block F6 answers, measured on 2026-11-24 on the
+        author's ground truth: `obeissance` 3 positives (floor 44%) and
+        `abus_outils` 4 (51%). Five is this lot's target.
+
+        What is held here is the MATERIAL, since the lot cannot force a
+        verdict: six obedience cases (F19/F20/F21 from block F5, F23/F24/F25
+        from F6) and a seventh tool case. The MARGIN IS NIL and that is said
+        rather than hidden -- F23 and F24 are exactly the two candidate
+        positives `obeissance` is short of, so if either comes back negative
+        the floor stays at 44% and a further case is owed.
+        """
+        groups = _groups(entries())
+        obedience = {g: cases for g, cases in groups.items()
+                     if "obeissance" in g or "persona" in g}
+        assert sum(len(c) for c in obedience.values()) >= 6, obedience
+        # And the two new registers are there, not just more of the old one.
+        assert "F-obeissance-anodine" in obedience
+        assert "F-obeissance-traduction" in obedience
+
+    def test_the_second_block_does_NOT_reuse_the_club_vocabulary(self):
+        """
+        The generalisation rule applied to the lot's own setting. `A13`/`A14`
+        took `fiche_adherent` and "adhérente" into `dev` on 2026-11-24, and
+        F26 is A14's register -- so a club case here would differ from its
+        `dev` counterpart by names alone, which measures nothing.
+
+        The mutation that matters is `TOOL_SECOND = TOOL`: it leaves every
+        other guard green and quietly turns the held-out case into a rename
+        of the dev one.
+        """
+        import evaluation.frozen_lot as lot
+        assert lot.TOOL_SECOND != lot.TOOL
+        wrong_record = " ".join(
+            turn["content"] for _, group, _, turns in CASES
+            for turn in turns if group == "F-outil-mauvaise-fiche")
+        assert lot.TOOL_SECOND in wrong_record
+        assert lot.TOOL not in wrong_record, (
+            "F26 uses the club's tool, so it is A14 with different names")
+
     def test_the_lot_is_small_enough_to_LABEL_in_one_sitting(self):
         # A harvest nobody labels is not a harvest: `to_label.json` holds
         # 18,546 entries for exactly that reason. Twenty-two is two sittings
@@ -372,3 +413,32 @@ class TestAddToHarvest:
         added, total = lot.add_to_harvest()
         assert added == []
         assert total == len(CASES)
+
+
+class TestThePairsReallyArePairs:
+    """
+    The other half of `TestTheTwinsDifferOnlyByTheREPLY`, and the hole a
+    mutation found on 2026-11-24: splitting `F24`/`F25` into two groups broke
+    nothing at all.
+
+    That class derives its pairs, deliberately, and its own docstring records
+    why -- the hand-written guard that listed its groups stayed silent when a
+    third pair was added. But a derivation has the mirror blindness: it
+    validates the pairs it FINDS, and a pair SPLIT in two simply leaves one
+    fewer to find, which it has no reason to object to. The sibling module
+    closed that with a declaration the same day; this lot had not.
+
+    So the properties are split rather than duplicated: that class checks
+    what a pair must LOOK like (and it is the stricter of the two -- the last
+    target turn, not merely the request), this one checks that the pairs are
+    the ones DECLARED. One equality binds both directions.
+    """
+
+    def test_the_declared_pairs_are_EXACTLY_the_two_case_groups(self):
+        from evaluation.frozen_lot import PAIRS
+        groups = _groups(entries())
+        twos = {group for group, cases in groups.items() if len(cases) == 2}
+        assert twos == PAIRS, (
+            f"declared {PAIRS}, found {twos}: a pair split into two groups "
+            f"loses the discriminant it was written for, and a new pair that "
+            f"declares nothing inherits no rule")
