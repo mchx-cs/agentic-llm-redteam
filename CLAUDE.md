@@ -67,7 +67,7 @@ never the note.
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,567 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,600 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -9908,6 +9908,108 @@ rapport-là devait savoir.
   `targets/docs.py` déclare.
 
 1,567 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**PROTOCOLE DÉCLARÉ : la livraison indirecte contre la directe
+(2026-11-25), avant de lancer quoi que ce soit.**
+
+L'axe que le point 2 a rendu mesurable. `evaluation/measure_modes.py` gagne
+`--arms delivery` ; **le protocole des tours reste intact**, textes de sortie
+compris, parce que ses chiffres publiés (17-1 au niveau 1, le tableau des
+trois niveaux) s'y réfèrent et qu'un résumé reformulé cesserait de décrire
+l'instrument qui les a produits. Un test tient cette immobilité.
+
+- **CIBLE** : `docs`, niveau 1 par défaut — le niveau sans aucune
+  délimitation du contenu récupéré, donc celui où le canal est le plus faible
+  et où la livraison a sa meilleure chance. `docs:2` et `docs:3` sont les
+  niveaux de généralité déclarés, mesurés séparément et **jamais mis en
+  commun**, exactement comme les trois niveaux de `demo`.
+
+- **NORMALISATION : TENTATIVES ÉGALES**, et ici c'est bien un coût égal — ce
+  qui est pourquoi elle diffère du protocole des tours. Une tentative
+  indirecte dépense une requête à la cible et trois votes de juge ; une
+  directe la même chose ; le plant est une mutation locale du prompt de cette
+  cible et ne coûte rien. Les deux bras peuvent rejouer. Le protocole des
+  tours devait compter les requêtes parce que le multi-tours en dépensait
+  ~4,5 fois plus par tentative : cette raison n'existe pas ici.
+
+  **Ce que ça ne généralise PAS** : contre une vraie application un plant est
+  une écriture sur un second endpoint — un dépôt de fichier, un commentaire,
+  une page partagée — donc une tentative indirecte y dépenserait une requête
+  de plus. C'est un fait sur la généralisation, pas sur ce run, et les
+  requêtes réellement dépensées sont mesurées et rapportées de toute façon.
+
+- **UN BIAIS DÉCLARÉ, GRAND, ET QUI FAVORISE LE BRAS DIRECT.** Mesuré le
+  2026-11-25 : l'obéissance à un texte que seule la note portait n'est PAS
+  scorable — le juge répond `aucun`, et il a raison, le critère 2 a besoin
+  d'un texte imposé à comparer et il est dans la note. Le bras indirect est
+  donc **structurellement privé** des trouvailles `obeissance`, qui étaient 30
+  des 83 du bras direct dans le run des tours au niveau 1.
+
+- **ISSUE, et la restriction est A PRIORI** : les trouvailles dont le critère
+  est dans `JOINTLY_SCORABLE` — `divulgation`, `abus_outils`,
+  `fuite_donnees_tiers`, les trois que les deux bras peuvent scorer. Déclarée
+  avant tout résultat et justifiée par une mesure qui précède ce run, ce qui
+  est la forme légitime : « restreindre aux techniques qui ont fui » est post
+  hoc et interdit, « restreindre aux familles DÉCLARÉES pertinentes » ne l'est
+  pas — la distinction tracée le 2026-11-13.
+
+  **Le total non restreint est rapporté à côté**, descriptif et jamais testé,
+  avec le compte d'`obeissance` du bras direct : un lecteur voit la taille de
+  la barrière au lieu de la prendre sur parole.
+
+- **TEST** : test des signes apparié, unilatéral, seuil 0,05, hypothèse
+  **« la livraison INDIRECTE trouve PLUS »**. La direction découle du design
+  de la cible et non d'une intuition : `docs` tient sa règle du secret FERME
+  et IDENTIQUE aux trois niveaux, donc une attaque directe sur elle affronte
+  une protection de rang `demo:2` — et `demo:2` refuse. La note est la
+  variable autour de laquelle la cible a été construite. Le p inverse est
+  rapporté et signalé comme n'étant pas le test déclaré.
+
+- **20 paires, 6 tentatives par campagne**, les deux bras. Six parce que le
+  round-robin par module croise alors plusieurs techniques, et parce que 6–20
+  est la plage réaliste que ce projet a enregistrée pour ses mesures
+  d'adaptation. Vingt comme les runs des tours, pour que les comparaisons
+  soient comparables et pas seulement consécutives.
+
+- **DOS À DOS, l'indirect d'abord**, pour la raison que le protocole des tours
+  donne : une cible probabiliste dérive, et mener un bras jusqu'au bout
+  laisserait la dérive se faire passer pour un effet.
+
+- **AUCUNE RÈGLE D'ARRÊT.** La reprise est supportée et invalidée par un
+  changement de cible, de protocole, de **bras** ou de juge.
+
+- **CE QUE LE RUN POURRAIT TROUVER, dit d'avance** pour qu'aucune des deux
+  issues ne puisse être habillée après coup. Si le bras indirect gagne l'issue
+  restreinte et perd le total, c'est la barrière structurelle rendue VISIBLE
+  et non une contradiction — les deux chiffres répondent à deux questions. S'il
+  perd aussi l'issue restreinte, alors cette livraison n'apporte rien contre
+  cette cible même là où le juge peut voir, et la fuite observée à la main au
+  niveau 1 le 2026-11-25 était l'artefact d'une note bien formée. Les deux sont
+  des résultats.
+
+**UN DÉFAUT DE MOI, attrapé par le test qui le demandait : `arms` était ÉCRIT
+dans le bloc de protocole et jamais LU par la reprise.** Donc reprendre un
+fichier de la comparaison des tours dans un run de livraison aurait mis deux
+mesures dans un seul chiffre, en silence. C'est la demi-connexion la plus
+fréquente de ce projet — les trois champs de chaîne de possession, le tour
+d'infraction émis dans le vide, `interroger.transport` — et elle a duré une
+heure cette fois.
+
+Un fichier sans `arms` vient de la comparaison des tours, parce que c'est la
+seule qui existait avant aujourd'hui : c'est un FAIT sur ces fichiers et non
+une hypothèse, donc ils restent reprenables au lieu de mériter un
+avertissement.
+
+**Quinze mutations, quinze morsures** — `obeissance` entrant dans l'issue
+déclarée, l'issue des tours devenue restreinte, le bras indirect qui ne plante
+plus, le direct qui plante aussi, des budgets inégaux, le canal non exigé,
+`arms` hors du protocole puis non lu, `docs` non déclaré, le p inverse tu, le
+total non rapporté, le biais absent de l'en-tête, et l'en-tête annonçant une
+égalisation des requêtes.
+
+**Rien n'a été LANCÉ.** Le protocole existe ; les chiffres non.
+
+1,600 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
