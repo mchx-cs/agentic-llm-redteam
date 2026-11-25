@@ -93,12 +93,21 @@ Each adjacent pair still varies ONE thing, which is what keeps the ladder a
 measuring instrument: 0 -> 1 adds the attribution, 1 -> 2 adds the delimiter
 and the declaration, 2 -> 3 adds the output filter.
 
-NO PROTOCOL IS DECLARED FOR LEVEL 0, deliberately. The target exists; the
-measurement does not. `measure_modes.DELIVERY_LEVELS` names the generality
-levels a delivery run may call confirmatory, and level 0 is not in it, so a
-run against it announces itself EXPLORATORY until someone declares a protocol
-for it. Pre-authorising the run while building the target it would use is how
-a measurement ends up justified by the result it is hoping for.
+A PROTOCOL IS NOW DECLARED FOR LEVEL 0, and for exactly ONE question. The
+target was committed FIRST, with "no protocol is declared for level 0"
+written in this very paragraph, so git shows that the instrument predates the
+measurement rather than having been shaped to suit it.
+
+That protocol is `measure_modes --arms attribution`: level 0 against level 1,
+BOTH arms indirect, so the attribution heading is the only variable. It pairs
+two LEVELS rather than two deliveries, which is what makes it the instrument
+for the hypothesis above rather than a fourth delivery run.
+
+WHAT IS STILL NOT DECLARED is the DELIVERY comparison at level 0 — indirect
+against direct there is a different question, nobody has asked it, and level 0
+is deliberately absent from `measure_modes.DELIVERY_LEVELS`, so such a run
+announces itself EXPLORATORY. Pre-authorising a measurement while building the
+target it would use is how one ends up justified by the result it hoped for.
 
 HOW A PAYLOAD GETS IN: `ask.plant(text)`, the declared channel described in
 `targets/indirect.py`. A target that does not declare it makes an indirect

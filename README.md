@@ -204,7 +204,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,723 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,766 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -402,9 +402,20 @@ target the indirect delivery finds substantially less. **What remains untested i
 the standing hypothesis is that `docs` level 1 plants its note under a heading that
 *attributes* it as reader-contributed, so "no delimitation" is weaker than the name
 suggests. That needed a target rather than a rerun, and the target now exists:
-`docs:0` is level 1 with the attribution removed and nothing else changed. **The
-measurement does not exist** — no protocol is declared for it, so a delivery run against
-level 0 announces itself exploratory until one is.
+`docs:0` is level 1 with the attribution removed and nothing else changed.
+
+**A fourth protocol is now declared, and it pairs the two LEVELS rather than two
+deliveries**: `--arms attribution`, both arms indirect, so the attribution heading is the
+only variable. A cheaper design was available and is refused — level 0 alone, read
+against the per-register run, whose file is still on disk with the same code fingerprint
+and the same judge. It is refused because those figures were **already read** while the
+protocol was being written, and a test whose null is a number someone inspected first is
+not a declared test. The price of pairing is stated rather than discovered: 72 campaigns
+instead of 36.
+
+**There are no figures: nothing has been run.** And the delivery comparison *at* level 0
+stays undeclared, being a different question, so a delivery run there announces itself
+exploratory.
 
 Here is a real run against `demo`, cut down to what matters:
 

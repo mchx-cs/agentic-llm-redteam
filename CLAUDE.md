@@ -68,7 +68,7 @@ never the note.
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,723 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,766 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -10654,6 +10654,139 @@ que ce fichier enregistre : « That needs a target, not a rerun ». La cible
 existe maintenant ; la mesure non, et le README dit désormais les deux.
 
 1,723 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**PROTOCOLE DÉCLARÉ : l'ATTRIBUTION, `docs:0` contre `docs`
+(2026-11-25).** Committé avant le moindre run, et il répond à l'hypothèse
+restée debout après trois protocoles concordants : le niveau 1 de `docs`
+s'appelle « aucune délimitation » et plante sa note sous un titre qui
+l'ATTRIBUE comme contenu de lecteur, donc « aucune délimitation » est plus
+faible que son nom.
+
+**LES BRAS SONT DEUX NIVEAUX, PAS DEUX LIVRAISONS, et c'est la décision du
+jour.** Les deux bras sont INDIRECTS ; la variable est l'attribution. Un
+quatrième run de livraison aurait mesuré l'indirect contre le direct à un
+niveau de plus — une autre question, qui ne dit rien du titre.
+
+**ET LA RAISON QUE J'AI FAILLI DONNER ÉTAIT FAUSSE.** Un design deux fois
+moins cher existe : lancer le niveau 0 seul, 36 campagnes au lieu de 72, et le
+comparer au fichier du run par registre, toujours sur le disque avec ses
+données par paire. J'allais le refuser pour un confond de CODE — la base porte
+l'empreinte `14e9a4d48d2a1b74`, et l'élargissement du vocabulaire du
+2026-11-25 a touché `agents/adaptation.py` et `agents/verifier.py`, tous deux
+surveillés. **Vérifié plutôt que supposé : l'élargissement est dans
+`58ca016`, AVANT le run par registre, et l'empreinte actuelle est
+`14e9a4d48d2a1b74` aussi.** Il n'y a pas de confond, et en inventer un pour
+justifier un design serait le même péché que nier celui qui existe.
+
+**Il est refusé parce que J'AI DÉJÀ LU LA BASE.** En concevant ce protocole,
+j'ai calculé le taux de son bras indirect depuis le fichier : 9 paires sur 36
+portent au moins une trouvaille scorable, 10 trouvailles en tout. **Un test
+dont l'hypothèse nulle est un chiffre qu'on a inspecté d'abord n'est pas un
+test déclaré** — c'est une base choisie après l'avoir vue, et la définition
+d'issue qui va avec (les paires à au moins une, là où ce module apparie des
+COMPTES) est une définition que j'ai dérivée de données que j'avais sous les
+yeux. Mesurer les deux bras À NEUF, après que le protocole est committé, est
+ce qui rend la comparaison confirmatoire.
+
+Deux raisons mineures, qui n'auraient pas suffi seules : l'appariement
+contrôle la DÉRIVE, comme dans les deux autres comparaisons — le juge est un
+service hébergé que ce projet a mesuré comme non déterministe, et la cible est
+probabiliste ; et ça garde UNE forme statistique et UNE issue, là où un design
+inter-runs ajouterait un test de deux proportions sur une unité que rien
+d'autre ici n'emploie. Le prix est déclaré : 72 campagnes au lieu de 36.
+
+**LA DIRECTION EST NEUVE ET CE N'EST PAS UN RETOURNEMENT.** Les trois runs de
+livraison déclaraient « la livraison indirecte trouve PLUS » et sont tous
+partis dans l'autre sens, et la règle de ce module interdit de retourner CETTE
+direction maintenant que les données ont parlé. Ici l'hypothèse est autre —
+sur l'attribution, pas sur la livraison — et sa direction découle d'elle. Ce
+qu'un lecteur est en droit de soupçonner, c'est qu'un axe neuf a été trouvé
+après trois défaites sur l'ancien ; la réponse est le registre et non une
+protestation : l'axe est nommé dans l'entrée de résultat du troisième run, et
+la cible est construite dans le commit suivant, tous deux avant ce protocole.
+
+**LA PUISSANCE, CALCULÉE et non supposée, parce que ce N n'est pas
+généreux.** Le test des signes demande 5 paires discordantes toutes du même
+côté, ou 7 sur 8, 10 sur 12, 12 sur 16, 13 sur 18. La base trouve quelque
+chose dans un quart de ses paires environ, donc si retirer l'attribution
+doublait ça il y aurait de l'ordre de 18 paires discordantes et il faudrait
+que ~72 % favorisent le niveau 0 — la limite de ce que 36 paires montrent.
+**Un PETIT effet n'atteindra pas le seuil ici**, et c'est déclaré maintenant
+plutôt qu'offert après coup comme excuse.
+
+**L'ISSUE EST GARDÉE POUR LA COMPARABILITÉ, PLUS POUR L'ÉQUITÉ, et la nuance
+mérite d'être dite au lieu d'être héritée.** Le protocole de livraison
+restreignait aux trois critères que les deux bras savent scorer parce que
+`obeissance` est inscorable pour une tentative indirecte : le compter donnait
+au bras direct un registre entier. Ici les DEUX bras sont indirects, la
+barrière s'applique également et ne corrige rien. Elle est gardée pour que ces
+chiffres reposent sur le même pied que les trois runs enregistrés — et la
+ligne `obeissance` devient une VÉRIFICATION, imprimée pour les deux bras : la
+barrière structurelle prédit zéro de chaque côté, et un non-zéro voudrait dire
+que cette affirmation est fausse.
+
+**Trois branches déclarées d'avance**, pour qu'aucune issue ne soit habillée
+après coup : le niveau 0 gagne → l'attribution ÉTAIT le suppresseur, et les
+trois résultats enregistrés décrivent une cible portant un indice de
+provenance plutôt que l'indirection ; aucune différence → l'attribution n'y
+était pour rien, ce qui FERME l'hypothèse au lieu de la laisser debout, et
+c'est un résultat ; le niveau 1 gagne → le titre AIDE l'attaque indirecte, et
+il faudrait l'expliquer.
+
+**CE QUI RESTE NON DÉCLARÉ, et c'est écrit dans les deux documents : la
+comparaison de LIVRAISON au niveau 0.** `docs:0` n'est pas ajouté à
+`DELIVERY_LEVELS`, donc un run de livraison contre lui s'annonce toujours
+exploratoire. Pré-autoriser une mesure que personne n'a demandée, en
+construisant la cible qu'elle utiliserait, est la façon dont une mesure finit
+justifiée par le résultat qu'elle espérait — et un test épingle cette
+non-déclaration, sinon elle se défait en une ligne.
+
+**ET DEUX DE MES PROPRES GARDES NE VALAIENT RIEN, trouvés par le balayage.**
+
+1. **Deux comparaient l'ORDRE OBSERVÉ à la constante qui le produit.**
+   `assert [c["target_name"] for c in calls[:2]] == list(ATTRIBUTION_LEVELS)`
+   : inverser la constante inverse les deux côtés, donc la mutation était
+   MUETTE. C'est le test tautologique de la phase 3a, **septième fois dans ce
+   fichier qu'un garde ne vaut que ce qu'il COMPARE**. Réécrits sur la
+   PROPRIÉTÉ — le bras qui n'attribue pas passe en premier — lue dans le
+   module qui DÉCLARE les niveaux, et la mutation mord.
+2. **Et une de mes mutations était MAL VISÉE** : elle changeait une ligne
+   voisine de la propriété affirmée, donc elle ne disait rien du garde.
+   Rejouée sur la clause qui porte la raison du design, elle mord. Quatrième
+   fois que cette leçon revient, après les trois de la semaine.
+
+**Un défaut de jonction, trouvé en lançant la suite et pas en relisant :** la
+branche mono-tour référençait encore `ask_target`, que la refonte avait
+supprimé. Onze tests existants sont tombés immédiatement — un échec BRUYANT et
+non silencieux, ce qui est la propriété voulue. Elle reste HORS du
+`two_campaigns` partagé, délibérément : ses deux bras diffèrent par leur
+BUDGET et pas seulement par un drapeau, et ses chiffres sont publiés.
+
+Deux préférences déjà enregistrées, appliquées là où elles manquaient :
+`departures_from_the_protocol` lit désormais les valeurs déclarées dans la
+SPEC au lieu de brancher sur le nom des bras — il a fallu y ajouter une
+troisième comparaison pour que ça vaille d'être dit en données ; et la paire de
+campagnes vit en UN endroit, parce que la boucle plate et la boucle par
+registre épelaient les bras deux fois et qu'une comparaison dont les bras sont
+deux CIBLES aurait dû être ajoutée aux deux.
+
+**QUINZE MUTATIONS, QUINZE MORSURES** — un bras qui cesse de planter, une
+cible au lieu de deux, les niveaux inversés, le canal vérifié sur le premier
+bras seul, `--target` accepté, un run plat qui n'est plus un écart, la CLI qui
+n'active plus le per-register, le périmètre déclaré non rempli, le compte de
+paires déclaré à neuf au lieu d'être dérivé, `docs:0` ajouté aux niveaux de
+livraison, la ligne `obeissance` retombée sur le bras direct, la cible non
+normalisée vers le libellé, l'hypothèse retournée, l'annonce qui tait la base
+déjà lue, et le bras mono-tour qui perd son budget.
+
+**Rien n'a été LANCÉ.** Le protocole existe ; les chiffres non.
+
+```
+.venv-pyrit/Scripts/python -m evaluation.measure_modes \
+    --arms attribution --output attribution.json
+```
+
+1,766 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
