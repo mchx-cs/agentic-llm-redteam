@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/mchx-cs/agentic-llm-redteam/actions/workflows/tests.yml/badge.svg)](https://github.com/mchx-cs/agentic-llm-redteam/actions/workflows/tests.yml)
 
-A multi-agent system that automates adversarial security testing of LLM applications — give it an endpoint, get back a list of validated vulnerabilities.
+A multi-agent system that red-teams LLM applications and **refuses to report what it cannot substantiate**: give it an endpoint, and every finding it hands back states what it does not prove — a leaked value is re-sent before it is called confirmed, a measured rate carries its confidence interval, and a campaign that finds nothing reports a bound, never a clean bill of health.
 
 > **Status: the pipeline and the payload library are complete; the attacker runs
 > single-turn or multi-turn.**
@@ -615,9 +615,14 @@ allows, the dialogue kept open on one connection, is not supported: each attempt
 fresh socket, and pretending otherwise would flatten a dialogue the way this adapter has
 always refused to.
 
-Still out of reach: a *file* part, which is what an indirect-injection test would need —
-and that is a register the judge cannot score yet, so building the transport for it would
-be building the wrong half first — and WebSocket subprotocol negotiation.
+Still out of reach: a *file* part, which is what an indirect-injection test would need,
+and WebSocket subprotocol negotiation. The file part was deferred because indirect
+injection looked unscorable, and that turned out to be true of only half of it: measured
+on 2026-11-25, an indirect injection whose *outcome* is visible in the reply — a value
+disclosed, a third party's record, a tool fired — is already scored by the existing
+criteria without the document being shown, 10 times out of 10. Only obedience to a text
+the document alone carried stays out of reach, so the transport is no longer the wrong
+half to build.
 
 **Streaming matters more than it looks.** "Just set `stream: false`" assumes you control
 the request body — which you often don't when the thing under test is a client's own
