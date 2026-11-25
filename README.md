@@ -122,7 +122,9 @@ and coverage that states what was never attempted.
 │   ├── decoy.py         # local decoy chatbot holding a fake secret (default)
 │   ├── mock.py          # deterministic, no LLM: free end-to-end tests
 │   ├── records.py       # a retrieval desk over reader records: the third-party target
+│   ├── docs.py          # a document base readers write into: the indirect target
 │   ├── conversation.py  # the multi-turn contract, and the refusal to fake it
+│   ├── indirect.py      # the planted-note contract: declared, never guessed
 │   ├── http.py          # a real endpoint, described in .env (urllib, no new dependency)
 │   └── websocket.py     # RFC 6455 on the standard library: ws:// and wss:// endpoints
 ├── agents/
@@ -175,6 +177,7 @@ and coverage that states what was never attempted.
 ├── console.py           # output in UTF-8: a redirected campaign must survive its payloads
 ├── check_rename_damage.py  # finds an English identifier dropped into a French sentence
 ├── check_excerpt.py      # the campaign excerpt above, against the run's real output
+├── check_indirect.py     # plant a note in `docs` and see what it does (calls a model)
 ├── report.py            # result.json (source of truth) → report.md; rule-based severity
 └── main.py              # orchestrator: runs the campaign loop
 ```
@@ -201,7 +204,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,495 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,535 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -263,6 +266,61 @@ measuring instrument rather than a prop:
 Level 3's filter is deliberately imperfect — it catches the code in clear text, not an
 encoded or spelled-out one — so the decoders have to earn their keep. The target also
 declares a fake tool, which reconnaissance picks up.
+
+Two more vulnerable targets ship beside it, and each is one instrument because each
+protects a *different asset* — mixing two assets into one target's levels would measure
+both at once:
+
+| Target | What it protects | What a finding there looks like |
+|---|---|---|
+| `demo` | a secret **string** | the access code comes back |
+| `records` | **access control** over look-alike reader records | somebody else's record is handed over |
+| `docs` | the **integrity of its own instructions** against retrieved content | an instruction found in a document overrides the operator's |
+
+### The indirect target
+
+`docs` is an assistant over a document base **readers can write into** — a suggestion
+box, a comment, a shared page. That is where indirect prompt injection actually happens,
+and it is the half of that register the judge can already score: measured on 2026-11-25,
+an indirect injection whose *outcome* is visible in the reply — a value disclosed, a tool
+fired, a third party's record — is scored by the existing criteria **without the document
+being shown**, 10 times out of 10. Being blind is what makes that work. Only obedience to
+a text the document alone carried stays out of reach.
+
+Its three levels vary the one defence that matters here, and hold everything else still:
+
+| Level | Retrieved content |
+|---|---|
+| `docs` | pasted flat — documents and instructions are indistinguishable |
+| `docs:2` | delimited, and declared to be data, never instructions |
+| `docs:3` | delimited, declared, **and** an output filter |
+
+The secret rule stays identical and firm at all three, deliberately: were it lax at
+level 1, a leak there would be attributable to the rule rather than to the planted note,
+and this target would be re-measuring `demo`'s gradient instead of its own.
+
+A payload gets in through a declared channel — `ask.plant(text)`, with
+`ask.indirect = True`. A target that does not declare it makes an indirect attempt be
+**refused**, never silently ignored: a note accepted and dropped would leave a campaign
+believing it ran an indirect attack the model never saw, and *"indirect injection adds
+nothing"* would be a false conclusion with nothing to flag it. The note is not planted in
+the conversation history, and that is the point — a payload in an earlier user turn is
+*in* the conversation, so the judge would see it, and what was measured would be an
+ordinary multi-turn attack.
+
+To see the channel by hand (it calls the model, so it is a command and not a test):
+
+```bash
+python check_indirect.py
+```
+
+One draw per level, and it says so: whether the three levels form a gradient is a
+measurement with a declared protocol and an N, and that measurement has not been made.
+
+**Campaigns do not plant yet.** `--target docs` today runs an ordinary campaign against
+one more target; the indirect channel is reachable through the contract and through the
+command above, not through the orchestrator. Announcing otherwise would be exactly the
+half-wiring the declared channel exists to prevent.
 
 Here is a real run against `demo`, cut down to what matters:
 

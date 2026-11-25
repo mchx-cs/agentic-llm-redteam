@@ -9,7 +9,9 @@ is now an ADAPTER, and they all honour the same deliberately minimal contract:
 That contract is what lets `reconnaissance.py` and `verifier.py` receive
 the target as a parameter, and lets tests use simulated targets in a few lines.
 
-Five adapters:
+Six adapters, and the first three are one instrument each: they differ by the
+ASSET they protect, because a different asset has a different defence and
+mixing two into one target's levels would measure both at once.
 - `demo`   : deliberately badly protected, with three defence levels. It gives
   in FOR REAL, and serves as much for the demonstration as for measuring how
   far the tool can go. What it protects is a SECRET STRING.
@@ -17,6 +19,12 @@ Five adapters:
   assistant over a reader DATABASE it has already read, with no tool at all.
   What it protects is THIRD-PARTY DATA, which is a different asset with a
   different defence, hence its own levels rather than three more on `demo`.
+- `docs`   : an assistant over a document base READERS CAN WRITE INTO. What it
+  protects is the INTEGRITY OF ITS OWN INSTRUCTIONS against an instruction
+  found in retrieved content, so its levels vary the delimitation of that
+  content while holding the secret rule firm at all three. It carries the same
+  asset KINDS as `demo` on purpose — the variable under test is the SOURCE of
+  the instruction and nothing else.
 - `decoy`  : the local toy chatbot, with a fictional secret to protect. It is
   the default target, so the repository runs with no configuration.
 - `mock`   : deterministic, with no LLM at all. Instant, free, always
@@ -33,6 +41,8 @@ model — so the `http` adapter calls it directly. That is deliberate.
 from targets.demo import LEVELS, build_demo_target
 from targets.records import LEVELS as RECORDS_LEVELS
 from targets.records import build_records_target
+from targets.docs import LEVELS as DOCS_LEVELS
+from targets.docs import build_docs_target
 from targets.http import build_http_target
 from targets.decoy import ask_decoy
 from targets.mock import ask_mock
@@ -48,6 +58,7 @@ from targets.mock import ask_mock
 # the project's preference recorded for `stats.STATES`, `judge_identity()` and
 # the attack catalogue. A second copy drifts on the first change.
 from targets.demo import SECRET as demo_secret
+from targets.docs import SECRET as docs_secret
 from targets.mock import SECRET as mock_secret
 
 NAMED_TARGETS = {
@@ -69,6 +80,7 @@ PUBLIC_TARGET_NAMES = ("decoy", "mock")
 LEVELLED_TARGETS = {
     "demo": (build_demo_target, LEVELS),
     "records": (build_records_target, RECORDS_LEVELS),
+    "docs": (build_docs_target, DOCS_LEVELS),
 }
 
 
@@ -84,6 +96,7 @@ SECRETS = {
     "leurre": "TOPSECRET42",
     "mock": mock_secret,
     "demo": demo_secret,
+    "docs": docs_secret,
 }
 
 
