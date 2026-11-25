@@ -461,6 +461,70 @@ order rather than my word for it.
     still carries no title before a colon where the genuine documents do. And
     nothing about a retriever: `docs` has none.
 
+THE REPAIR RUNS, declared BEFORE running (2026-11-26)
+------------------------------------------------------
+The attribution run's own consistency check turned up a defect in THIS
+module: the delivery comparison handed both arms ONE target object, the
+indirect arm planted a note per attempt, and nothing cleared it — so the
+DIRECT arm's campaign ran against a base still carrying the indirect arm's
+last payload, and its findings were credited to the direct delivery. Fixed in
+`one_campaign`, which now clears before every campaign.
+
+So the three delivery runs are REPLAYED, and the distinction that makes this
+legitimate: **nothing about the protocols changes.** Same targets, same
+scopes, same pair counts, same outcome, same direction, same threshold. The
+reason for rerunning is a defect in the INSTRUMENT, found by reading the code
+and verified by reading the prompt back — not a result anyone disliked. That
+is the same line this module already draws between "restrict to the families
+DECLARED relevant" (legitimate) and "restrict to the techniques that leaked"
+(post hoc).
+
+  * THE RUNS, each to its own output file so none can resume into another and
+    none overwrites the recorded evidence:
+
+        --arms delivery                                   (whole library, 20)
+        --arms delivery --only injection-indirecte        (shapes, 20)
+        --arms delivery --only injection-indirecte --per-register   (6 x 6)
+
+  * WHAT I ALREADY KNOW, and it has to be said: I have seen the originals.
+    They ran 2-10, 0-19 and 1-31 for the DIRECT arm. Knowing that, the two
+    outcomes below are declared now so neither can be dressed up after.
+
+  * THE QUANTITY TO WATCH IS PER ARM, and it is a sharp prediction rather
+    than a hope. The confound inflated the DIRECT arm only — the indirect arm
+    plants its own note every attempt, so a leftover changes nothing for it.
+    Reference counts, restricted outcome:
+
+        | run        | indirect | direct |
+        |------------|----------|--------|
+        | library    |        5 |     20 |
+        | shapes     |        2 |     58 |
+        | registers  |       10 |     87 |
+
+    So the direct arm should FALL and the indirect arm should not. **If the
+    indirect arm also moves a lot, something else moved too**, and the
+    comparison with the originals needs re-reading — which is exactly the
+    check that found this defect, applied to its own repair.
+
+  * TWO OUTCOMES, declared:
+      - the direction HOLDS: the leftover was immaterial to the conclusion,
+        and the three recorded results stand with their figures corrected
+        rather than their conclusion overturned;
+      - the direction WEAKENS OR REVERSES: the leftover carried part of the
+        direct arm's advantage, and those conclusions were partly an artefact
+        of the instrument. Both are results.
+
+  * A GAP IN THE FINGERPRINT, stated rather than quietly fixed. `code`
+    watches what decides a count — adaptation, the planner, the attacker, the
+    verifier, `main`, `stats`, the library — and NOT this module, so the
+    digest is `14e9a4d48d2a1b74` for the originals and for the repairs alike:
+    it cannot tell a pre-fix run from a post-fix one. Adding
+    `evaluation/measure_modes.py` to `WATCHED` would catch that and refuse
+    every resume across a docstring edit, which is the "digest of the whole
+    repository" this project rejected for that very reason. The protection
+    here is the separate output files and the `complete` guard on the old
+    ones, not the digest.
+
 REPORTED BESIDE THE TEST, descriptive and NEVER tested
 -------------------------------------------------------
   * target requests actually spent by each mode, which is the normalisation's
