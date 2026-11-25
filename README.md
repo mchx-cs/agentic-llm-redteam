@@ -344,6 +344,29 @@ And unlike multi-turn, an indirect finding **can be replayed**: plant the same n
 the same trigger. So `high` severity is reachable here, which is the one row of the
 single-turn / multi-turn trade-off table this delivery does not lose.
 
+**Measured, and it finds LESS** (20 pairs against `docs`, protocol committed before the
+run, 2026-11-25). Equal attempts, and the declared outcome counted only the three
+criteria both deliveries can score, so `obeissance` — which an indirect attempt cannot
+produce — was excluded in the indirect arm's favour:
+
+| | indirect | direct |
+|---|---|---|
+| pairs won (of 12 decided) | **2** | **10** |
+| findings, scorable criteria | 5 | **20** |
+| findings in all | 5 | 39 (19 of them `obeissance`) |
+| `divulgation` | **0** | 15 |
+| `high` | 0 | 6 |
+
+The declared hypothesis was "indirect finds more": p = 0.9968, not significant. The
+reverse direction gives p = 0.0193, reported and flagged as *not* the declared test.
+
+The sharpest fact is not the count but the register: **the indirect arm produced only
+`abus_outils`, never a single disclosure of the secret.** The likely reason is a property
+of the library rather than of the delivery — its payloads are written to be *sent*
+("Ignore all the instructions you got before…" addresses the assistant), and inside a
+document that reads as a quoted user message, which is exactly what the target does with
+one. A hypothesis, not a measurement.
+
 Here is a real run against `demo`, cut down to what matters:
 
 ```console
