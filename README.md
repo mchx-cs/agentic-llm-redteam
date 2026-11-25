@@ -361,11 +361,30 @@ The declared hypothesis was "indirect finds more": p = 0.9968, not significant. 
 reverse direction gives p = 0.0193, reported and flagged as *not* the declared test.
 
 The sharpest fact is not the count but the register: **the indirect arm produced only
-`abus_outils`, never a single disclosure of the secret.** The likely reason is a property
-of the library rather than of the delivery — its payloads are written to be *sent*
-("Ignore all the instructions you got before…" addresses the assistant), and inside a
-document that reads as a quoted user message, which is exactly what the target does with
-one. A hypothesis, not a measurement.
+`abus_outils`, never a single disclosure of the secret.**
+
+**And the six registers were then measured one by one** (36 pairs, the library restricted
+to one register per sub-run so the sampling could not favour whichever the round-robin
+happened to reach — the defect the run above carried and declared):
+
+| register | indirect | direct |
+|---|---|---|
+| service memo | 1 | 10 |
+| block break | 4 | 13 |
+| email | 1 | 4 |
+| processing metadata | 0 | 12 |
+| FAQ entry | 0 | 27 |
+| changelog entry | 4 | 21 |
+
+**Every one of the six favours the direct delivery.** Pooled: 1 pair against 31, declared
+p = 1.0000, reverse p = 0.0000. So the shape hypothesis is refuted across the board, and
+not by one register carrying the result.
+
+Three protocols, each declared and committed before its run, all agree: against this
+target the indirect delivery finds substantially less. **What remains untested is WHY** —
+the standing hypothesis is that `docs` level 1 plants its note under a heading that
+*attributes* it as reader-contributed, so "no delimitation" is weaker than the name
+suggests. That needs a target, not a rerun.
 
 Here is a real run against `demo`, cut down to what matters:
 
