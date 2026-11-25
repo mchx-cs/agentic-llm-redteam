@@ -57,7 +57,6 @@ def is_local(target_name):
     2026-11-11, breaking the one-command demonstration).
     """
     from targets import is_bundled_target
-
     if is_bundled_target(target_name):
         return True
     return any(marker in target_name for marker in _LOCAL_MARKERS)
@@ -269,6 +268,24 @@ class AuditTrail:
                      "sent_digest": digest(sent),
                      "received_digest": digest(received)})
 
+    def record_plant(self, phase, note):
+        """
+        A note PLANTED in content the target reads. Not an exchange.
+
+        Its own entry type, deliberately: a plant is not a round trip, it is
+        a WRITE into the system under test, and `record_exchange` would have
+        to invent a reply that never came. On an engagement this is the line
+        that matters most about an indirect test — what was placed in the
+        client's system, and when — so it must not be filed as something it
+        is not.
+
+        The digest is there for the same reason as an exchange's: citing the
+        evidence without copying the note verbatim.
+        """
+        self._exchanges += 1
+        self._write({"type": "plant", "phase": phase, "note": note,
+                     "note_digest": digest(note)})
+
     def record_verdict(self, attempt, verdict):
         self._write({"type": "verdict", "attempt": attempt,
                      "enfreint": verdict["reussi"],
@@ -326,6 +343,29 @@ class AuditTrail:
         # Declared, not guessed: a target that cannot converse must not look
         # as though it can just because it was wrapped.
         ask.conversation = bool(getattr(ask_target, "conversation", False))
+
+        # AND THE INDIRECT CHANNEL, for the reason the history is carried: a
+        # wrapper that dropped `plant` would make `require_indirect` refuse a
+        # traced target -- loudly, which is better than silently, but it would
+        # also make an indirect campaign impossible against the one kind of
+        # target where the trail is MANDATORY, a remote one under mandate.
+        #
+        # And the plant is RECORDED. It is the act that changes the client's
+        # system, so a contested indirect test is defended by this line and
+        # not by the exchange that follows it.
+        # Imported here rather than at module level, like `is_bundled_target`
+        # above and for the same reason: `targets` imports the adapters, and
+        # one of them would import us back.
+        from targets.indirect import supports_indirect
+        if supports_indirect(ask_target):
+            def plant(note):
+                stored = ask_target.plant(note)
+                self.record_plant(phase, stored)
+                return stored
+
+            ask.indirect = True
+            ask.plant = plant
+            ask.planted = getattr(ask_target, "planted", None)
         return ask
 
 

@@ -70,6 +70,38 @@ record, on the attempt, and it is not this module's job.
 NOTE_LIMIT = 4000
 
 
+class NoteRefused(ValueError):
+    """
+    A note that cannot be PLANTED as it stands.
+
+    Distinct so the orchestrator can tell it from a bug, exactly as
+    `PayloadTooLong` is distinct from a wiring failure: it is not the target
+    refusing and it is not the campaign broken, it is one attempt that never
+    happened. So it is recorded as a MISSING measurement — outside the ASR
+    denominator — and the campaign carries on with the next.
+
+    A `ValueError` rather than a `RuntimeError`, unlike `PayloadTooLong`,
+    because that is what it is: an argument the channel cannot accept. The
+    caller that catches `ValueError` on `plant` keeps working.
+    """
+
+
+class NoIndirectChannel(RuntimeError):
+    """
+    This target has no content a payload can be planted in.
+
+    Distinct from a wiring failure, and that distinction is the whole point.
+    Left as a plain `RuntimeError` it was swallowed by the orchestrator's
+    generic handler, which announced "the target did not answer as expected"
+    and advised `--probe-target` -- at a target that had never been asked
+    anything, and for which `--probe-target` is refused anyway.
+
+    That is the misattribution ended on 2026-11-23 for the judge
+    (`_component`), met again in a new path. Wrong advice costs more than no
+    advice: it sends the operator to check a thing that is not broken.
+    """
+
+
 def supports_indirect(ask):
     """
     Can a payload be planted where this target will read it?
@@ -85,7 +117,7 @@ def require_indirect(ask, target_name="this target"):
     """Raise with an instruction if the target has no indirect channel."""
     if supports_indirect(ask):
         return
-    raise RuntimeError(
+    raise NoIndirectChannel(
         f"{target_name} has no content a payload can be planted in: an "
         f"indirect injection is not testable against it.\n"
         f"`docs` is the bundled target that has one. An HTTP endpoint does "
@@ -107,11 +139,11 @@ def check_note(text):
         return None
     text = str(text)
     if not text.strip():
-        raise ValueError(
+        raise NoteRefused(
             "an empty note plants nothing: the target would answer from its "
             "genuine documents, and the attempt would look like a refusal.")
     if len(text) > NOTE_LIMIT:
-        raise ValueError(
+        raise NoteRefused(
             f"note of {len(text)} characters, limit {NOTE_LIMIT}. It is "
             f"REFUSED rather than truncated: half a payload produces a "
             f"harmless reply, and a report that reads as 'the target "

@@ -179,6 +179,10 @@ def build_report(result, target="unknown"):
             # technique chose the aim, PyRIT's attacker model chose the words.
             "delivery": raw["payload"].get("delivery") or "single-turn",
             "pyrit_objective": raw["payload"].get("pyrit_objective"),
+            # What was actually SENT when the payload was planted instead.
+            # Without it the evidence would show a note and a reply with
+            # nothing between them, and a reader could not reproduce it.
+            "trigger": raw["payload"].get("trigger"),
             # The whole conversation, when there was one. The last reply is
             # not the evidence: 4 of 19 leaks of the sequenced form are
             # invisible in it (measured 2026-11-17).
@@ -715,6 +719,32 @@ def _not_attempted_block(delivery="single-turn", attack=None,
             "of prompts, even a reordered one, is weaker assurance than zero "
             "successes against an attacker that rewords.",
         ]
+        # AND an indirect campaign has one of its own. It is appended to the
+        # single-turn limits rather than replacing them, because an indirect
+        # attempt IS a single message with no history: both of those stay
+        # true, and only the SOURCE of the payload changed.
+        #
+        # What has to be said is what the judge could not see. Measured
+        # 2026-11-25: the half whose OUTCOME is visible in the reply is
+        # scored by the existing criteria without the note being shown, 10
+        # times out of 10 -- being blind is what makes that work. The half
+        # whose outcome is obedience to a text only the note carried is NOT
+        # scorable, and the judge is right to say `aucun`. So this delivery
+        # finds one of the two, and a reader must not read a clean result as
+        # covering both.
+        if delivery == "indirect":
+            lines += [
+                "- **the judge never saw the planted note** : it read the "
+                "innocuous question and the reply, and scored the OUTCOME. "
+                "That an attempt was delivered indirectly is recorded here, "
+                "never inferred by the judge.",
+                "- **and only outcomes VISIBLE in the reply are scorable** : "
+                "a value disclosed, a tool fired, a third party's data. "
+                "Obedience to a text the note alone carried is not — the "
+                "criteria need an imposed text to compare against, and it is "
+                "in the note. A clean result here covers the first kind, not "
+                "the second.",
+            ]
 
     lines.append(
         "- **persistence, privilege escalation, blast radius** : not "
@@ -724,8 +754,25 @@ def _not_attempted_block(delivery="single-turn", attack=None,
     return lines
 
 
+def _delivery_flag(delivery):
+    """
+    The flag the advised command needs to bound THIS campaign's delivery.
+
+    Without it the bounds block told the reader of an INDIRECT report to run
+    a DIRECT campaign -- so to bound a different thing entirely. Found by
+    reading the rendering, which is the only way a presentation defect ever
+    shows up here, and the same family as the block that pointed at "the
+    replay shown on each finding" in a mode that runs none.
+
+    `--multiturn` is not offered: a multi-turn campaign can afford neither
+    the N a bound requires nor the repetition it rests on, which is why its
+    own branch of the limitations block says so.
+    """
+    return "--indirect " if delivery == "indirect" else ""
+
+
 def _bounds_block(bounds, finding_count, rate=None, replayed=True,
-                  repeated=None):
+                  repeated=None, delivery="single-turn"):
     """
     What the attempt count allows us to claim — and above all what it does
     not.
@@ -851,6 +898,7 @@ def _bounds_block(bounds, finding_count, rate=None, replayed=True,
                 f"{stats.attempts_to_rule_out(rate)} independent "
                 f"attempts of that same combination — which is what "
                 f"`--only <technique> --repeat --no-adaptation "
+                f"{_delivery_flag(delivery)}"
                 f"--attempts {stats.attempts_to_rule_out(rate)}` gives. "
                 f"Sweeping ONE technique is not enough: it still crosses "
                 f"several objectives and transformations, so its attempts "
@@ -935,6 +983,27 @@ def _evidence(finding, abridge):
     conversation harvest the majority behaviour was a leak on turn 1 followed
     by an impeccable last turn.
     """
+    # INDIRECT delivery: the payload was PLANTED and the message sent was an
+    # innocuous trigger, so "Payload sent" would be false in a third way --
+    # the same defect as calling a multi-turn objective a payload, and the
+    # same fix. Both halves are shown, because either alone is unreproducible:
+    # the note without the trigger does nothing, and the trigger without the
+    # note is a harmless question.
+    if finding.get("delivery") == "indirect":
+        blocks = (("**Note planted** — in content the target reads, not in "
+                   "the message. The judge never saw it.",
+                   finding["payload"]),
+                  ("**Then asked** — innocuous by design: that is what makes "
+                   "the outcome scorable without showing the judge the note.",
+                   finding.get("trigger") or ""),
+                  ("**Target's reply**", finding["reply"]))
+        lines = []
+        for title, content in blocks:
+            excerpt = _excerpt(content, abridge)
+            fence = _fence(excerpt)
+            lines += ["", title, "", fence] + excerpt + [fence]
+        return lines
+
     if finding.get("delivery") != "pyrit-multiturn" or not finding["turns"]:
         blocks = (("**Payload sent**", finding["payload"]),
                   ("**Target's reply**", finding["reply"]))
@@ -1139,7 +1208,9 @@ def render_markdown(report, abridge=False):
         # send the reader to something this report does not contain.
         replayed=(report["campaign"].get("delivery") or "single-turn")
         != "pyrit-multiturn",
-        repeated=report.get("repeated"))
+        repeated=report.get("repeated"),
+        # So the advised command bounds THIS delivery and not another one.
+        delivery=report["campaign"].get("delivery") or "single-turn")
 
     lines += ["**Families tested**", ""]
     lines += [f"- `{f}`" for f in coverage["families_tested"]] or \

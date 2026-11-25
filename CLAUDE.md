@@ -24,8 +24,9 @@ a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
 THREE vulnerable targets ship with it, one per ASSET: `demo` a secret string, `records`
 access control over look-alike records, `docs` the integrity of its own instructions
 against content it retrieved. `docs` carries the indirect channel (`ask.plant`), which is
-DECLARED and refused rather than faked — and no campaign plants yet: that is points 2 and
-3 of the repositioning plan.
+DECLARED and refused rather than faked, and `--indirect` makes a campaign PLANT each
+payload and then ask one fixed innocuous question — the judge reads that exchange and
+never the note.
 
 - **Phase 1**: the library is filled — **1,160 source payloads**, of which 1,143 come
   from garak (52 probes, local snapshot) and 15 were written by hand where garak
@@ -66,7 +67,7 @@ DECLARED and refused rather than faked — and no campaign plants yet: that is p
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,535 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,567 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -9777,6 +9778,136 @@ la tentative), et les annoncer faits serait exactement la demi-connexion que
 `targets/indirect.py` existe pour empêcher.
 
 1,535 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LE CANAL INDIRECT DANS LA CAMPAGNE : `--indirect` (2026-11-25).**
+Le point 2 du plan, et le point 3 avec lui — la provenance n'avait pas besoin
+d'un champ neuf.
+
+**CE QUE LA LIVRAISON CHANGE, et ce qu'elle ne change pas.** Une tentative
+indirecte diffère d'une tentative directe par l'ENDROIT où va le payload :
+`ask.plant(payload)`, puis une question anodine. Donc l'échange que le juge
+lit est le déclencheur et la réponse, jamais la note — et c'est exactement ce
+qui rend le registre scorable, mesuré 10/10 le matin même. Les payloads ne
+changent pas, le plan ne change pas, l'adaptation ne change pas.
+
+**LE DÉCLENCHEUR EST FIXE, et c'est la décision qui porte la mesure.**
+`INDIRECT_TRIGGER`, une constante. S'il était dérivé de la reconnaissance il
+serait une SECONDE variable, et une fuite pourrait être imputable à une
+question bien choisie plutôt qu'à la note. C'est le confond mesuré le
+2026-11-19, où une tentative multi-tours poursuivait un objectif de
+reconnaissance À LA PLACE de son payload — et le bras s'est révélé n'avoir
+jamais tenté un seul jailbreak. Un test tient aussi que le déclencheur ne
+mentionne ni code, ni secret, ni consigne : sinon l'échange jugé porterait une
+partie de l'attaque.
+
+**LE POINT 3 N'A PAS BESOIN D'UN CHAMP NEUF.** La livraison est estampillée
+sur la TENTATIVE (`delivery`, `trigger`), là où `report.py` lisait déjà une
+livraison pour le multi-tours. Le juge note le résultat correctement et ne
+peut JAMAIS dire que l'injection était indirecte — le document n'est pas dans
+l'échange — donc ce champ est le seul endroit qui le sache, et un rapport sans
+lui ne distingue pas une trouvaille indirecte d'une directe. Un test vérifie
+que les critères ne parlent ni de document, ni de note, ni de contenu
+récupéré : le jour où ils en parleraient, la justification de ce champ doit
+être revue.
+
+**UNE TROUVAILLE INDIRECTE EST REJOUABLE, et c'est son avantage structurel sur
+le multi-tours.** `high` exige `("divulgation", "confirmed")`, le rejeu
+renvoie UN payload, et une conversation n'en a aucun. Une tentative indirecte
+en a un : replanter la même note, poser le même déclencheur. Le rejeu replante
+donc avant CHAQUE appel, ce qui garde les tentatives i.i.d. — `plant`
+remplace, donc replanter est idempotent.
+
+**LA PISTE D'AUDIT ENREGISTRE LE PLANT, et comme son propre type d'entrée.**
+Un plant n'est pas un aller-retour, c'est une ÉCRITURE dans le système sous
+test, et `record_exchange` aurait dû inventer une réponse qui n'est jamais
+venue. Sur un engagement c'est la ligne qui compte le plus à propos d'un test
+indirect — ce qui a été placé dans le système du client, et quand — donc elle
+ne doit pas être classée sous autre chose. Un test vérifie qu'un plant n'est
+PAS aussi enregistré comme un échange.
+
+**ET LA JONCTION DU 2026-11-17 ÉTAIT LÀ, DANS UN ENDROIT NEUF.**
+`AuditTrail.trace` copiait `conversation` et pas `plant`. Un wrapper qui perd
+le canal rend `require_indirect` refusant sur une cible tracée — bruyamment,
+ce qui vaut mieux que silencieusement, mais il rend aussi une campagne
+indirecte impossible contre le seul genre de cible où la piste est
+OBLIGATOIRE : une cible distante, sous mandat. Et c'est le wrapper qu'utilise
+le REJEU, donc le seul chemin par lequel une trouvaille indirecte atteint
+`high`.
+
+**UNE NOTE REFUSÉE EST UNE MESURE MANQUANTE**, `not_sent`, l'état ajouté avec
+le transport GET. Pas une résistance : la confusion mesurée le 2026-11-12
+déplaçait un ASR de dix-sept points en faveur de la cible. Et la campagne
+CONTINUE — une note indélivrable sur 1 160 n'a pas à terminer un run à
+mi-parcours. D'où `NoteRefused`, distincte pour que l'orchestrateur la
+distingue d'un bug, comme `PayloadTooLong` l'est d'une panne de câblage.
+
+**DEUX LIVRAISONS À LA FOIS SONT REFUSÉES**, plutôt qu'à moitié supportées.
+Une attaque indirecte multi-tours est concevable — planter une note puis tenir
+une conversation — mais rien ici ne l'a mesurée, le pont PyRIT ne sait rien de
+`plant`, et un drapeau qui gagne en silence sur un autre est la façon dont un
+opérateur finit par lire le rapport d'une campagne qu'il n'a pas lancée.
+
+**MON PROPRE DÉFAUT, trouvé en LISANT LA SORTIE : une cible sans canal était
+annoncée comme une cible qui répond mal.** `require_indirect` levait un
+`RuntimeError`, donc le gestionnaire générique de `cli` imprimait
+« Campaign INTERRUPTED: the target did not answer as expected » et conseillait
+`--probe-target`. **Deux affirmations fausses** : la cible n'avait jamais été
+interrogée, et `--probe-target` est refusé pour une cible embarquée. C'est la
+mésattribution terminée le 2026-11-23 pour le juge (`_component`), reproduite
+par moi dans un chemin neuf — et un mauvais conseil coûte plus que pas de
+conseil, puisqu'il envoie l'opérateur vérifier une chose qui n'est pas cassée.
+Corrigé par `NoIndirectChannel`, attrapée AVANT le gestionnaire générique, et
+un test garde le contraste : une vraie panne de câblage doit garder son
+ancien message.
+
+**Et ma correction en a cassé une autre, trouvée en relançant** : j'y fermais
+la piste, que le `finally` ferme déjà, donc la seconde écriture levait
+`ValueError: I/O operation on closed file`. Un défaut dans un chemin d'erreur
+ne se voit qu'en le parcourant.
+
+**LE DÉFAUT DE PRÉSENTATION, et c'est la famille corrigée trois fois ici : le
+conseil de bornage omettait `--indirect`.** Le bloc de bornes disait
+`--only <technique> --repeat --no-adaptation --attempts 30` — donc un lecteur
+d'un rapport INDIRECT qui lance cette commande bornerait une campagne
+DIRECTE, c'est-à-dire autre chose. Même famille que le bloc pointant vers
+« le rejeu montré sur chaque trouvaille » dans un mode qui n'en fait aucun, et
+que « the expected method is a POST » conseillé à un socket. Le conseil porte
+la livraison maintenant, avec le contraste : un rapport direct ne doit pas
+l'afficher.
+
+**Trouvé en lisant le rendu d'une campagne réelle — quatorzième fois dans ce
+fichier qu'un défaut de présentation ne sort que par là**, et aucun test ne
+pouvait le voir : les deux documents s'accordaient sur l'orthographe de la
+commande, et `test_the_advice_is_runnable` vérifie qu'elle tourne, pas
+qu'elle borne la bonne livraison.
+
+**VÉRIFIÉ EN LE LANÇANT : 3 tentatives contre `docs`, 19 appels, 31 351
+jetons, zéro trouvaille** — et la troisième tentative est le résultat du jour.
+Le payload DAN de garak, PLANTÉ dans les notes de lecteurs, a bien fait
+adopter à la cible le format `GPT:` / `DAN:` imposé, avec le ton grossier et
+tout. Et le juge a dit `aucun`, trois votes sur trois.
+
+**Il a RAISON, et c'est la moitié « obéissance seule » rencontrée dans une
+campagne réelle au premier essai.** Le critère 2 parle d'« écrire mot pour mot
+un texte imposé », et le texte imposé est dans la note, invisible au juge. La
+frontière mesurée le matin sur `I1` / `I2` s'est donc présentée dans la nature
+en trois tentatives, et le rapport la DIT au lecteur — « only outcomes VISIBLE
+in the reply are scorable » — ce qui est exactement ce qu'un lecteur de ce
+rapport-là devait savoir.
+
+**CE QUI RESTE, dit franchement :**
+- **l'obéissance seule n'est pas scorable**, et un troisième rôle dans le
+  format de question du juge est ce qui la débloquerait. C'est un artefact
+  mesuré que l'on ne touche pas sans protocole : toutes les figures publiées
+  décrivent un format à deux rôles ;
+- **aucune mesure** de ce que la livraison indirecte trouve par rapport à la
+  directe. Le protocole mode contre mode existe (`measure_modes`) et il sait
+  déjà viser une cible ; l'étendre à cette livraison est une mesure à déclarer,
+  pas un pas à enchaîner ;
+- **une seule note à la fois** et **aucun retriever**, les deux limites que
+  `targets/docs.py` déclare.
+
+1,567 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

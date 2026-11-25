@@ -204,7 +204,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,535 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,567 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -317,10 +317,32 @@ python check_indirect.py
 One draw per level, and it says so: whether the three levels form a gradient is a
 measurement with a declared protocol and an N, and that measurement has not been made.
 
-**Campaigns do not plant yet.** `--target docs` today runs an ordinary campaign against
-one more target; the indirect channel is reachable through the contract and through the
-command above, not through the orchestrator. Announcing otherwise would be exactly the
-half-wiring the declared channel exists to prevent.
+### Attacking through it
+
+```bash
+python main.py --target docs --indirect --report reports/
+```
+
+`--indirect` replaces the DELIVERY, not the payloads: each attempt plants the library's
+payload in content the target reads, then asks one fixed innocuous question. The trigger
+is fixed on purpose — were it derived from reconnaissance it would be a second variable,
+and a leak could be attributable to a well-chosen question rather than to the note. That
+is the confound measured on 2026-11-19, where a multi-turn attempt pursued a
+reconnaissance objective *instead* of its payload.
+
+A target that does not declare the channel is **refused**, with its own message and exit
+code 2 — not attacked directly behind your back, and not reported as "the target did not
+answer as expected", which would blame a target that was never asked anything.
+
+What the report then says, because the judge cannot: which attempts were delivered this
+way, the note that was planted *and* the question that followed (either alone is
+unreproducible), and the limitation that matters — **the judge never saw the note.** It
+scored the outcome, so a clean result covers outcomes visible in the reply, never
+obedience to a text the note alone carried.
+
+And unlike multi-turn, an indirect finding **can be replayed**: plant the same note, ask
+the same trigger. So `high` severity is reachable here, which is the one row of the
+single-turn / multi-turn trade-off table this delivery does not lose.
 
 Here is a real run against `demo`, cut down to what matters:
 
