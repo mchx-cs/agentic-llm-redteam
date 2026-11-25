@@ -182,6 +182,21 @@ def redundant_techniques(library):
     around the model (exfiltration through a Markdown URI, XSS, Jinja or SQL
     injection), not at tool calls. Counting them here would announce a hole
     filled that is not.
+
+    AND A TECHNIQUE MAY DECLARE THE REDUNDANCY ACCEPTED, with its reason
+    (`redundancy_accepted`), in which case it is returned under `accepted`
+    rather than as a debt to re-read. Added 2026-11-25 for
+    `injection-indirecte`: garak covers LLM01 as a primary family and even
+    carries 9 document-shaped `latentinjection` probes, but their embedded
+    instruction is a fixed canary our four criteria cannot score — measured
+    5/5 `aucun` on a reply that fully obeyed.
+
+    A REASON and not a boolean, deliberately: a boolean would be a silent
+    escape hatch, and the point of this guard is that the decision is
+    recorded where the next reader meets it. The entry is still RETURNED, so
+    the validator can print it — a flag silenced is a flag that stops
+    teaching, which is why this project removed a guard that cried wrong
+    twice in four.
     """
     garak_families = {_prefix(technique.get("owasp_family"))
                       for technique in library["techniques"]
@@ -208,8 +223,24 @@ def redundant_techniques(library):
                 "probes": sum(1 for other in library["techniques"]
                               if other.get("source")
                               and _prefix(other.get("owasp_family")) == family),
+                # None = a debt to re-read; a string = the reason it was
+                # accepted, which the validator prints as such.
+                "accepted": technique.get("redundancy_accepted"),
             })
     return redundant
+
+
+def redundancy_to_review(library):
+    """
+    The redundancies NOBODY has accepted — the ones that call for a decision.
+
+    `redundant_techniques` returns every redundancy, accepted or not, because
+    the validator must be able to print both. This is what a guard should
+    assert on: a technique whose redundancy is declared with a reason is a
+    decision taken, and failing on it would teach people to ignore the guard.
+    """
+    return [entry for entry in redundant_techniques(library)
+            if not entry.get("accepted")]
 
 
 def _report_redundancies(library):
@@ -218,13 +249,30 @@ def _report_redundancies(library):
     redundant = redundant_techniques(library)
     if not redundant:
         return
-    print("\nSome hand-written techniques may have become redundant:")
-    for technique in redundant:
-        print(f"  {technique['id']} ({technique['payloads']} hand-written "
-              f"payload(s)) — {technique['probes']} garak probe(s) now carry "
-              f"{technique['family']} as their primary family.")
-    print("  Re-read those probes before removing anything: a tag is not a "
-          "measurement.")
+
+    # A DEBT and a DECISION TAKEN are printed apart, and that is the whole
+    # value of the `accepted` field: a list that mixed them would make the
+    # operator re-read a decision somebody already recorded, every single
+    # run, until they stopped reading the block.
+    to_review = [t for t in redundant if not t.get("accepted")]
+    accepted = [t for t in redundant if t.get("accepted")]
+
+    if to_review:
+        print("\nSome hand-written techniques may have become redundant:")
+        for technique in to_review:
+            print(f"  {technique['id']} ({technique['payloads']} "
+                  f"hand-written payload(s)) — {technique['probes']} garak "
+                  f"probe(s) now carry {technique['family']} as their "
+                  f"primary family.")
+        print("  Re-read those probes before removing anything: a tag is not "
+              "a measurement.")
+
+    if accepted:
+        print("\nRedundant on the family, and ACCEPTED with a reason:")
+        for technique in accepted:
+            print(f"  {technique['id']} — {technique['probes']} garak "
+                  f"probe(s) carry {technique['family']}.")
+            print(f"      {technique['accepted']}")
 
 
 def main(arguments=None):

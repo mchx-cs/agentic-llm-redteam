@@ -213,18 +213,56 @@ class TestFalseCoverageHoles:
                 "family_covered_elsewhere"] is True
 
     def test_a_genuinely_absent_family_is_not_called_covered(self):
-        # `injection-directe` est vide, et ici rien ne couvre LLM01 :
-        # l'instantane garak est neutralise par la fixture. Le trou est donc
-        # reel, et le dire couvert serait la moitie inverse du mensonge.
-        #
-        # Ce test visait `abus-outils` jusqu'au 2026-11-12 : la technique
-        # n'avait aucun payload, donc elle etait toujours ecartee. Elle en a
-        # quatre depuis, et c'est le bon comportement — pas une regression.
+        """
+        Une technique vide dont la famille n'est couverte par RIEN ne doit
+        pas etre dite couverte : ce serait la moitie inverse du mensonge.
+
+        LA FAMILLE EST DERIVEE, plus nommee. Ce test a du etre repointe deux
+        fois pour la meme raison, et chaque fois parce que le comportement
+        s'etait AMELIORE : il visait `abus-outils` jusqu'au 2026-11-12, qui a
+        recu quatre payloads, puis `injection-directe` jusqu'au 2026-11-25,
+        date a laquelle `injection-indirecte` a apporte six payloads LLM01 —
+        donc LLM01 est desormais couverte ailleurs, et le champ a raison.
+
+        Une troisieme famille nommee en dur se perimerait de la meme facon,
+        d'ou la derivation : on cherche une technique vide dont la famille
+        n'est portee par aucune technique non vide. L'instantane garak est
+        neutralise par la fixture, donc seules les techniques ecrites a la
+        main comptent ici.
+        """
         plan = plan_campaign(profile(tools=["un_outil"],
                                refused=["le code du coffre"]), budget=3)
         par_nom = {e["technique"]: e for e in plan["skipped"]}
-        assert par_nom["injection-directe"]["family_covered_elsewhere"] \
-            is False
+
+        from agents.attacker import load_library
+        library = load_library()
+        pourvues = {t.get("owasp_family") for t in library["techniques"]
+                    if (t.get("templates") or t.get("complete_payloads"))}
+        vides = [t for t in library["techniques"]
+                 if not (t.get("templates") or t.get("complete_payloads"))
+                 and t.get("owasp_family")
+                 and t["id"] in par_nom]
+
+        orphelines = [t["id"] for t in vides
+                      if t["owasp_family"] not in pourvues]
+        couvertes = [t["id"] for t in vides if t["owasp_family"] in pourvues]
+
+        assert orphelines, (
+            "plus aucune famille n'est un trou reel : la propriete n'est plus "
+            "testable ici, et il faut une technique vide dont la famille "
+            "n'est portee par rien")
+        for identifiant in orphelines:
+            assert par_nom[identifiant]["family_covered_elsewhere"] is False, \
+                identifiant
+
+        # LE CONTRASTE, sans quoi le test ci-dessus passerait sur un champ
+        # qui repondrait False a tout.
+        assert couvertes, (
+            "aucune technique vide n'a sa famille couverte ailleurs : le "
+            "contraste manque, donc la premiere moitie ne compare rien")
+        for identifiant in couvertes:
+            assert par_nom[identifiant]["family_covered_elsewhere"] is True, \
+                identifiant
 
     def test_every_skipped_entry_carries_the_field(self):
         # Le rapport le lit sans garde : un champ manquant le ferait mentir

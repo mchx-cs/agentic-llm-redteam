@@ -303,20 +303,65 @@ class TestRedundancyWithGarak:
         techniques += list(maison)
         return {"techniques": techniques}
 
-    def test_nothing_to_report_with_todays_families(self, snapshot):
-        # The state measured on 2026-11-12: the 52 probes in scope carry
-        # LLM01 or LLM02 as their primary family, never LLM06 or LLM07. The
-        # two hand-written techniques therefore remain alone in covering
-        # theirs.
-        #
-        # The snapshot is BUILT for the test, as everywhere in this file: a
-        # test reading the local snapshot would pass or not depending on
-        # whether the exporter had been run.
-        from payloads.garak_source import redundant_techniques
+    def test_nothing_to_REVIEW_with_todays_families(self, snapshot):
+        """
+        Nothing is an UNREVIEWED debt.
+
+        It asserted on every redundancy until 2026-11-25, and it failed
+        because the behaviour improved rather than regressed:
+        `injection-indirecte` was added, it carries LLM01, and garak covers
+        LLM01 as a primary family — so the guard flagged it, correctly in its
+        own terms.
+
+        What the technique then DECLARES is the decision, with its reason:
+        garak's 9 document-shaped `latentinjection` probes embed a fixed
+        canary our four criteria cannot score (measured 5/5 `aucun` on a
+        reply that fully obeyed), which is the LLM07 and LLM06 situation
+        again. So the guard asserts on what nobody has decided — a declared
+        redundancy re-flagged on every run would teach people to ignore the
+        block.
+
+        The snapshot is BUILT for the test, as everywhere in this file: a
+        test reading the local snapshot would pass or not depending on
+        whether the exporter had been run.
+        """
+        from payloads.garak_source import redundancy_to_review
         snapshot([_probe(owasp_families=("owasp:llm01",)),
                     _probe(name="probes.leakreplay.Fake",
                            owasp_families=("owasp:llm02",))])
-        assert redundant_techniques(load_library()) == []
+        assert redundancy_to_review(load_library()) == []
+
+    def test_but_an_accepted_redundancy_is_still_RETURNED(self, snapshot):
+        """
+        The field is a declaration, not a silencer.
+
+        `redundant_techniques` keeps returning it so `--version` can print
+        it, under its own heading and with its reason. A flag that vanished
+        would stop teaching, which is the failure mode this project removed a
+        guard for.
+        """
+        from payloads.garak_source import redundant_techniques
+        snapshot([_probe(owasp_families=("owasp:llm01",))])
+        found = redundant_techniques(load_library())
+        accepted = [e for e in found if e.get("accepted")]
+        assert accepted, "the declared redundancy disappeared from the report"
+        assert any(e["id"] == "injection-indirecte" for e in accepted)
+        for entry in accepted:
+            assert len(entry["accepted"]) > 80, (
+                "a reason that short is a boolean in disguise: the point of "
+                "the field is that the next reader meets the decision")
+
+    def test_a_technique_WITHOUT_the_field_is_still_a_debt(self, snapshot):
+        # The contrast, without which the two tests above would pass on a
+        # guard that had simply stopped flagging anything.
+        from payloads.garak_source import redundancy_to_review
+        library = self._library(
+            garak_families=["LLM06:2025 Excessive Agency"],
+            maison=[{"id": "abus-outils",
+                     "owasp_family": "LLM06:2025 Excessive Agency",
+                     "templates": ["x"]}])
+        assert [e["id"] for e in redundancy_to_review(library)] == [
+            "abus-outils"]
 
     def test_a_probe_that_fills_the_hole_is_reported(self):
         from payloads.garak_source import redundant_techniques
