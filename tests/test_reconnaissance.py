@@ -17,7 +17,8 @@ whole families — without raising the slightest exception.
 import pytest
 
 import agents.reconnaissance as reconnaissance
-from agents.reconnaissance import (KNOWN_CONTEXTS, PROBES, reconnoitre,
+from agents.reconnaissance import (DEFAULT_PROBE_LANGUAGE, KNOWN_CONTEXTS,
+                                  PROBES, reconnoitre,
                                    summarise)
 
 CHAMPS_ATTENDUS = {"role", "language", "tools", "refused_subjects",
@@ -58,7 +59,8 @@ class TestProfileShape:
         # Without them, there is no way to understand why the analysis
         # failed.
         analyst("pas du JSON")
-        assert len(reconnoitre(_target())["exchanges"]) == len(PROBES)
+        assert len(reconnoitre(_target())["exchanges"]) == len(
+            PROBES[DEFAULT_PROBE_LANGUAGE])
 
     def test_the_types_are_enforced(self, analyst):
         # Un champ du mauvais type deviendrait une erreur beaucoup plus loin,
@@ -128,9 +130,11 @@ class TestDeclaredContext:
     def test_no_probe_asks_about_the_context(self):
         # Garde-fou contre la tentation : si quelqu'un ajoute « ta sortie est
         # rendered as Markdown?" is ever added to the probes, this test
-        questions = " ".join(PROBES).lower()
-        for interdit in ("markdown", "html", "terminal", "rendu"):
-            assert interdit not in questions, interdit
+        for langue, sondes in PROBES.items():
+            questions = " ".join(sondes).lower()
+            for interdit in ("markdown", "html", "terminal", "rendu",
+                             "rendered"):
+                assert interdit not in questions, (langue, interdit)
 
     def test_the_context_names_are_documented(self):
         # Ils apparaissent dans le message d'erreur de la ligne de commande :
@@ -151,10 +155,13 @@ class TestBudgetAndDisplay:
 
     def test_every_probe_targets_one_field(self):
         # A recorded principle: one probe fewer must mean one fact fewer,
-        # never a false profile. Hence one probe per probed field.
-        assert len(PROBES) == len(
-            {"role", "capacites", "refused_subjects", "tools",
-             "writes_code", "handles_documents"})
+        # never a false profile. Hence one probe per probed field -- IN EVERY
+        # LANGUAGE, because `RECON_BUDGET` slices by position: a set with one
+        # probe fewer would silently stop gating a family.
+        champs = {"role", "capacites", "refused_subjects", "tools",
+                  "writes_code", "handles_documents"}
+        for langue, sondes in PROBES.items():
+            assert len(sondes) == len(champs), langue
 
     def test_the_summary_shows_the_new_fields(self, analyst):
         analyst('{"writes_code": true, "handles_documents": false}')
@@ -337,3 +344,94 @@ class TestTheCAMPAIGNSurvivesIt:
         assert result["profile"]["warning"], (
             "and the result must carry WHY the profile is empty — it is the "
             "only place the report can read it from")
+
+
+class TestTheProbeLanguageIsDECLARED:
+    """
+    French only until 2026-11-25, so every profile of an English-speaking
+    target was built on an exchange opened in French — and probing is the
+    first thing this tool does.
+
+    The target's language is exactly what the probes are meant to discover,
+    so there is nothing to read before the first one goes out: it is the
+    operator's declaration, like `--context`.
+    """
+
+    def test_french_is_the_default(self):
+        # Every bundled target and every published figure is French.
+        assert DEFAULT_PROBE_LANGUAGE == "fr"
+
+    def test_both_sets_exist(self):
+        assert set(PROBES) == {"fr", "en"}
+
+    def test_the_english_set_is_really_english(self, analyst):
+        analyst("{}")
+        profile = reconnoitre(_target(), language="en")
+        asked = " ".join(e["question"] for e in profile["exchanges"])
+        assert "Could you introduce yourself" in asked
+        assert "Peux-tu" not in asked
+
+    def test_the_declared_language_is_what_goes_OUT(self, analyst):
+        # The junction: a flag parsed and not reaching the probes would leave
+        # the campaign believing it had probed in English.
+        analyst("{}")
+        for langue in PROBES:
+            profile = reconnoitre(_target(), language=langue)
+            asked = [e["question"] for e in profile["exchanges"]]
+            assert asked == PROBES[langue][:6], langue
+
+    def test_an_unknown_language_is_REFUSED(self):
+        # A typo must not quietly probe in the wrong language, which is the
+        # defect this parameter exists to fix.
+        with pytest.raises(ValueError, match="Unknown probe language"):
+            reconnoitre(_target(), language="de")
+
+    def test_the_english_probes_gate_the_SAME_families(self):
+        # Each probe gates something: `packagehallucination` on whether the
+        # target writes code, `latentinjection` on whether it reads a
+        # document handed to it. A reworded probe would gate another thing,
+        # and `RECON_BUDGET` counts POSITIONS.
+        assert "code" in PROBES["en"][4].lower()
+        assert "document" in PROBES["en"][5].lower()
+        assert "code" in PROBES["fr"][4].lower()
+        assert "document" in PROBES["fr"][5].lower()
+
+
+class TestAMismatchIsFLAGGED:
+    """
+    Probing an English-speaking target in French still produces a profile —
+    models answer across languages — so the mistake is SILENT and the profile
+    is built on an exchange nobody meant to have. Free to detect: the analyst
+    already reports the language it read.
+    """
+
+    def test_it_warns_when_the_target_answers_in_another_language(self,
+                                                                  analyst):
+        analyst('{"language": "en"}')
+        profile = reconnoitre(_target(), language="fr")
+        assert profile["warning"]
+        assert "--target-language en" in profile["warning"]
+
+    def test_it_says_NOTHING_when_they_agree(self, analyst):
+        # The contrast: a warning on every run would be noise, and this
+        # project has removed a guard for crying wrong.
+        analyst('{"language": "fr"}')
+        assert reconnoitre(_target(), language="fr")["warning"] is None
+
+    def test_a_locale_still_counts_as_agreement(self, analyst):
+        # "fr-FR" is French: comparing the first two characters is what keeps
+        # this from firing on a locale tag.
+        analyst('{"language": "fr-FR"}')
+        assert reconnoitre(_target(), language="fr")["warning"] is None
+
+    def test_and_the_PROFILE_still_stands(self, analyst):
+        # A warning, never a refusal: a bilingual target, or one answering in
+        # the user's language, is a legitimate case this must not block.
+        analyst('{"language": "en", "tools": ["un_outil"]}')
+        profile = reconnoitre(_target(), language="fr")
+        assert profile["tools"] == ["un_outil"]
+
+    def test_a_target_that_says_nothing_about_its_language_is_not_flagged(
+            self, analyst):
+        analyst("{}")
+        assert reconnoitre(_target(), language="fr")["warning"] is None

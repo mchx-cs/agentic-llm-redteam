@@ -38,7 +38,11 @@ PROFILE = {"role": "a librarian", "language": "fr", "tools": [],
 def _campaign(monkeypatch, judge, attempts=2, target=lambda m: "Je refuse.",
               replay=None):
     """A real `run_campaign`, with the model calls replaced."""
-    monkeypatch.setattr(main, "reconnoitre", lambda ask: dict(PROFILE))
+    # `**_` and not `(ask)`: `main` passes `language=` since
+    # 2026-11-25, and a double that does not match the real
+    # signature hides exactly that kind of change.
+    monkeypatch.setattr(main, "reconnoitre",
+                        lambda ask, **_: dict(PROFILE))
     monkeypatch.setattr(main, "MAX_ATTEMPTS", attempts)
     monkeypatch.setattr(main, "judge_by_vote", judge)
     if replay is not None:

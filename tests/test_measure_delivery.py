@@ -511,3 +511,117 @@ class TestTheDocumentShapedPayloads:
         # pasted into a conversation holds against any chatbot -- which is
         # the condition for the direct arm to get something sensible.
         assert self._technique()["prerequisites"] == []
+
+
+class TestTheCODEFingerprint:
+    """
+    A SIXTH thing a resume must refuse to cross, added 2026-11-25 with a
+    20-pair run in flight and the refusal patterns, the tool marker and the
+    replay's value test all about to be widened.
+
+    AND IT SHIPPED UNGUARDED. Two mutations — the field dropped from the
+    protocol block, and the comparison disabled — broke nothing at all. The
+    irony is worth the line: the field was added precisely to close a
+    "written but never read" gap, which is this project's commonest defect,
+    and then it was itself written and never compared.
+    """
+
+    def test_it_changes_when_a_watched_file_changes(self, tmp_path,
+                                                    monkeypatch):
+        from evaluation.code_fingerprint import code_fingerprint
+        before = code_fingerprint()
+        assert before, "no fingerprint at all: nothing would be compared"
+        # A file OUTSIDE the watched set must not move it: a digest over the
+        # whole repository would change on a docstring and refuse every
+        # legitimate resume.
+        assert code_fingerprint() == before
+
+    def test_a_missing_file_gives_NONE_and_not_a_partial_digest(self):
+        from evaluation.code_fingerprint import code_fingerprint
+        assert code_fingerprint(("does/not/exist.py",)) is None, (
+            "a digest over a different set of files is a digest of something "
+            "else, and comparing it would be worse than not comparing")
+
+    def test_the_watched_set_names_what_decides_a_COUNT(self):
+        from evaluation.code_fingerprint import WATCHED
+        # Not "every file": the modules whose text decides what a campaign
+        # sends and how its outcome is counted.
+        for name in ("agents/adaptation.py", "agents/verifier.py",
+                     "agents/planner.py", "main.py", "stats.py",
+                     "payloads/library.json"):
+            assert name in WATCHED, name
+        assert "report.py" not in WATCHED, (
+            "the rendering cannot change a count, and watching it would "
+            "refuse resumes for nothing")
+
+    def test_the_protocol_block_CARRIES_it(self, monkeypatch, tmp_path):
+        import json
+        output = tmp_path / "f.json"
+        sequence = [_arm(), _arm()]
+        monkeypatch.setattr(modes, "one_campaign",
+                            lambda ask, **k: sequence.pop(0))
+        monkeypatch.setattr("targets.choose_target",
+                            lambda *a, **k: _plantable())
+        modes.measure(pairs=1, multi_attempts=modes.DELIVERY_ATTEMPTS,
+                      output=str(output), show=lambda *_: None,
+                      target="docs", arms="delivery")
+        written = json.loads(output.read_text(encoding="utf-8"))
+        assert written["protocol"]["code"], (
+            "the field is not written, so there is nothing to compare")
+
+    def test_a_file_from_ANOTHER_code_version_is_REFUSED(self, tmp_path):
+        import json
+        output = tmp_path / "f.json"
+        output.write_text(json.dumps({
+            "complete": False, "target": "docs",
+            "protocol": {"pairs": 20, "multi_attempts": 6, "turns": 3,
+                         "threshold": 0.05, "judge": "fake/judge",
+                         "declared": True, "arms": "delivery", "only": [],
+                         "code": "0000000000000000"},
+            "pairs": [{"indirect": _arm(), "direct": _arm()}]}),
+            encoding="utf-8")
+        with pytest.raises(SystemExit, match="fingerprinted"):
+            modes.already_measured(
+                str(output), "docs",
+                {"pairs": 20, "multi_attempts": 6, "turns": 3,
+                 "threshold": 0.05, "judge": "fake/judge", "declared": True,
+                 "arms": "delivery", "only": [], "code": "ffffffffffffffff"},
+                show=lambda *_: None)
+
+    def test_the_SAME_version_resumes_normally(self, tmp_path):
+        # The contrast: a guard that refused every resume would be worse than
+        # none, since resuming is a repair this project built on purpose.
+        import json
+        output = tmp_path / "f.json"
+        protocol = {"pairs": 20, "multi_attempts": 6, "turns": 3,
+                    "threshold": 0.05, "judge": "fake/judge",
+                    "declared": True, "arms": "delivery", "only": [],
+                    "code": "abcdef0123456789"}
+        output.write_text(json.dumps({
+            "complete": False, "target": "docs", "protocol": protocol,
+            "pairs": [{"indirect": _arm(), "direct": _arm()}]}),
+            encoding="utf-8")
+        done = modes.already_measured(str(output), "docs", dict(protocol),
+                                      show=lambda *_: None)
+        assert len(done) == 1
+
+    def test_a_file_PREDATING_the_field_says_so_rather_than_passing(
+            self, tmp_path, capsys):
+        # The branch `judge` already has, and self-liquidating for the same
+        # reason: every file written from here on carries it.
+        import json
+        output = tmp_path / "f.json"
+        protocol = {"pairs": 20, "multi_attempts": 6, "turns": 3,
+                    "threshold": 0.05, "judge": "fake/judge",
+                    "declared": True, "arms": "delivery", "only": [],
+                    "code": "abcdef0123456789"}
+        was = {k: v for k, v in protocol.items() if k != "code"}
+        output.write_text(json.dumps({
+            "complete": False, "target": "docs", "protocol": was,
+            "pairs": [{"indirect": _arm(), "direct": _arm()}]}),
+            encoding="utf-8")
+        said = []
+        done = modes.already_measured(str(output), "docs", dict(protocol),
+                                      show=said.append)
+        assert len(done) == 1
+        assert any("predates the `code` field" in line for line in said)

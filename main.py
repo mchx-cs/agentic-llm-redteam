@@ -29,7 +29,8 @@ from audit import (AUTHORISATION_FILE, MissingAuthorisation, AuditTrail,
 from agents.adaptation import accumulate, observe, next_attempt
 from agents.judge import judge, judge_by_vote
 from agents.planner import plan_campaign, summarise as summarise_plan
-from agents.reconnaissance import (KNOWN_CONTEXTS, reconnoitre,
+from agents.reconnaissance import (DEFAULT_PROBE_LANGUAGE, KNOWN_CONTEXTS,
+                                  PROBES, reconnoitre,
                                    summarise as summarise_profile)
 from agents.verifier import verify_by_replay
 from targets import choose_target, is_url_target
@@ -80,7 +81,7 @@ from pyrit_bridge.convert import (ATTACK_NAMES as MULTITURN_ATTACKS,
 def run_campaign(ask_target=None, target_name=None, trail=None,
                  context=(), adaptive=True, only=(), excluding=(),
                  multiturn=None, max_turns=None, attempts=None,
-                 repeat=False, indirect=False):
+                 repeat=False, indirect=False, target_language=None):
     """
     Runs a campaign against `ask_target`.
 
@@ -112,8 +113,10 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
     # --- 1. Reconnaissance: who is this target? ----------------------------
     print("--- Reconnaissance ---")
     try:
-        profile = reconnoitre(trail.trace("reconnaissance", ask_target)
-                              if trail else ask_target)
+        profile = reconnoitre(
+            trail.trace("reconnaissance", ask_target) if trail
+            else ask_target,
+            language=target_language or DEFAULT_PROBE_LANGUAGE)
     except BudgetExceeded as stop:
         print(f"\n>>> {stop}")
         return _finish({"status": "budget_exhausted", "profile": None,
@@ -612,6 +615,16 @@ def cli(arguments=None):
              "library's payload text is NOT sent — it chooses the objective, "
              "and PyRIT writes the words. The report says so.")
     parser.add_argument(
+        "--target-language", "--langue-cible", default=DEFAULT_PROBE_LANGUAGE,
+        dest="target_language", metavar="CODE",
+        choices=sorted(PROBES),
+        help=f"the language the TARGET speaks, for the reconnaissance probes "
+             f"(default {DEFAULT_PROBE_LANGUAGE}). The target's language is "
+             f"what the probes are meant to discover, so there is nothing to "
+             f"read before the first one goes out: you declare it, as you do "
+             f"--context. If the target then answers in another language, the "
+             f"profile says so and stands.")
+    parser.add_argument(
         "--indirect", action="store_true", dest="indirect",
         help="deliver the payload INDIRECTLY: plant it in content the target "
              "reads, then ask an innocuous question. Needs a target that "
@@ -815,7 +828,8 @@ def cli(arguments=None):
             max_turns=arguments.max_turns,
             attempts=arguments.attempts,
             repeat=arguments.repeat,
-            indirect=arguments.indirect)
+            indirect=arguments.indirect,
+            target_language=arguments.target_language)
     except NoIndirectChannel as refusal:
         # BEFORE the generic handler, which would announce "the target did
         # not answer as expected" and advise `--probe-target`: the target was

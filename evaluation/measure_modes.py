@@ -619,6 +619,23 @@ def already_measured(output, target, protocol, show=print):
                f"{protocol['only'] or 'the whole library'} — different "
                f"payloads, so a different measurement.")
 
+    # And the CODE. Files written before the field cannot be checked and say
+    # so rather than passing silently — the branch `judge` already has, and
+    # self-liquidating for the same reason: every file written from here on
+    # carries it.
+    if "code" not in was:
+        show(f"/!\\ {output} predates the `code` field, so the version of "
+             f"`agents/adaptation.py` and its neighbours behind its "
+             f"{len(done)} pair(s) cannot be checked from the file. Resuming "
+             f"assumes the code has not moved.")
+    elif was["code"] != protocol["code"]:
+        refuse(f"they were measured by code fingerprinted {was['code']}, "
+               f"this run by {protocol['code']} — adaptation chooses the "
+               f"next payload, so that is two measurements under one sign "
+               f"test. NOTE: the digest is over file TEXT, so a comment is "
+               f"enough to trip it; if nothing behavioural moved, start a "
+               f"fresh --output rather than pooling.")
+
     # The judge was not recorded before 2026-11-23, so a file written then
     # cannot be checked and SAYS so rather than passing silently: the
     # machine flags, the human decides. Every file written from here on
@@ -650,6 +667,7 @@ def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
         from targets.indirect import require_indirect
         require_indirect(ask_target, target)
 
+    from evaluation.code_fingerprint import code_fingerprint
     from evaluation.evaluate_judge import judge_identity
 
     declared = not departures_from_the_protocol(target, pairs, multi_attempts,
@@ -664,7 +682,15 @@ def measure(pairs=PAIRS, multi_attempts=MULTI_ATTEMPTS, turns=TURNS,
     protocol = {"pairs": pairs, "multi_attempts": multi_attempts,
                 "turns": turns, "threshold": THRESHOLD,
                 "judge": judge_identity(), "declared": declared,
-                "arms": arms, "only": list(only)}
+                "arms": arms, "only": list(only),
+                # A SIXTH thing a resume must refuse to cross, found the day
+                # it mattered: with a 20-pair run in flight, the refusal
+                # patterns, the tool marker and the replay's value test were
+                # all about to be widened, and nothing here would have
+                # noticed. Adaptation chooses which payload goes next, so
+                # resuming across that change would put two measurements
+                # under one sign test.
+                "code": code_fingerprint()}
     single_attempts = multi_attempts * turns
     show(f"Protocol: {pairs} pair(s) against {target}, one-sided paired sign "
          f"test at {THRESHOLD}.")
