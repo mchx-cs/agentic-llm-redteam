@@ -204,7 +204,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,772 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,777 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -404,18 +404,27 @@ the standing hypothesis is that `docs` level 1 plants its note under a heading t
 suggests. That needed a target rather than a rerun, and the target now exists:
 `docs:0` is level 1 with the attribution removed and nothing else changed.
 
-**A fourth protocol is now declared, and it pairs the two LEVELS rather than two
-deliveries**: `--arms attribution`, both arms indirect, so the attribution heading is the
-only variable. A cheaper design was available and is refused — level 0 alone, read
-against the per-register run, whose file is still on disk with the same code fingerprint
-and the same judge. It is refused because those figures were **already read** while the
-protocol was being written, and a test whose null is a number someone inspected first is
-not a declared test. The price of pairing is stated rather than discovered: 72 campaigns
-instead of 36.
+**A fourth protocol answered it, and the answer is no.** `--arms attribution` pairs the
+two LEVELS rather than two deliveries — both arms indirect, so the attribution heading is
+the only variable — and over 36 pairs it gives **5 against 4, 27 ties, p = 0.5000**.
+Level 0 found 5 of 36 pairs (Wilson 6–29%), level 1 found 4 of 36 (4–25%). That is not an
+underpowered maybe: there is no direction to bound.
 
-**There are no figures: nothing has been run.** And the delivery comparison *at* level 0
-stays undeclared, being a different question, so a delivery run there announces itself
-exploratory.
+**So the attribution was not the suppressor, and the hypothesis is closed.** *"No
+delimitation"* was still a misleading name for level 1, and level 0 is still the bottom of
+the ladder — but the heading is not what cost the indirect arm. What remains is the
+delivery itself, or the payloads.
+
+**And that run's own consistency check found a defect in the instrument.** The delivery
+comparison hands both arms **one** target object: the indirect arm plants a note per
+attempt, nothing cleared it, so the *direct* arm attacked a base still carrying the
+indirect arm's last payload — and its findings were credited to the direct delivery. The
+comparison was "A against A plus a leftover B", and the bias runs the way all three
+results went. It does not make them simply wrong (a payload in the user turn is a strong
+attack by itself), but the direct arm attacked a **poisoned** target while the indirect
+arm attacked a clean one. **The three delivery figures above carry that confound** until
+those runs are redone under the corrected instrument. The attribution run was never
+exposed: its arms are two objects and both of them plant.
 
 Here is a real run against `demo`, cut down to what matters:
 

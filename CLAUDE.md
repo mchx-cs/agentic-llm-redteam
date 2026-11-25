@@ -68,7 +68,7 @@ never the note.
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,772 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,777 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -10830,6 +10830,126 @@ des tours, une comparaison sans préfixe déclaré, et le matcher qui dit oui à
 tout.
 
 1,772 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**RÉSULTAT : l'attribution n'était PAS le suppresseur, et l'hypothèse est
+CLOSE (36 paires, 2026-11-26).** Protocole déclaré et committé avant le run
+([`8d3b551`](8d3b551)).
+
+```
+  docs:0, no attribution finds more: 5
+  docs,   attributed     finds more: 4
+  tie                              : 27
+
+  DECLARED test (removing the attribution finds more): p = 0.5000
+  NOT significant at 0.05
+
+  docs:0  5 trouvailles, 5/36 paires (Wilson 6-29%)   432 requêtes
+  docs    4 trouvailles, 4/36 paires (Wilson 4-25%)   432 requêtes
+  `obeissance` : 0 des deux côtés — la barrière structurelle prédisait 0
+```
+
+**C'EST LA DEUXIÈME BRANCHE DÉCLARÉE, mot pour mot : « aucune différence →
+l'attribution n'y était pour rien, et les trois résultats concordants
+reposent sur une base plus large — la suppression est dans la livraison ou
+dans les payloads. Ça FERME l'hypothèse au lieu de la laisser debout, ce qui
+est un résultat et pas un échec. »**
+
+Et ce n'est pas un « sous-dimensionné, on ne sait pas » : **il n'y a pas de
+direction à borner.** 9 paires discordantes, 5 contre 4, et les intervalles
+des deux bras se recouvrent presque entièrement. Le protocole avait déclaré
+d'avance qu'un PETIT effet n'atteindrait pas le seuil à 36 paires ; ce qu'on
+observe n'est pas un petit effet, c'est l'absence d'effet visible.
+
+**Donc l'hypothèse restée debout après trois protocoles est écartée, et par
+le seul instrument qui pouvait l'écarter.** « Aucune délimitation » était un
+nom trompeur pour le niveau 1 — ça reste vrai, et le niveau 0 reste le bas de
+l'échelle — mais le titre d'attribution n'est pas ce qui faisait perdre le
+bras indirect. Ce qui reste, c'est la livraison elle-même ou les payloads.
+
+**Trois faits secondaires, rapportés et jamais testés.** Les deux bras ont
+dépensé **exactement 432 requêtes** chacun — 36 × (6 sondes de reconnaissance
++ 6 tentatives), aucun rejeu nulle part — donc la normalisation « tentatives
+égales EST coût égal » a tenu à la requête près. La ligne `obeissance` est à
+**0 des deux côtés** : première fois que la barrière structurelle est
+VÉRIFIÉE au lieu d'être affirmée. Et l'unique `divulgation` est une récitation
+de consignes, `not_verifiable` au rejeu, donc `medium` — aucun `high` d'aucun
+côté, et pas à cause du format.
+
+Par registre, le détail que le protocole promettait : le registre 2 — la
+rupture de bloc, la seule forme que j'avais déjà vue fonctionner à la main —
+porte presque tout (3-2-1), et les cinq autres sont quasi vides. Six paires
+chacun ne portent aucun test.
+
+**ET LE CONTRÔLE DE COHÉRENCE DÉCLARÉ A TROUVÉ UN DÉFAUT DANS
+L'INSTRUMENT.** Le protocole disait : « si le bras attribué diverge nettement
+de la base, quelque chose a déplacé la mesure entre les deux runs ». Le bras
+attribué EST la configuration du bras indirect de la base — niveau 1, même
+périmètre, même échantillonnage, même compte :
+
+| | paires avec ≥1 | Wilson |
+|---|---|---|
+| base (run par registre, bras indirect) | 9/36 | 14-41 % |
+| ce run, bras attribué | 4/36 | 4-25 % |
+
+Les intervalles se **recouvrent** (Fisher unilatéral descriptif p = 0,11, et
+c'est descriptif puisque la base était déjà lue), donc **l'écart n'est pas
+établi**. Mais le contrôle a fait ce pour quoi il existait : demander ce qui
+diffère entre les deux configurations.
+
+**LA RÉPONSE EST UN DÉFAUT, et il touche les trois résultats de livraison.**
+La comparaison de livraison donne aux DEUX bras **UN SEUL objet cible**
+(vérifié : `asks[0][0] is asks[1][0]` → True). Le bras indirect plante une
+note par tentative ; `run_campaign` ne plante que `if indirect:` et **rien
+n'efface**. Donc **la campagne du bras DIRECT tournait contre une base
+portant encore le DERNIER payload du bras indirect** — et chacune de ses
+trouvailles a été créditée à la livraison directe.
+
+Vérifié plutôt que déduit : après un `plant`, une campagne qui ne plante
+jamais lit toujours la note sous le titre des notes de lecteurs.
+
+La comparaison n'était donc pas « livraison A contre livraison B » mais
+**« A contre A plus un reste de B »**, et le biais va dans la direction que
+les trois résultats ont prise.
+
+**Ce que ça ne veut PAS dire**, et il faut le dire des deux côtés : les trois
+résultats ne sont pas simplement faux. Un payload direct dans le tour
+utilisateur est une attaque forte par lui-même, et le reste est une note
+contre six tentatives. Ce qui est établi est plus étroit et suffit : **le bras
+direct attaquait une cible EMPOISONNÉE pendant que le bras indirect en
+attaquait une propre.**
+
+**Le run d'attribution n'y a jamais été exposé**, et c'est aussi comment le
+défaut est sorti : `arm_targets` construit un objet par NIVEAU (vérifié :
+`is not` → True) et ses deux bras plantent tous les deux. C'est en demandant
+ce qui différait entre cette configuration et celle de la base que le
+mécanisme est apparu.
+
+**Corrigé dans `one_campaign`, en UN endroit**, donc toute campagne de ce
+module part d'une base propre — y compris les bras « tours » contre une cible
+plantable, et une cible sans canal n'est pas touchée. Trois mutations mordent,
+dont le retour exact du défaut.
+
+**ET L'ÉCART 9 → 4 N'EST PAS EXPLIQUÉ PAR CE DÉFAUT**, ce qui doit être dit
+plutôt que laissé à l'inférence commode : le bras indirect plante sa propre
+note à chaque tentative, donc le reste ne l'affecte pas. L'explication la plus
+plausible reste la variance ordinaire d'une cible probabiliste et d'un juge
+non déterministe sur de petits comptes — mais c'est une hypothèse, pas une
+mesure, et c'est exactement la forme de claim que ce projet refuse d'affirmer.
+
+**CE QUI RESTE, et ce n'est pas à moi de le décider : refaire les trois runs
+de livraison sous l'instrument corrigé.** Leurs chiffres portent le confond
+jusque-là, et les deux documents le disent. Ce serait trois protocoles
+déjà déclarés rejoués à l'identique, donc une réparation et non une nouvelle
+question — mais ça coûte ce que trois runs coûtent, et le choix est à
+l'auteur.
+
+**Première fois dans ce projet qu'un contrôle DÉCLARÉ dans un protocole
+trouve un défaut de l'INSTRUMENT et non de la mesure.** Les quatorze
+précédents sont sortis en lançant la commande, en lisant le rendu, ou par
+mutation ; celui-ci est sorti parce qu'un protocole avait écrit d'avance ce
+qu'il faudrait regarder si un chiffre divergeait.
+
+1,777 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

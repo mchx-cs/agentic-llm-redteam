@@ -847,6 +847,29 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show,
     import main
     import report
 
+    # A CLEAN BASE, before anything is sent.
+    #
+    # THE DEFECT, found on 2026-11-26 by the attribution run's own
+    # consistency check: the delivery comparison hands BOTH arms ONE target
+    # object, the indirect arm plants a note per attempt, and NOTHING cleared
+    # it. So the DIRECT arm's campaign ran against a document base still
+    # carrying the indirect arm's LAST payload — and every finding it
+    # produced was attributed to the direct delivery.
+    #
+    # The comparison was therefore not "delivery A against delivery B" but
+    # "A against A plus a leftover B", and the bias runs in the direction all
+    # three recorded delivery results took. Verified rather than reasoned
+    # about: after `plant`, a campaign that never plants still reads the note
+    # under the reader-notes heading.
+    #
+    # Here rather than in the pairing, so EVERY campaign this module runs
+    # starts clean, including the turns arms against a plantable target —
+    # one place, no branch to forget. `plant(None)` clears, which is the
+    # contract `targets/indirect.py` declares, and a target with no channel
+    # is left alone.
+    if getattr(ask_target, "indirect", False):
+        ask_target.plant(None)
+
     counted, calls = counting(ask_target)
     original = main.MAX_ATTEMPTS
     main.MAX_ATTEMPTS = attempts
