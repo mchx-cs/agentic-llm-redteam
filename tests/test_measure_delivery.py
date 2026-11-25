@@ -325,7 +325,7 @@ class TestTheFileRecordsWHICHComparison:
             "complete": False, "target": "docs",
             "protocol": {"pairs": 20, "multi_attempts": 6, "turns": 3,
                          "threshold": 0.05, "judge": "fake/judge",
-                         "declared": True, "arms": "turns"},
+                         "declared": True, "arms": "turns", "per_register": False},
             "pairs": [{"multi": _arm(), "single": _arm()}]}),
             encoding="utf-8")
         with pytest.raises(SystemExit):
@@ -333,7 +333,8 @@ class TestTheFileRecordsWHICHComparison:
                 str(output), "docs",
                 {"pairs": 20, "multi_attempts": 6, "turns": 3,
                  "threshold": 0.05, "judge": "fake/judge", "declared": True,
-                 "arms": "delivery"},
+                 "arms": "delivery",
+                 "per_register": False},
                 show=lambda *_: None)
 
 
@@ -422,7 +423,8 @@ class TestTheSHAPEProtocol:
             "complete": False, "target": "docs",
             "protocol": {"pairs": 20, "multi_attempts": 6, "turns": 3,
                          "threshold": 0.05, "judge": "fake/judge",
-                         "declared": True, "arms": "delivery", "only": []},
+                         "declared": True, "arms": "delivery", "only": [],
+                         "per_register": False},
             "pairs": [{"indirect": _arm(), "direct": _arm()}]}),
             encoding="utf-8")
         with pytest.raises(SystemExit, match="different payloads"):
@@ -430,7 +432,8 @@ class TestTheSHAPEProtocol:
                 str(output), "docs",
                 {"pairs": 20, "multi_attempts": 6, "turns": 3,
                  "threshold": 0.05, "judge": "fake/judge", "declared": True,
-                 "arms": "delivery", "only": ["injection-indirecte"]},
+                 "arms": "delivery", "only": ["injection-indirecte"],
+                 "per_register": False},
                 show=lambda *_: None)
 
     def test_the_scope_is_ANNOUNCED_above_the_figures(self, monkeypatch):
@@ -577,6 +580,7 @@ class TestTheCODEFingerprint:
             "protocol": {"pairs": 20, "multi_attempts": 6, "turns": 3,
                          "threshold": 0.05, "judge": "fake/judge",
                          "declared": True, "arms": "delivery", "only": [],
+                         "per_register": False,
                          "code": "0000000000000000"},
             "pairs": [{"indirect": _arm(), "direct": _arm()}]}),
             encoding="utf-8")
@@ -585,7 +589,8 @@ class TestTheCODEFingerprint:
                 str(output), "docs",
                 {"pairs": 20, "multi_attempts": 6, "turns": 3,
                  "threshold": 0.05, "judge": "fake/judge", "declared": True,
-                 "arms": "delivery", "only": [], "code": "ffffffffffffffff"},
+                 "arms": "delivery", "only": [], "per_register": False,
+                 "code": "ffffffffffffffff"},
                 show=lambda *_: None)
 
     def test_the_SAME_version_resumes_normally(self, tmp_path):
@@ -596,7 +601,7 @@ class TestTheCODEFingerprint:
         protocol = {"pairs": 20, "multi_attempts": 6, "turns": 3,
                     "threshold": 0.05, "judge": "fake/judge",
                     "declared": True, "arms": "delivery", "only": [],
-                    "code": "abcdef0123456789"}
+                    "per_register": False, "code": "abcdef0123456789"}
         output.write_text(json.dumps({
             "complete": False, "target": "docs", "protocol": protocol,
             "pairs": [{"indirect": _arm(), "direct": _arm()}]}),
@@ -614,7 +619,7 @@ class TestTheCODEFingerprint:
         protocol = {"pairs": 20, "multi_attempts": 6, "turns": 3,
                     "threshold": 0.05, "judge": "fake/judge",
                     "declared": True, "arms": "delivery", "only": [],
-                    "code": "abcdef0123456789"}
+                    "per_register": False, "code": "abcdef0123456789"}
         was = {k: v for k, v in protocol.items() if k != "code"}
         output.write_text(json.dumps({
             "complete": False, "target": "docs", "protocol": was,
@@ -625,3 +630,198 @@ class TestTheCODEFingerprint:
                                       show=said.append)
         assert len(done) == 1
         assert any("predates the `code` field" in line for line in said)
+
+
+class TestThePERREGISTERMode:
+    """
+    The third delivery run (2026-11-25): the registers SAMPLED.
+
+    The shape run came back 19-0 for the direct arm with a declared defect —
+    84% of its attempts went to one of the six registers and four were never
+    drawn on the indirect side. That was identifiable before the run
+    (`_share_budget` rotates by technique, the six are one technique), and
+    this mode is what forces the sampling.
+    """
+
+    def test_the_six_registers_are_FOUND(self):
+        assert len(modes.registers_of()) == 6
+
+    def test_a_missing_technique_stops_rather_than_running_EMPTY(self):
+        with pytest.raises(SystemExit, match="no registers"):
+            modes.registers_of(technique="does-not-exist")
+
+    def test_the_restriction_leaves_ONE_template(self):
+        from agents.attacker import load_library
+        with modes.only_register(2):
+            library = load_library(with_garak=False)
+            technique = [t for t in library["techniques"]
+                         if t["id"] == modes.REGISTER_TECHNIQUE][0]
+            assert len(technique["templates"]) == 1
+
+    def test_and_it_is_the_one_ASKED_for(self):
+        from agents.attacker import load_library
+        expected = modes.registers_of()[2]
+        with modes.only_register(2):
+            library = load_library(with_garak=False)
+            technique = [t for t in library["techniques"]
+                         if t["id"] == modes.REGISTER_TECHNIQUE][0]
+            assert technique["templates"] == [expected]
+
+    def test_the_library_is_PUT_BACK(self):
+        """
+        The half that makes the restriction acceptable: a measurement that
+        left the library restricted would silently narrow every later run,
+        and the next figure would describe a pool nobody chose.
+        """
+        from agents.attacker import load_library
+        before = load_library(with_garak=False)
+        with modes.only_register(0):
+            pass
+        after = load_library(with_garak=False)
+        assert before == after
+
+    def test_it_is_put_back_even_if_the_SUB_RUN_RAISES(self):
+        from agents.attacker import load_library
+        before = load_library(with_garak=False)
+        with pytest.raises(RuntimeError):
+            with modes.only_register(0):
+                raise RuntimeError("the sub-run died")
+        assert load_library(with_garak=False) == before
+
+    def test_LIBRARY_FILE_is_what_moves_and_not_load_library(self):
+        """
+        `agents/planner.py` binds `load_library` at import, so patching the
+        FUNCTION would leave the planner reading the real library while this
+        thought it had restricted it — the silent half-measure this module
+        exists to avoid.
+        """
+        from agents import attacker
+        original_function = attacker.load_library
+        original_file = attacker.LIBRARY_FILE
+        with modes.only_register(0):
+            assert attacker.load_library is original_function, (
+                "the FUNCTION was patched, which the planner's import would "
+                "not see")
+            assert attacker.LIBRARY_FILE != original_file
+        assert attacker.LIBRARY_FILE == original_file
+
+    def test_an_index_past_the_end_is_REFUSED(self):
+        with pytest.raises(SystemExit, match="does not exist"):
+            with modes.only_register(99):
+                pass
+
+    def test_every_pair_RECORDS_its_register(self, monkeypatch):
+        calls = []
+        sequence = [_arm() for _ in range(24)]
+        monkeypatch.setattr(modes, "one_campaign",
+                            lambda ask, **k: calls.append(k)
+                            or sequence.pop(0))
+        monkeypatch.setattr("targets.choose_target",
+                            lambda *a, **k: _plantable())
+        results = modes.measure(
+            pairs=2, multi_attempts=modes.DELIVERY_ATTEMPTS,
+            show=lambda *_: None, target="docs", arms="delivery",
+            only=("injection-indirecte",), per_register=True)
+        # A measurement that does not record its own question cannot be
+        # resumed, only repeated.
+        assert all("register" in r for r in results)
+        assert sorted({r["register"] for r in results}) == list(range(6))
+        assert len(results) == 12, "two pairs per register, six registers"
+
+    def test_the_breakdown_is_REPORTED(self, monkeypatch):
+        # The previous protocol PROMISED a per-register table and the
+        # instrument did not print it: it had to be recovered from a log.
+        lines = []
+        sequence = [_arm(1, ["divulgation"]) if i % 2 == 0 else _arm()
+                    for i in range(24)]
+        monkeypatch.setattr(modes, "one_campaign",
+                            lambda ask, **k: sequence.pop(0))
+        monkeypatch.setattr("targets.choose_target",
+                            lambda *a, **k: _plantable())
+        modes.measure(pairs=2, multi_attempts=modes.DELIVERY_ATTEMPTS,
+                      show=lines.append, target="docs", arms="delivery",
+                      only=("injection-indirecte",), per_register=True)
+        joined = "\n".join(lines)
+        assert "By REGISTER" in joined
+        for index in range(1, 7):
+            assert f"register {index}:" in joined, index
+
+    def test_and_it_says_it_is_NEVER_tested(self, monkeypatch):
+        # Six pairs per register cannot carry a sign test, and quoting a
+        # sub-group p as a result is the post hoc selection this module
+        # refuses everywhere.
+        lines = []
+        sequence = [_arm() for _ in range(24)]
+        monkeypatch.setattr(modes, "one_campaign",
+                            lambda ask, **k: sequence.pop(0))
+        monkeypatch.setattr("targets.choose_target",
+                            lambda *a, **k: _plantable())
+        modes.measure(pairs=2, multi_attempts=modes.DELIVERY_ATTEMPTS,
+                      show=lines.append, target="docs", arms="delivery",
+                      only=("injection-indirecte",), per_register=True)
+        joined = "\n".join(lines)
+        assert "never tested" in joined
+
+    def test_a_FLAT_run_prints_no_breakdown(self, monkeypatch):
+        # The contrast: the table must not appear where there are no
+        # registers to break down by.
+        lines = []
+        sequence = [_arm(), _arm()]
+        monkeypatch.setattr(modes, "one_campaign",
+                            lambda ask, **k: sequence.pop(0))
+        monkeypatch.setattr("targets.choose_target",
+                            lambda *a, **k: _plantable())
+        modes.measure(pairs=1, multi_attempts=modes.DELIVERY_ATTEMPTS,
+                      show=lines.append, target="docs", arms="delivery")
+        assert "By REGISTER" not in "\n".join(lines)
+
+    def test_the_mode_is_in_the_PROTOCOL_block(self, monkeypatch, tmp_path):
+        import json
+        output = tmp_path / "r.json"
+        sequence = [_arm() for _ in range(24)]
+        monkeypatch.setattr(modes, "one_campaign",
+                            lambda ask, **k: sequence.pop(0))
+        monkeypatch.setattr("targets.choose_target",
+                            lambda *a, **k: _plantable())
+        modes.measure(pairs=2, multi_attempts=modes.DELIVERY_ATTEMPTS,
+                      output=str(output), show=lambda *_: None,
+                      target="docs", arms="delivery", per_register=True)
+        written = json.loads(output.read_text(encoding="utf-8"))
+        assert written["protocol"]["per_register"] is True
+
+    def test_a_FLAT_file_is_refused_by_a_per_register_run(self, tmp_path):
+        import json
+        output = tmp_path / "r.json"
+        output.write_text(json.dumps({
+            "complete": False, "target": "docs",
+            "protocol": {"pairs": 6, "multi_attempts": 6, "turns": 3,
+                         "threshold": 0.05, "judge": "fake/judge",
+                         "declared": True, "arms": "delivery", "only": [],
+                         "per_register": False, "code": "aaaa"},
+            "pairs": [{"indirect": _arm(), "direct": _arm()}]}),
+            encoding="utf-8")
+        # The pair count is EQUAL on both sides on purpose: it is checked
+        # first, so leaving it different would have this test passing on the
+        # wrong guard.
+        with pytest.raises(SystemExit, match="per-register"):
+            modes.already_measured(
+                str(output), "docs",
+                {"pairs": 6, "multi_attempts": 6, "turns": 3,
+                 "threshold": 0.05, "judge": "fake/judge", "declared": True,
+                 "arms": "delivery", "only": [], "per_register": True,
+                 "code": "aaaa"},
+                show=lambda *_: None)
+
+    def test_its_pair_count_is_CONFIRMATORY(self):
+        assert modes.departures_from_the_protocol(
+            "docs", modes.PER_REGISTER_PAIRS, modes.DELIVERY_ATTEMPTS,
+            modes.TURNS, "delivery", ("injection-indirecte",),
+            per_register=True) == []
+
+    def test_and_the_FLAT_count_is_a_departure_there(self):
+        # The two protocols declare different pair counts, so one read
+        # against the other would call a confirmatory run exploratory.
+        assert modes.departures_from_the_protocol(
+            "docs", modes.DELIVERY_PAIRS, modes.DELIVERY_ATTEMPTS,
+            modes.TURNS, "delivery", ("injection-indirecte",),
+            per_register=True) != []

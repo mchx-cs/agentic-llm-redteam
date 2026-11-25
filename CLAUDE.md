@@ -68,7 +68,7 @@ never the note.
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,697 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,713 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -10417,6 +10417,81 @@ changerait sur un docstring et refuserait toute reprise légitime, ce qui est
 le garde qui crie faux jusqu'à ce qu'on ne le lise plus.
 
 1,697 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**PROTOCOLE DÉCLARÉ : les six registres ÉCHANTILLONNÉS (2026-11-25),
+committé avant le run.**
+
+Le run de forme a rendu 19-0 pour le bras direct avec un défaut que j'ai
+déclaré avec son résultat : **les registres n'avaient pas été
+échantillonnés** — 84 % des tentatives sur un seul des six, et quatre jamais
+tirés côté indirect. Donc c'était un résultat sur la note de service, et les
+quatre autres ne disaient rien.
+
+**C'est une AUTRE mesure et non une reprise** : sa question est « l'effet
+tient-il sur les six registres », à laquelle le run précédent ne pouvait pas
+répondre. Sa justification est ce défaut déclaré, jamais « le dernier p valait
+0,0000 ».
+
+**L'ÉCHANTILLONNAGE EST FORCÉ PAR LA MESURE, PAS PAR LA BIBLIOTHÈQUE, et
+c'est la décision qui compte.** Découper les six en six techniques aurait
+donné le bon échantillonnage pour la mauvaise raison : ce projet a déplacé le
+round-robin au grain du MODULE précisément pour que quinze variantes d'un même
+test n'aient pas quinze tours quand `dan` en a trois, et six registres d'une
+même forme sont des variantes. Le grain de la bibliothèque reste juste.
+
+Chaque registre a donc son sous-run : la bibliothèque est restreinte à ce seul
+template pour sa durée, `PER_REGISTER_PAIRS` paires sont jouées, et la
+restriction est **défaite**. Déclarée à voix haute, comme le patch de
+`MAX_ATTEMPTS` à côté — « une mesure qui réécrit en silence ce qu'elle mesure
+ne vaut rien ».
+
+**Et c'est `LIBRARY_FILE` qui bouge, pas `load_library`** : `agents/planner.py`
+lie cette fonction à l'import, donc patcher la fonction aurait laissé le
+planificateur lire la vraie bibliothèque pendant que la mesure se croyait
+restreinte — la demi-mesure silencieuse que ce module existe pour éviter. Un
+test le tient, et une mutation qui patche la fonction le fait tomber.
+
+- **DANS un registre la livraison est la seule variable**, les deux bras
+  tirant du même template unique. **ENTRE les registres le registre est une
+  seconde variable**, ce qui est exactement pourquoi le détail est le but et
+  le chiffre groupé le résumé.
+- **LE TEST DÉCLARÉ est le groupé** : 6 × 6 = **36 paires**, test des signes
+  apparié unilatéral à 0,05, hypothèse « la livraison INDIRECTE trouve PLUS ».
+  Même direction que les deux runs précédents, et elle reste déclarée bien que
+  les deux soient partis dans l'autre sens : la retourner maintenant serait
+  choisir l'hypothèse que les données suggèrent.
+- **LE DÉTAIL PAR REGISTRE EST RAPPORTÉ ET JAMAIS TESTÉ.** Six paires par
+  registre ne portent pas un test des signes, et citer le p d'un sous-groupe
+  comme un résultat est la sélection post hoc que ce module refuse partout. Il
+  est là parce que **le protocole précédent le PROMETTAIT et que l'instrument
+  ne l'imprimait pas** — une promesse dans un protocole que le code ne tient
+  pas est le défaut que ce projet traque, et il a fallu récupérer le tableau
+  d'un log.
+- **Tout le reste est le protocole de livraison** : `docs` niveau 1,
+  tentatives égales, issue restreinte a priori, le même biais déclaré
+  favorisant le direct, l'indirect d'abord, aucune règle d'arrêt.
+- **CE QUE LE RUN POURRAIT TROUVER, dit d'avance.** Si les cinq autres
+  registres se comportent comme la note de service, l'hypothèse de la forme
+  est réfutée sur toute la ligne et le défaut du run précédent n'a coûté que
+  de la certitude. Si l'un d'eux favorise le bras indirect, alors la livraison
+  documentaire fonctionne et c'est le REGISTRE qui compte — et ce registre
+  serait nommé par un détail que personne ne peut tester, donc ce serait une
+  HYPOTHÈSE pour une quatrième mesure, pas un résultat.
+
+**Et la reprise LIT le mode**, écrit et comparé dans le même commit cette
+fois : un fichier du protocole plat repris dans un run par registre mettrait
+deux questions et deux comptes de paires sous un seul test des signes.
+
+**Douze mutations, douze morsures** — la restriction qui ne restreint rien, la
+bibliothèque non remise, la fonction patchée au lieu du fichier, un index hors
+borne passé en silence, une technique absente donnant un run vide, le registre
+non enregistré sur la paire, la boucle qui ne tourne plus, le détail non
+imprimé puis imprimé sur un run plat, le mode hors du protocole puis non lu, et
+le compte de paires du mode non déclaré.
+
+**Rien n'a été LANCÉ.** Le protocole existe ; les chiffres non.
+
+1,713 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
