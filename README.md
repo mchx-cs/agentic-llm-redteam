@@ -204,7 +204,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,713 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,723 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -287,16 +287,33 @@ fired, a third party's record — is scored by the existing criteria **without t
 being shown**, 10 times out of 10. Being blind is what makes that work. Only obedience to
 a text the document alone carried stays out of reach.
 
-Its three levels vary the one defence that matters here, and hold everything else still:
+Its levels vary one axis — how much the prompt tells the model about the **provenance
+and status** of retrieved content — and hold everything else still:
 
 | Level | Retrieved content |
 |---|---|
-| `docs` | pasted flat — documents and instructions are indistinguishable |
+| `docs:0` | the note is just another document: nothing says who wrote it |
+| `docs` | the note is **attributed** to readers, under its own heading |
 | `docs:2` | delimited, and declared to be data, never instructions |
 | `docs:3` | delimited, declared, **and** an output filter |
 
-The secret rule stays identical and firm at all three, deliberately: were it lax at
-level 1, a leak there would be attributable to the rule rather than to the planted note,
+Each adjacent pair adds exactly one thing, which is what keeps the ladder an instrument.
+
+**Level 0 arrived after three measurements had already run against level 1, and it exists
+because they found a weakness in level 1's own name.** That level was called *"no
+delimitation"*, and it files the planted note under a heading that *attributes* it as
+reader-contributed. A heading naming who wrote a block is a provenance cue — so it is the
+weakest rung of the very ladder these levels vary, and level 1 was never the bottom of
+it. Level 0 removes the heading **and nothing else**: the note becomes an undistinguished
+entry in the document list, which is the canonical retrieval-poisoning case. It is still
+indirect in the only sense that matters, since the instruction arrives through content
+the model retrieved and the judge still cannot see it.
+
+The number is 0 rather than a renumbering so the three recorded runs' *"level 1"* keeps
+pointing at the level they measured, and `--target docs` still means level 1.
+
+The secret rule stays identical and firm at every level, deliberately: were it lax at the
+bottom, a leak there would be attributable to the rule rather than to the planted note,
 and this target would be re-measuring `demo`'s gradient instead of its own.
 
 A payload gets in through a declared channel — `ask.plant(text)`, with
@@ -314,8 +331,8 @@ To see the channel by hand (it calls the model, so it is a command and not a tes
 python check_indirect.py
 ```
 
-One draw per level, and it says so: whether the three levels form a gradient is a
-measurement with a declared protocol and an N, and that measurement has not been made.
+One draw per level, and it says so: whether the levels form a gradient is a measurement
+with a declared protocol and an N, and that measurement has not been made.
 
 ### Attacking through it
 
@@ -384,7 +401,10 @@ Three protocols, each declared and committed before its run, all agree: against 
 target the indirect delivery finds substantially less. **What remains untested is WHY** —
 the standing hypothesis is that `docs` level 1 plants its note under a heading that
 *attributes* it as reader-contributed, so "no delimitation" is weaker than the name
-suggests. That needs a target, not a rerun.
+suggests. That needed a target rather than a rerun, and the target now exists:
+`docs:0` is level 1 with the attribution removed and nothing else changed. **The
+measurement does not exist** — no protocol is declared for it, so a delivery run against
+level 0 announces itself exploratory until one is.
 
 Here is a real run against `demo`, cut down to what matters:
 

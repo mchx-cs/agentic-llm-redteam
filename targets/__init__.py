@@ -21,10 +21,12 @@ mixing two into one target's levels would measure both at once.
   different defence, hence its own levels rather than three more on `demo`.
 - `docs`   : an assistant over a document base READERS CAN WRITE INTO. What it
   protects is the INTEGRITY OF ITS OWN INSTRUCTIONS against an instruction
-  found in retrieved content, so its levels vary the delimitation of that
-  content while holding the secret rule firm at all three. It carries the same
-  asset KINDS as `demo` on purpose — the variable under test is the SOURCE of
-  the instruction and nothing else.
+  found in retrieved content, so its levels vary how much the prompt says
+  about the PROVENANCE AND STATUS of that content — from level 0, where the
+  planted note is just another document, up to a delimited block declared to
+  be data plus an output filter — while holding the secret rule firm at every
+  one of them. It carries the same asset KINDS as `demo` on purpose: the
+  variable under test is the SOURCE of the instruction and nothing else.
 - `decoy`  : the local toy chatbot, with a fictional secret to protect. It is
   the default target, so the repository runs with no configuration.
 - `mock`   : deterministic, with no LLM at all. Instant, free, always

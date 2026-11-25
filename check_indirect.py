@@ -7,8 +7,8 @@ It is also what keeps `plant` from shipping as a capability nothing calls —
 the half-wiring this project has met too often (the three chain-of-custody
 fields, the breach turn the judge emitted into nothing, `interroger.transport`).
 
-    python check_indirect.py                 # the three levels, one draw each
-    python check_indirect.py --level 1
+    python check_indirect.py                 # every level, one draw each
+    python check_indirect.py --level 0
     python check_indirect.py --payload "..." --question "..."
 
 WHAT IT IS NOT: a measurement. One draw per level, against a probabilistic
@@ -82,14 +82,19 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Plant a note in the docs target and see what it does.")
     parser.add_argument("--level", type=int, choices=sorted(LEVELS),
-                        help="one level only; default: all three.")
+                        help="one level only; default: every level.")
     parser.add_argument("--payload", default=DEFAULT_PAYLOAD,
                         help="the text planted in the reader notes.")
     parser.add_argument("--question", default=DEFAULT_QUESTION,
                         help="what the user asks — innocuous by design.")
     arguments = parser.parse_args(argv)
 
-    levels = [arguments.level] if arguments.level else sorted(LEVELS)
+    # `is not None`, and the distinction is not pedantry: level 0 is a
+    # valid level and a falsy one, so `if arguments.level` would silently run
+    # EVERY level when the operator asked for exactly one -- the level that
+    # exists to be looked at on its own.
+    levels = ([arguments.level] if arguments.level is not None
+              else sorted(LEVELS))
 
     print("Planted note:")
     print("  " + arguments.payload.replace("\n", "\n  "))

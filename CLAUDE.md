@@ -68,7 +68,7 @@ never the note.
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,713 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,723 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -10565,6 +10565,95 @@ C'est une mesure à déclarer, et sa justification ne peut pas être « le derni
 p valait 0,0000 ».
 
 1,713 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LA CIBLE SANS ATTRIBUTION : `docs:0`, et aucune mesure (2026-11-25).**
+L'hypothèse restée debout après trois protocoles concordants demandait **une
+cible et non un run** : le niveau 1 de `docs` s'appelle « aucune
+délimitation » et plante sa note sous un titre — `NOTES_HEADING` — qui
+l'ATTRIBUE comme contenu de lecteur. Un titre qui nomme l'auteur d'un bloc est
+un indice de provenance, donc le premier barreau de l'échelle même que ces
+niveaux font varier : **le niveau 1 n'a jamais été le bas de cette échelle.**
+
+Le niveau 0 retire ce titre **et rien d'autre**. La note devient une entrée
+indistincte de la liste des documents, ce qui est le cas canonique
+d'empoisonnement de corpus — un attaquant fait entrer une page, un document
+aspiré ou un fichier déposé dans une base de connaissances, et le modèle le lit
+comme du corpus. L'injection reste indirecte au seul sens qui compte ici :
+l'instruction arrive par du contenu récupéré, jamais par le tour de
+l'utilisateur, **donc le juge ne la voit pas**.
+
+**UN NIVEAU ET NON UNE QUATRIÈME CIBLE**, par la règle que `records.py`
+énonce : une cible à part est pour un ACTIF différent avec une DÉFENSE
+différente. Ici l'actif est le même — l'intégrité des consignes face à une
+instruction trouvée dans du contenu récupéré — et la défense est sur le même
+axe, simplement un cran plus bas. Chaque paire adjacente ne fait varier qu'UNE
+chose, ce qui est la condition pour que l'échelle reste un instrument :
+0 → 1 ajoute l'attribution, 1 → 2 le délimiteur et la déclaration, 2 → 3 le
+filtre de sortie.
+
+**DEUX DÉCISIONS QU'UN LECTEUR DOIT POUVOIR CONTESTER, écrites dans le
+module :**
+- **0 plutôt qu'une renumérotation.** Décaler les numéros pour que le nouveau
+  bas devienne 1 ferait pointer le « niveau 1 » des trois runs enregistrés
+  vers une autre cible, et leurs chiffres cesseraient en silence de décrire ce
+  qu'ils ont mesuré. Le numéro ne coûte rien ; une citation qui ne résout plus
+  coûte la mesure. `DEFAULT_LEVEL` reste 1, donc `--target docs` est inchangé ;
+- **le titre RETIRÉ et rien d'AJOUTÉ.** Donner à la note un titre de document
+  neutre (`- Document 2026-27 : …`) la ferait passer pour une pièce de
+  l'opérateur, ce qui est un second changement **en sens inverse** — et le
+  niveau 0 différerait alors du niveau 1 par deux choses, donc un écart entre
+  eux ne serait attribuable à aucune des deux. C'est le confond rencontré dans
+  `measure_multiturn` (des bras différant par autre chose que la variable
+  déclarée) et dans `measure_adaptive` (l'adaptation couplée à l'usage des
+  payloads). Il reste donc **un indice de forme résiduel** : la note ne porte
+  pas de titre avant un deux-points là où les vrais documents en portent un.
+  Dit plutôt que lissé, parce que ça borne ce que 0 contre 1 peut montrer.
+
+**ET LE GARDE QUI TIENT ÇA EST UN DIFF, pas une liste d'assertions.**
+`test_level_0_differs_from_level_1_by_the_ATTRIBUTION_ALONE` compare les deux
+prompts ligne à ligne : la seule ligne retirée doit être le titre, et **rien ne
+doit être ajouté**. C'est ce qui mord sur tout ce qu'une retouche ultérieure
+mettrait dans l'un des deux niveaux — quatre mutations distinctes tombent
+dessus, dont le titre de document inventé et la règle du secret rendue laxiste
+au seul niveau 0.
+
+**AUCUN PROTOCOLE N'EST DÉCLARÉ, délibérément.** `DELIVERY_LEVELS` nomme les
+niveaux de généralité qu'un run de livraison peut appeler confirmatoire, et 0
+n'y est pas : un run contre lui **s'annonce exploratoire** jusqu'à ce qu'un
+protocole existe. Pré-autoriser la mesure en construisant la cible qu'elle
+utiliserait est la façon dont une mesure finit justifiée par le résultat
+qu'elle espère.
+
+**UN DÉFAUT CRÉÉ PAR LE NIVEAU 0 LUI-MÊME, et c'est un entier faux.**
+`check_indirect.py` choisissait ses niveaux par
+`[arguments.level] if arguments.level else sorted(LEVELS)` : `0` est un niveau
+valide **et une valeur fausse**, donc `--level 0` aurait tourné sur TOUS les
+niveaux au moment où l'opérateur en demandait exactement un — celui qui existe
+pour être regardé seul. Corrigé en `is not None`, et **le module n'avait aucun
+fichier de test**, ce qui est comment la jonction aurait survécu. Le garde
+PILOTE `main()` au lieu de lire sa source, la leçon du 2026-11-19 où un
+argument inséré dans le mauvais appel était passé devant treize tests parce
+qu'aucun ne pilotait `main()`.
+
+**ET MON PROPRE GARDE A CRIÉ FAUX, immédiatement.** Ma première version
+balayait la section de données à la recherche de « lecteur » et « Notes » pour
+vérifier qu'aucun indice d'auteur ne subsiste — et un VRAI document dit
+« réservables deux heures par jour et par lecteur ». Un garde qui échoue sur
+une donnée légitime apprend à être ignoré, et ce projet en a supprimé un en
+entier pour exactement ça. Ce que ce balayage cherchait est tenu précisément
+par le diff ci-dessus, donc il est remplacé par lui et non raffiné.
+
+**ONZE MUTATIONS, ONZE MORSURES** : le niveau 0 supprimé, le niveau 0 qui
+attribue, le niveau 1 qui n'attribue plus, `_base` qui ignore le drapeau dans
+les deux sens, la note lâchée au niveau 0, le titre de document inventé, le
+niveau 0 qui délimite aussi, la règle du secret laxiste au seul niveau 0, le
+défaut passé à 0, et `--level 0` retombant sur tous les niveaux.
+
+**Une phrase du README est devenue fausse par ce commit**, et c'est le motif
+que ce fichier enregistre : « That needs a target, not a rerun ». La cible
+existe maintenant ; la mesure non, et le README dit désormais les deux.
+
+1,723 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
