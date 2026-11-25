@@ -599,6 +599,13 @@ ARMS = {
         #: departure. An empty tuple would mean "the whole library, and only
         #: that", which is a different statement.
         "scopes": None,
+        #: The prefix its output files carry, DECLARED rather than left to
+        #: three operators' habits — a test requires `<prefix>*.json` and
+        #: `<prefix>*.log` to be gitignored, so a fourth comparison cannot
+        #: arrive with a name nothing covers. `modes` and not `turns`: it is
+        #: the historical name, and renaming it would orphan the three
+        #: recorded files on disk.
+        "output_prefix": "modes",
     },
     "delivery": {
         "first": ("indirect", "indirect   "),
@@ -615,6 +622,7 @@ ARMS = {
         #: One arm plants, the other does not: here the DELIVERY is the
         #: variable.
         "deliveries": (True, False),
+        "output_prefix": "delivery",
     },
     "attribution": {
         "first": ("unattributed", "docs:0, no attribution"),
@@ -646,6 +654,7 @@ ARMS = {
         #: a confirmatory run of its own protocol rather than that protocol
         #: pointed at the whole library.
         "default_scope": (REGISTER_TECHNIQUE,),
+        "output_prefix": "attribution",
     },
 }
 

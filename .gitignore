@@ -59,6 +59,7 @@ dist/
 # source, and a long run rewrites them.
 modes*.json
 delivery*.json
+attribution*.json
 # And their LOGS, which is the half I forgot and had to untrack: a campaign's
 # stdout carries the complete payloads and the target's complete replies, and
 # keeping those out of a public repository is the whole reason `--abridge`
@@ -66,4 +67,5 @@ delivery*.json
 # log it needs is a file this repository deliberately does not keep.
 modes*.log
 delivery*.log
+attribution*.log
 *-report.log

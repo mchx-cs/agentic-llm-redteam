@@ -20,6 +20,7 @@ imported and nothing is executed, so it cannot call a model.
 """
 
 import ast
+import fnmatch
 import pathlib
 import re
 import subprocess
@@ -331,3 +332,134 @@ class TestWhatGetsSHIPPED:
         # import `check_excerpt`, which is what made the rule's first
         # version demand it be shipped.
         assert (ROOT / "tests" / "test_check_excerpt.py").exists()
+
+class TestNoMeasurementFileCanBeCOMMITTED:
+    """
+    Every output file a protocol DOCUMENTS must be gitignored, and its `.log`
+    sibling with it.
+
+    THE DEFECT, twice. The delivery run of 2026-11-25 put 560 KB of campaign
+    stdout into the repository — every complete payload and every verbatim
+    reply, which is exactly what `--abridge` exists to keep out of a public
+    repository. `modes*.json` and `delivery*.json` were ignored; the `.log`
+    half was not, and it had to be untracked afterwards. Then the attribution
+    protocol arrived and `attribution*` matched NEITHER, so two more lines
+    went in BY HAND — which is the defect, not the fix.
+
+    So this is a SWEEP and not a list: the names are read from the run
+    commands the modules document, so it fails the day a fifth protocol adds
+    one. That is precisely when the decision has to be taken deliberately
+    instead of inherited — the same shape as the entry-point sweep and the
+    `py-modules` sweep above.
+
+    The `.log` sibling is an INFERENCE, and declared as one: the log's name
+    comes from a shell redirect that no docstring shows, so the guard assumes
+    the project's convention of `<stem>.log`. Its cost if wrong is one
+    unnecessary pattern; its benefit is the half that was actually forgotten.
+
+    Static, like the rest of this file: nothing is imported, nothing runs, and
+    it does not look at what happens to be on this disk — a guard that
+    depended on the operator's leftovers would pass on a clean checkout.
+    """
+
+    @staticmethod
+    def _documented_outputs():
+        """The `--output` filenames the measurement modules document."""
+        found = {}
+        for path in sorted(ROOT.glob("evaluation/*.py")) + [ROOT / "main.py"]:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            doc = ast.get_docstring(tree) or ""
+            for name in re.findall(r"--output\s+(\S+)", doc):
+                found.setdefault(name, path.relative_to(ROOT))
+        return found
+
+    @staticmethod
+    def _ignored(name):
+        """
+        Does `.gitignore` match `name`?
+
+        Only basename patterns are considered. Every pattern that matters
+        here is one, and pretending to implement gitignore's path semantics
+        would be a guard whose own correctness nobody checks.
+        """
+        patterns = [line.strip() for line
+                    in (ROOT / ".gitignore").read_text(
+                        encoding="utf-8").splitlines()
+                    if line.strip() and not line.startswith("#")
+                    and "/" not in line.strip()]
+        return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
+
+    @staticmethod
+    def _declared_prefixes():
+        """
+        The output-file prefix each COMPARISON declares.
+
+        Read from the code, so a fifth comparison brings its own line here
+        the day it is added. The first version of this guard swept the
+        DOCSTRING's run commands instead, and a mutation showed the hole:
+        removing `delivery*.log` failed nothing, because the three delivery
+        runs' filenames were typed on the command line and never documented
+        — so the very files whose log had to be untracked were outside its
+        reach.
+        """
+        import evaluation.measure_modes as modes
+        return {name: spec["output_prefix"]
+                for name, spec in modes.ARMS.items()
+                if "output_prefix" in spec}
+
+    def test_EVERY_comparison_declares_its_output_prefix(self):
+        # Without this, the test below would pass on a module where a
+        # comparison had simply dropped the field.
+        import evaluation.measure_modes as modes
+        declared = self._declared_prefixes()
+        assert set(declared) == set(modes.ARMS), (
+            "these comparisons declare no output prefix, so nothing requires "
+            "their files to be gitignored: "
+            + ", ".join(sorted(set(modes.ARMS) - set(declared))))
+
+    def test_every_declared_prefix_is_IGNORED_json_and_LOG(self):
+        missing = []
+        for arms, prefix in sorted(self._declared_prefixes().items()):
+            for suffix in (".json", ".log"):
+                probe = f"{prefix}-whatever{suffix}"
+                if not self._ignored(probe):
+                    missing.append(f"{prefix}*{suffix} (for `{arms}`)")
+        assert not missing, (
+            "a run writes its pairs and its stdout under these names, and "
+            "the stdout carries every complete payload and every verbatim "
+            "reply: " + ", ".join(missing))
+
+    def test_the_sweep_FINDS_the_documented_outputs(self):
+        # Without this, the two tests below would pass on a sweep that found
+        # nothing at all -- the tautology this project has met seven times.
+        found = self._documented_outputs()
+        assert found, "the sweep found no documented --output at all"
+        assert any(name.startswith("attribution") for name in found), found
+
+    def test_every_documented_output_is_IGNORED(self):
+        missing = {name: by for name, by
+                   in self._documented_outputs().items()
+                   if not self._ignored(name)}
+        assert not missing, (
+            "these measurement files are documented and committable, and a "
+            "run writes its pairs into them: "
+            + ", ".join(f"{name} (documented in {by})"
+                        for name, by in sorted(missing.items())))
+
+    def test_and_so_is_its_LOG(self):
+        # The half that was forgotten, and the one that carries the payloads
+        # and the target's verbatim replies.
+        missing = []
+        for name, by in sorted(self._documented_outputs().items()):
+            log = re.sub(r"\.json$", ".log", name)
+            if log != name and not self._ignored(log):
+                missing.append(f"{log} (for {name}, documented in {by})")
+        assert not missing, (
+            "a campaign's stdout carries every complete payload and every "
+            "verbatim reply: " + ", ".join(missing))
+
+    def test_the_matcher_does_not_simply_say_YES(self):
+        # The contrast, without which the two tests above would pass on an
+        # `_ignored` that returned True for everything.
+        assert not self._ignored("README.md")
+        assert self._ignored("attribution.json")

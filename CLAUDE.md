@@ -68,7 +68,7 @@ never the note.
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,766 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,772 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -10786,7 +10786,50 @@ déjà lue, et le bras mono-tour qui perd son budget.
     --arms attribution --output attribution.json
 ```
 
-1,766 `pytest` tests, toujours sans aucun appel à un modèle.
+1,772 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LES FICHIERS DE MESURE NE PEUVENT PLUS ÊTRE COMMITTÉS, et mon premier
+balayage avait un trou (2026-11-25).** Trouvé en lançant la mesure
+d'attribution : `.gitignore` couvrait `modes*` et `delivery*`, pas
+`attribution*`. **J'ai donc ajouté deux lignes À LA MAIN — ce qui est le
+défaut, pas le correctif.** C'est le demi-oubli du 2026-11-25, où
+`delivery*.json` était ignoré et `delivery*.log` non, et où 560 Ko de stdout
+de campagne — chaque payload complet et chaque réponse verbatim — sont entrés
+dans le dépôt avant d'être détrackés.
+
+**MA PREMIÈRE VERSION DU GARDE BALAYAIT LES NOMS DOCUMENTÉS**, lus dans les
+commandes que les docstrings donnent : zéro faux positif, et elle tombe le
+jour où un cinquième protocole en documente un. Elle passait.
+
+**ET LA MUTATION A MONTRÉ LE TROU : retirer `delivery*.log` ne faisait rien
+échouer.** Les trois fichiers des runs de livraison ont été tapés sur la ligne
+de commande et ne sont documentés nulle part — donc **les fichiers mêmes dont
+le log avait dû être détracké étaient hors de portée du garde écrit pour
+eux**. Un garde qui ne couvre pas le cas qui l'a motivé.
+
+Fermé en déclarant le préfixe dans le CODE : chaque comparaison de `ARMS`
+porte son `output_prefix` (`modes`, `delivery`, `attribution`), et le garde
+exige `<prefix>*.json` ET `<prefix>*.log`. Deux conséquences : le préfixe
+cesse d'être une habitude dans la tête de trois opérateurs, et une cinquième
+comparaison ne peut plus arriver avec un nom que rien ne couvre — c'est la
+forme du balayage des points d'entrée et de celui de `py-modules`, pas une
+liste qu'il faut penser à étendre.
+
+`modes` et non `turns`, dit plutôt que lissé : c'est le nom historique, et le
+renommer orphelinerait les trois fichiers déjà sur le disque.
+
+La moitié `.log` du garde des noms documentés reste une INFÉRENCE, et elle le
+dit : le nom du log vient d'une redirection shell qu'aucun docstring ne
+montre, donc le garde suppose la convention `<stem>.log`. Son coût s'il se
+trompe est un motif inutile ; son bénéfice est la moitié qui a réellement été
+oubliée.
+
+Six mutations, six morsures après correction : le json et le log
+d'attribution, le log de livraison (muet avant), le json de la comparaison
+des tours, une comparaison sans préfixe déclaré, et le matcher qui dit oui à
+tout.
+
+1,772 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
