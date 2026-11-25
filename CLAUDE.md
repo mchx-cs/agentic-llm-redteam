@@ -67,7 +67,7 @@ never the note.
   in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
   failure: the campaign stops cleanly, keeps its findings, and the report announces at
   the top that it was **cut short**.
-- **Phase 10**: 1,600 `pytest` tests in `tests/`, with no LLM call at all, run
+- **Phase 10**: 1,615 `pytest` tests in `tests/`, with no LLM call at all, run
   automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
   combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
   command.
@@ -10009,7 +10009,7 @@ total non rapporté, le biais absent de l'en-tête, et l'en-tête annonçant une
 
 **Rien n'a été LANCÉ.** Le protocole existe ; les chiffres non.
 
-1,600 `pytest` tests, toujours sans aucun appel à un modèle.
+1,615 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 

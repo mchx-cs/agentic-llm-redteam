@@ -391,8 +391,13 @@ def counting(ask_target):
         return (ask_target(message, history) if history is not None
                 else ask_target(message))
 
-    ask.conversation = getattr(ask_target, "conversation", False)
-    return ask, calls
+    # Through `carry_capabilities`, not by hand: this wrapper dropped
+    # `plant` on 2026-11-25 and the measurement died at pair 1 -- the
+    # measurement checked the channel on the RAW target, then wrapped it, and
+    # the campaign refused the wrapper. Third wrapper in this project to lose
+    # a declared capability, hence one place that copies them.
+    from targets.wrapping import carry_capabilities
+    return carry_capabilities(ask, ask_target), calls
 
 
 def one_campaign(ask_target, *, multiturn, attempts, turns, show,

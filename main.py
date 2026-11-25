@@ -434,8 +434,10 @@ def _replanting(ask, note):
         ask.plant(note)
         return (ask(message, history=history) if history else ask(message))
 
-    ask_with_note.conversation = bool(getattr(ask, "conversation", False))
-    return ask_with_note
+    # Through `carry_capabilities`: the third wrapper in this project, and
+    # two of the other two had already lost a declared capability.
+    from targets.wrapping import carry_capabilities
+    return carry_capabilities(ask_with_note, ask)
 
 
 def _campaign_result(profile, plan, findings, launched, states, observations,

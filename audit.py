@@ -340,33 +340,33 @@ class AuditTrail:
             self.record_exchange(phase, message, reply)
             return reply
 
-        # Declared, not guessed: a target that cannot converse must not look
-        # as though it can just because it was wrapped.
-        ask.conversation = bool(getattr(ask_target, "conversation", False))
-
-        # AND THE INDIRECT CHANNEL, for the reason the history is carried: a
-        # wrapper that dropped `plant` would make `require_indirect` refuse a
-        # traced target -- loudly, which is better than silently, but it would
-        # also make an indirect campaign impossible against the one kind of
-        # target where the trail is MANDATORY, a remote one under mandate.
+        # Declared, not guessed, and copied in ONE place: a target that
+        # cannot converse must not look as though it can just because it was
+        # wrapped, and a wrapper that dropped `plant` would make
+        # `require_indirect` refuse a traced target -- loudly, which beats
+        # silently, but it would also make an indirect campaign impossible
+        # against the one kind of target where the trail is MANDATORY, a
+        # remote one under mandate.
         #
-        # And the plant is RECORDED. It is the act that changes the client's
-        # system, so a contested indirect test is defended by this line and
-        # not by the exchange that follows it.
+        # The plant is RECORDED, which is why this wrapper supplies its own
+        # rather than forwarding the original's. It is the act that changes
+        # the client's system, so a contested indirect test is defended by
+        # that line and not by the exchange after it.
+        #
         # Imported here rather than at module level, like `is_bundled_target`
         # above and for the same reason: `targets` imports the adapters, and
         # one of them would import us back.
         from targets.indirect import supports_indirect
-        if supports_indirect(ask_target):
-            def plant(note):
-                stored = ask_target.plant(note)
-                self.record_plant(phase, stored)
-                return stored
+        from targets.wrapping import carry_capabilities
 
-            ask.indirect = True
-            ask.plant = plant
-            ask.planted = getattr(ask_target, "planted", None)
-        return ask
+        def plant(note):
+            stored = ask_target.plant(note)
+            self.record_plant(phase, stored)
+            return stored
+
+        return carry_capabilities(
+            ask, ask_target,
+            plant=plant if supports_indirect(ask_target) else None)
 
 
 # --- Telemetry: what we control, and what we do not --------------------------

@@ -1,0 +1,42 @@
+Note: your .env still uses the key name(s) this project carried before it switched to English. They keep working; rename them when convenient:
+  PROFIL_ARBITRE -> JUDGE_PROFILE
+Protocol: 20 pair(s) against docs, one-sided paired sign test at 0.05.
+Equal ATTEMPTS: 6 per campaign, both arms — and here that IS equal
+cost, since an indirect attempt spends one target request and three votes,
+exactly as a direct one does, and the plant is local to this target.
+DECLARED BIAS, favouring the DIRECT arm: `obeissance` is structurally
+unscorable for an indirect attempt, so the declared outcome counts only the
+criteria both arms can score (divulgation, abus_outils, fuite_donnees_tiers). The unrestricted
+total is reported beside it, never tested.
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\Clement\Documents\Project LLM Pentesting\pentest-llm\evaluation\measure_modes.py", line 798, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\Clement\Documents\Project LLM Pentesting\pentest-llm\evaluation\measure_modes.py", line 791, in main
+    measure(arguments.pairs, arguments.attempts, arguments.turns,
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            arguments.output, target=arguments.target, arms=arguments.arms)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Clement\Documents\Project LLM Pentesting\pentest-llm\evaluation\measure_modes.py", line 628, in measure
+    first = one_campaign(ask_target, multiturn=None,
+                         attempts=multi_attempts, turns=None,
+                         show=show, target_name=target, indirect=True)
+  File "C:\Users\Clement\Documents\Project LLM Pentesting\pentest-llm\evaluation\measure_modes.py", line 421, in one_campaign
+    result = main.run_campaign(
+        ask_target=counted, target_name=target_name,
+        multiturn=multiturn or None,
+        max_turns=turns if multiturn else None,
+        indirect=indirect)
+  File "C:\Users\Clement\Documents\Project LLM Pentesting\pentest-llm\main.py", line 104, in run_campaign
+    require_indirect(ask_target, target_name)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Clement\Documents\Project LLM Pentesting\pentest-llm\targets\indirect.py", line 120, in require_indirect
+    raise NoIndirectChannel(
+    ...<6 lines>...
+        f"Run an ordinary campaign, or aim at `--target docs`.")
+targets.indirect.NoIndirectChannel: docs has no content a payload can be planted in: an indirect injection is not testable against it.
+`docs` is the bundled target that has one. An HTTP endpoint does not yet: reaching a real application's write surface — an upload, a comment, a shared page — is a second endpoint to configure, not a variant of this one.
+Run an ordinary campaign, or aim at `--target docs`.

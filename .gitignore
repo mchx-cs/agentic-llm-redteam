@@ -53,3 +53,9 @@ evaluation/.verdicts-*.jsonl
 build/
 dist/
 *.egg-info/
+
+# Measurement output files: a run writes its pairs as it goes so it can be
+# RESUMED, and the file records its own protocol. They are results, not
+# source, and a long run rewrites them.
+modes*.json
+delivery*.json
