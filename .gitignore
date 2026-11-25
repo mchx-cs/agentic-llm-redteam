@@ -59,3 +59,11 @@ dist/
 # source, and a long run rewrites them.
 modes*.json
 delivery*.json
+# And their LOGS, which is the half I forgot and had to untrack: a campaign's
+# stdout carries the complete payloads and the target's complete replies, and
+# keeping those out of a public repository is the whole reason `--abridge`
+# exists. `check_excerpt.py` is a hand-run command for the same reason -- the
+# log it needs is a file this repository deliberately does not keep.
+modes*.log
+delivery*.log
+*-report.log

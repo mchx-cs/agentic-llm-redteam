@@ -10115,6 +10115,20 @@ niveaux de généralité déclarés et non lancés ; rien sur une autre cible ; 
 rien sur l'obéissance indirecte, que le juge ne sait pas scorer et que l'issue
 déclarée excluait donc des deux côtés.
 
+**ET UN DÉFAUT À MOI DANS LE COMMIT PRÉCÉDENT : le LOG du run est parti dans
+le dépôt.** 560 Ko de sortie de 40 campagnes — chaque payload complet et
+chaque réponse verbatim de la cible. C'est exactement ce que `--abridge`
+existe pour garder hors d'un dépôt public, et c'est la raison pour laquelle
+`check_excerpt.py` est une commande lancée à la main : « le log qu'il lui faut
+est un fichier que ce dépôt ne garde délibérément pas ».
+
+J'avais ajouté `modes*.json` et `delivery*.json` au `.gitignore` en pensant
+aux fichiers de reprise, et oublié la moitié qui porte le contenu. Le log est
+détraqué et les motifs couvrent maintenant les deux. Ici la cible est
+embarquée et ses secrets sont fictifs, donc rien de sensible n'a fui — mais la
+règle porte sur la pratique, et un dépôt qui garde ses logs de campagne
+apprend à le faire sur un engagement.
+
 1,615 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
