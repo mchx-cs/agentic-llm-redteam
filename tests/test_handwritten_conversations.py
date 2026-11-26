@@ -158,9 +158,25 @@ class TestTheUnreachableTrapsAreCovered:
 
 
 class TestPouringIn:
-    def test_pouring_in_does_not_overwrite_the_harvest(self, monkeypatch, tmp_path):
-        import evaluation.handwritten_conversations as by_hand
+    """
+    CES TESTS ONT CHANGE PARCE QUE LE COMPORTEMENT S'EST AMELIORE.
+
+    Ils comparaient le total verse a `len(CASES)`. `--add` saute desormais ce
+    qui est deja dans le CORPUS, donc le total depend de l'avancement de
+    l'etiquetage -- et c'est le point : `integrate()` vide la recolte, donc
+    avant cette correction un `--add` apres une integration re-offrait TOUT.
+    Mesure apres un run reel le 2026-11-26 : 49 cas deja integres annonces
+    << a etiqueter >>. C'est le defaut nomme le 2026-11-16, qui avait bloque
+    une session d'etiquetage, pris a sa cause au lieu de son symptome.
+
+    Ce qui est tenu ici ne depend plus de l'etat du corpus.
+    """
+
+    def test_pouring_in_does_not_overwrite_the_harvest(self, monkeypatch,
+                                                       tmp_path):
         import json
+
+        import evaluation.handwritten_conversations as by_hand
 
         harvest = tmp_path / "recolte.json"
         harvest.write_text(json.dumps({"conversations": [
@@ -168,18 +184,37 @@ class TestPouringIn:
         monkeypatch.setattr(by_hand, "HARVEST_FILE", harvest)
 
         added, total = by_hand.add_to_harvest()
-        assert len(added) == len(CASES)
-        assert total == len(CASES) + 1
+        assert total == len(added) + 1, (
+            "une deuxieme recolte qui ecrase la premiere coute une soiree "
+            "d'etiquetage")
 
     def test_pouring_in_twice_duplicates_nothing(self, monkeypatch, tmp_path):
         import evaluation.handwritten_conversations as by_hand
 
         monkeypatch.setattr(by_hand, "HARVEST_FILE",
                             tmp_path / "recolte.json")
-        by_hand.add_to_harvest()
+        first, _ = by_hand.add_to_harvest()
         added, total = by_hand.add_to_harvest()
         assert added == []
-        assert total == len(CASES)
+        assert total == len(first)
+
+    def test_what_is_already_in_the_CORPUS_is_not_offered_again(
+            self, monkeypatch, tmp_path):
+        """
+        La propriete que la correction du 2026-11-26 apporte : etiqueter un id
+        deja present n'accomplit rien, puisque `integrate()` le saute.
+        """
+        import json
+
+        import evaluation.handwritten_conversations as by_hand
+
+        harvest = tmp_path / "recolte.json"
+        monkeypatch.setattr(by_hand, "HARVEST_FILE", harvest)
+        by_hand.add_to_harvest()
+        offered = {entry["id"] for entry in json.loads(
+            harvest.read_text(encoding="utf-8"))["conversations"]}
+        assert not (offered & by_hand._ids_in_corpus()), (
+            "des cas deja dans le corpus sont offerts a l'etiquetage")
 
 
 class TestAHandWrittenIdCannotCOLLIDEWithTheCorpus:
@@ -370,3 +405,48 @@ class TestASecretIsClaimedOnlyWhereItIsAtStake:
                 f"{entry['id']} declares a secret that appears nowhere in "
                 f"it: add it to WITHOUT_SECRET, or the prepass will report "
                 f"on a value the case is not about")
+
+
+class TestTheIntentionNeverStatesTheAnswer:
+    """
+    LE GARDE QUI MANQUAIT DE CE COTE, et l'asymetrie etait reelle : les deux
+    lots livrent des cas NON etiquetes dont l'intention est montree a
+    l'auteur, et seul le lot gele le tenait.
+
+    Teste contre les intentions existantes AVANT d'etre ajoute -- zero
+    contrevenant sur 31 -- donc il ne crie pas faux sur des donnees
+    legitimes, ce pour quoi ce projet a retire un garde entier.
+
+    La liste est LUE dans `test_frozen_lot`, qui la declare, plutot que
+    recopiee : une liste redite diverge a la premiere formule ajoutee.
+    """
+
+    def test_no_intention_makes_the_label_a_formality(self):
+        from test_frozen_lot import GIVEAWAYS
+
+        for identifier, _, intention, _ in CASES:
+            lowered = intention.lower()
+            for giveaway in GIVEAWAYS:
+                assert giveaway not in lowered, (
+                    f"l'intention de {identifier} enonce la reponse : "
+                    f"'{giveaway}'")
+
+    def test_the_list_is_READ_and_not_restated(self):
+        """
+        Une premiere version lisait la source de CE module et y interdisait
+        le litteral -- qu'elle contenait elle-meme. Elle ne pouvait pas
+        passer, et un test qui ne peut pas passer ne tient aucune propriete.
+
+        Ce qui compte est que le garde voisin PRENNE sa liste dans le lot
+        gele : l'inliner y retirerait cette reference.
+        """
+        import inspect
+
+        import test_frozen_lot
+
+        source = inspect.getsource(
+            self.test_no_intention_makes_the_label_a_formality)
+        assert "test_frozen_lot" in source, (
+            "le garde ne lit plus la liste du lot gele : une liste redite "
+            "diverge a la premiere formule ajoutee")
+        assert test_frozen_lot.GIVEAWAYS

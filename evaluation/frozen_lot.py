@@ -579,7 +579,9 @@ def add_to_harvest():
             HARVEST_FILE.read_text(encoding="utf-8"))).get(
                 "conversations", [])
 
-    already = {entry["id"] for entry in existing}
+    from evaluation.handwritten_conversations import _ids_in_corpus
+
+    already = {entry["id"] for entry in existing} | _ids_in_corpus()
     added = [entry for entry in entries() if entry["id"] not in already]
 
     HARVEST_FILE.write_text(

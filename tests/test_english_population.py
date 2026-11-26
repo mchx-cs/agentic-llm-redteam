@@ -228,10 +228,32 @@ class TestTheTranslationIsFAITHFUL:
         assert not (translated & set(NEVER_TRANSLATED)), (
             "un échange que le projet refuse de traduire est traduit")
 
-    def test_no_new_id_COLLIDES_with_the_corpus(self, corpus):
-        for new_id, _, _, _ in TRANSLATIONS:
-            assert new_id not in corpus, (
-                f"{new_id} désigne déjà une entrée du corpus")
+    def test_no_new_id_DESIGNATES_A_DIFFERENT_corpus_entry(self, corpus,
+                                                            built):
+        """
+        « Déjà dans le corpus » N'EST PAS la collision : une traduction
+        intégrée y est légitimement. La collision est un id qui désigne
+        l'entrée de QUELQU'UN D'AUTRE.
+
+        Une première version comparait la PRÉSENCE, donc elle est tombée à
+        l'instant même où les 21 ont été intégrées — le défaut exact déjà
+        corrigé sur le lot écrit à la main le 2026-11-19, et un garde qui crie
+        faux sur des données légitimes apprend à être ignoré.
+        """
+        stolen = []
+        for entry in built:
+            existing = corpus.get(entry["id"])
+            if existing is None:
+                continue
+            if (existing.get("payload") != entry.get("payload")
+                    or existing.get("reply") != entry.get("reply")):
+                stolen.append(entry["id"])
+        assert not stolen, (
+            f"ces ids désignent une AUTRE entrée du corpus : "
+            f"{sorted(stolen)} — `integrate()` saute un id déjà présent, "
+            f"donc ils seraient étiquetés puis silencieusement perdus")
+
+    def test_no_two_translations_share_an_id(self):
         assert len({n for n, _, _, _ in TRANSLATIONS}) == len(TRANSLATIONS)
 
 
@@ -311,13 +333,22 @@ class TestWhatTheLotReachesAndWhatItDoesNot:
                 f"{criterion} n'atteint que {counted[criterion]} positif(s) "
                 f"sur la population à cible anglophone")
 
-    def test_the_two_criteria_that_measured_NOTHING_now_measure(
-            self, corpus, built):
-        before = self._floors(self._population(list(corpus.values())))
-        after = self._floors(self._population(list(corpus.values()) + built))
+    def test_the_lot_CONTRIBUTES_five_to_each_of_the_two_thin_criteria(
+            self, built):
+        """
+        CE QUE LE LOT APPORTE, et non la transition du corpus.
+
+        Une premiere version affirmait que ces deux criteres mesuraient ZERO
+        avant -- vrai au moment ou elle a ete ecrite, et l'integration a
+        detruit l'avant. **Un test sur la transition d'un fichier de donnees
+        mutable ne vaut que jusqu'a la prochaine ecriture** ; la transition
+        appartient au journal, qui est date et ne rouille pas.
+        """
+        contributed = self._floors(self._population(built))
         for criterion in ("abus_outils", "fuite_donnees_tiers"):
-            assert before[criterion] == 0 and after[criterion] >= 5, (
-                f"{criterion}: {before[criterion]} -> {after[criterion]}")
+            assert contributed[criterion] >= 5, (
+                f"{criterion}: le lot n'apporte que "
+                f"{contributed[criterion]} positif(s)")
 
     def test_the_SHORTFALL_on_obeissance_is_declared(self, corpus, built):
         """
@@ -325,8 +356,10 @@ class TestWhatTheLotReachesAndWhatItDoesNot:
         après la mesure — et les deux qui manquent demandent des cas NEUFS,
         donc des étiquettes de l'auteur que la traduction ne remplace pas.
         """
-        after = self._floors(self._population(list(corpus.values()) + built))
-        assert after["obeissance"] < 5
+        contributed = self._floors(self._population(built))
+        assert contributed["obeissance"] < 5, (
+            "le lot comble `obeissance` : le plafonnement declare dans le "
+            "module serait devenu faux")
         assert "obeissance` plafonne" in lot.__doc__
         assert "plancher 44" in lot.__doc__
 
@@ -364,27 +397,52 @@ class TestTheHarvestIsAppendedAndTheCorpusLeftAlone:
             "verrait pas les entrées")
 
     def test_add_APPENDS_and_never_overwrites(self, tmp_path):
+        """
+        CE QUI EST DEJA LA SURVIT. Une premiere version comparait aussi le
+        TOTAL a `len(TRANSLATIONS)` -- vrai avant l'integration, faux apres,
+        puisque `add` saute desormais ce qui est dans le corpus. Un test sur
+        l'etat d'un fichier de donnees mutable a une duree de vie.
+        """
         key = self._key()
         harvest = tmp_path / "harvest.json"
         harvest.write_text(json.dumps(
             {key: [{"id": "DEJA-LA", "expected": None}]},
             ensure_ascii=False), encoding="utf-8")
-        lot.add(path=harvest, show=lambda *_: None)
+        before = lot.add(path=harvest, show=lambda *_: None)
         written = json.loads(harvest.read_text(encoding="utf-8"))[key]
         assert any(e["id"] == "DEJA-LA" for e in written), (
             "une deuxième récolte qui écrase la première coûte une soirée "
             "d'étiquetage")
-        assert len(written) == 1 + len(TRANSLATIONS)
+        assert len(written) == 1 + before
 
     def test_rerunning_add_DUPLICATES_nothing(self, tmp_path):
         key = self._key()
         harvest = tmp_path / "harvest.json"
         harvest.write_text(json.dumps({key: []}), encoding="utf-8")
-        lot.add(path=harvest, show=lambda *_: None)
+        first = lot.add(path=harvest, show=lambda *_: None)
         second = lot.add(path=harvest, show=lambda *_: None)
         assert second == 0
         written = json.loads(harvest.read_text(encoding="utf-8"))[key]
-        assert len(written) == len(TRANSLATIONS)
+        assert len(written) == first
+        assert len({e["id"] for e in written}) == len(written)
+
+    def test_what_is_ALREADY_in_the_corpus_is_not_offered_again(
+            self, tmp_path):
+        """
+        `integrate()` saute un id deja present, donc l'etiqueter n'accomplit
+        rien -- le defaut nomme le 2026-11-16, qui a bloque une session
+        d'etiquetage.
+        """
+        key = self._key()
+        harvest = tmp_path / "harvest.json"
+        harvest.write_text(json.dumps({key: []}), encoding="utf-8")
+        lot.add(path=harvest, show=lambda *_: None)
+        written = {e["id"] for e in json.loads(
+            harvest.read_text(encoding="utf-8"))[key]}
+        in_corpus = {e["id"] for e in _corpus().values()}
+        assert not (written & in_corpus), (
+            f"{sorted(written & in_corpus)} sont deja dans le corpus et "
+            f"seraient offerts a l'etiquetage pour rien")
 
     def test_the_entries_are_READY_to_integrate(self, built):
         # `integrate()` prend toute entrée dont `expected` n'est pas None :

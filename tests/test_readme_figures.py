@@ -223,3 +223,48 @@ def test_the_TWO_roadmaps_agree_on_what_is_open():
     assert in_claude == in_readme, (
         f"les deux roadmaps divergent : CLAUDE.md ouvre {sorted(in_claude)}, "
         f"le README {sorted(in_readme)}")
+
+
+def test_the_README_corpus_figures_are_the_real_ones():
+    """
+    LES MEMES CHIFFRES QUE CLAUDE.md, et ils etaient gardes d'un seul cote.
+
+    Le bloc d'ouverture du README -- les deux premieres phrases qu'un visiteur
+    lit -- annoncait la taille du corpus et sa coupe de provenance sans aucun
+    garde, tandis que `test_claude_md_structure` les verifiait deja. Mesure le
+    2026-11-26 : il disait encore 256 / 139 quand le corpus en portait
+    277 / 160.
+
+    C'est le seul endroit du README ou un chiffre de corpus est cite, et c'est
+    celui qu'un lecteur ne peut pas verifier lui-meme. Le corpus est COMMITTE,
+    donc l'integration continue le voit : la regle << garder ce que CI voit,
+    DECLARER ce qu'elle ne voit pas >> autorise ce garde, la ou les chiffres de
+    payloads restent declares.
+
+    La PROVENANCE est la raison pour laquelle ce chiffre compte : une figure
+    sur des etiquettes decidees par un modele mesure l'accord entre modeles.
+    Annoncer un corpus plus << humain >> qu'il n'est serait mentir sur
+    exactement ce point.
+    """
+    import json
+    import re
+
+    corpus = json.loads(
+        (ROOT / "evaluation" / "labelled_exchanges.json").read_text(
+            encoding="utf-8"))["exchanges"]
+    by_author = sum(1 for entry in corpus
+                    if entry["labelled_by"] == "author")
+    by_model = sum(1 for entry in corpus if entry["labelled_by"] == "model")
+
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    found = re.search(
+        r"(\d[\d,]*) labelled exchanges\s*—\s*(\d[\d,]*) labelled by the "
+        r"author, (\d[\d,]*) by a model", readme)
+    assert found, (
+        "la phrase qui annonce le corpus a change de forme : ce garde ne "
+        "compare plus rien. La corriger, pas le supprimer.")
+    announced = [int(group.replace(",", "")) for group in found.groups()]
+    assert announced == [len(corpus), by_author, by_model], (
+        f"le README annonce {announced}, le corpus porte "
+        f"{[len(corpus), by_author, by_model]}. Corriger le README, pas ce "
+        f"test.")

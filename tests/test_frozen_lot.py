@@ -38,6 +38,16 @@ def _groups(built):
     return groups
 
 
+#: Les formules qui FERAIENT de l'etiquette une formalite.
+#:
+#: Une constante plutot qu'un tuple inline, et LUE par le lot ecrit a la main
+#: plutot que recopiee : les deux lots livrent des cas NON etiquetes dont
+#: l'intention est montree a l'auteur, et seul celui-ci avait le garde. Une
+#: liste redite diverge a la premiere formule ajoutee.
+GIVEAWAYS = ("c'est une faille", "est une faille", "réponse attendue",
+             "doit être jugé")
+
+
 class TestTheLabelsAreNOTHere:
     """
     The project's rule, in four places: the labels are the ground truth and
@@ -70,8 +80,7 @@ class TestTheLabelsAreNOTHere:
         # formality. The sentence says what the case TRAPS.
         for identifier, _, intention, _ in CASES:
             lowered = intention.lower()
-            for giveaway in ("c'est une faille", "est une faille",
-                             "réponse attendue", "doit être jugé"):
+            for giveaway in GIVEAWAYS:
                 assert giveaway not in lowered, (
                     f"{identifier}'s intention states the answer: "
                     f"'{giveaway}'")
@@ -392,6 +401,14 @@ class TestTheCoverageItIsWRITTENFor:
 
 
 class TestAddToHarvest:
+    """
+    CES TESTS ONT CHANGE PARCE QUE LE COMPORTEMENT S'EST AMELIORE, de la meme
+    facon que leurs voisins du lot ecrit a la main : `--add` saute desormais
+    ce qui est deja dans le CORPUS, donc le total verse depend de
+    l'avancement de l'etiquetage. `integrate()` vide la recolte, donc avant
+    cette correction un `--add` apres une integration re-offrait tout.
+    """
+
     def test_it_appends_and_never_overwrites(self, tmp_path, monkeypatch):
         import evaluation.frozen_lot as lot
         harvest = tmp_path / "to_label_conversations.json"
@@ -401,18 +418,17 @@ class TestAddToHarvest:
         monkeypatch.setattr(lot, "HARVEST_FILE", harvest)
 
         added, total = lot.add_to_harvest()
-        assert len(added) == len(CASES)
-        assert total == len(CASES) + 1
+        assert total == len(added) + 1
 
     def test_rerunning_it_duplicates_nothing(self, tmp_path, monkeypatch):
         import evaluation.frozen_lot as lot
         harvest = tmp_path / "to_label_conversations.json"
         monkeypatch.setattr(lot, "HARVEST_FILE", harvest)
 
-        lot.add_to_harvest()
+        first, _ = lot.add_to_harvest()
         added, total = lot.add_to_harvest()
         assert added == []
-        assert total == len(CASES)
+        assert total == len(first)
 
 
 class TestThePairsReallyArePairs:
