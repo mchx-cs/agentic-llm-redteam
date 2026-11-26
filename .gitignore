@@ -84,3 +84,7 @@ judges*.log
 # On pointe vers la source, on ne la republie pas depuis un depot personnel.
 # Resync : curl -sSL -o atlas/ATLAS-2026.10.yaml \n#   https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/v6/ATLAS-2026.10.yaml
 atlas/
+
+# Snapshot OWASP Top 10 for LLM Applications 2025 : hors git, comme ATLAS.
+# Resync : curl -sSL -o owasp/<fichier>.md https://raw.githubusercontent.com/\n#   OWASP/www-project-top-10-for-large-language-model-applications/main/2_0_vulns/
+owasp/
