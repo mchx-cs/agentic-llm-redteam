@@ -392,30 +392,62 @@ class TestNoMeasurementFileCanBeCOMMITTED:
     @staticmethod
     def _declared_prefixes():
         """
-        The output-file prefix each COMPARISON declares.
+        Chaque sortie declaree par le CODE -> son prefixe, de DEUX sources.
 
-        Read from the code, so a fifth comparison brings its own line here
-        the day it is added. The first version of this guard swept the
-        DOCSTRING's run commands instead, and a mutation showed the hole:
-        removing `delivery*.log` failed nothing, because the three delivery
-        runs' filenames were typed on the command line and never documented
-        — so the very files whose log had to be untracked were outside its
-        reach.
+        `measure_modes.ARMS` en porte un par comparaison. Et toute mesure sous
+        `evaluation/measure_*.py` peut declarer `OUTPUT_PREFIX`, ce qui est la
+        seconde source -- ajoutee le 2026-11-26 parce que `measure_recall`
+        n'etait dans aucune des deux et que son fichier serait arrive sans que
+        rien ne le couvre.
+
+        Un balayage et non une liste : la forme de celui des points d'entree
+        et de celui de `py-modules`, pour que le prochain module ne repaie pas
+        l'oubli. Le defaut d'origine, enregistre le 2026-11-25 : << j'ai
+        ajoute deux lignes A LA MAIN -- ce qui est le defaut, pas le
+        correctif >>.
+
+        Rend un dict pour que le message d'echec puisse NOMMER la mesure
+        fautive : un prefixe sans son proprietaire laisse le lecteur chercher.
         """
-        import evaluation.measure_modes as modes
-        return {name: spec["output_prefix"]
-                for name, spec in modes.ARMS.items()
-                if "output_prefix" in spec}
+        import importlib
+        import pkgutil
+
+        found = {}
+
+        from evaluation.measure_modes import ARMS
+        for name, spec in ARMS.items():
+            prefix = spec.get("output_prefix")
+            if prefix:
+                found[name] = prefix
+
+        import evaluation
+        for info in pkgutil.iter_modules(evaluation.__path__):
+            if not info.name.startswith("measure_"):
+                continue
+            module = importlib.import_module(f"evaluation.{info.name}")
+            declared = getattr(module, "OUTPUT_PREFIX", None)
+            if declared:
+                found[info.name] = declared
+
+        return found
 
     def test_EVERY_comparison_declares_its_output_prefix(self):
         # Without this, the test below would pass on a module where a
         # comparison had simply dropped the field.
         import evaluation.measure_modes as modes
         declared = self._declared_prefixes()
-        assert set(declared) == set(modes.ARMS), (
+        assert set(modes.ARMS) <= set(declared), (
             "these comparisons declare no output prefix, so nothing requires "
             "their files to be gitignored: "
             + ", ".join(sorted(set(modes.ARMS) - set(declared))))
+        # Et la SECONDE source n'est pas morte : sans cette moitie, le
+        # balayage des modules de mesure pourrait ne rien trouver et la
+        # moitie ci-dessus passerait quand meme.
+        from_modules = set(declared) - set(modes.ARMS)
+        assert from_modules, (
+            "no module under evaluation/measure_*.py declares OUTPUT_PREFIX: "
+            "the second source of the sweep finds nothing, so a measurement "
+            "outside ARMS would arrive uncovered")
 
     def test_every_declared_prefix_is_IGNORED_json_and_LOG(self):
         missing = []

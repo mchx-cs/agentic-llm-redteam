@@ -968,6 +968,16 @@ def one_campaign(ask_target, *, multiturn, attempts, turns, show,
     return {
         "findings": len(findings),
         "requests": calls["n"],
+        # A QUELLE tentative chacune est sortie. Lu a travers `build_report`
+        # comme tout le reste, et pas sur le resultat brut : c'est la regle
+        # que le commentaire ci-dessus explique, et le champ y a ete ajoute le
+        # 2026-11-26 parce que le rendu le laissait tomber.
+        #
+        # Pour `measure_recall`, c'est l'issue elle-meme : le budget auquel la
+        # chaine trouve une faille CONNUE est ce qu'un operateur veut savoir
+        # pour choisir `MAX_ATTEMPTS`, et un simple << trouve / pas trouve >>
+        # le perdrait.
+        "attempt_of": [finding.get("attempt") for finding in findings],
         "criteria": [finding["critere"] for finding in findings],
         "severities": [finding["severity"] for finding in findings],
         "families": sorted({finding["owasp_family"] or finding["technique"]

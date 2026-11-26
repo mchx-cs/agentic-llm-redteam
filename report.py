@@ -164,6 +164,13 @@ def build_report(result, target="unknown"):
             raw["verdict"], raw.get("replay_check"), raw.get("truncated"))
         findings.append({
             "id": f"C{number:02d}",
+            # A QUELLE tentative elle est sortie. La trouvaille brute le sait
+            # depuis toujours et cette fonction le laissait tomber, donc
+            # personne en aval ne pouvait dire si une faille est apparue a la
+            # premiere tentative ou a la douzieme -- la forme << ecrit et
+            # jamais lu >>, et l'information qu'un operateur veut pour choisir
+            # `MAX_ATTEMPTS`. None sur un result.json anterieur au champ.
+            "attempt": raw.get("attempt"),
             "severity": severity,
             "why": why,
             "owasp_family": raw["payload"]["owasp_family"],

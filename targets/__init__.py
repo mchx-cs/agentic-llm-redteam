@@ -59,6 +59,9 @@ from targets.mock import ask_mock
 # The secrets come from the modules that DECLARE them, never restated here:
 # the project's preference recorded for `stats.STATES`, `judge_identity()` and
 # the attack catalogue. A second copy drifts on the first change.
+from targets.bench import DOORS as BENCH_DOORS
+from targets.bench import SECRET as bench_secret
+from targets.bench import build_bench_target
 from targets.demo import SECRET as demo_secret
 from targets.docs import SECRET as docs_secret
 from targets.mock import SECRET as mock_secret
@@ -85,6 +88,23 @@ LEVELLED_TARGETS = {
     "docs": (build_docs_target, DOCS_LEVELS),
 }
 
+# The targets whose suffix names a CONFIGURATION rather than an ordinal level.
+#
+# A registry of its own, and not one more entry in LEVELLED_TARGETS, because
+# the suffix means something different: `demo:3` is a defence LEVEL on a
+# ladder, `bench:secret` is WHICH vulnerability is open. Folding them together
+# would make a level sometimes an int and sometimes a string, and the error
+# message would have to stop naming what is valid -- which is the one thing
+# that message is for.
+#
+# Same discipline as the mapping above, for the same recorded reason: every
+# gate asks ONE declared place. The authorisation guard did not know about
+# `demo` and REFUSED TO START, and a sweep now checks that every configured
+# target is recognised as bundled.
+CONFIGURED_TARGETS = {
+    "bench": (build_bench_target, BENCH_DOORS),
+}
+
 
 #: The secret each BUNDLED target holds, read from the module that declares
 #: it. `decoy` embeds its own in a prompt string rather than a constant, so it
@@ -99,6 +119,7 @@ SECRETS = {
     "mock": mock_secret,
     "demo": demo_secret,
     "docs": docs_secret,
+    "bench": bench_secret,
 }
 
 
@@ -127,9 +148,10 @@ def is_bundled_target(name):
     These targets run locally and hold nothing but fictional secrets:
     `audit.py` uses this to require a mandate only against a third party.
     """
+    suffixed = {**LEVELLED_TARGETS, **CONFIGURED_TARGETS}
     return (name in NAMED_TARGETS
             or any(name == base or name.startswith(f"{base}:")
-                   for base in LEVELLED_TARGETS))
+                   for base in suffixed))
 
 
 #: The URL schemes a target name may carry. `ws://` and `wss://` arrived on
@@ -194,6 +216,17 @@ def choose_target(name=None, profile=None, transport=None):
                 f"{{{', '.join(str(n) for n in levels)}}}."
             ) from error
 
+    # A configured target carries the name of its configuration, not a
+    # number: "bench:secret" says WHICH vulnerability is open.
+    if base in CONFIGURED_TARGETS:
+        build, configurations = CONFIGURED_TARGETS[base]
+        if level and level not in configurations:
+            raise ValueError(
+                f"Unknown {base} configuration in '{name}': '{level}'.\n"
+                f"  Expected: {base}, or {base}:NAME with NAME in "
+                f"{{{', '.join(sorted(configurations))}}}.")
+        return build(level) if level else build()
+
     if is_url_target(name):
         return build_http_target(name, profile=profile, transport=transport)
 
@@ -201,5 +234,6 @@ def choose_target(name=None, profile=None, transport=None):
         f"Unknown target: '{name}'. Expected: "
         f"{', '.join(PUBLIC_TARGET_NAMES)}, "
         f"{', '.join(f'{base}[:N]' for base in LEVELLED_TARGETS)}, "
+        f"{', '.join(f'{base}[:NAME]' for base in CONFIGURED_TARGETS)}, "
         f"or a URL ({', '.join(URL_SCHEMES)})."
     )
