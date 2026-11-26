@@ -90,7 +90,6 @@ PROTOCOLE, DÉCLARÉ AVANT LE MOINDRE RUN (2026-11-26)
 
 import argparse
 import json
-import os
 import pathlib
 import sys
 
@@ -137,30 +136,54 @@ def _one_arm(model, dataset=DATASET, language=LANGUAGE, show=print):
     """
     Un bras : le modèle du juge, puis le corpus.
 
-    Le modèle passe par `GROQ_MODEL`, qui est le point de réglage que
-    `config.py` déclare pour ça — « remplaçable par GROQ_MODEL, sans toucher
-    au code ». Il est restitué ensuite, et dit à voix haute : une mesure qui
-    réécrit en silence ce qu'elle mesure ne vaut rien.
-    """
-    import config
-    import importlib
+    LE DICT EST MUTÉ EN PLACE, et ce n'est pas un détail de style. Une
+    première version rechargeait `config` après avoir posé `GROQ_MODEL` dans
+    l'environnement — le point de réglage que `config.py` déclare pour ça. Et
+    `llm_client` fait `from config import PROFILES`, une référence LIÉE :
+    recharger le module crée un NOUVEAU dict et `llm_client.PROFILES` pointe
+    toujours sur l'ancien.
 
-    before = os.environ.get("GROQ_MODEL")
-    os.environ["GROQ_MODEL"] = model
-    importlib.reload(config)
+    Les trois bras auraient donc tourné sur le modèle par défaut, EN SILENCE,
+    et rendu trois figures identiques — que j'aurais lues comme « les critères
+    portent le résultat », la conclusion la plus flatteuse des trois, obtenue
+    d'un bug. Attrapé avant le run et pas après, en lisant comment
+    `llm_client` résout un profil.
+
+    Muter le sous-dict marche parce que `llm_client.PROFILES` EST le même
+    objet : un seul dict, partagé. Et c'est VÉRIFIABLE, ce qu'un rechargement
+    n'est pas — d'où le garde ci-dessous, qui refuse de mesurer si le juge
+    n'a pas bougé.
+
+    Le patch est dit à voix haute et restitué : une mesure qui réécrit en
+    silence ce qu'elle mesure ne vaut rien.
+    """
+    from config import PROFILES
+    from evaluation.evaluate_judge import evaluate, judge_identity
+
+    profile = _judge_profile()
+    before = PROFILES[profile]["model"]
+    PROFILES[profile]["model"] = model
     try:
-        import evaluation.evaluate_judge as evaluator
-        importlib.reload(evaluator)
-        show(f"  judge now: {evaluator.judge_identity()}")
-        counts, metrics = evaluator.evaluate(dataset=dataset,
-                                             language=language)
-        return counts, metrics
+        now = judge_identity()
+        show(f"  judge now: {now}")
+        # LE GARDE : un bras qui tourne sur le mauvais modèle ne doit PAS
+        # pouvoir produire un chiffre. Sans lui, le défaut ci-dessus serait
+        # revenu silencieusement à la première refonte.
+        if model not in now:
+            raise RuntimeError(
+                f"the judge is still {now!r} after asking for {model!r}: "
+                f"the arms would share a model and the figures would be "
+                f"three copies of one measurement. Refusing to measure.")
+        return evaluate(dataset=dataset, language=language)
     finally:
-        if before is None:
-            os.environ.pop("GROQ_MODEL", None)
-        else:
-            os.environ["GROQ_MODEL"] = before
-        importlib.reload(config)
+        PROFILES[profile]["model"] = before
+
+
+def _judge_profile():
+    """Le profil que le juge emploie, lu et non devine."""
+    from config import JUDGE_PROFILE
+
+    return JUDGE_PROFILE
 
 
 def measure(arms=None, dataset=DATASET, language=LANGUAGE, output=OUTPUT,
