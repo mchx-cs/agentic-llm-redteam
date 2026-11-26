@@ -107,10 +107,24 @@ class TestTheModelReallyCHANGESFromArmToArm:
         with pytest.raises(RuntimeError, match="three copies"):
             judges._one_arm("qwen/qwen3.8-27b", show=lambda *_: None)
 
-    def test_the_profile_is_READ_and_not_guessed(self):
-        from config import JUDGE_PROFILE
+    def test_the_profile_is_READ_and_not_guessed(self, monkeypatch):
+        """
+        UNE SENTINELLE, et pas la valeur configuree.
 
-        assert judges._judge_profile() == JUDGE_PROFILE
+        Une premiere version comparait `_judge_profile()` a l'import
+        `JUDGE_PROFILE` : les deux cotes venaient du MEME endroit, donc elle
+        passait quelle que soit la valeur -- et elle serait passee aussi si la
+        fonction rendait cette constante en dur, ce qui est exactement ce
+        qu'elle pretend interdire.
+
+        Elle lisait de surcroit le juge AMBIANT pour decider son assertion,
+        ce que `TestNoTestReadsTheAmbientJudge` interdit depuis qu'une CI
+        rouge l'a coute : vert ici ou `.env` existe, rouge la ou il n'existe
+        pas.
+        """
+        monkeypatch.setattr("config.JUDGE_PROFILE", "sentinelle-de-test")
+        assert judges._judge_profile() == "sentinelle-de-test", (
+            "le profil est devine au lieu d'etre lu dans `config`")
 
 
 class TestTheThreeArmsAreWhatMakesTheResultREADABLE:

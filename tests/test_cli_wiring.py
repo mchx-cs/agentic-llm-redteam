@@ -60,11 +60,33 @@ def _namespace_names(tree):
     return found
 
 
+def _tracked_and_new(pathspec):
+    """
+    Les fichiers suivis par git ET ceux qui ne le sont pas encore.
+
+    LES DEUX, et la seconde moitie est la correction du 2026-11-26. Un
+    `git ls-files` seul ne voit pas un fichier neuf, donc le defaut qu'un
+    balayage existe pour attraper part dans le commit MEME qui l'introduit et
+    ne se voit qu'au run suivant. C'est ce qui est arrive a
+    `tests/test_measure_judges.py`, committe en lisant le juge ambiant sans
+    l'epingler.
+
+    `--others --exclude-standard` liste les fichiers non suivis que
+    `.gitignore` ne cache PAS, donc `.venv` et `.venv-pyrit` restent dehors
+    sans qu'on ait de liste d'exclusions a tenir -- une liste que quelqu'un
+    doit penser a etendre serait le defaut et non le correctif.
+    """
+    found = set()
+    for extra in ([], ["--others", "--exclude-standard"]):
+        found.update(subprocess.run(["git", "ls-files"] + extra + [pathspec],
+                                    cwd=ROOT, capture_output=True, text=True,
+                                    check=True).stdout.split())
+    return sorted(found)
+
+
 def modules_with_a_parser():
-    """Every tracked module that builds an ArgumentParser."""
-    listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
-                            capture_output=True, text=True,
-                            check=True).stdout.split()
+    """Every module that builds an ArgumentParser, committed or not yet."""
+    listed = _tracked_and_new("*.py")
     found = []
     for name in listed:
         if name.startswith("tests/"):
@@ -198,15 +220,20 @@ class TestNoTestReadsTheAmbientJudge:
     def test_a_test_naming_the_judge_profile_also_pins_it(self):
         import subprocess
 
-        listed = subprocess.run(["git", "ls-files", "tests/*.py"], cwd=ROOT,
-                                capture_output=True, text=True,
-                                check=True).stdout.split()
+        listed = _tracked_and_new("tests/*.py")
         offenders = []
         for name in listed:
             source = (ROOT / name).read_text(encoding="utf-8")
             if "JUDGE_PROFILE" not in source:
                 continue
-            if '"JUDGE_PROFILE"' not in source:
+            # DEUX orthographes d'epinglage sont legitimes --
+            # `setattr(config, "JUDGE_PROFILE", x)` et
+            # `setattr("config.JUDGE_PROFILE", x)` -- et une premiere version
+            # n'en reconnaissait qu'une, donc elle criait faux sur la seconde.
+            # Le marqueur commun est le nom SUIVI D'UN GUILLEMET, qui ne peut
+            # venir que d'un litteral : un simple `import JUDGE_PROFILE` n'en
+            # a pas.
+            if 'JUDGE_PROFILE"' not in source:
                 # Named but never passed to monkeypatch.setattr as a string.
                 offenders.append(name)
         assert not offenders, (

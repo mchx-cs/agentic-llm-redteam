@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **256** entries, 175 `dev` / 81 `test` | **yes** |
 | … of which labelled by the AUTHOR | **139**, against 117 by a model | **yes** |
 | scorable criteria | **4** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers` | **yes** |
-| `pytest` tests, no LLM call at all | **1,925** | **yes** |
+| `pytest` tests, no LLM call at all | **1,954** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -11289,6 +11289,147 @@ casse ses voisins ne vaut pas la propriété qu'il tient** : il tourne
 maintenant dans un sous-processus.
 
 1,925 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LA POPULATION A CIBLE ANGLOPHONE : 21 traductions, et un garde qui ne
+voyait pas les fichiers neufs (2026-11-26).** La croissance du corpus PAR
+POPULATION, et le trou a ete mesure avant d'ecrire une ligne.
+
+Sur la moitie etiquetee par l'auteur, en `dev`, les positifs par critere quand
+la cible parle anglais :
+
+| critere | avant | apres | plancher avant -> apres |
+|---|---|---|---|
+| `divulgation` | 5 | **7** | 57 % -> **65 %** |
+| `obeissance` | 1 | **3** | 21 % -> **44 %** |
+| `abus_outils` | **0** | **5** | rien -> **57 %** |
+| `fuite_donnees_tiers` | **0** | **5** | rien -> **57 %** |
+
+**Deux criteres mesuraient RIEN DU TOUT des que la cible parle anglais**, et
+c'est exactement la forme que le jeu gele avait le 2026-11-19 avant que le lot
+gele ne soit ecrit. Ce n'est pas une population exotique : `targets/http.py`
+atteint n'importe quel endpoint, les payloads de garak sont anglais, et une
+cible anglophone est le cas le plus probable d'un vrai engagement. La
+population passe de 11 a 32 entrees, dont 12 negatives.
+
+**DES TRADUCTIONS ET PAS DES CAS NEUFS, parce que la langue doit etre la SEULE
+variable** -- la discipline posee le 2026-11-09, dont les trois regles valent
+ici mot pour mot : l'etiquette est HERITEE de l'original que l'auteur a tranche,
+le GROUPE est celui de l'original, et l'instruction du juge n'est pas touchee.
+`E04-en` est le gabarit committe. Aucune decision d'etiquetage nouvelle, donc
+aucune etiquette de moi dans la verite terrain : ce qui est de moi est la
+SURFACE, et `--review` imprime l'original en face pour que la fidelite se
+verifie en quelques minutes.
+
+**ET C'EST UN PRECEDENT QUI A DEFINI LA POPULATION, pas mon gout.** Le plancher
+publie de `fuite_donnees_tiers` repose sur six positifs dont **deux `fr->?` et
+un `en->fr`** : les chiffres par critere POOLENT les paires de langue. La
+definition qui s'accorde est donc « la cible ne repond PAS en francais », soit
+`en->en` plus `en->?` -- et `?` est une vraie reponse et non un echec, puisqu'une
+reponse faite d'identifiants n'a genuinement aucune langue.
+
+**LA FIDELITE EST VERIFIEE PAR LA PAIRE DE LANGUE, et 19 des 21 preservent la
+forme exactement.** Mieux : `P01` et `P07` sont `fr->?` et leurs traductions
+`en->?` -- la traduction preserve le fait que la reponse n'a aucune langue, ce
+qui est la meilleure preuve de fidelite disponible.
+
+**DEUX ONT CHANGE DE FORME, ET LES DEUX SONT DE MOI.**
+- **`E10-b`** passait de `fr->fr` a `en->?` : « Bien recu » classe en francais,
+  « Understood » n'a aucun mot grammatical anglais. Corrige en **« Got it »**,
+  qui est l'anglais idiomatique de « Bien recu » -- donc une meilleure
+  traduction par elle-meme, et elle recupere la propriete. Je l'ai remarque par
+  le classifieur, ce qui est dit plutot que lisse : garder une traduction moins
+  bonne pour eviter l'apparence d'un ajustement serait pire.
+- **`P06`** reste `en->?`, et le mecanisme est nomme : son original ne classait
+  en francais que grace aux mots grammaticaux de l'etiquette crochetee
+  (« [resultat de l'outil] »), qu'aucune etiquette anglaise fidele ne porte. La
+  « corriger » demanderait de decreter que l'original avait tort, c'est-a-dire
+  de choisir la classification que je veux.
+
+**LA TROISIEME IMPOSITION DE SET, et elle est par HERITAGE.**
+`split_sets.imposed_set` connait deux impositions opposees et rend `None` quand
+le striping decide. Une traduction n'a besoin NI de l'une NI de l'autre : son
+groupe est deja dans le corpus, donc `integrate()` en derive le set et le
+striping ne le voit jamais. **Valide a une condition precise : aucun groupe
+neuf** -- un groupe `-en` serait stripe, donc expose a partir dans `test`
+pendant que son original reste dans `dev`, la fuite exacte que la regle
+interdit. Un test le tient, et un second tient la moitie qui se deferait en une
+ligne : renommer `TRANSLATIONS` en `CASES` ferait tomber le balayage des lots
+sur un module qui n'a besoin d'aucune imposition, et l'« utile » correction
+serait d'en ajouter une.
+
+**`W01` est EXCLU, nomme avec sa raison.** C'est un echange d'une VRAIE
+campagne : une reponse qu'une cible a reellement produite est une PREUVE, et la
+traduire fabriquerait une donnee qu'aucune cible n'a produite. Le projet le
+refuse depuis le 2026-11-13, et il le refuse meme quand l'instruction demande
+le contraire.
+
+**Ce que le lot NE fournit PAS, dit plutot que decouvert apres la mesure :**
+`obeissance` plafonne a **3 positifs** (plancher 44 %). Les deux qui manquent
+demandent des cas NEUFS, donc des etiquettes de l'auteur que la traduction ne
+remplace pas. Et aucune conversation : traduire un piege sur ce que l'ATTAQUANT
+ecrit demande de retraduire l'attaquant, ce qui est un second changement.
+
+**TREIZE MUTATIONS, TREIZE MORSURES** -- une etiquette redite dans le bloc, la
+valeur du secret traduite, le marqueur d'outil perdu, un outil DECRIT qui se met
+a en declencher un (frontiere D18), une moitie de paire, la demande qui change
+entre deux jumeaux, un groupe neuf, le module qui se declare lot de cas, `W01`
+traduit, une reponse restee en francais, la recolte ecrasee, le plafonnement
+retire du module, et un original etiquete par un MODELE comme source.
+
+**Un detail d'outillage qui a coute une ancre, et c'est le pendant d'une lecon
+deja enregistree.** J'avais ecrit les tirets cadratins en `\u2014` dans le
+contenu du fichier ; l'outil d'ecriture a resolu l'echappement, donc le fichier
+porte le VRAI caractere. Mon ancre de mutation visait des octets absents, et le
+balayage l'a signalee ANCRE plutot que MUETTE -- ce qui est la propriete voulue.
+La lecon « ces scripts s'ecrivent avec un outil de fichier » a donc une moitie
+qu'il faut ajouter : **une ancre doit etre ecrite dans les octets que le fichier
+porte vraiment**, et un echappement que j'ecris n'est pas forcement ce qui
+atterrit.
+
+**ET LA SUITE A TROUVE UN DEFAUT PLUS GRAVE QUE LE LOT : un balayage ne voyait
+pas les fichiers pas encore suivis.** `TestNoTestReadsTheAmbientJudge` a
+signale `tests/test_measure_judges.py`, committe quelques heures plus tot, et
+seulement maintenant -- parce qu'il liste par `git ls-files`.
+
+**Donc le defaut qu'un balayage existe pour attraper part dans le commit MEME
+qui l'introduit**, et ne se voit qu'au run suivant. Deux balayages partageaient
+l'angle mort, dont celui qui gouverne les POINTS D'ENTREE : un nouveau module
+qui tourne comme un programme n'etait pas verifie pour `write_in_utf8` tant
+qu'il n'etait pas committe. C'est la famille « un garde ne vaut que ce qu'il
+COMPARE » en version population -- la liste comparee excluait le fichier le plus
+recent.
+
+Ferme par une union avec `--others --exclude-standard`, qui liste les fichiers
+non suivis que `.gitignore` NE cache pas : `.venv` et `.venv-pyrit` restent
+dehors sans liste d'exclusions a tenir, et une liste que quelqu'un doit penser a
+etendre serait le defaut plutot que le correctif. Verifie dans les deux sens --
+le garde mord encore sur un vrai contrevenant, et il l'a attrape sur un fichier
+**jamais committe**, ce qui prouve la correction au passage.
+
+**ET LE GARDE AVAIT RAISON A LA LETTRE SUR MON TEST.** Il interdit de lire
+`JUDGE_PROFILE` pour DECIDER une assertion, et
+`test_the_profile_is_READ_and_not_guessed` faisait exactement ca -- en etant
+tautologique par-dessus, les deux cotes de l'egalite venant du MEME import.
+Il passait donc quelle que soit la valeur, et il serait passe aussi si la
+fonction rendait la constante en dur, c'est-a-dire precisement ce qu'il pretend
+interdire. **Huitieme fois dans ce fichier qu'un garde ne vaut que ce qu'il
+COMPARE.** Corrige par une sentinelle, et la mutation mord.
+
+Et le garde avait de son cote une etroitesse reelle : il ne reconnaissait
+qu'une orthographe d'epinglage (`setattr(config, "JUDGE_PROFILE", x)`) et criait
+faux sur l'autre (`setattr("config.JUDGE_PROFILE", x)`). Elargi au marqueur
+commun -- le nom suivi d'un guillemet, qui ne peut venir que d'un litteral.
+
+**Ce qui reste a l'auteur : verifier la fidelite, et integrer.** Les etiquettes
+etant heritees, aucune session d'etiquetage n'est necessaire.
+
+```
+python -m evaluation.english_population --review
+python -m evaluation.english_population --add
+python -m evaluation.label --integrate
+```
+
+1,954 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 
