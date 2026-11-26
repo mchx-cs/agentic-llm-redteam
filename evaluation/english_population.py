@@ -124,7 +124,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from console import write_in_utf8                       # noqa: E402
 
 CORPUS_FILE = pathlib.Path(__file__).parent / "labelled_exchanges.json"
-HARVEST_FILE = pathlib.Path(__file__).parent / "to_label_conversations.json"
 
 #: Ce que le `source` de chaque entrée déclare. Le même libellé que `E04-en`,
 #: le gabarit committé, pour qu'une traduction de 2026-11-26 se reconnaisse
@@ -344,7 +343,36 @@ def review(show=print):
          f"l'original : il n'y a que la fidélité à vérifier.")
 
 
-def add(path=HARVEST_FILE, show=print):
+def harvest_source():
+    """
+    Le fichier de récolte et SA CLÉ, lus dans `label.SOURCES`.
+
+    LUS ET NON SUPPOSÉS. Une première version écrivait sous `entrees`, et la
+    récolte porte `conversations` : la commande levait. Mon test utilisait une
+    récolte FABRIQUÉE à ma clé, donc il testait mon hypothèse au lieu du
+    fichier — la jonction entre deux modules corrects séparément, que ce
+    projet rencontre sans arrêt, et un test qui ne vaut que ce qu'il COMPARE.
+
+    Les deux lots écrits à la main codent la clé en dur ; la lire est la
+    préférence déjà enregistrée pour `stats.STATES`, `judge_identity()` et
+    `split_sets.imposed_set()`.
+
+    LA RÉCOLTE DES CONVERSATIONS, bien que les 21 soient mono-tour : c'est le
+    précédent de tous les lots écrits à la main — les cas P et F sont
+    mono-tour et y sont passés — et `integrate()` balaie les DEUX sources,
+    donc rien n'est perdu. L'autre récolte porte 18 536 entrées du balayage
+    non borné, où 21 cas seraient injoignables sans `--ids`.
+    """
+    from evaluation.label import CONVERSATIONS_FILE, SOURCES
+
+    for path, key in SOURCES:
+        if path == CONVERSATIONS_FILE:
+            return path, key
+    raise RuntimeError(
+        "`label.SOURCES` ne déclare plus la récolte des conversations")
+
+
+def add(path=None, key=None, show=print):
     """
     Verse les traductions dans la récolte, sans rien écraser.
 
@@ -355,9 +383,16 @@ def add(path=HARVEST_FILE, show=print):
     Et l'intégration reste SA commande. Le corpus est la vérité terrain ; ce
     module prépare, il ne décide pas.
     """
+    from migration import modernise
+
+    declared_path, declared_key = harvest_source()
+    path = declared_path if path is None else path
+    key = declared_key if key is None else key
+
     built = _stamped(entries())
-    data = json.loads(path.read_text(encoding="utf-8"))
-    existing = {e["id"] for e in data["entrees"]}
+    data = modernise(json.loads(path.read_text(encoding="utf-8")))
+    data.setdefault(key, [])
+    existing = {e["id"] for e in data[key]}
     already_in_corpus = {e["id"] for e in _corpus()}
 
     added = skipped = 0
@@ -370,7 +405,7 @@ def add(path=HARVEST_FILE, show=print):
             show(f"{entry['id']}: déjà dans la récolte, ignoré.")
             skipped += 1
             continue
-        data["entrees"].append(entry)
+        data[key].append(entry)
         added += 1
 
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1),

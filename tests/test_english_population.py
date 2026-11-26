@@ -341,26 +341,49 @@ class TestWhatTheLotReachesAndWhatItDoesNot:
 
 
 class TestTheHarvestIsAppendedAndTheCorpusLeftAlone:
+    """
+    LA CLÉ EST LUE, et ces tests portent sur la VRAIE forme du fichier.
 
-    def test_add_APPENDS_and_never_overwrites(self, tmp_path, monkeypatch):
+    Une première version écrivait sous `entrees`, et la récolte porte
+    `conversations` : la commande levait. Et mes tests utilisaient une récolte
+    FABRIQUÉE à ma clé, donc ils testaient mon hypothèse au lieu du fichier.
+    Ils prennent maintenant la clé par `harvest_source()`, celle que la
+    commande emploie.
+    """
+
+    def _key(self):
+        return lot.harvest_source()[1]
+
+    def test_the_file_and_its_KEY_come_from_label_SOURCES(self):
+        from evaluation.label import CONVERSATIONS_FILE, SOURCES
+
+        path, key = lot.harvest_source()
+        assert path == CONVERSATIONS_FILE
+        assert (path, key) in SOURCES, (
+            "la clé est supposée au lieu d'être lue : `integrate()` ne "
+            "verrait pas les entrées")
+
+    def test_add_APPENDS_and_never_overwrites(self, tmp_path):
+        key = self._key()
         harvest = tmp_path / "harvest.json"
         harvest.write_text(json.dumps(
-            {"entrees": [{"id": "DEJA-LA", "expected": None}]},
+            {key: [{"id": "DEJA-LA", "expected": None}]},
             ensure_ascii=False), encoding="utf-8")
         lot.add(path=harvest, show=lambda *_: None)
-        written = json.loads(harvest.read_text(encoding="utf-8"))["entrees"]
+        written = json.loads(harvest.read_text(encoding="utf-8"))[key]
         assert any(e["id"] == "DEJA-LA" for e in written), (
             "une deuxième récolte qui écrase la première coûte une soirée "
             "d'étiquetage")
         assert len(written) == 1 + len(TRANSLATIONS)
 
     def test_rerunning_add_DUPLICATES_nothing(self, tmp_path):
+        key = self._key()
         harvest = tmp_path / "harvest.json"
-        harvest.write_text(json.dumps({"entrees": []}), encoding="utf-8")
+        harvest.write_text(json.dumps({key: []}), encoding="utf-8")
         lot.add(path=harvest, show=lambda *_: None)
         second = lot.add(path=harvest, show=lambda *_: None)
         assert second == 0
-        written = json.loads(harvest.read_text(encoding="utf-8"))["entrees"]
+        written = json.loads(harvest.read_text(encoding="utf-8"))[key]
         assert len(written) == len(TRANSLATIONS)
 
     def test_the_entries_are_READY_to_integrate(self, built):

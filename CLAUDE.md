@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **256** entries, 175 `dev` / 81 `test` | **yes** |
 | … of which labelled by the AUTHOR | **139**, against 117 by a model | **yes** |
 | scorable criteria | **4** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers` | **yes** |
-| `pytest` tests, no LLM call at all | **1,954** | **yes** |
+| `pytest` tests, no LLM call at all | **1,955** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -11420,6 +11420,24 @@ qu'une orthographe d'epinglage (`setattr(config, "JUDGE_PROFILE", x)`) et criait
 faux sur l'autre (`setattr("config.JUDGE_PROFILE", x)`). Elargi au marqueur
 commun -- le nom suivi d'un guillemet, qui ne peut venir que d'un litteral.
 
+**ET UN DEFAUT DE MOI TROUVE EN LANCANT LA COMMANDE, pas en la relisant.**
+`add` ecrivait sous la cle `entrees` ; la recolte porte `conversations`, donc la
+commande levait. Et **mon test utilisait une recolte FABRIQUEE a ma cle**, donc
+il testait mon hypothese au lieu du fichier -- neuvieme fois dans ce projet
+qu'un test ne vaut que ce qu'il COMPARE, et la jonction entre deux modules
+corrects separement, rencontree une fois de plus.
+
+La cle est desormais LUE dans `label.SOURCES`, qui la declare ; les deux lots
+ecrits a la main la codent en dur, et c'est la derive par duplication que ce
+projet refuse partout ailleurs. Et le choix de la recolte des CONVERSATIONS,
+bien que les 21 soient mono-tour, est le precedent de tous les lots ecrits a la
+main -- les cas P et F sont mono-tour et y sont passes, `integrate()` balaye les
+DEUX sources -- plus un fait pratique : l'autre recolte porte 18 562 entrees du
+balayage non borne, ou 21 cas seraient injoignables sans `--ids`.
+
+Verifie pour de vrai : **21 versees, 0 a etiqueter**, et `label.py --check` dit
+« Nothing to report ».
+
 **Ce qui reste a l'auteur : verifier la fidelite, et integrer.** Les etiquettes
 etant heritees, aucune session d'etiquetage n'est necessaire.
 
@@ -11429,7 +11447,7 @@ python -m evaluation.english_population --add
 python -m evaluation.label --integrate
 ```
 
-1,954 `pytest` tests, toujours sans aucun appel a un modele.
+1,955 `pytest` tests, toujours sans aucun appel a un modele.
 
 **LES DEUX MESURES DUES : le rappel repare, et le modele du juge
 REMPLACABLE sur les trois figures publiees mais pas sur le critere nomme
