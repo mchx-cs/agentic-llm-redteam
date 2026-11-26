@@ -431,6 +431,50 @@ def _per_provenance(exchanges, results_by_id):
               f"accuracy={as_percent(s['exactitude'])}")
 
 
+
+def _per_delivery(exchanges, results_by_id):
+    """
+    Les memes figures, par PROVENANCE de l'instruction.
+
+    WHY. Le juge ne peut pas deduire ce champ -- le document n'est pas dans
+    l'echange qu'on lui montre -- donc sans lui rien ne distingue une
+    trouvaille indirecte d'une directe. Mesure le 2026-11-25 : un resultat
+    VISIBLE est score correctement sans le document, et c'est le fait d'etre
+    aveugle qui le permet.
+
+    Et tant que le corpus est HOMOGENE, la ventilation se tait (le precedent
+    de `_per_language`) mais la PORTEE se dit : des figures tirees d'un corpus
+    tout direct ne decrivent que l'injection directe, et OWASP enumere
+    l'indirect comme l'un des deux types de LLM01.
+    """
+    groups = {}
+    for exchange in exchanges:
+        groups.setdefault(exchange.get("delivery") or "unrecorded",
+                          []).append(exchange)
+
+    if len(groups) < 2:
+        only = next(iter(groups), None)
+        if only == "direct":
+            print("\n--- Scope: DIRECT injection only ---")
+            print("Every exchange here carries its payload in a USER turn. "
+                  "OWASP enumerates indirect injection as one of LLM01's two "
+                  "types, so these figures say nothing about an instruction "
+                  "that arrived through retrieved content.")
+        return
+
+    print("\n--- Per delivery (where the instruction came from) ---")
+    print("The judge cannot tell these apart: the document is not in the "
+          "exchange it is shown. The field is ours, not its verdict.")
+    for delivery in sorted(groups, key=lambda d: -len(groups[d])):
+        # `scores()` et pas un calcul a nous : il rend None quand le
+        # denominateur est nul, et quatre sites decidant chacun pour soi est
+        # comment un `precision=0%` a atteint une ligne d'apparence publiee.
+        figures = scores(groups[delivery], results_by_id)
+        print(f"  {delivery:10} {figures['n']:4} entries, "
+              f"{figures['positives']:3} vuln"
+              f"   precision {as_percent(figures['precision'])}"
+              f"  recall {as_percent(figures['rappel'])}")
+
 def _per_format(exchanges, results_by_id):
     """
     Single-turn and conversations, side by side and NEVER pooled.
@@ -809,6 +853,7 @@ def evaluate(dataset="dev", language="fr", only=None):
     _per_language(exchanges, results_by_id)
     _per_criterion(exchanges, results_by_id)
     _per_provenance(exchanges, results_by_id)
+    _per_delivery(exchanges, results_by_id)
     _print_turn_agreement(exchanges, results_by_id)
     _print_criterion_agreement(exchanges, results_by_id)
     _print_format_contribution(exchanges)

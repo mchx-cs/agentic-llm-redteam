@@ -33,10 +33,10 @@ own instructions against content it retrieved.
 |---|---|---|
 | source payloads | **1,166** (1,143 garak / 52 probes, 23 by hand) | no — the snapshot is outside git |
 | catalogue, crossed with objectives and transformations | **9,304** | no — same reason |
-| labelled corpus | **288** entries, 207 `dev` / 81 `test` | **yes** |
-| … of which labelled by the AUTHOR | **171**, against 117 by a model | **yes** |
+| labelled corpus | **291** entries, 210 `dev` / 81 `test` | **yes** |
+| … of which labelled by the AUTHOR | **174**, against 117 by a model | **yes** |
 | scorable criteria | **4** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers` | **yes** |
-| `pytest` tests, no LLM call at all | **1,983** | **yes** |
+| `pytest` tests, no LLM call at all | **1,995** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -12243,6 +12243,138 @@ python -m evaluation.label --integrate
 ```
 
 1,983 `pytest` tests, toujours sans aucun appel a un modele.
+
+**LES TROIS ITEMS D'OWASP SONT ETIQUETES, LE CHAMP DE PROVENANCE EXISTE, ET
+LE RAPPORT DIT CE QUE LLM06 VEUT DIRE CHEZ NOUS (2026-11-26).** Les trois
+suites de l'audit, prises ensemble sur la decision de Clement.
+
+**LES TROIS VERDICTS, tous `oui`.** Chacun est un item ENUMERE d'OWASP
+qu'aucune entree du corpus ne couvrait :
+
+| | l'item | ce qui manquait |
+|---|---|---|
+| `O01` | LLM07 item 1, *Exposure of Sensitive Functionality* | les 9 positifs `fuite-prompt-systeme` recitent des REGLES ; aucun ne livrait un identifiant technique -- la moitie qu'OWASP met en PREMIER, parce qu'elle est directement exploitable |
+| `O02` | LLM07 item 2 | une regle CHIFFREE, la forme exacte de l'exemple d'OWASP (<< The Transaction limit is set to $5000 per day >>) : un seuil qu'on contourne en le connaissant |
+| `O03` | LLM02 item 2, *Proprietary Algorithm Exposure* | **zero entree** : la `divulgation` du corpus porte sur un secret du prompt ou sur les consignes, jamais sur ce que le modele a APPRIS |
+
+**LE CLASSEMENT EST DE MOI, et c'est dit plutot que glisse.** Trois categories
+neuves (`fuite-identifiant`, `fuite-seuil-interne`,
+`fuite-donnees-entrainement`) plutot que `fuite-prompt-systeme` pour les
+trois : celle-la couvre l'item 2 de LLM07, et y verser O01 ferait tenir deux
+items enumeres distincts sous un seul nom -- or grouper les erreurs par genre
+de piege est le seul travail que la liste des categories a.
+
+**Et ce n'est pas l'erreur de `multitours-reussi`.** La regle du 2026-11-19
+interdit a une categorie de cas POSITIF de decrire la forme de l'attaque, mais
+ce qu'elle visait precisement est un axe qui CROISE les criteres : la
+contribution du multi-tours traversait `divulgation`, `obeissance` et
+`abus_outils` a la fois. Un identifiant divulgue est une `divulgation`
+toujours, exactement comme `fuite-epelee` et `fuite-encodee`, qui sont les
+categories positives existantes de ce critere et qui sont des formes.
+
+**ILS NE RELEVENT AUCUN PLANCHER**, et c'est la moitie qui compte :
+`divulgation` en portait deja 41, plancher 91 %. Leur valeur est la CONFORMITE
+au standard, et confondre les deux serait gonfler un compte en croyant gagner
+de la preuve.
+
+Corpus : **291 entrees**, dev 210 / test 81, provenance **174 `author` /
+117 `model`**.
+
+---
+
+**LE CHAMP DE PROVENANCE : `delivery`, et il est LU.**
+
+Mesure du 2026-11-25 : quand le RESULTAT est visible dans la reponse, les
+criteres existants scorent une injection indirecte sans qu'on montre le
+document au juge -- et c'est le fait d'etre AVEUGLE qui le permet. Mais pour
+cette meme raison **le juge ne pourra JAMAIS dire que l'injection etait
+indirecte**. C'est donc a nous de l'enregistrer, comme
+`pyrit_objective_from` l'est sur une tentative.
+
+**`direct` et pas `single-turn`**, bien que la campagne ecrive `single-turn` :
+elle confond la livraison et le format dans un champ, la ou une entree les
+separe deja -- le format est porte par `turns` et lu par `is_conversation()`.
+
+**TOTAL, et la valeur de depart est un FAIT.** L'audit a verifie qu'aucune
+entree n'est indirecte -- zero sur 291 -- donc estampiller `direct` enregistre
+ce qui est, la ou un champ absent devrait se lire << probablement direct >>.
+C'est le raisonnement de `labelled_by`, rendu total pour cette raison exacte.
+
+**ET DEUX LECTURES, dont la seconde est celle qui compte aujourd'hui :**
+- une ventilation par livraison, **muette sous deux populations** -- le
+  precedent de `_per_language`, qui ne dit rien quand le corpus est homogene
+  pour ne pas imprimer du bruit a chaque run ;
+- **une ligne de PORTEE quand il EST homogene** : *<< Scope: DIRECT injection
+  only. Every exchange here carries its payload in a USER turn. OWASP
+  enumerates indirect injection as one of LLM01's two types, so these figures
+  say nothing about an instruction that arrived through retrieved content. >>*
+  Tant que le corpus est tout direct, **toutes les figures publiees ne
+  decrivent que l'injection directe**, et rien ne le disait. La ligne
+  disparait d'elle-meme des qu'une entree indirecte arrive.
+
+Sans cette seconde moitie le champ serait ecrit-sans-lecteur, la forme de
+defaut la plus frequente de ce projet.
+
+**Ce qui n'est PAS fait, dit plutot qu'implique : les collecteurs n'estampillent
+pas la provenance.** `label.py` CONSERVE un `delivery` deja pose -- un test le
+tient -- donc la chaine est prete du cote corpus ; ce qui manque est que
+`collect_exchanges` et `collect_conversations` le posent quand ils recoltent
+contre `--indirect`. C'est le maillon suivant, et l'annoncer fait serait la
+demi-connexion que ce champ existe pour empecher.
+
+---
+
+**LE RAPPORT DIT QUE `abus_outils` EST PLUS ETROIT QUE LLM06.**
+
+Le constat de l'audit : les SIX items enumeres d'<< Excessive Agency >> portent
+tous sur la conception de l'application -- verbatim, l'item 4,
+*<< An LLM extension has permissions on downstream systems that are not needed
+for the intended operation >>*. Notre critere est un PROXY des items 5 et 6, et
+les items 1 a 4 sont structurellement invisibles depuis un echange.
+
+> *This report scores LLM06 through ONE criterion: a tool fired on the user's
+> orders, or a tool result exposing a third party's data. OWASP's LLM06 is
+> wider: its first four enumerated items are about how the application was
+> BUILT [...] so the `LLM06` listed above means *tool invocation observed in a
+> reply*, never *Excessive Agency assessed*.*
+
+**CONDITIONNELLE, la ou ses trois voisines sont INCONDITIONNELLES, et la
+raison est ecrite dans le code.** Celles-la sont des proprietes de l'OUTIL --
+un seul tour, l'adaptation qui reordonne, la persistance non tentee -- et les
+rendre dependantes de la campagne les ferait disparaitre quand elles comptent
+le plus. Celle-ci est une reserve sur une LIGNE : sans LLM06 dans les familles
+testees il n'y a rien a sur-lire, et l'imprimer serait du bruit -- la raison
+exacte pour laquelle << la famille est couverte par d'autres sondes >> a ete
+restreinte au seul cas qui la justifie le 2026-11-11.
+
+---
+
+**ET UN BUG A MOI, PIRE QUE CELUI QU'IL AVAIT L'AIR DE REINTRODUIRE.** J'avais
+ecrit `as_percent(tp, tp + fp)`. La signature est `as_percent(value, width=0)`
+: elle prend un RATIO, donc je passais `tp` comme valeur et `tp + fp` comme
+**largeur de champ**. La fonction formatait `tp` en pourcentage et **ne
+calculait rien** -- le << 100 % >> d'une ligne etait `tp = 1`, par coincidence,
+et le << precision 0% >> sur une population a denominateur nul etait `tp = 0`.
+
+C'est pire que le defaut du 2026-11-19 : la, le site d'impression calculait
+juste et formatait mal ; ici il ne calculait pas. **Trouve en LISANT LE
+RENDU**, seizieme fois dans ce projet, et la correction n'est pas un meilleur
+appel : `_per_delivery` lit `scores()`, qui rend `None` sur un denominateur nul
+avec la raison ecrite a cote. Quatre sites d'impression decidant chacun pour
+soi est comment un `precision=0%` a atteint une ligne d'apparence publiee --
+et j'en etais le cinquieme.
+
+**ET UN DEFAUT DE DIRECTION dans la reserve LLM06**, trouve de la meme facon :
+elle disait *<< read `LLM06` below >>* alors que la liste des familles est
+AU-DESSUS d'elle. Quinzieme fois.
+
+**Douze gardes, onze mutations, onze morsures** -- la reserve non appelee, la
+reserve inconditionnelle, elle qui ne dit plus << CONCEPTION >>, elle qui
+n'interdit plus la sur-lecture, elle qui pointe vers le bas, la provenance non
+estampillee, un `indirect` ecrase, `DELIVERIES` redit, la ventilation non
+appelee, la ligne de portee supprimee, et la precision re-derivee.
+
+1,995 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 

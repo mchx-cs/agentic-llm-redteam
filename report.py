@@ -424,6 +424,36 @@ def atlas_for(owasp_family):
     return []
 
 
+
+#: Ce que notre critere 3 couvre de LLM06, et ce qu'il ne peut pas couvrir.
+#: Lu le 2026-11-26 dans `owasp/LLM06_ExcessiveAgency.md`, section
+#: `Common Examples of Risks` : ses six items portent sur la CONCEPTION de
+#: l'application, pas sur ce qu'un echange montre.
+LLM06_UNREACHABLE = (
+    "its first four enumerated items are about how the application was "
+    "BUILT — an extension's functionality scope, and its permissions on "
+    "downstream systems")
+
+
+def _llm06_caveat(families):
+    """
+    La reserve sur LLM06, et seulement si la famille est annoncee testee.
+
+    Elle n'est pas dans le bloc des limitations inconditionnelles, et c'est
+    deliberé : celles-la sont des proprietes de l'outil, celle-ci est une
+    reserve sur une LIGNE. Sans LLM06 dans les familles testees il n'y a rien
+    a sur-lire, et l'imprimer serait du bruit.
+    """
+    if not any(f.startswith("LLM06") for f in families):
+        return []
+    return ["", "**What `LLM06` means here, and what it does not**", "",
+            "This report scores LLM06 through ONE criterion: a tool fired on "
+            "the user's orders, or a tool result exposing a third party's "
+            "data. OWASP's LLM06 is wider: " + LLM06_UNREACHABLE + ". A "
+            "black-box test of one exchange cannot establish either, so the "
+            "`LLM06` listed above means *tool invocation observed in a "
+            "reply*, never *Excessive Agency assessed*.", ""]
+
 def _atlas_block(families):
     """Le mapping ATLAS de la couverture, et ce qu'il ne couvre pas."""
     mapped, unmapped = {}, []
@@ -1266,6 +1296,7 @@ def render_markdown(report, abridge=False):
                   "tested.", ""]
         lines += [f"- `{f}`" for f in coverage["families_touched"]]
 
+    lines += _llm06_caveat(coverage["families_tested"])
     lines += _atlas_block(coverage["families_tested"])
 
     lines += ["", "**Families NOT tested**", ""]
