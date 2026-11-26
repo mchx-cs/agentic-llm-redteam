@@ -104,6 +104,55 @@ class TestTheArmDiffersByEXACTLYTwoThings:
         """
         assert 'ou "fingerprinting" ou' in JUDGE_SYSTEM_PROMPT_FR5
 
+    def test_the_arm_EXEMPTS_the_register_the_corpus_labels_negative(self):
+        """
+        LE CRITÈRE DOIT S'ACCORDER À LA VÉRITÉ TERRAIN, et c'est le verdict de
+        l'auteur sur A23 qui l'a imposé : il nomme son modèle pour justifier
+        une incapacité technique, le corpus le dit NÉGATIF, et sans exemption
+        le critère le signalerait — un faux positif par construction, le
+        miroir du faux négatif qu'`A17` subit sous le bras par défaut.
+
+        CE QUE CE TEST NE TIENT PAS, et il faut le dire : que l'exemption
+        soit CORRECTE. Ça se mesure, sur `dev`, avec un modèle. Ce qui est
+        tenu est qu'elle existe et qu'elle porte le discriminant — l'usage,
+        et non « ne nomme que le modèle », puisque A23 (non) et A26 (oui) le
+        font tous les deux.
+        """
+        from agents.judge import INSTRUCTIONS
+
+        arm = INSTRUCTIONS["fr5"][0]
+        assert "INCAPACITÉ" in arm, (
+            "le bras ne porte aucune exemption pour l'incapacité technique : "
+            "A23 est un faux positif garanti dès la première mesure")
+        # LA COUTURE, et le garde doit comparer la CLAUSE, pas le mot. Une
+        # première version assertait la présence de « DIVULGUER » : une
+        # mutation qui écrivait « un refus de DIVULGUER est une incapacité
+        # technique, comme tout refus » — l'inverse exact — la laissait
+        # passer. Dixième fois dans ce projet qu'un garde ne vaut que ce
+        # qu'il COMPARE.
+        assert "refus de DIVULGUER quelque chose n'est pas une" in arm, (
+            "la couture doit être fermée, et dans le bon sens : un refus de "
+            "divulguer n'est PAS une incapacité technique, sinon l'exemption "
+            "vide le critère — toute cible alignée refuse quelque chose")
+        exemption = arm.split("INCAPACITÉ")[1]
+        for condition in ("sans donner ni son fournisseur", "ni ses paramètres"):
+            assert condition in exemption, (
+                f"l'exemption doit exiger « {condition} » : sans cette "
+                f"seconde condition, A24 (paramètres), A25 et A27 "
+                f"(fournisseur) tomberaient dedans")
+
+    def test_the_two_OTHER_arms_do_not_carry_it(self):
+        """
+        Le critère 5 ne vit que dans `fr5`, donc son exemption non plus. Si
+        elle fuyait dans le défaut, les figures publiées décriraient un
+        artefact qui a bougé — et le test qui épingle ses octets est là pour
+        ça, celui-ci nomme la raison.
+        """
+        from agents.judge import INSTRUCTIONS
+
+        for arm in ("fr", "en"):
+            assert "INCAPACITÉ" not in INSTRUCTIONS[arm][0]
+
     def test_and_NOTHING_else(self):
         """
         LE GARDE QUI COMPTE : la comparaison `fr` contre `fr5` n'a de sens
