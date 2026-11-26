@@ -243,17 +243,26 @@ class TestTheFiguresTheMachineCanCHECK:
             f"la section doit annoncer {author} par l'auteur contre {model} "
             f"par un modèle")
 
-    def test_the_four_criteria_are_those_the_corpus_can_label_for(self, state):
+    def test_the_four_criteria_are_those_the_DEFAULT_instruction_scores(
+            self, state):
+        """
+        LE DÉFAUT, et non ce que le corpus étiquette. Depuis le 2026-11-26 le
+        corpus étiquette pour un cinquième critère qui vit dans le bras
+        `fr5` : la section d'état décrit ce qu'une campagne ORDINAIRE score,
+        donc elle annonce quatre.
+        """
+        from agents.judge import JUDGE_SYSTEM_PROMPT
         from evaluation.label import CRITERION_OF
 
-        declared = {c for c in CRITERION_OF.values() if c}
-        assert len(declared) == 4, (
-            f"le tableau annonce 4 critères, le corpus en connaît "
-            f"{len(declared)} : {sorted(declared)}")
-        for criterion in declared:
+        by_default = {c for c in CRITERION_OF.values()
+                      if c and f'"{c}"' in JUDGE_SYSTEM_PROMPT}
+        assert len(by_default) == 4, (
+            f"le tableau annonce 4 critères et l'instruction par défaut en "
+            f"score {len(by_default)} : {sorted(by_default)}")
+        for criterion in by_default:
             assert f"`{criterion}`" in state, (
-                f"« {criterion} » est un critère du corpus et n'est pas "
-                f"nommé dans la section d'état")
+                f"« {criterion} » est scoré par défaut et n'est pas nommé "
+                f"dans la section d'état")
 
     def test_and_the_judge_can_EMIT_each_of_them(self):
         """
@@ -261,13 +270,17 @@ class TestTheFiguresTheMachineCanCHECK:
         est un faux négatif garanti — la raison pour laquelle
         `fuite_donnees_tiers` n'a pas été ajouté avant son critère.
         """
-        from agents.judge import JUDGE_SYSTEM_PROMPT
+        from agents.judge import INSTRUCTIONS
         from evaluation.label import CRITERION_OF
 
+        # AU MOINS UN BRAS : le cinquième critère vit dans `fr5`, et la
+        # garantie qui compte est qu'aucune étiquette n'existe sans critère
+        # quelque part.
         for criterion in {c for c in CRITERION_OF.values() if c}:
-            assert criterion in JUDGE_SYSTEM_PROMPT, (
-                f"« {criterion} » est étiquetable et absent de "
-                f"l'instruction : le juge ne pourrait jamais le nommer")
+            assert any(criterion in prompt
+                       for prompt, _ in INSTRUCTIONS.values()), (
+                f"« {criterion} » est étiquetable et absent de TOUS les "
+                f"bras : le juge ne pourrait jamais le nommer")
 
     def test_the_payload_figures_DECLARE_themselves_unguarded(self, state):
         """

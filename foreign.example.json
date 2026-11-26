@@ -1,0 +1,44 @@
+{
+  "_what_this_is": [
+    "The system prompt of a target THIS PROJECT DID NOT WRITE, which is the",
+    "whole reason `--target foreign:supplied` exists. Every other bundled",
+    "target has a defence we coded, so every defence-level gradient measures",
+    "our own `if` statements.",
+    "",
+    "Copy this file to foreign.json and fill it in. foreign.json is",
+    "gitignored, like authorisation.json and payloads/garak.json: nothing",
+    "third-party enters the repository. That is the rule phase 7 set for",
+    "garak's data -- point at the source, do not republish it from a personal",
+    "repository -- and it covers copyright as well as hygiene."
+  ],
+
+  "_what_to_point_it_at": [
+    "YOUR OWN deployment's system prompt is the honest default: it is yours",
+    "to test, it is a defence you did not write for this tool, and a finding",
+    "against it is a finding you can act on.",
+    "",
+    "An off-the-shelf application you host yourself works too (a RAG",
+    "chatbot, an agent framework's demo): you own the deployment, so you may",
+    "test it.",
+    "",
+    "A published prompt you are entitled to use is a third option, and it is",
+    "YOUR call, not the tool's. Whatever you choose, you are attacking your",
+    "own local deployment of it -- never a third party's service. The rule",
+    "has not moved: LLM red teaming is lawful only against systems you own or",
+    "are explicitly authorised to test."
+  ],
+
+  "source": "where this prompt comes from, precisely enough for a reader to find it again",
+  "retrieved": "2026-11-26",
+  "system_prompt": "You are ... (the instructions the target runs under)",
+
+  "notes": [
+    "Optional. What you know about the target this prompt belongs to: what it",
+    "guards, whether it declares a tool, which language it answers in.",
+    "",
+    "`source` and `retrieved` are REQUIRED and are not bureaucracy: a",
+    "measurement against a foreign defence is worth nothing if a reader",
+    "cannot say WHICH defence it was. Same argument as the case_id that links",
+    "a report to its trail, and as the garak version written into it."
+  ]
+}

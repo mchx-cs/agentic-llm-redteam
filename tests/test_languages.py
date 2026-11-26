@@ -730,15 +730,49 @@ class TestTheCriteriaGapsThatAPentestWouldHit:
             "a third role exists now: an indirect-injection criterion and its "
             "labels become possible")
 
-    def test_nothing_covers_fingerprinting(self):
-        # A target naming its model, provider and sampling parameters. A
-        # reconnaissance finding on a real engagement; `aucun` here, and
-        # arguably right under the current criteria.
+    def test_nothing_covers_fingerprinting_BY_DEFAULT(self):
+        """
+        A target naming its model, provider and sampling parameters. A
+        reconnaissance finding on a real engagement; `aucun` by default, and
+        arguably right under the four criteria the default instruction has.
+
+        HALF CLOSED on 2026-11-26, and the half matters. The criterion is
+        WRITTEN, the corpus has four categories and four cases for it, and
+        the report GRADES it `low` — but all of that lives in the `fr5` ARM
+        of the instruction, not in the default. So a campaign run without
+        `--language fr5` still scores `aucun`, and the published figures
+        still describe an instruction that has four criteria.
+
+        Why an arm rather than the default: the three remaining gaps cost the
+        same price — a `dev` re-measurement plus a frozen consultation — and
+        fingerprinting is the LEAST valuable of the three. Paying that price
+        for it would be bad economics; the two that are worth it each need a
+        decision on the artefact (a third role in the question format; the
+        criterion-1 seam). The arm makes it measurable for one flag and moves
+        the default by zero bytes, which is the route the English arm already
+        took on 2026-11-14.
+
+        This guard therefore keeps holding the DEFAULT, which is what the
+        figures describe. It closes for good the day the arm is adopted.
+        """
         from agents.judge import JUDGE_SYSTEM_PROMPT as prompt
         for word in ("modèle", "fournisseur", "température"):
             assert word not in prompt, (
-                f"'{word}' appears in the criteria now: fingerprinting may be "
-                f"scorable, so the corpus needs cases for it")
+                f"'{word}' appears in the DEFAULT criteria now: the arm has "
+                f"been adopted, so the published figures must be re-measured "
+                f"and this guard retired")
+
+    def test_but_the_ARM_covers_it_and_the_corpus_can_label_for_it(self):
+        """
+        Le contraste, sans lequel le garde ci-dessus se lirait comme « rien
+        n'existe pour le fingerprinting » — ce qui a cessé d'être vrai le
+        2026-11-26.
+        """
+        from agents.judge import JUDGE_SYSTEM_PROMPT_FR5
+        from evaluation.label import CRITERION_OF
+
+        assert '5. "fingerprinting"' in JUDGE_SYSTEM_PROMPT_FR5
+        assert "fingerprinting" in set(CRITERION_OF.values())
 
     def test_nothing_covers_a_BYPASSABLE_CONTROL_disclosed(self):
         """
@@ -1283,15 +1317,42 @@ class TestTheFiguresAreReportedPerCRITERION:
         assert not invented, invented
 
     def test_the_mapping_names_only_REAL_criteria(self):
-        # A criterion in the mapping that the judge cannot emit would produce
-        # a row whose recall is zero by construction -- the defect the project
-        # names when it refuses to add a label before its criterion.
-        from agents.judge import JUDGE_SYSTEM_PROMPT
+        # A criterion in the mapping that NO instruction can emit would
+        # produce a row whose recall is zero by construction -- the defect
+        # the project names when it refuses to add a label before its
+        # criterion.
+        #
+        # AT LEAST ONE ARM, and not the default: since 2026-11-26 the fifth
+        # criterion lives in `fr5`, written and measurable without moving the
+        # default a single byte, so that no published figure goes stale. The
+        # guarantee that matters is unchanged -- no label without a criterion
+        # SOMEWHERE -- and the contrast below holds the other half.
+        from agents.judge import INSTRUCTIONS
         from evaluation.label import CRITERION_OF
         for criterion in {c for c in CRITERION_OF.values() if c}:
-            assert f'"{criterion}"' in JUDGE_SYSTEM_PROMPT, (
-                f"{criterion} is mapped but the judge's instruction does not "
-                f"name it")
+            assert any(f'"{criterion}"' in prompt
+                       for prompt, _ in INSTRUCTIONS.values()), (
+                f"{criterion} is mapped and NO arm of the judge's "
+                f"instruction names it")
+
+    def test_and_the_DEFAULT_arm_names_exactly_four(self):
+        """
+        Le contraste, sans lequel le test ci-dessus passerait sur une
+        instruction par defaut vide de tout critere.
+
+        Une mesure lancee sans `--language` est jugee par le defaut : si un
+        cinquieme critere y entrait sans qu'on le veuille, les figures
+        publiees cesseraient de le decrire en silence.
+        """
+        from agents.judge import JUDGE_SYSTEM_PROMPT
+        from evaluation.label import CRITERION_OF
+
+        labelled = {c for c in CRITERION_OF.values() if c}
+        by_default = {c for c in labelled
+                      if f'"{c}"' in JUDGE_SYSTEM_PROMPT}
+        assert len(by_default) == 4, (
+            f"l'instruction par defaut nomme {sorted(by_default)} : les "
+            f"figures publiees decrivent QUATRE criteres")
 
     def test_each_criterion_is_printed_with_its_FLOOR(self, capsys):
         # The floor is the point: "caught 5 of 5" bounds the true rate at 57%,

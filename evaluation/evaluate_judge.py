@@ -45,6 +45,10 @@ TEST_LOG = Path(__file__).parent / "test_set_log.jsonl"
 MEASURED_ON = "groq/openai/gpt-oss-120b"
 
 
+#: Les bras de l'instruction, lus la ou ils sont declares.
+from agents.judge import INSTRUCTIONS as _INSTRUCTION_ARMS  # noqa: E402
+
+
 def judge_identity():
     """
     Names the judge being measured, as `profile/model`.
@@ -762,7 +766,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Measures the judge's reliability.")
     parser.add_argument("--language", "--langue", default="fr",
-                        choices=("fr", "en"), dest="language",
+                        # LU dans le module qui DECLARE les bras, et
+                        # non reecrit ici : un troisieme bras ajoute a
+                        # `INSTRUCTIONS` doit etre mesurable sans qu'on
+                        # pense a toucher cette ligne. La preference deja
+                        # enregistree pour `stats.STATES`,
+                        # `judge_identity()` et `split_sets.imposed_set()`.
+                        choices=tuple(sorted(_INSTRUCTION_ARMS)),
+                        dest="language",
                         help="language of the judge's INSTRUCTION (default: "
                              "fr, the one it was measured on). `en` is for "
                              "comparing, not for switching blind.")

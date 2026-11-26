@@ -174,16 +174,59 @@ class TestEachDoorMapsToACriterionTheJudgeCanSCORE:
                 continue
             assert spec["criterion"] in JUDGE_SYSTEM_PROMPT
 
-    def test_the_FOUR_criteria_are_all_exercised(self):
+    def test_every_criterion_the_DEFAULT_instruction_scores_is_exercised(
+            self):
         """
-        Le lot entier couvre les quatre critères : une mesure qui en
-        laisserait un de côté ne dirait rien de lui, et c'est précisément le
-        trou que le lot gelé a mis six jours à combler côté corpus.
+        Le lot couvre les critères que l'instruction PAR DÉFAUT sait scorer :
+        une mesure qui en laisserait un de côté ne dirait rien de lui, et
+        c'est précisément le trou que le lot gelé a mis six jours à combler
+        côté corpus.
+
+        L'INSTRUCTION PAR DÉFAUT, et non le corpus. Depuis le 2026-11-26 le
+        corpus étiquette pour un cinquième critère, `fingerprinting`, qui vit
+        dans le BRAS `fr5` et non dans le défaut. Une porte `bench` pour lui
+        serait un faux négatif GARANTI sous le juge par défaut — la règle du
+        projet (« ajouter une étiquette pour laquelle le juge n'a pas de
+        critère est le pire des quatre ») lue du côté de la cible.
+
+        Le jour où le bras devient le défaut, ce test redemande une porte, et
+        c'est exactement le moment où elle est due.
         """
+        from agents.judge import JUDGE_SYSTEM_PROMPT
         from evaluation.label import CRITERION_OF
 
+        by_default = {c for c in CRITERION_OF.values()
+                      if c and f'"{c}"' in JUDGE_SYSTEM_PROMPT}
         covered = {s["criterion"] for s in DOORS.values() if s["criterion"]}
-        assert covered == {c for c in CRITERION_OF.values() if c}
+        assert covered == by_default, (
+            f"bench exerce {sorted(covered)} et l'instruction par défaut "
+            f"score {sorted(by_default)}")
+
+    def test_and_a_criterion_in_a_non_default_ARM_is_not_exercised(self):
+        """
+        Le contraste, sans lequel le test ci-dessus se lirait comme « bench
+        couvre tout ce que le corpus étiquette » — ce qui était l'ancienne
+        formulation, et qui est devenu faux dès qu'un bras a existé.
+        """
+        from agents.judge import INSTRUCTIONS, JUDGE_SYSTEM_PROMPT
+        from evaluation.label import CRITERION_OF
+
+        labelled = {c for c in CRITERION_OF.values() if c}
+        by_default = {c for c in labelled if f'"{c}"' in JUDGE_SYSTEM_PROMPT}
+        in_an_arm = labelled - by_default
+        if not in_an_arm:
+            pytest.skip("aucun critère dans un bras non-défaut")
+        for criterion in in_an_arm:
+            assert any(criterion in prompt
+                       for prompt, _ in INSTRUCTIONS.values()), (
+                f"« {criterion} » est étiquetable et n'est dans AUCUN bras : "
+                f"ce serait une étiquette qu'aucune instruction ne sait "
+                f"scorer, le pire des quatre cas")
+            assert criterion not in {s["criterion"]
+                                     for s in DOORS.values()}, (
+                f"bench a une porte pour « {criterion} », qui n'est pas dans "
+                f"l'instruction par défaut : elle serait un faux négatif "
+                f"garanti")
 
 
 class TestTheDoorWIDTHIsMeasurableAndReported:

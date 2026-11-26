@@ -32,6 +32,12 @@ reports/
 # The template to fill in is authorisation.example.json.
 authorisation.json
 
+# The system prompt of a target we did NOT write. Outside git
+# for the reason phase 7 set for garak's data: we point at the
+# source, we do not republish third-party text from a personal
+# repository. The template, foreign.example.json, is committed.
+foreign.json
+
 # garak snapshot: produced by payloads/garak_export.py in a separate venv.
 # Outside git -- the probes embed third-party datasets, which we do not
 # republish from a personal repository. Resync rather than freeze.

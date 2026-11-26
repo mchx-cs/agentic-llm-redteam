@@ -60,6 +60,8 @@ from targets.mock import ask_mock
 # the project's preference recorded for `stats.STATES`, `judge_identity()` and
 # the attack catalogue. A second copy drifts on the first change.
 from targets.bench import DOORS as BENCH_DOORS
+from targets.foreign import CONFIGURATIONS as FOREIGN_CONFIGURATIONS
+from targets.foreign import build_foreign_target
 from targets.bench import SECRET as bench_secret
 from targets.bench import build_bench_target
 from targets.demo import SECRET as demo_secret
@@ -103,6 +105,7 @@ LEVELLED_TARGETS = {
 # target is recognised as bundled.
 CONFIGURED_TARGETS = {
     "bench": (build_bench_target, BENCH_DOORS),
+    "foreign": (build_foreign_target, FOREIGN_CONFIGURATIONS),
 }
 
 
