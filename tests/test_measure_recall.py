@@ -183,9 +183,10 @@ class TestTheCLIReallyReachesTheMeasurement:
     def test_the_flags_reach_measure(self, monkeypatch, tmp_path):
         seen = {}
 
-        def fake(campaigns, attempts, target, output, show=print):
+        def fake(campaigns, attempts, target, output, show=print,
+                 doors=None):
             seen.update(campaigns=campaigns, attempts=attempts,
-                        target=target, output=output)
+                        target=target, output=output, doors=doors)
             return [], {"declared": True}
 
         monkeypatch.setattr(recall, "measure", fake)
@@ -194,7 +195,25 @@ class TestTheCLIReallyReachesTheMeasurement:
         recall.main(["--campaigns", "2", "--attempts", "4",
                      "--target", "bench", "--output", str(out)])
         assert seen == {"campaigns": 2, "attempts": 4, "target": "bench",
-                        "output": pathlib.Path(str(out))}
+                        "output": pathlib.Path(str(out)), "doors": None}
+
+    def test_a_single_DOOR_can_be_rerun(self, monkeypatch, tmp_path):
+        """
+        Reserve aux REPARATIONS, et la regle est non selective : seuls les
+        bras dont la PORTE a bouge sont relances, ce qui est determine par le
+        changement d'instrument et jamais par le resultat.
+        """
+        seen = {}
+
+        def fake(campaigns, attempts, target, output, show=print, doors=None):
+            seen["doors"] = doors
+            return [], {"declared": True}
+
+        monkeypatch.setattr(recall, "measure", fake)
+        monkeypatch.setattr(recall, "_widths", lambda *a, **k: {})
+        recall.main(["--door", "consignes", "--door", "outil",
+                     "--output", str(tmp_path / "x.json")])
+        assert seen["doors"] == ["consignes", "outil"]
 
     def test_widths_only_calls_NO_model(self, monkeypatch, capsys):
         """
