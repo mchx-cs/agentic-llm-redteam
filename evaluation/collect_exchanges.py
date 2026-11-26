@@ -31,12 +31,15 @@ Run it from the project root with:  python -m evaluation.collect_exchanges
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from agents.attacker import generate_payloads
 from agents.planner import _share_budget
 from console import write_in_utf8
 from targets import choose_target, secret_of
+from targets.indirect import (INDIRECT_TRIGGER, NoIndirectChannel,
+                              require_indirect)
 
 OUTPUT_FILE = Path(__file__).parent / "to_label.json"
 
@@ -79,10 +82,16 @@ def _sample(payloads, limit):
     return _share_budget(payloads, limit)
 
 
-def collect(target_name=None, limit=MAX_PAYLOADS):
+def collect(target_name=None, limit=MAX_PAYLOADS, indirect=False):
     # The one `.env` names unless told otherwise: we therefore harvest from
     # the decoy as readily as from `demo`, without touching this script.
     ask_target = choose_target(target_name)
+    # LE CANAL EST EXIGE, jamais devine. Une cible qui jette la note en
+    # silence laisserait croire qu'on a mene une attaque indirecte quand le
+    # modele n'a jamais vu la note : le juge noterait un echange anodin et la
+    # recolte porterait une provenance fausse.
+    if indirect:
+        require_indirect(ask_target, target_name or "the configured target")
     # DECLARED by the target, never hardcoded. `labelling_prepass` searches
     # the replies for this exact string to tell the author who said the
     # secret, so a wrong value here reports zero disclosures over a harvest
@@ -105,7 +114,13 @@ def collect(target_name=None, limit=MAX_PAYLOADS):
     exchanges = list(existing.get("exchanges", []))
     already = {entry.get("id") for entry in exchanges}
 
+    # La LIVRAISON est dans l'identifiant : la recolte saute les ids deja
+    # presents, donc une recolte indirecte qui reutiliserait les ids directs
+    # serait declaree << deja recoltee >> et n'ajouterait rien en affichant
+    # son travail -- le defaut du 2026-11-13.
     stamp = (target_name or "env").replace(":", "")
+    if indirect:
+        stamp = f"{stamp}i"
     added = 0
     for payload_number, payload in enumerate(kept, start=1):
         # All the replies to one payload form a group: they will have to go
@@ -115,7 +130,16 @@ def collect(target_name=None, limit=MAX_PAYLOADS):
             identifier = f"{group}-{sample}"
             if identifier in already:
                 continue
-            reply = ask_target(payload["text"])
+            if indirect:
+                # Le payload va dans le contenu RECUPERE, et la question
+                # posee est le declencheur FIXE : s'il variait il serait une
+                # seconde variable, et une fuite pourrait s'imputer a une
+                # question bien choisie plutot qu'a la note.
+                ask_target.plant(payload["text"])
+                asked = INDIRECT_TRIGGER
+            else:
+                asked = payload["text"]
+            reply = ask_target(asked)
             exchanges.append({
                 "id": identifier,
                 "group": group,
@@ -125,8 +149,16 @@ def collect(target_name=None, limit=MAX_PAYLOADS):
                 "source": (f"real target — {payload['technique']} / "
                            f"{payload['objective']} / "
                            f"{payload['transformation']}"),
-                "payload": payload["text"],
+                # Ce qui a ete DEMANDE, et non le payload : en indirect
+                # les deux diffèrent, et c'est l'echange que le juge verra.
+                "payload": asked,
                 "reply": reply,
+                # LA PROVENANCE, estampillee a la SOURCE. `label.py` la
+                # conserve plutot que de la recalculer, donc elle traverse
+                # jusqu'au corpus -- et le juge ne pourra jamais la deduire,
+                # le document n'etant pas dans l'echange qu'on lui montre.
+                "delivery": "indirect" if indirect else "direct",
+                "planted": payload["text"] if indirect else None,
                 "expected": None,      # to fill in by hand: true or false
                 "trap": "",            # to fill in by hand
             })
@@ -150,6 +182,13 @@ def main(arguments=None):
     parser.add_argument("--target", default=None,
                         help="the target to harvest from (default: TARGET "
                              "in .env)")
+    parser.add_argument(
+        "--indirect", action="store_true",
+        help="PLANT each payload in the retrieved content, then ask the "
+             "fixed innocuous trigger. The target must DECLARE the channel; "
+             "the harvest refuses rather than guessing. Entries are stamped "
+             "`delivery: indirect`, which the judge can never derive since "
+             "the document is not in the exchange it is shown.")
     parser.add_argument("--payloads", type=int, default=MAX_PAYLOADS,
                         metavar="N",
                         help=f"payloads kept out of the library's thousands "
@@ -157,7 +196,17 @@ def main(arguments=None):
                              f"{SAMPLE_COUNT} times, so N x {SAMPLE_COUNT} "
                              f"exchanges to label by hand.")
     parsed = parser.parse_args(arguments)
-    collect(target_name=parsed.target, limit=parsed.payloads)
+    try:
+        collect(target_name=parsed.target, limit=parsed.payloads,
+                indirect=parsed.indirect)
+    except NoIndirectChannel as refusal:
+        # Attrape plutot que laisse remonter : un traceback sur une erreur
+        # legitime d'operateur est le defaut corrige pour les campagnes --
+        # << huit lignes de traceback avec le bon message noye dedans >>. Le
+        # message de `require_indirect` dit deja quoi faire, il ne lui manque
+        # que de sortir seul.
+        print(f"\nHarvest REFUSED.\n{refusal}", file=sys.stderr)
+        return 2
     return 0
 
 

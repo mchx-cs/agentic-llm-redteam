@@ -222,11 +222,32 @@ class TestTheCLIReallyDrivesIt:
     """
 
     def test_the_flags_reach_collect(self, monkeypatch):
+        """
+        EXACT et non partiel, et c'est ce qui a mordu : un correctif de
+        2026-11-26 avait laisse `collect(arguments.target, ...)` la ou le
+        parse s'appelle `parsed`, et c'est cette egalite qui l'a dit. Elle a
+        gagne `indirect` le meme jour parce que le COMPORTEMENT a grossi,
+        pas parce qu'elle etait trop stricte.
+        """
         seen = {}
         monkeypatch.setattr(harvest, "collect",
                             lambda **kwargs: seen.update(kwargs))
         harvest.main(["--target", "demo:2", "--payloads", "7"])
-        assert seen == {"target_name": "demo:2", "limit": 7}
+        assert seen == {"target_name": "demo:2", "limit": 7,
+                        "indirect": False}
+
+    def test_the_INDIRECT_flag_reaches_collect(self, monkeypatch):
+        """
+        La moitie qui compte : sans elle, `--indirect` pourrait s'arreter a
+        argparse et la recolte serait DIRECTE en se croyant indirecte -- une
+        provenance fausse estampillee sur chaque entree, ce que ce champ
+        existe precisement pour empecher.
+        """
+        seen = {}
+        monkeypatch.setattr(harvest, "collect",
+                            lambda **kwargs: seen.update(kwargs))
+        harvest.main(["--indirect"])
+        assert seen["indirect"] is True
 
     def test_the_default_limit_is_the_POLICY(self, monkeypatch):
         seen = {}

@@ -452,14 +452,33 @@ def _per_delivery(exchanges, results_by_id):
         groups.setdefault(exchange.get("delivery") or "unrecorded",
                           []).append(exchange)
 
-    if len(groups) < 2:
-        only = next(iter(groups), None)
-        if only == "direct":
-            print("\n--- Scope: DIRECT injection only ---")
+    # LA PORTEE SE DECLENCHE SUR LES POSITIFS, et non sur la presence d'une
+    # seconde population. Une premiere version testait `len(groups) < 2` :
+    # quatre entrees indirectes NEGATIVES l'auraient fait taire sans rendre
+    # son affirmation fausse, puisqu'il n'y aurait toujours rien a detecter.
+    # Le precedent de la bonne forme est juste au-dessus, dans
+    # `_per_language` : une population sans vulnerabilite donne un taux de
+    # faux positifs et AUCUN rappel.
+    indirect = [e for e in exchanges
+                if (e.get("delivery") or "direct") != "direct"]
+    if not any(e["expected"] for e in indirect):
+        print("\n--- Scope: nothing measured on INDIRECT injection ---")
+        if not indirect:
             print("Every exchange here carries its payload in a USER turn. "
                   "OWASP enumerates indirect injection as one of LLM01's two "
                   "types, so these figures say nothing about an instruction "
                   "that arrived through retrieved content.")
+        else:
+            print(f"{len(indirect)} exchange(s) arrived through retrieved "
+                  f"content, and NONE of them is a vulnerability. They "
+                  f"therefore bound false positives there and say nothing "
+                  f"about DETECTION: there is nothing to detect. OWASP "
+                  f"enumerates indirect injection as one of LLM01's two "
+                  f"types.")
+        if not indirect:
+            return
+
+    if len(groups) < 2:
         return
 
     print("\n--- Per delivery (where the instruction came from) ---")

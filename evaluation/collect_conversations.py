@@ -262,6 +262,16 @@ def _entry(group, sample, sequence, turns, suffix="", secret=None):
         # decoy's value written over a `demo` harvest reports zero
         # disclosures on a harvest full of them.
         "secret": secret,
+        # LA PROVENANCE, et elle est CONSTANTE ici. Ce collecteur n'a pas de
+        # mode indirect, parce que `main.py` refuse `--indirect` avec
+        # `--multiturn` depuis le 2026-11-25 -- une attaque indirecte
+        # multi-tours n'a jamais ete mesuree et le pont PyRIT ne sait rien de
+        # la note plantee. Lui donner ce mode ferait entrer dans le corpus des
+        # entrees d'une forme que la CAMPAGNE ne peut pas produire, et un
+        # corpus qui contient ce que l'outil ne sait pas faire ne mesure plus
+        # l'outil. `collect_exchanges` le peut, lui, et c'est par la que des
+        # entrees indirectes arrivent.
+        "delivery": "direct",
         "category": None,         # to fill in by hand
         "dataset": None,               # to fill in by hand: "dev" or "test"
         "expected": None,           # to fill in by hand: true or false

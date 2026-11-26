@@ -104,28 +104,58 @@ class TestTheProvenanceIsREAD:
     def _entry(self, identifier, delivery, expected):
         return {"id": identifier, "delivery": delivery, "expected": expected}
 
-    def test_a_HOMOGENEOUS_corpus_declares_its_SCOPE(self):
+    def test_a_corpus_with_NO_indirect_entry_declares_its_SCOPE(self):
         """
-        Tant que le corpus est tout direct, TOUTES les figures publiées ne
+        Tant qu'aucune entrée n'est indirecte, TOUTES les figures publiées ne
         décrivent que l'injection directe, et rien ne le disait. OWASP
         énumère l'indirect comme l'un des deux TYPES de LLM01, donc ce n'est
         pas une nuance : c'est la moitié d'une famille.
         """
         out = self._run([self._entry("A", "direct", True)],
                         {"A": {"reussi": True}})
-        assert "DIRECT injection only" in out
+        assert "nothing measured on INDIRECT" in out
+        assert "USER turn" in out
         assert "LLM01" in out
 
-    def test_and_the_scope_line_DISAPPEARS_once_indirect_entries_exist(self):
+    def test_indirect_NEGATIVES_do_not_silence_the_scope_line(self):
         """
-        Le contraste, sans lequel le test précédent passerait sur une ligne
-        imprimée en toute circonstance.
+        LE DÉFAUT QUE QUATRE ENTRÉES RÉCOLTÉES ONT EXPOSÉ avant d'être
+        étiquetées. La première version testait `len(groups) < 2` : quatre
+        entrées indirectes NÉGATIVES l'auraient fait taire, alors qu'elles ne
+        rendent pas son affirmation fausse — il n'y a toujours rien à
+        détecter là-bas.
+
+        Ma condition comparait la PRÉSENCE d'une seconde population là où
+        l'affirmation dépend de cette population ayant des POSITIFS. Le
+        précédent de la bonne forme est dans `_per_language`, qui imprime
+        déjà « a pair with no real vulnerability gives a false-positive rate
+        and no recall ».
+        """
+        out = self._run(
+            [self._entry("A", "direct", True)]
+            + [self._entry(f"H{n}", "indirect", False) for n in range(4)],
+            {"A": {"reussi": True},
+             **{f"H{n}": {"reussi": False} for n in range(4)}})
+        assert "nothing measured on INDIRECT" in out
+        assert "NONE of them is a vulnerability" in out
+        assert "bound false positives" in out, (
+            "la ligne doit dire ce que ces entrées BORNENT, sinon elle lit "
+            "comme si elles ne servaient à rien")
+        # Et la ventilation parait quand meme : c'est elle qui PORTE cette
+        # borne.
+        assert "Per delivery" in out
+
+    def test_the_scope_line_DISAPPEARS_once_an_indirect_POSITIVE_exists(self):
+        """
+        Le contraste, sans lequel les deux tests précédents passeraient sur
+        une ligne imprimée en toute circonstance. Un positif indirect est le
+        moment où il y a enfin quelque chose à mesurer.
         """
         out = self._run(
             [self._entry("A", "direct", True),
              self._entry("B", "indirect", True)],
             {"A": {"reussi": True}, "B": {"reussi": True}})
-        assert "DIRECT injection only" not in out
+        assert "nothing measured on INDIRECT" not in out
         assert "Per delivery" in out
 
     def test_precision_is_n_a_when_NO_positive_verdict_was_issued(self):
