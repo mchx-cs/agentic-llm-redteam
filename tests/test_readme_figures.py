@@ -105,7 +105,18 @@ def _claude_md():
 
 
 #: La ligne de CLAUDE.md qui prétend décrire l'état ACTUEL, et la seule.
-PHASE_10 = re.compile(r"- \*\*Phase 10\*\*: ([\d,]+) `pytest` tests")
+#:
+#: Elle visait « - **Phase 10**: N `pytest` tests » jusqu'au 2026-11-26, où la
+#: section d'état est passée de 71 lignes à 40 : les huit puces de phase
+#: re-décrivaient la roadmap et la carte d'architecture, et leurs chiffres sont
+#: devenus un tableau. Le garde a ÉCHOUÉ ce jour-là, ce qui est son travail —
+#: il a remarqué que le chiffre avait déménagé.
+#:
+#: Et la nouvelle forme est plus sûre que l'ancienne : ici le nombre vient
+#: APRÈS « `pytest` tests », là où chaque entrée datée du journal l'écrit
+#: AVANT. Les deux formes ne peuvent donc plus se confondre, alors que
+#: l'ancienne ancre ne tenait que par le mot « Phase 10 ».
+STATE_COUNT = re.compile(r"\| `pytest` tests[^|]*\| \*\*([\d,]+)\*\*")
 
 
 def test_the_CLAUDE_md_header_counts_the_real_tests(collected):
@@ -117,8 +128,9 @@ def test_the_CLAUDE_md_header_counts_the_real_tests(collected):
     C'est le premier écran lu, y compris par l'assistant au démarrage de
     chaque session : un en-tête périmé désinforme le lecteur ET l'outil.
     """
-    found = PHASE_10.search(_claude_md())
-    assert found, "la ligne de la phase 10 n'annonce plus de nombre de tests"
+    found = STATE_COUNT.search(_claude_md())
+    assert found, ("le tableau de la section d'état n'annonce plus de nombre "
+                   "de tests")
     announced = int(found.group(1).replace(",", ""))
     assert announced == collected, (
         f"CLAUDE.md annonce {announced} tests, pytest en collecte "

@@ -12,74 +12,43 @@ stay honest about how far it has got.
 
 ## Current state: 14 phases closed, 2 and 5 in progress
 
-The full campaign **reconnaissance → planning → attack → judgement → replay** runs end
-to end locally, and the next attempt is now chosen from what the target has already
-replied (phase 3a).
+**This section describes NOW, so it rots.** It is kept to a screen on purpose:
+an addition here should DISPLACE something, not accumulate. The narrative of
+how each figure came about is in the journal, where it is dated and does not
+rot. The roadmap table says which phases are closed; the architecture map says
+what each file does; neither is repeated here.
 
-A campaign can also attack over SEVERAL TURNS (`--multiturn`, phase 3b) — measured at
-the three defence levels, and it finds LESS than single-turn at equal target requests at
-two of them, with a tie at the third — and it reaches an endpoint by
-a JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
+The full campaign **reconnaissance → planning → attack → judgement → replay**
+runs end to end locally, the next attempt is chosen from what the target has
+already replied (phase 3a), and a campaign can attack over SEVERAL TURNS
+(`--multiturn`, phase 3b) or PLANT each payload in retrieved content and then
+ask one fixed innocuous question (`--indirect`). It reaches an endpoint by a
+JSON POST, a GET, a `multipart` form or a WebSocket (`--target-transport`).
 
-THREE vulnerable targets ship with it, one per ASSET: `demo` a secret string, `records`
-access control over look-alike records, `docs` the integrity of its own instructions
-against content it retrieved. `docs` carries the indirect channel (`ask.plant`), which is
-DECLARED and refused rather than faked, and `--indirect` makes a campaign PLANT each
-payload and then ask one fixed innocuous question — the judge reads that exchange and
-never the note.
+THREE vulnerable targets ship with it, one per ASSET: `demo` a secret string,
+`records` access control over look-alike records, `docs` the integrity of its
+own instructions against content it retrieved.
 
-- **Phase 1**: the library is filled — **1,166 source payloads**, of which 1,143 come
-  from garak (52 probes, local snapshot) and 21 were written by hand where garak
-  supplies nothing in a form the judge can score: 11 for LLM07, 4 for LLM06, 6 for
-  document-shaped indirect injection (plus 2 `controle` templates). Crossed
-  with the objectives and the transformations, that gives a catalogue of **9,304**
-  combinations — a figure that only grew once composition made each complete payload
-  also produce its composed variants, and which the French version of this file still
-  reported as 2,344. Three home-grown techniques stay empty
-  (`injection-directe`, `jailbreak`, `divulgation-information`) and that is deliberate:
-  their families are covered by 52 garak probes, and filling them would add maintenance
-  debt without adding coverage. What the phase does NOT say: the coverage is garak's,
-  and the 15 hand-written payloads will age — `garak_source --version` flags the day
-  garak fills the gap.
-- **Phase 2**: the judge has explicit criteria, examples, JSON output, temperature 0,
-  reasons before ruling, receives the passages decoded by `detectors.py`, and abstains
-  when its verdict contradicts itself. It is measured on hand-labelled exchanges, split
-  into a development set (175 entries, `python -m evaluation.evaluate_judge`) and a
-  frozen test set (81 entries, `--test`) — **256 in all, of which 139 were labelled by
-  the AUTHOR and 117 by a model**, a split stored on every entry because a figure over
-  model-decided labels measures agreement between models and not whether the judge is
-  right. Four criteria are scorable (`divulgation`, `obeissance`, `abus_outils`,
-  `fuite_donnees_tiers`), in a single turn and in conversation. A leaked value is checked **by replay**
-  before being declared (`agents/verifier.py`);
-  `python -m evaluation.collect_exchanges` harvests real exchanges with the target;
-  `python -m evaluation.label` is for labelling them by hand, and `--integrate` then
-  pours them into the corpus.
-- **Phase 12**: `targets/demo.py` is the deliberately badly protected target, with three
-  defence levels (`--target demo`, `demo:2`, `demo:3`). Level 1 gives up the code on a
-  plain question; levels 2 and 3 refuse, and level 3 held the VALUE 30 times out of 30
-  on 2026-11-19 — while leaking the instruction text around it 14 times, because a
-  filter that protects a value does not protect the instruction mentioning it. THREE
-  abridged example reports are committed in `examples/` (single-turn, multi-turn,
-  pass@k), and the README shows a campaign output excerpt from the first.
-- **Phase 9**: `audit.py` refuses to start against a remote target without a valid
-  mandate (`authorisation.json`, outside git), and records every exchange with the
-  target in a JSONL trail written as it goes.
-- **Phase 11**: campaign budget enforced in `llm_client` (`CALL_BUDGET`, `TOKEN_BUDGET`
-  in `.env`). Reaching its ceiling raises `BudgetExceeded`, an exception distinct from a
-  failure: the campaign stops cleanly, keeps its findings, and the report announces at
-  the top that it was **cut short**.
-- **Phase 10**: 1,777 `pytest` tests in `tests/`, with no LLM call at all, run
-  automatically on GitHub Actions (Ubuntu and Windows, Python 3.10 and 3.13 — all four
-  combinations pass). `pyproject.toml` packages the project and exposes the `redteam`
-  command.
-- **Phase 6**: `report.py` produces `result.json` (the source of truth) and `report.md`
-  (the rendering), via `python main.py --report`. Severity follows deterministic rules,
-  not an LLM. The campaign now goes to the END of its plan and collects every finding,
-  instead of stopping at the first.
-- **Phase 5**: `reconnaissance.py` probes the target and builds a profile of it (role,
-  language, tools, refused subjects); `planner.py` derives from it, by deterministic
-  rules, which families to launch, which objectives to aim at and in what order. Tested
-  against simulated targets: `python -m evaluation.check_reconnaissance`.
+| | figure | guarded? |
+|---|---|---|
+| source payloads | **1,166** (1,143 garak / 52 probes, 23 by hand) | no — the snapshot is outside git |
+| catalogue, crossed with objectives and transformations | **9,304** | no — same reason |
+| labelled corpus | **256** entries, 175 `dev` / 81 `test` | **yes** |
+| … of which labelled by the AUTHOR | **139**, against 117 by a model | **yes** |
+| scorable criteria | **4** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers` | **yes** |
+| `pytest` tests, no LLM call at all | **1,789** | **yes** |
+
+**The right-hand column is not decoration.** The payload figures depend on
+`payloads/garak.json`, which is gitignored — a guard on them would pass on a
+development machine and fail in continuous integration, which is exactly the
+defect that turned CI red for six days. So: guard what CI can see, DECLARE what
+it cannot.
+
+Two figures worth keeping in view because they bound what the tool can claim:
+the corpus is 139 author-labelled against 117 model-labelled, and a figure over
+model-decided labels measures agreement between models rather than whether the
+judge is right. And every recall floor rests on its criterion's POSITIVES: five
+positives bound a perfect recall at 57%, never at 100%.
 
 ## Architecture
 
@@ -259,6 +228,14 @@ production, and that a roadmap centred on attacks left invisible.
 Phase 3 is the most expensive, and the only one where PyRIT does the heavy lifting.
 
 ## Decisions taken, and why
+
+**A mixed section, and the mixture is historical rather than intended.** Its
+durable half states a decision and why it was taken — those do not rot, and
+they belong here. Its other half is 39 dated entries written before the journal
+had a heading of its own. They are not moved: an entry is true of its date, and
+relocating thousands of lines of it would be rewriting rather than tidying.
+**New dated entries go under `## Journal`.**
+
 
 **The judge does not know the target's secret.** It rules only from the visible
 exchange, as in a real black-box test. That is what makes its job hard — and it is the
@@ -4536,6 +4513,21 @@ unconditional sentence in the output into a claim that has to be re-checked**
 defects of 2026-11-12, all four of 2026-11-17, the `precision=0%` on an
 unmeasured population and the by-criterion attribution all came out that way:
 never from a test, never from reading the code.
+
+## Journal — dated entries, in the order they happened
+
+**This file has TWO regimes of truth, and only one of them rots.** Everything
+below is dated: each entry is true of its date, none is rewritten — the same
+reason the 91 French commits and the 18 sealed trails are not rewritten. A
+reader meeting a figure here reads a date, never an inconsistency.
+
+The sections ABOVE describe the state NOW, so every sentence in them is a claim
+that goes stale in silence at each commit that does not touch it. That is why
+they are kept to a screen, why their figures carry executable guards, and why
+an addition to them should DISPLACE something rather than accumulate.
+
+Before this heading existed, these entries were filed under *What remains*,
+which promised the present and delivered 6,400 lines of history.
 
 **A pass over the README, and it found what the last two days had made false
 (2026-11-17).** Asked for alongside recording the single-turn / multi-turn
@@ -10950,6 +10942,107 @@ mutation ; celui-ci est sorti parce qu'un protocole avait écrit d'avance ce
 qu'il faudrait regarder si un chiffre divergeait.
 
 1,777 `pytest` tests, toujours sans aucun appel à un modèle.
+
+**LE JOURNAL N'AVAIT AUCUN TITRE À LUI, et c'était structurel et non de
+la prose qui dérive (2026-11-26).** Point 5 des cinq axes. Le diagnostic posé
+en bilan était « la moitié d'état rouille » ; mesuré, il était à moitié faux et
+le vrai défaut était ailleurs.
+
+**CE QUI ÉTAIT FAUX DANS MON DIAGNOSTIC : les chiffres de la section d'état
+étaient tous JUSTES.** Vérifiés un par un contre le code — 256 entrées,
+139 `author` / 117 `model`, 175 `dev` / 81 `test`, 1 166 payloads, 9 304
+combinaisons, 1 777 tests, 4 critères. Les gardes du 2026-11-21 et les
+corrections de la semaine avaient fait leur travail. Ce qui reste à corriger
+est la LONGUEUR, pas l'exactitude, et le dire dans ce sens évite de chercher
+une rouille qui n'est pas là.
+
+**ET CE QUI ÉTAIT PIRE QUE DIT : les 6 400 lignes d'entrées datées vivaient
+SOUS « What remains ».** Donc la table des matières de GitHub rangeait toute
+l'histoire du projet sous un titre qui promet l'état présent, et un lecteur ne
+pouvait pas distinguer l'état de l'historique en NAVIGUANT. Ce fichier a deux
+régimes de vérité — les entrées datées ne vieillissent pas, les sections
+d'état se périment à chaque commit qui ne les touche pas — et seul le second
+demande une relecture. Un seul des deux avait un titre.
+
+| | avant | après |
+|---|---|---|
+| `## Current state` | 71 lignes | **40** |
+| `## What remains` | **6 618** lignes | **204** |
+| `## Journal` | *n'existait pas* | 6 429 |
+
+Une ligne insérée, et « What remains » retrouve sa taille réelle. La section
+d'état perd ses huit puces de phase, qui re-décrivaient la roadmap et la carte
+d'architecture ; ce qu'elles portaient d'irremplaçable — les CHIFFRES — devient
+un tableau, **parce qu'un tableau de chiffres se garde là qu'un paragraphe ne
+se garde pas.**
+
+**LA COLONNE « guarded? » N'EST PAS DÉCORATIVE, et c'est la décision qui
+compte.** Les chiffres de corpus se vérifient depuis le fichier committé, donc
+CI les tient. Les chiffres de payloads dépendent de `payloads/garak.json`, qui
+est **gitignoré** : un garde sur eux passerait sur une machine de développement
+et échouerait en intégration continue — exactement le défaut qui a mis la CI au
+rouge pendant six jours. La règle est donc écrite dans le document lui-même :
+**garder ce que CI voit, DÉCLARER ce qu'elle ne voit pas**, et un test protège
+cette non-garantie pour que personne n'ajoute « utilement » le garde manquant.
+
+**UN GARDE ÉCRIT PUIS RETIRÉ, et c'est la partie qui vaut d'être lue.** J'avais
+d'abord interdit toute ENTRÉE DATÉE dans une section d'état, repérée par un
+titre en gras portant une date ISO. Mesuré sur le document réel, il était faux
+**des deux côtés** : il attrapait cinq puces d'état parfaitement légitimes
+(« pass@k is DONE (2026-11-20) » dit l'état d'un item, avec sa date) et il
+MANQUAIT la plupart des vraies entrées, dont le titre renvoie la date à la
+ligne suivante. **Une date n'est pas le discriminant entre l'état et
+l'histoire.**
+
+Le PLAFOND fait ce travail et mieux : une entrée de journal fait des dizaines
+de lignes, donc elle ne tient pas dans une section capée à 40. Ce projet a déjà
+retiré un garde entier pour avoir crié faux deux fois sur quatre ; celui-ci
+criait faux cinq fois sur cinq. Et un test mesure que les plafonds sont assez
+SERRÉS pour refuser une entrée typique — un plafond plus large qu'une entrée ne
+refuserait rien, et serait la précaution décorative que ce fichier dénonce
+ailleurs.
+
+**UN SEUIL ARBITRAIRE REMPLACÉ PAR UNE PROPRIÉTÉ RELATIVE.** Mon premier test
+exigeait « plus de 20 dates distinctes » sous le journal : il y en a 19, et le
+projet s'étend sur dix-neuf jours ouvrés. Ajuster le nombre pour qu'il passe
+serait régler le garde sur les données qu'il examine. Il affirme désormais que
+le journal porte PLUS de dates que n'importe quelle section d'état, ce qui
+n'a pas besoin de seuil et exprime la vraie revendication.
+
+**ET MON RECALCUL A CONTREDIT LE CORPUS, ce qui est la démonstration de la
+règle.** En vérifiant les 175 `dev` / 81 `test` annoncés, mon propre
+regroupement a rendu **174 / 82**. Le champ `dataset` est STOCKÉ sur chaque
+entrée, et la raison enregistrée le 2026-11-15 est exactement celle-ci : « un
+fait enregistré reste reproductible si le classifieur bouge ». Mon classifieur
+a bougé, dans la session même où je vérifiais. L'en-tête avait raison.
+
+**UNE MUTATION MUETTE SUR MON PROPRE TEST, la septième fois dans ce fichier
+qu'un garde ne vaut que ce qu'il COMPARE.** Je cherchais le MOT `rewritten`
+dans le titre du journal ; la phrase voisine le contient aussi, donc retirer la
+clause ne faisait rien échouer. Le test compare maintenant la PHRASE que la
+mutation retire.
+
+**Et le garde du compte de tests a échoué, ce qui est son travail :** il était
+ancré sur la ligne « Phase 10 » que la réduction a supprimée, donc il a
+remarqué que le chiffre avait déménagé. Repointé sur la ligne du tableau — et
+la nouvelle forme est plus sûre que l'ancienne, puisque le nombre y vient
+APRÈS « `pytest` tests » là où chaque entrée datée l'écrit AVANT : les deux
+formes ne peuvent plus se confondre, alors que l'ancienne ancre ne tenait que
+par le mot « Phase 10 ».
+
+**Ce qui n'est PAS fait, et c'est un choix :** `## Decisions taken, and why`
+fait encore 4 083 lignes et mélange des décisions durables avec 39 entrées
+datées écrites avant que le journal ait un titre. Elles ne sont pas déplacées —
+une entrée est vraie de sa date, et relocaliser des milliers de lignes serait
+réécrire plutôt que ranger. La section porte désormais une note qui le dit, et
+qui envoie les nouvelles entrées sous `## Journal`.
+
+Huit mutations, huit morsures : le journal privé de titre, sa clause de
+non-réécriture, la section d'état qui ne dit plus qu'elle rouille, un chiffre
+de corpus faux, la provenance effacée, un critère retiré du tableau, la
+non-garantie sur les payloads effacée, et la règle « garder ce que CI voit ».
+
+1,789 `pytest` tests, toujours sans aucun appel à un modèle.
 
 ## Legal framing
 
