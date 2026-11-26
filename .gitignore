@@ -67,6 +67,7 @@ modes*.json
 delivery*.json
 attribution*.json
 recall*.json
+judges*.json
 # And their LOGS, which is the half I forgot and had to untrack: a campaign's
 # stdout carries the complete payloads and the target's complete replies, and
 # keeping those out of a public repository is the whole reason `--abridge`
@@ -76,4 +77,5 @@ modes*.log
 delivery*.log
 attribution*.log
 recall*.log
+judges*.log
 *-report.log

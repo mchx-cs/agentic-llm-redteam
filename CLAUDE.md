@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **256** entries, 175 `dev` / 81 `test` | **yes** |
 | … of which labelled by the AUTHOR | **139**, against 117 by a model | **yes** |
 | scorable criteria | **4** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers` | **yes** |
-| `pytest` tests, no LLM call at all | **1,904** | **yes** |
+| `pytest` tests, no LLM call at all | **1,905** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
