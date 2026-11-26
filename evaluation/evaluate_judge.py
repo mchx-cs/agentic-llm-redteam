@@ -601,6 +601,52 @@ def _print_format_contribution(exchanges):
           f"many the FORMAT contributed to. A corpus fact, not a judge one.")
 
 
+def criteria_the_arm_can_name(language):
+    """
+    Les criteres que CE bras d'instruction peut emettre, LUS dans son enum.
+
+    Lus et non redits, pour deux raisons dont la seconde est la plus
+    importante. Une liste a nous divergerait du prompt a la premiere retouche
+    -- la derive par duplication que ce projet refuse partout. Et surtout :
+    une liste a nous permettrait de faire disparaitre un vrai rate en
+    declarant un critere inscorable. Ce que le juge peut NOMMER est dans la
+    sortie JSON qu'on lui impose, et c'est la seule source qui ne puisse pas
+    mentir sur ce point.
+    """
+    import re
+
+    enum = re.search(r'"critere":\s*(.+?),\s*"valeur"',
+                     system_prompt_for(False, language), re.S)
+    if enum is None:
+        raise RuntimeError(
+            f"the `{language}` instruction no longer declares a `critere` "
+            f"enum: this guard cannot tell what the judge may name, and a "
+            f"silent empty set would exclude the whole corpus")
+    return set(re.findall(r'"([a-z_]+)"', enum.group(1)))
+
+
+def unscorable_positives(exchanges, language):
+    """
+    Les POSITIFS dont ce bras ne peut pas nommer le critere.
+
+    SEULS LES POSITIFS, et l'asymetrie est la correction. Un positif dont le
+    critere est hors du bras est un faux negatif GARANTI : le juge n'a pas de
+    case pour le dire. Un NEGATIF, lui, est score correctement par n'importe
+    quel bras -- le juge dit `aucun`, l'etiquette dit non, vrai negatif -- et
+    l'exclure jetterait une mesure reussie, le raisonnement qui garde
+    `hallucination` scorable dans `stats.py`. Sous un bras qui PORTE le
+    critere, ce meme negatif peut devenir un faux positif, ce qui est une
+    vraie mesure de precision.
+    """
+    from evaluation.label import CRITERION_OF
+
+    nameable = criteria_the_arm_can_name(language)
+    return [exchange for exchange in exchanges
+            if exchange["expected"]
+            and CRITERION_OF.get(exchange["category"]) is not None
+            and CRITERION_OF[exchange["category"]] not in nameable]
+
+
 def evaluate(dataset="dev", language="fr", only=None):
     """
     Measures the judge, optionally on ONE format only.
@@ -623,6 +669,17 @@ def evaluate(dataset="dev", language="fr", only=None):
     if only:
         wanted = only == "conversations"
         exchanges = [e for e in exchanges if is_conversation(e) is wanted]
+
+    # A POSITIVE whose criterion this arm cannot name is a GUARANTEED false
+    # negative: the judge has no box to say it in. Counting it would drop the
+    # recall for a reason that is not the judge's, so it leaves the
+    # measurement -- and it is NAMED above the figures, never silently.
+    # The precedent is this file's own: conversations are excluded from the
+    # single-turn line and said so, because judging them on a format the
+    # instruction does not know would silently move a reference measurement.
+    set_aside = unscorable_positives(exchanges, language)
+    if set_aside:
+        exchanges = [e for e in exchanges if e not in set_aside]
     counts = {"VP": 0, "FP": 0, "VN": 0, "FN": 0, "a_revoir": 0}
     errors = []
     results_by_id = {}
@@ -641,6 +698,25 @@ def evaluate(dataset="dev", language="fr", only=None):
         print(f"    This is a diagnostic, NOT the `{dataset}` "
               f"measurement, and it must not be quoted as one.")
         print()
+
+    # Said at the TOP, like the provenance warning: a reader skimming must
+    # meet the exclusion before the figures, not after them.
+    if set_aside:
+        from evaluation.label import CRITERION_OF
+
+        absent = sorted({CRITERION_OF[e["category"]] for e in set_aside})
+        print(f"!!! {len(set_aside)} positive(s) SET ASIDE: the `{language}` "
+              f"instruction cannot name {', '.join(absent)}.\n"
+              f"    Its JSON enum does not carry it, so the judge has no box "
+              f"to say it in and each one\n"
+              f"    would be a GUARANTEED false negative -- a drop that is "
+              f"not the judge's doing. The\n"
+              f"    arm that carries the criterion measures them; this one "
+              f"cannot. Set aside: "
+              f"{', '.join(sorted(e['id'] for e in set_aside))}.\n"
+              f"    NEGATIVES are kept: `aucun` against a `false` label is a "
+              f"correct measurement,\n"
+              f"    and throwing it away would discard a successful one.\n")
 
     by_model = [e for e in exchanges if e.get("labelled_by") == "model"]
     if by_model:

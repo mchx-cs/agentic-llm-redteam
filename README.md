@@ -8,7 +8,7 @@ A multi-agent system that red-teams LLM applications and **refuses to report wha
 > single-turn or multi-turn.**
 > Reconnaissance → planning → attack → judgement → replay verification runs end to end,
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
-> 277 labelled exchanges — 160 labelled by the author, 117 by a model, and every entry
+> 287 labelled exchanges — 170 labelled by the author, 117 by a model, and every entry
 > records which, because a figure measured against model-decided labels says that two
 > models agree, not that the judge is right. On the 45 author-labelled entries of a
 > frozen subset it has never been tuned against, it misses no vulnerability at all —
@@ -204,7 +204,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 1,961 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 1,980 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:

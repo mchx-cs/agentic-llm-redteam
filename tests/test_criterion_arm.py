@@ -44,6 +44,18 @@ DEFAULT_SHA = "bfc7432b19344efd8159a34cdd37774ff36b8598c4eea9f0fe656daa9d9bd17e"
 DEFAULT_LENGTH = 8821
 
 
+def _corpus():
+    """Le corpus committe. Les invariants portent sur ce qui est ETIQUETE,
+    jamais sur ce que le module declare : un cas peut etre ecrit et attendre
+    le verdict de l'auteur."""
+    import json
+    import pathlib
+
+    return json.loads(pathlib.Path(
+        "evaluation/labelled_exchanges.json").read_text(
+            encoding="utf-8"))["exchanges"]
+
+
 class TestTheDefaultIsUntouchedBYTEForBYTE:
     """
     La propriété pour laquelle le bras existe. Sans elle, le critère 5 aurait
@@ -206,14 +218,72 @@ class TestTheSeverityTableGRADESIt:
 
 class TestTheCorpusCanLabelForItAndTheCasesExist:
 
-    def test_the_four_categories_exist(self):
+    def test_ONE_category_carries_the_positives_and_the_rest_are_NEGATIVE(
+            self):
+        """
+        LA PROPRIÉTÉ, et non un compte. La version d'avant affirmait
+        `len(mine) == 4` : elle est tombée en ajoutant
+        `modele-nomme-en-refusant` le 2026-11-26, et elle aurait PASSÉ sur un
+        corpus où l'une des quatre avait changé de bord — la forme exacte de
+        l'invariant indexé sur « 17 entrées de refus-mentionne-secret »,
+        corrigé le 2026-11-18.
+
+        Ce qui compte est l'ÉQUILIBRE : une seule catégorie porte les
+        positives, les autres sont négatives et majoritaires. Le risque de ce
+        critère n'est pas de manquer un nom de modèle, c'est de signaler une
+        faille à chaque fois qu'une cible dit « je suis une IA ».
+
+        Et une seconde catégorie positive serait l'erreur de
+        `multitours-reussi`, retirée le 2026-11-19 : la catégorie d'un cas
+        POSITIF décrit le critère enfreint, jamais la forme de l'attaque.
+        """
         from evaluation.label import CATEGORIES, CRITERION_OF
 
         mine = [c for c in CATEGORIES
                 if CRITERION_OF.get(c) == "fingerprinting"]
-        assert len(mine) == 4, (
-            f"quatre catégories sont dues — une positive et trois négatives, "
-            f"l'équilibre de D16–D20 — et il y en a {len(mine)} : {mine}")
+        carries_positive = {e["category"] for e in _corpus()
+                            if e["category"] in mine and e["expected"]}
+        assert carries_positive == {"fingerprinting"}, (
+            f"{carries_positive} portent des positives. Une seule le doit : "
+            f"la catégorie d'un cas positif détermine le critère, donc elle "
+            f"ne peut pas aussi décrire la forme.")
+        negatives = [c for c in mine if c != "fingerprinting"]
+        assert len(negatives) > len(carries_positive), (
+            f"les négatives doivent rester majoritaires, il y en a "
+            f"{len(negatives)} : {negatives}")
+
+    def test_the_register_A23_pinned_has_its_OWN_negative_category(self):
+        """
+        LE VERDICT DE L'AUTEUR SUR A23 A COÛTÉ UNE CATÉGORIE, et c'est ce que
+        ce test tient. Les trois négatives d'avant couvrent « se dire une
+        IA », « nommer son rôle » et « le nom vient de l'attaquant » : aucune
+        ne couvre une cible qui nomme SON PROPRE modèle en refusant. La
+        classer sous une voisine perdrait ce qui fait le cas — la dérive par
+        synonyme que la liste des catégories existe pour empêcher.
+
+        ET LE CRITÈRE N'A PAS ÉTÉ RETOUCHÉ pour s'accorder à l'étiquette.
+        Ses deux exemptions portent sur « sans nommer lequel » et sur le
+        RÔLE, donc il signalerait ce cas : c'est un faux positif attendu, le
+        miroir du faux négatif d'`A17` sous le bras par défaut. L'étiquette
+        est la vérité terrain, le critère est l'artefact sous test, et une
+        correction sans mesure AVANT n'est attribuable à rien — la leçon de
+        `D16-1`, 2026-11-19. A23 étant dans `dev`, cette correction pourra
+        s'y justifier le jour où une mesure la demande.
+        """
+        from evaluation.label import CRITERION_OF
+
+        assert CRITERION_OF["modele-nomme-en-refusant"] == "fingerprinting"
+        theirs = [e for e in _corpus()
+                  if e["category"] == "modele-nomme-en-refusant"]
+        assert theirs, "la catégorie n'a aucun cas : elle ne tient rien"
+        for entry in theirs:
+            assert not entry["expected"], (
+                f"{entry['id']} est positif sous une catégorie NÉGATIVE : "
+                f"le registre a changé de bord sans que personne le dise")
+            assert entry["dataset"] == "dev", (
+                f"{entry['id']} est dans `{entry['dataset']}` : une "
+                f"correction du critère ne pourrait plus se justifier sur "
+                f"lui sans régler sur le jeu de test")
 
     def test_three_of_the_four_are_the_NEGATIVE_traps(self):
         """
