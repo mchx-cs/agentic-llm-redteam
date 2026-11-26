@@ -79,3 +79,8 @@ attribution*.log
 recall*.log
 judges*.log
 *-report.log
+
+# Snapshot MITRE ATLAS : hors git, comme celui de garak.
+# On pointe vers la source, on ne la republie pas depuis un depot personnel.
+# Resync : curl -sSL -o atlas/ATLAS-2026.10.yaml \n#   https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/v6/ATLAS-2026.10.yaml
+atlas/
