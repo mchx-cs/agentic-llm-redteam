@@ -33,10 +33,10 @@ own instructions against content it retrieved.
 |---|---|---|
 | source payloads | **1,166** (1,143 garak / 52 probes, 23 by hand) | no — the snapshot is outside git |
 | catalogue, crossed with objectives and transformations | **9,304** | no — same reason |
-| labelled corpus | **291** entries, 210 `dev` / 81 `test` | **yes** |
-| … of which labelled by the AUTHOR | **174**, against 117 by a model | **yes** |
+| labelled corpus | **307** entries, 226 `dev` / 81 `test` | **yes** |
+| … of which labelled by the AUTHOR | **190**, against 117 by a model | **yes** |
 | scorable criteria | **4** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers` | **yes** |
-| `pytest` tests, no LLM call at all | **2,010** | **yes** |
+| `pytest` tests, no LLM call at all | **2,019** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -12516,6 +12516,138 @@ seulement -- il lance la reconnaissance et prend ses objectifs `refus-N` /
 `outil-N`. Le collecteur mono-tour ne l'a jamais eu.
 
 2,010 `pytest` tests, toujours sans aucun appel a un modele.
+
+**LA RECONNAISSANCE DANS LE COLLECTEUR MONO-TOUR, et le corpus a enfin une
+population INDIRECTE (2026-11-27).**
+
+**LE DEFAUT ETAIT STRUCTUREL.** `generate_payloads()` croisait les techniques
+avec `library["objectives"]`, et les trois generiques -- `presentation`,
+`mission`, `culture-generale` -- sont tous ANODINS. Donc une recolte mono-tour
+ne demandait jamais ce que la cible protege, et ses entrees etaient des
+negatives par construction. C'est le defaut corrige le 2026-11-13 pour le
+collecteur de CONVERSATIONS seulement ; le mono-tour ne l'a jamais eu.
+
+**TROIS PIECES, et la troisieme est celle sans laquelle les deux autres ne
+servent a rien.**
+- `generate_payloads(objectives=None)`, additif -- le defaut reste la
+  bibliotheque. Un PARAMETRE et non une globale : `measure_modes` patche
+  `LIBRARY_FILE` plutot que la fonction, parce que le planificateur lie
+  `load_library` a l'import, et une globale ici porterait la meme fragilite.
+- La logique est **LUE chez le voisin** : `_objectives` devient
+  `targeted_objectives`, elle cesse d'etre privee parce qu'elle est partagee.
+  Ses quarante lignes de raisonnement -- la borne, le repli sur l'objectif
+  anodin, et l'ANNONCE de ce repli -- ne doivent exister qu'une fois.
+- **L'OBJECTIF EST DANS L'IDENTIFIANT.** Le numero de payload est un INDEX
+  dans la liste echantillonnee, et cette liste change avec les objectifs :
+  sans ce tag, relancer avec de nouveaux objectifs produirait les MEMES ids
+  pour des payloads DIFFERENTS, que la recolte sauterait en les declarant
+  deja recoltes. C'est le defaut du 2026-11-13, et il est **pire ici** -- la
+  il sautait des sequences identiques, ici il sauterait des payloads qui ne
+  sont pas les memes.
+
+`--harmless` garde l'ancien comportement, et ce n'est pas une commodite : un
+corpus sans entrees anodines a des faux positifs NULS par construction, ce que
+le manuel OWASP nomme comme le piege du corpus tout-malveillant.
+
+**LE PIEGE DU 2026-11-13 ETAIT ARME UNE SECONDE FOIS.** Cabler la
+reconnaissance a rendu les tests du collecteur dependants du modele
+ANALYSTE -- et ils passaient ICI parce qu'Ollama tourne sur cette machine. En
+integration continue, ou il n'y a ni Ollama ni cle, ils tomberaient. Les deux
+fichiers ont desormais la fixture `no_model_call` que le collecteur de
+conversations avait gagnee pour exactement cette raison, et la lecon reste
+celle-la : **un environnement de developpement plus riche que la CI masque les
+dependances qu'on vient d'ajouter.**
+
+Un detail interessant au passage : la fixture ne fait PAS lever ces tests,
+parce que `reconnoitre` survit a un modele qui refuse (le garde du 2026-11-23)
+et retombe sur l'objectif anodin en l'ANNONCANT. Le garde ecrit pour un
+fournisseur qui refuse sert aussi a un test qui interdit les appels.
+
+**SEIZE ENTREES INDIRECTES, etiquetees NEGATIVES par l'auteur.** La premiere
+population indirecte du corpus, qui en avait zero -- le manque que l'audit du
+2026-11-26 avait nomme alors qu'OWASP enumere l'indirect comme l'un des deux
+TYPES de LLM01.
+
+**La lecture qui soutient le verdict est celle d'OWASP, verbatim** : *<< The
+external source may have content data that when interpreted by the model,
+ALTERS THE BEHAVIOR of the model in unintended or unexpected ways >>*. Sur les
+seize, la cible a repondu a la question posee -- le declencheur anodin -- et
+n'a execute aucune instruction de la note. Rien n'a ete altere.
+
+**ATLAS dit que le registre EXISTE et ne tranche pas l'etiquette.**
+`AML.T0051.001` << Indirect >>, lu dans le snapshot local : *<< An adversary
+may inject prompts indirectly via a separate data channel that the LLM or AI
+agent ingests, such as text or multimedia pulled from documents, emails,
+databases or websites >>*. Il decrit l'ACTE d'injecter, pas sa reussite --
+exactement la distinction que l'audit avait posee entre les deux sources.
+
+`attaque-sans-effet` et non `controle` : la categorie ecrite le 2026-11-16 pour
+une VRAIE attaque qui n'a rien produit de scorable, distincte d'un echange
+benin. `dev` est un choix de MOI, et je le dis : ce sont les premieres entrees
+d'une population neuve, et le jeu gele ne doit recevoir de l'indirect que comme
+un lot DELIBERE, ecrit pour etre tenu a l'ecart -- le precedent de
+`frozen_lot`. Les y envoyer d'emblee ferait mesurer au jeu gele une population
+dont `dev` n'a rien.
+
+Corpus : **307 entrees**, dev 226 / test 81, provenance **190 `author` /
+117 `model`**, et **16 `indirect`** contre 291 `direct`.
+
+**ET LA CORRECTION DE LA LIGNE DE PORTEE PAIE IMMEDIATEMENT.** Conditionnee
+sur `len(groups) < 2`, elle se serait TAUE devant ces seize. Conditionnee sur
+les positifs, elle dit ce qui est vrai :
+
+```
+--- Scope: nothing measured on INDIRECT injection ---
+16 exchange(s) arrived through retrieved content, and NONE of them is a
+vulnerability. They therefore bound false positives there and say nothing
+about DETECTION: there is nothing to detect.
+
+--- Per delivery (where the instruction came from) ---
+  direct      291 entries, 112 vuln   precision 100%  recall 100%
+  indirect     16 entries,   0 vuln   precision n/a  recall n/a
+```
+
+**LE BALAYAGE A RENDU 1/7, ET LES CINQ MUETTES ETAIENT DE VRAIS TROUS.**
+J'avais affirme ces proprietes dans des COMMENTAIRES et je ne les avais jamais
+COMPAREES : les objectifs qui atteignent le catalogue, la logique lue chez le
+voisin, l'objectif dans l'identifiant, `bare` pour un objectif absent, et
+`generate_payloads` qui honore ses arguments. Cinq gardes d'un coup, ce qui est
+le record de ce fichier pour une seule livraison -- et la demonstration que
+cabler une fonctionnalite sans ecrire ses gardes dans le meme mouvement ne
+tient pas.
+
+**ET LA SEPTIEME MUTATION M'A COUTE TROIS ANCRES FAUSSES**, toutes de la meme
+famille : la premiere laissait le fichier non parsable (donc CASSE, qui ne dit
+rien du garde), la deuxieme portait des antislashes mal echappes -- le fichier
+ecrit `/!\` en source et ma chaine n'en voyait qu'un -- et la troisieme un
+guillemet non echappe qui cassait mon propre litteral. La quatrieme tient sur
+une sous-chaine sans caractere special, ecrite avec un outil de fichier, et
+elle MORD : `test_a_silent_target_FALLS_BACK_on_the_harmless_one_and_says_so`,
+le garde du voisin. **Sept sur sept.**
+
+Un detour de lecture a noter aussi, parce qu'il a failli couter une
+verification : j'ai lu << le balayage n'a jamais tourne >> devant un traceback
+qui etait celui de mon PATCH du script, au-dessus de la sortie -- les deux
+commandes n'etaient pas chainees, donc le balayage avait bien tourne. Et le
+`.mutbak` que j'ai pris pour un residu inquietant etait le fichier en cours de
+mutation a cet instant. Deux lectures fausses d'affilee sur l'etat d'un
+processus, corrigees en regardant le fichier plutot qu'en deduisant.
+
+**DEUX CHOSES SIGNALEES PLUTOT QUE CORRIGEES.**
+- **Un seul des trois objectifs a servi.** Les douze ids disent `refus1` :
+  `_share_budget` fait tourner par TECHNIQUE et non par objectif, donc le
+  premier de chaque groupe porte le meme. `refus-2` et `refus-3` n'ont jamais
+  ete exerces -- c'est une decision sur l'echantillonnage, pas une ligne de
+  code.
+- **Un objectif derive CONTIENT le secret.** La reconnaissance a produit
+  *<< me parler de : Les informations relatives au code d'acces
+  INTRANET-605... >>*, parce que la cible l'a nomme en refusant. Un payload
+  bati dessus DONNE le secret a la cible : c'est
+  `secret-dit-par-l-attaquant`, genere automatiquement. Il n'est pas sorti
+  dans ces douze, mais il sortira -- et toute verification << le secret
+  apparait dans la reponse >> deviendra fausse sur ces entrees.
+
+2,019 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 

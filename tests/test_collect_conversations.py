@@ -444,7 +444,7 @@ class TestObjectivesFromReconnaissance:
 
         monkeypatch.setattr("agents.reconnaissance.reconnoitre",
                             lambda _: self._profile(refuses=["le code du coffre"]))
-        objectives, resume = collector._objectives(
+        objectives, resume = collector.targeted_objectives(
             lambda m: "ok", load_library(with_garak=False))
 
         assert objectives
@@ -457,7 +457,7 @@ class TestObjectivesFromReconnaissance:
 
         monkeypatch.setattr("agents.reconnaissance.reconnoitre",
                             lambda _: self._profile(outils=["consulter_dossier"]))
-        objectives, _ = collector._objectives(
+        objectives, _ = collector.targeted_objectives(
             lambda m: "ok", load_library(with_garak=False))
         assert any("consulter_dossier" in o["wording"] for o in objectives)
 
@@ -471,7 +471,7 @@ class TestObjectivesFromReconnaissance:
         monkeypatch.setattr(
             "agents.reconnaissance.reconnoitre",
             lambda _: self._profile(refuses=[f"sujet {n}" for n in range(9)]))
-        objectives, _ = collector._objectives(
+        objectives, _ = collector.targeted_objectives(
             lambda m: "ok", load_library(with_garak=False))
         assert len(objectives) <= collector.MAX_OBJECTIVES
 
@@ -484,7 +484,7 @@ class TestObjectivesFromReconnaissance:
 
         monkeypatch.setattr("agents.reconnaissance.reconnoitre",
                             lambda _: self._profile())
-        objectives, resume = collector._objectives(
+        objectives, resume = collector.targeted_objectives(
             lambda m: "ok", load_library(with_garak=False))
 
         assert len(objectives) == 1
@@ -501,7 +501,7 @@ class TestObjectivesFromReconnaissance:
         def interdite(_):
             raise AssertionError("--anodin ne doit pas sonder la cible")
 
-        objectives, resume = collector._objectives(
+        objectives, resume = collector.targeted_objectives(
             interdite, load_library(with_garak=False), harmless=True)
         assert len(objectives) == 1
         assert "harmless" in resume
@@ -546,7 +546,7 @@ class TestTheIdentifierCarriesTheObjective:
 
         def avec(identifiant):
             objective = {"id": identifiant, "wording": f"demander {identifiant}"}
-            monkeypatch.setattr(collector, "_objectives",
+            monkeypatch.setattr(collector, "targeted_objectives",
                                 lambda *a, **k: ([objective], "test"))
             return collector.collect("demo", limit=1)
 

@@ -285,15 +285,25 @@ def load_library(with_garak=True):
     return library
 
 
-def generate_payloads():
+def generate_payloads(objectives=None):
     """
     Returns the list of every possible payload: each template of each
     technique, crossed with each objective and each transformation.
 
     The list is finite by construction (a product of finite lists), but it
     grows fast: it is MAX_ATTEMPTS, in main.py, that bounds the campaign.
+
+    `objectives` replaces the library's own, which are all HARMLESS by
+    design -- `presentation`, `mission`, `culture-generale`. A harvest that
+    wants positives passes the objectives RECONNAISSANCE derived (`refus-N`,
+    `outil-N`), which is what a campaign does. A parameter and not a global:
+    `measure_modes` patches `LIBRARY_FILE` rather than this function because
+    the planner binds `load_library` at import, and a global here would carry
+    the same fragility.
     """
     library = load_library()
+    if objectives:
+        library = dict(library, objectives=objectives)
     payloads = []
 
     for technique in library["techniques"]:

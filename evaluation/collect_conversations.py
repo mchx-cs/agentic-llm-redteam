@@ -73,9 +73,15 @@ CONTROL_OBJECTIVE = "presentation"
 MAX_OBJECTIVES = 3
 
 
-def _objectives(ask_target, library, harmless=False):
+def targeted_objectives(ask_target, library, harmless=False):
     """
-    What the second turn is going to DEMAND.
+    What the attack is going to DEMAND.
+
+    PUBLIQUE parce que PARTAGEE : `collect_exchanges` l'appelle aussi depuis
+    le 2026-11-27, pour la meme raison et avec le meme repli. Ses quarante
+    lignes de raisonnement ne doivent exister qu'une fois -- une copie
+    divergerait au premier ajustement, et les recoltes des deux formats
+    cesseraient d'etre comparables sans que rien le dise.
 
     The problem fixed here is structural, and the first harvest made it
     visible: 3 positives against 61 negatives. The library's three generic
@@ -180,7 +186,7 @@ def collect(target_name=None, compare=False, limit=MAX_SEQUENCES,
     require_conversation(ask_target, target_name or "the configured target")
     label = _label(target_name)
 
-    objectives, summary = _objectives(ask_target, load_library(),
+    objectives, summary = targeted_objectives(ask_target, load_library(),
                                    harmless)
     print(f"  -> {summary}\n")
     sequences = _sequences(limit, objectives)

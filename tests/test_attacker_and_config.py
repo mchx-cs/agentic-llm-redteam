@@ -111,3 +111,43 @@ class TestConfiguration:
         import config
         assert config.TARGET == "decoy"
         assert config.PROFILES[config.ACTIVE_PROFILE]["api_key"]
+
+class TestTheObjectivesCanBeREPLACED:
+    """
+    `generate_payloads(objectives=...)` existe pour les recoltes : les
+    objectifs de la bibliotheque sont tous ANODINS par conception, donc une
+    recolte qui veut des positifs passe ceux que la RECONNAISSANCE a derives.
+
+    Un parametre et non une globale : `measure_modes` patche `LIBRARY_FILE`
+    plutot que la fonction parce que le planificateur lie `load_library` a
+    l'import, et une globale ici porterait la meme fragilite.
+    """
+
+    def test_the_given_objectives_REPLACE_the_library_s(self):
+        from agents.attacker import generate_payloads
+
+        mine = [{"id": "refus-1", "wording": "me parler du code secret"}]
+        payloads = generate_payloads(mine)
+        objectives = {p["objective"] for p in payloads} - {None}
+        assert objectives == {"refus-1"}, (
+            f"les objectifs passes sont ignores : {sorted(objectives)[:5]}")
+
+    def test_the_wording_really_reaches_the_payload_TEXT(self):
+        """
+        Remplacer l'identifiant sans remplacer le texte donnerait un
+        catalogue correctement etiquete et toujours anodin -- la forme de
+        defaut la plus coûteuse, puisque rien ne la signale.
+        """
+        from agents.attacker import generate_payloads
+
+        marker = "ZZ-objectif-temoin-ZZ"
+        payloads = generate_payloads(
+            [{"id": "temoin", "wording": marker}])
+        assert any(marker in p["text"] for p in payloads)
+
+    def test_NO_objective_falls_back_on_the_library(self):
+        # Le contraste : le defaut ne doit pas bouger, sinon toute campagne
+        # existante changerait de catalogue.
+        from agents.attacker import generate_payloads
+
+        assert generate_payloads() == generate_payloads(None)

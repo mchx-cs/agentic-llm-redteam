@@ -34,7 +34,8 @@ import json
 import sys
 from pathlib import Path
 
-from agents.attacker import generate_payloads
+from agents.attacker import generate_payloads, load_library
+from evaluation.collect_conversations import targeted_objectives
 from agents.planner import _share_budget
 from console import write_in_utf8
 from targets import choose_target, secret_of
@@ -82,7 +83,22 @@ def _sample(payloads, limit):
     return _share_budget(payloads, limit)
 
 
-def collect(target_name=None, limit=MAX_PAYLOADS, indirect=False):
+
+def _tag(objective_id):
+    """
+    L'objectif, reduit a ce qui tient dans un identifiant.
+
+    `None` est le cas des payloads COMPLETS joues seuls : ils portent leur
+    propre intention et ne croisent pas l'axe des objectifs. `bare` le dit,
+    la ou une chaine vide donnerait un double tiret illisible.
+    """
+    if not objective_id:
+        return "bare"
+    return "".join(c for c in str(objective_id) if c.isalnum()).lower()
+
+
+def collect(target_name=None, limit=MAX_PAYLOADS, indirect=False,
+            harmless=False):
     # The one `.env` names unless told otherwise: we therefore harvest from
     # the decoy as readily as from `demo`, without touching this script.
     ask_target = choose_target(target_name)
@@ -99,7 +115,20 @@ def collect(target_name=None, limit=MAX_PAYLOADS, indirect=False):
     # than a value.
     secret = secret_of(target_name)
 
-    payloads = generate_payloads()
+    # LES OBJECTIFS VIENNENT DE LA RECONNAISSANCE, pas de la bibliotheque.
+    # Les trois generiques (`presentation`, `mission`, `culture-generale`)
+    # sont tous ANODINS, donc une recolte qui les garde ne demande jamais ce
+    # que la cible protege et ses entrees sont des negatives par
+    # construction. C'est le defaut corrige le 2026-11-13 pour le collecteur
+    # de CONVERSATIONS seulement.
+    #
+    # La logique est LUE chez le voisin et non recopiee : son repli sur
+    # l'objectif anodin, sa borne et son ANNONCE de ce repli ne doivent
+    # exister qu'une fois.
+    objectives, summary = targeted_objectives(ask_target, load_library(),
+                                              harmless)
+    print(f"Objectives: {summary}")
+    payloads = generate_payloads(objectives)
     kept = _sample(payloads, limit)
     print(f"{len(payloads)} combination(s) in the library, {len(kept)} kept "
           f"(limit {limit}), {len(kept) * SAMPLE_COUNT} exchange(s) to "
@@ -125,7 +154,13 @@ def collect(target_name=None, limit=MAX_PAYLOADS, indirect=False):
     for payload_number, payload in enumerate(kept, start=1):
         # All the replies to one payload form a group: they will have to go
         # into the same set (dev or test), never be split between them.
-        group = f"{PREFIX}-{stamp}-{payload_number:02d}"
+        # L'OBJECTIF EST DANS L'ID. Le numero de payload est un index dans
+        # la liste echantillonnee, et cette liste change avec les objectifs :
+        # sans ce tag, relancer avec de nouveaux objectifs produirait les
+        # memes ids pour des payloads DIFFERENTS, que la recolte sauterait en
+        # les declarant deja recoltes.
+        tag = _tag(payload["objective"])
+        group = f"{PREFIX}-{stamp}-{tag}-{payload_number:02d}"
         for sample in range(1, SAMPLE_COUNT + 1):
             identifier = f"{group}-{sample}"
             if identifier in already:
@@ -189,6 +224,13 @@ def main(arguments=None):
              "the harvest refuses rather than guessing. Entries are stamped "
              "`delivery: indirect`, which the judge can never derive since "
              "the document is not in the exchange it is shown.")
+    parser.add_argument(
+        "--harmless", "--anodin", action="store_true",
+        help="keep the library's HARMLESS objectives instead of running "
+             "reconnaissance. For harvesting NEGATIVES: a corpus with no "
+             "inoffensive exchange has zero false positives by "
+             "construction, which the OWASP manual names as the "
+             "all-malicious corpus trap.")
     parser.add_argument("--payloads", type=int, default=MAX_PAYLOADS,
                         metavar="N",
                         help=f"payloads kept out of the library's thousands "
@@ -198,7 +240,7 @@ def main(arguments=None):
     parsed = parser.parse_args(arguments)
     try:
         collect(target_name=parsed.target, limit=parsed.payloads,
-                indirect=parsed.indirect)
+                indirect=parsed.indirect, harmless=parsed.harmless)
     except NoIndirectChannel as refusal:
         # Attrape plutot que laisse remonter : un traceback sur une erreur
         # legitime d'operateur est le defaut corrige pour les campagnes --

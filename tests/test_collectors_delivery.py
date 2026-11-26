@@ -18,6 +18,32 @@ import evaluation.collect_exchanges as harvest
 from targets.indirect import INDIRECT_TRIGGER, NoIndirectChannel
 
 
+@pytest.fixture(autouse=True)
+def no_model_call(monkeypatch):
+    """
+    Tout appel a un modele depuis ce fichier doit LEVER.
+
+    Ajoutee le 2026-11-27, quand la reconnaissance a ete cablee dans ce
+    collecteur : ses tests sont devenus dependants d'un modele et passaient
+    quand meme, parce qu'Ollama tourne sur la machine de developpement. En
+    integration continue ils tomberaient tous.
+
+    C'est le piege arme une SECONDE fois -- le collecteur de conversations l'a
+    rencontre le 2026-11-13 -- et la lecon est la meme : un environnement de
+    developpement plus riche que la CI masque les dependances qu'on vient
+    d'ajouter. La regle << un test qui appellerait un modele n'a rien a faire
+    dans tests/ >> etait tenue par le code la-bas et par rien ici.
+    """
+    def refuser(*_, **__):
+        raise AssertionError(
+            "appel a un modele depuis tests/ : interdit. Passe "
+            "`harmless=True` ou neutralise la reconnaissance.")
+
+    for module in ("llm_client", "agents.reconnaissance", "agents.judge"):
+        monkeypatch.setattr(f"{module}.ask_llm", refuser, raising=False)
+
+
+
 class _Direct:
     """Une cible sans canal indirect : le cas par défaut."""
 
@@ -113,9 +139,15 @@ class TestWhatTheIndirectHarvestActuallySends:
         harvest.collect(target_name="docs", limit=1, indirect=True)
 
         assert ask.planted, "rien n'a été planté"
-        assert set(ask.asked) == {INDIRECT_TRIGGER}, (
-            f"la cible a reçu autre chose que le déclencheur : {ask.asked}")
-        assert all(p not in ask.asked for p in ask.planted)
+        # LA PROPRIÉTÉ PORTE SUR LES ATTAQUES. Une première version comparait
+        # TOUS les messages reçus — et la reconnaissance en envoie six, en
+        # clair et légitimement : les planter ferait lire à la reconnaissance
+        # le profil d'une cible qui lit une note.
+        assert INDIRECT_TRIGGER in ask.asked, (
+            f"le déclencheur n'a pas été posé : {ask.asked}")
+        assert all(planted not in ask.asked for planted in ask.planted), (
+            "un payload planté a AUSSI été envoyé comme message : la "
+            "récolte est directe en s'estampillant indirecte")
 
     def test_the_trigger_is_READ_from_the_contract_and_not_restated(self):
         """
