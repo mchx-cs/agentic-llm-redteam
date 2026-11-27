@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **307** entries, 226 `dev` / 81 `test` | **yes** |
 | … of which labelled by the AUTHOR | **190**, against 117 by a model | **yes** |
 | scorable criteria | **4** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers` | **yes** |
-| `pytest` tests, no LLM call at all | **2,019** | **yes** |
+| `pytest` tests, no LLM call at all | **2,027** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -12648,6 +12648,111 @@ processus, corrigees en regardant le fichier plutot qu'en deduisant.
   apparait dans la reponse >> deviendra fausse sur ces entrees.
 
 2,019 `pytest` tests, toujours sans aucun appel a un modele.
+
+**LE ROUND-ROBIN TOURNE PAR OBJECTIF -- DANS LA RECOLTE SEULEMENT -- et ca a
+expose un defaut plus grave que celui qu'on corrigeait (2026-11-27).**
+
+**LE BESOIN ETAIT MESURE EN LE LANCANT** : les douze entrees recoltees plus
+tot portaient toutes `refus1`. `_share_budget` groupe par module, donc le
+premier de chaque groupe partage un objectif, et `refus-2` et `refus-3`
+n'avaient jamais ete exerces.
+
+**ET LE GRAIN DE LA CAMPAGNE NE BOUGE PAS, ce qui est la decision qui
+compte.** Passer du probe au MODULE a ete mesure le 2026-11-11 : +0,57
+trouvaille au budget 10, +0,88 au budget 20 sur le bras adaptatif. Le grain
+par objectif n'a JAMAIS ete mesure, et changer le defaut deplacerait en
+silence la base de comparaison de toutes les figures de campagne publiees
+depuis -- la comparaison des modes, celle des livraisons, pass@k. Ce projet a
+deja REFUTE par la mesure une amelioration qui paraissait evidente : exempter
+un module qui vient de ceder donnait +0,11 trouvaille contre quatre modules de
+couverture perdus.
+
+Donc `_share_budget` prend une CLE, defaut inchange, et `grain_of` devient
+public pour qu'un appelant puisse dire << le grain habituel, PLUS X >> au lieu
+de le redire. Le grain par objectif reste mesurable pour la campagne, sous
+protocole declare, le jour ou quelqu'un le demande.
+
+**ET LE DEFAUT QUE CA A REVELE : DEUX PARTIES SUR TROIS DE L'IDENTIFIANT
+MENTAIENT.** Apres le changement de grain, deux ids revenaient en portant un
+payload DIFFERENT de celui deja dans le corpus sous ce nom :
+
+- la **POSITION** est un index dans la liste echantillonnee, donc elle change
+  de sens des que le grain change -- `refus1-04` designait la 4e technique
+  avec `refus-1`, il designait ensuite la 4e case du round-robin ;
+- et **`refus-1` LUI-MEME est instable** : la reconnaissance renumerote les
+  sujets refuses a chaque run. Verifie sur deux entrees de meme id, meme
+  technique, meme numero d'objectif -- et des LIBELLES differents.
+
+**LA CONSEQUENCE ETAIT SILENCIEUSE.** `label.py` refuse un id deja present
+dans le corpus sans regarder derriere, donc ces deux payloads etaient
+INJOIGNABLES pour l'etiquetage apres avoir ete annonces << collected >>. C'est
+le defaut du 2026-11-13 vivant, survivant au correctif que je lui avais
+apporte la veille, et il ne s'est vu qu'en COMPARANT les payloads derriere
+deux ids identiques.
+
+**L'ID PORTE DESORMAIS UN DIGEST DU PAYLOAD** -- la prevention plutot que la
+detection, la preference enregistree le 2026-11-20 quand le prefixe est passe
+de `R` a `H`. Stable a travers les grains, les renumerotations d'objectifs et
+les reordonnancements de bibliotheque, et << deja recolte >> veut enfin dire
+<< le meme payload, contre la meme cible, par la meme livraison >>. La position
+DISPARAIT au lieu d'etre gardee a cote : un id qui porte a la fois une verite
+et un mensonge est plus trompeur qu'un id illisible, et la technique est deja
+dans `source`.
+
+**ET LA DETECTION EST AJOUTEE QUAND MEME**, parce que cette classe a mordu
+deux fois : `label.py` dit desormais si un id refuse porte un contenu
+DIFFERENT. Mon premier essai comparait `payload` seul -- qui en livraison
+indirecte porte toujours le DECLENCHEUR, identique partout -- donc il ne
+voyait rien **sur exactement les entrees qui ont revele le defaut**. Il compare
+maintenant le texte plante aussi.
+
+**UN FAIT MESURE EN LE LANCANT, et il n'est pas un defaut du digest :**
+
+| relance identique | |
+|---|---|
+| `--harmless` | **6 sautes, 0 ajoute** -- idempotent |
+| reconnaissance | 6 ajoutes -- **pas** idempotent |
+
+La reconnaissance resonde la cible et le libelle des objectifs change, donc
+les payloads diffèrent reellement d'un run a l'autre. Le digest le REVELE au
+lieu de le masquer sous une position stable qui designait autre chose. A dire
+franchement : une recolte dirigee par la reconnaissance n'est pas
+reproductible, et c'est une propriete de la reconnaissance.
+
+**LE BALAYAGE A RENDU 5/8, ET LES TROIS MUETTES ETAIENT TROIS TROUS
+DIFFERENTS -- aucune n'etant un oubli :**
+
+1. le garde du grain comparait la **VALEUR** rendue. Rediger la formule du
+   planificateur en clair dans `_grain` donne exactement la meme valeur, donc
+   il passait : il verifiait le resultat la ou l'affirmation porte sur la
+   LECTURE. Repare par une sentinelle ;
+2. le garde de l'id affirmait que les ids sont **distincts** -- et avec un id
+   positionnel, le second payload recoit l'id du premier, donc la recolte le
+   SAUTE et il n'entre jamais. Les ids presents restent distincts. **Le test
+   passait sur une recolte a laquelle il manquait precisement l'entree que le
+   defaut perd** ;
+3. le message de `label.py` n'avait **aucun** test : j'ai ajoute la detection
+   sans son garde, dans le mouvement meme ou je corrigeais une detection
+   manquante.
+
+C'est la troisieme fournee de gardes muets de la journee -- apres les cinq du
+cablage de la reconnaissance -- et le motif est stable : **cabler une
+fonctionnalite et ecrire ses gardes doivent etre le meme mouvement**, sans
+quoi les gardes verifient ce que le code fait et non ce qu'on affirme qu'il
+fait.
+
+**Les 42 entrees laissees par mes verifications sont supprimees**, sur
+decision de l'auteur, apres sauvegarde et apres verification qu'aucune entree
+ETIQUETEE n'etait dans le lot. Recolte a 18 536, corpus intact a 307 dont ses
+16 indirectes.
+
+**Huit mutations, huit morsures** apres reparation : la recolte revenue au
+grain de la campagne, le grain qui oublie l'objectif, le grain redit au lieu
+d'etre lu, l'id revenu a une position, le digest qui ignore le texte, le grain
+de la CAMPAGNE passe a l'objectif, la cle ignoree, et le refus qui ne dit plus
+que le contenu differe.
+
+2,027 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 

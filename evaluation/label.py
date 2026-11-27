@@ -580,6 +580,32 @@ def label(ids=None):
             print("  Either they are not in a harvest, or they are "
                   "already labelled, or they are already in the corpus "
                   "(then: --revise).")
+            # ET SI LE CONTENU DIFFERE, ON LE DIT. Un id deja dans le corpus
+            # est refuse sans regarder derriere -- et le 2026-11-27, changer
+            # le grain du round-robin a fait porter a deux ids un payload
+            # DIFFERENT de celui du corpus : ces payloads etaient
+            # injoignables en silence, apres avoir ete annonces
+            # << collected >>. La prevention est dans l'id (un digest du
+            # payload) ; ceci est la detection, pour le prochain schema.
+            corpus = {e["id"]: e for e in load(CORPUS_FILE)["exchanges"]}
+            for identifier in unknown:
+                known = corpus.get(identifier)
+                harvested = next((e for e in exchanges
+                                  if e["id"] == identifier), None)
+                # LES DEUX CHAMPS, et c'est ce que le premier essai a
+                # manque : en livraison indirecte `payload` porte toujours
+                # le DECLENCHEUR, identique partout, et ce qui change est
+                # `planted`. Comparer `payload` seul ne voyait donc rien
+                # sur exactement les entrees qui ont revele le defaut.
+                def contenu(entry):
+                    return (entry.get("payload"), entry.get("planted"),
+                            entry.get("turns"))
+
+                if known and harvested and contenu(harvested) != contenu(known):
+                    print(f"  /!\\ {identifier} is in the corpus with "
+                          f"DIFFERENT content: what was harvested under "
+                          f"this id can never be labelled. The harvest's "
+                          f"id does not identify its payload.")
             return
         # The order asked for, not the harvest's: labelling a pair means
         # reading its two members one after the other.

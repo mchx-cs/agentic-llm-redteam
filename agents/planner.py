@@ -336,7 +336,18 @@ def _group(technique):
     return technique.get("group") or technique["id"]
 
 
-def _share_budget(attempts, budget):
+def grain_of(attempt):
+    """
+    The default grain of the round-robin: the garak module, or the technique.
+
+    Named and exported because `_share_budget` now takes a key, and the
+    DEFAULT must be readable from outside — a caller that wants a finer grain
+    has to be able to say «the usual one, plus X» rather than restate it.
+    """
+    return attempt.get("group") or attempt["technique"]
+
+
+def _share_budget(attempts, budget, key=grain_of):
     """
     Shares the budget BETWEEN groups of techniques, instead of handing it to
     the first one.
@@ -349,14 +360,21 @@ def _share_budget(attempts, budget):
     So we take one attempt per technique, in priority order, then a second
     from each, and so on. At an equal budget, coverage is maximal — and the
     report can finally speak of several families.
+
+    `key` CHOOSES THE GRAIN, and its default is the measured one. Moving to
+    the module was measured on 2026-11-11 (+0.57 findings at budget 10, +0.88
+    at 20 on the adaptive arm); a finer grain has never been measured, and
+    changing this default would silently move the comparison basis of every
+    campaign figure published since. A caller that needs another grain passes
+    it — the harvest adds the OBJECTIVE, because a corpus needs each objective
+    exercised where a campaign needs each KIND of attack swept.
     """
     if budget <= 0:
         return []
 
     by_technique = {}
     for attempt in attempts:                 # `attempts` is already sorted
-        key = attempt.get("group") or attempt["technique"]
-        by_technique.setdefault(key, []).append(attempt)
+        by_technique.setdefault(key(attempt), []).append(attempt)
 
     kept = []
     rounds = max((len(v) for v in by_technique.values()), default=0)

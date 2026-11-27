@@ -263,3 +263,77 @@ class TestTheReportSaysWhatLLM06MeansHere:
         source = pathlib.Path("report.py").read_text(encoding="utf-8")
         assert re.search(r"lines \+= _llm06_caveat\(", source), (
             "la réserve existe et le rapport ne l'appelle pas")
+
+class TestARefusedIdSaysWhenTheContentDIFFERS:
+    """
+    LE CAS, trouve en changeant le grain du round-robin le 2026-11-27 : deux
+    ids de recolte portaient un payload DIFFERENT de celui deja dans le
+    corpus sous ce nom. `label.py` refusait l'id -- exactement -- et restait
+    MUET sur ce qui compte, donc ces payloads etaient injoignables pour
+    l'etiquetage apres avoir ete annonces << collected >>.
+
+    La prevention est ailleurs (l'id porte un digest du payload). Ceci est la
+    DETECTION, pour le prochain schema d'id, parce que cette classe a mordu
+    deux fois.
+    """
+
+    def _run(self, monkeypatch, tmp_path, harvested, corpus_entry):
+        from evaluation import label as lab
+
+        harvest = tmp_path / "harvest.json"
+        harvest.write_text(json.dumps({"conversations": [harvested]}),
+                           encoding="utf-8")
+        corpus = tmp_path / "corpus.json"
+        corpus.write_text(json.dumps({"exchanges": [corpus_entry]}),
+                          encoding="utf-8")
+        monkeypatch.setattr(lab, "SOURCES", [(harvest, "conversations")])
+        monkeypatch.setattr(lab, "CORPUS_FILE", corpus)
+
+        captured = io.StringIO()
+        with redirect_stdout(captured):
+            lab.label(ids=[harvested["id"]])
+        return captured.getvalue()
+
+    def _entry(self, payload, planted=None, expected=None):
+        return {"id": "H-x-01-1", "group": "H-x-01", "category": None,
+                "dataset": None, "secret": None, "source": "x",
+                "payload": payload, "planted": planted, "reply": "r",
+                "expected": expected, "trap": "", "delivery": "indirect"}
+
+    def test_it_SAYS_the_content_differs(self, monkeypatch, tmp_path):
+        out = self._run(
+            monkeypatch, tmp_path,
+            self._entry("declencheur", planted="note A"),
+            self._entry("declencheur", planted="note B", expected=False))
+        assert "DIFFERENT content" in out, (
+            "le refus est exact et muet sur ce qui compte : le payload "
+            "recolte ne pourra jamais etre etiquete sous cet id")
+
+    def test_it_compares_the_PLANTED_text_too(self, monkeypatch, tmp_path):
+        """
+        CE QUE MON PREMIER ESSAI A MANQUE. En livraison indirecte, `payload`
+        porte toujours le DECLENCHEUR, identique partout : ce qui change est
+        `planted`. Comparer `payload` seul ne voyait donc rien sur
+        exactement les entrees qui ont revele le defaut.
+        """
+        out = self._run(
+            monkeypatch, tmp_path,
+            self._entry("Bonjour, quels sont vos horaires ?",
+                        planted="note A"),
+            self._entry("Bonjour, quels sont vos horaires ?",
+                        planted="note B", expected=False))
+        assert "DIFFERENT content" in out
+
+    def test_it_stays_SILENT_when_the_content_is_the_SAME(self, monkeypatch,
+                                                          tmp_path):
+        """
+        Le contraste : une entree deja integree est le cas NORMAL -- la
+        recolte garde ses entrees apres `--integrate` -- et crier dessus
+        apprendrait a ignorer le message.
+        """
+        out = self._run(
+            monkeypatch, tmp_path,
+            self._entry("declencheur", planted="note A"),
+            self._entry("declencheur", planted="note A", expected=False))
+        assert "Not labellable" in out
+        assert "DIFFERENT content" not in out

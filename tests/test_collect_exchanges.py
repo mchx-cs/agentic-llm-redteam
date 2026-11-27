@@ -253,6 +253,143 @@ class TestTheIdentifierCarriesTheObjective:
             "la seconde recolte a ete sautee : ses ids etaient ceux de la "
             "premiere alors que ses payloads sont differents")
 
+    def test_the_round_robin_rotates_through_the_OBJECTIVES(self,
+                                                            monkeypatch):
+        """
+        LE DEFAUT MESURE EN LE LANCANT. La recolte du 2026-11-27 a garde
+        douze payloads et les douze portaient `refus-1` : `_share_budget`
+        groupe par module, donc le premier de chaque groupe partage un
+        objectif, et les deux autres que la reconnaissance avait derives
+        n'etaient jamais exerces.
+
+        Un corpus veut chaque objectif exerce, parce qu'un objectif est une
+        chose DIFFERENTE que la cible protege. Une campagne veut chaque
+        GENRE d'attaque balaye, et ce grain-la est mesure : il ne bouge pas.
+        """
+        ask, _ = _target()
+        monkeypatch.setattr(harvest, "choose_target", lambda name=None: ask)
+        trois = [{"id": f"refus-{n}", "wording": f"me parler du sujet {n}"}
+                 for n in (1, 2, 3)]
+        monkeypatch.setattr(harvest, "targeted_objectives",
+                            lambda *a, **k: (trois, "test"))
+
+        harvest.collect(target_name="mock", limit=3)
+        entries = json.loads(
+            harvest.OUTPUT_FILE.read_text(encoding="utf-8"))["exchanges"]
+        tags = {e["id"].split("-")[2] for e in entries}
+        assert tags == {"refus1", "refus2", "refus3"}, (
+            f"le round-robin ne tourne pas par objectif : {sorted(tags)}")
+
+    def test_the_CAMPAIGN_grain_does_NOT_move(self):
+        """
+        LA DECISION QUI COMPTE. Passer du probe au MODULE a ete mesure le
+        2026-11-11 : +0,57 trouvaille au budget 10, +0,88 au budget 20 sur le
+        bras adaptatif. Le grain par objectif n'a JAMAIS ete mesure, et
+        changer le defaut deplacerait en silence la base de comparaison de
+        toutes les figures de campagne publiees depuis -- la comparaison des
+        modes, celle des livraisons, pass@k.
+
+        Ce projet a deja REFUTE par la mesure une amelioration qui paraissait
+        evidente : exempter un module qui vient de ceder donnait +0,11
+        trouvaille contre quatre modules de couverture perdus.
+        """
+        from agents.planner import _share_budget, grain_of
+
+        attempts = [
+            {"technique": "t1", "group": "m", "objective": "a"},
+            {"technique": "t1", "group": "m", "objective": "b"},
+            {"technique": "t2", "group": "n", "objective": "a"},
+        ]
+        # Le defaut groupe par MODULE : deux tentatives du module `m` ne
+        # peuvent pas sortir avant celle du module `n`.
+        kept = _share_budget(attempts, 2)
+        assert [a["group"] for a in kept] == ["m", "n"]
+        assert grain_of(attempts[0]) == "m"
+
+    def test_the_harvest_grain_is_the_campaign_s_PLUS_the_objective(
+            self, monkeypatch):
+        """
+        LU et non redit : une seconde copie du grain par defaut divergerait
+        du planificateur au premier ajustement.
+
+        LA SENTINELLE EST LA PROPRIETE. Une premiere version comparait la
+        VALEUR rendue -- et rediger la formule du planificateur en clair dans
+        `_grain` donne exactement la meme valeur, donc elle passait. Elle
+        verifiait le resultat la ou l'affirmation porte sur la LECTURE.
+        """
+        from agents.planner import grain_of
+
+        payload = {"technique": "t", "group": "m", "objective": "refus-1"}
+        assert harvest._grain(payload) == (grain_of(payload), "refus-1")
+
+        monkeypatch.setattr(harvest, "grain_of", lambda _: "SENTINELLE")
+        assert harvest._grain(payload) == ("SENTINELLE", "refus-1"), (
+            "`_grain` ne LIT pas le grain du planificateur, il le redit : "
+            "les deux divergeront au premier ajustement")
+
+    def test_the_identifier_identifies_the_PAYLOAD_and_not_a_position(
+            self, monkeypatch):
+        """
+        CE QUE LE CHANGEMENT DE GRAIN A EXPOSE. L'id portait une POSITION --
+        un index dans la liste echantillonnee -- donc il changeait de sens
+        des que le grain changeait : le 2026-11-27, `refus1-04` a designe un
+        payload DIFFERENT de celui deja dans le corpus sous ce nom, et
+        `label.py`, qui refuse un id deja present sans regarder derriere, l'a
+        rendu injoignable en silence apres l'avoir annonce « collected ».
+
+        Et `refus-1` lui-meme est instable : la reconnaissance renumerote les
+        sujets refuses a chaque run. Deux parties sur trois de l'ancien id
+        mentaient.
+        """
+        ask, _ = _target()
+        monkeypatch.setattr(harvest, "choose_target", lambda name=None: ask)
+        un = {"id": "refus-1", "wording": "sujet UN"}
+        autre = {"id": "refus-1", "wording": "sujet AUTRE"}
+
+        def avec(objective):
+            monkeypatch.setattr(harvest, "targeted_objectives",
+                                lambda *a, **k: ([objective], "test"))
+            return harvest.collect(target_name="mock", limit=1)
+
+        avec(un)
+        entries = avec(autre)
+
+        # LES DEUX LIBELLES DOIVENT ETRE LA, et c'est ce que la premiere
+        # version manquait : elle affirmait que les ids sont distincts. Avec
+        # un id POSITIONNEL, le second payload recoit l'id du premier et la
+        # recolte le SAUTE -- donc il n'entre jamais, et les ids presents
+        # restent distincts. Le test passait sur une recolte a laquelle il
+        # manquait precisement l'entree que le defaut perd.
+        textes = " ".join(e["payload"] for e in entries)
+        assert "sujet UN" in textes
+        assert "sujet AUTRE" in textes, (
+            "le second payload n'est pas dans la recolte : son id etait "
+            "celui du premier, donc il a ete saute en silence")
+        assert len({e["id"] for e in entries}) == len(entries)
+
+    def test_the_same_payload_keeps_the_SAME_id(self, monkeypatch):
+        """
+        Le contraste : un digest qui changerait a chaque lancement ferait de
+        « deja recolte » une promesse morte, et chaque relance couterait des
+        requetes a une cible pour ne rien ajouter d'utile.
+
+        C'est verifie en vrai sur `--harmless`, dont les objectifs sont fixes :
+        six sautes, zero ajoute. Le mode RECONNAISSANCE n'est PAS idempotent,
+        et c'est une propriete de la reconnaissance et non du digest -- elle
+        resonde la cible, et le libelle des objectifs change.
+        """
+        ask, _ = _target()
+        monkeypatch.setattr(harvest, "choose_target", lambda name=None: ask)
+        harvest.collect(target_name="mock", limit=2, harmless=True)
+        before = {e["id"] for e in json.loads(
+            harvest.OUTPUT_FILE.read_text(encoding="utf-8"))["exchanges"]}
+        harvest.collect(target_name="mock", limit=2, harmless=True)
+        after = {e["id"] for e in json.loads(
+            harvest.OUTPUT_FILE.read_text(encoding="utf-8"))["exchanges"]}
+        assert before == after, (
+            "des objectifs FIXES doivent donner les memes ids : sinon "
+            "« deja recolte » ne veut plus rien dire")
+
     def test_a_payload_with_NO_objective_is_tagged_bare(self):
         """
         Le cas des payloads COMPLETS joues seuls : ils portent leur propre

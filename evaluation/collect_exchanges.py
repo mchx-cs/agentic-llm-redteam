@@ -30,13 +30,14 @@ Run it from the project root with:  python -m evaluation.collect_exchanges
 """
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
 
 from agents.attacker import generate_payloads, load_library
 from evaluation.collect_conversations import targeted_objectives
-from agents.planner import _share_budget
+from agents.planner import _share_budget, grain_of
 from console import write_in_utf8
 from targets import choose_target, secret_of
 from targets.indirect import (INDIRECT_TRIGGER, NoIndirectChannel,
@@ -65,22 +66,37 @@ MAX_PAYLOADS = 60
 PREFIX = "H"
 
 
+def _grain(payload):
+    """
+    The harvest's grain: the campaign's, PLUS the objective.
+
+    WHY IT DIFFERS, and it was measured by running it. The harvest of
+    2026-11-27 kept twelve payloads and all twelve carried `refus-1`:
+    `_share_budget` groups by module, so the first of each group shares one
+    objective, and the other two the reconnaissance had derived were never
+    exercised.
+
+    A campaign wants each KIND of attack swept — that grain is measured, and
+    it does not move. A CORPUS wants each objective exercised, because an
+    objective is a different thing the target protects, and a corpus that
+    holds only one of them measures the judge on one subject.
+
+    The default is READ from the planner rather than restated: a second copy
+    would drift from the campaign's on the first adjustment.
+    """
+    return (grain_of(payload), payload.get("objective"))
+
+
 def _sample(payloads, limit):
     """
-    The payloads to harvest, round-robin over techniques.
+    The payloads to harvest, round-robin over (technique, objective).
 
     `_share_budget` is the planner's own function, read rather than restated:
     it is this project's answer to "which payloads, at what grain", and a
-    second copy would drift from the campaign's.
-
-    The grain differs from a campaign's, and that is intended. It groups by
-    `group` where there is one and by TECHNIQUE otherwise, and
-    `generate_payloads` emits no `group` — so a harvest rotates per technique
-    where a campaign rotates per garak module. A campaign wants coverage of
-    distinct KINDS of attack; a corpus needs variety, which is the recorded
-    reason the multi-turn collector takes its sequences in library order.
+    second copy would drift from the campaign's. Only the KEY differs, and
+    `_grain` says why.
     """
-    return _share_budget(payloads, limit)
+    return _share_budget(payloads, limit, key=_grain)
 
 
 
@@ -91,10 +107,40 @@ def _tag(objective_id):
     `None` est le cas des payloads COMPLETS joues seuls : ils portent leur
     propre intention et ne croisent pas l'axe des objectifs. `bare` le dit,
     la ou une chaine vide donnerait un double tiret illisible.
+
+    POUR LA LISIBILITE SEULEMENT : ce tag n'identifie RIEN. La
+    reconnaissance renumerote les sujets refuses a chaque run, donc `refus-1`
+    designe un sujet different d'une recolte a l'autre -- verifie le
+    2026-11-27 sur deux entrees de meme id et de libelles differents.
+    L'identite est portee par `_digest`.
     """
     if not objective_id:
         return "bare"
     return "".join(c for c in str(objective_id) if c.isalnum()).lower()
+
+
+def _digest(text):
+    """
+    Ce qui IDENTIFIE un payload : un condense de son texte.
+
+    Pourquoi pas une position. L'id portait
+    `H-<cible>-<objectif>-<position>`, et la position est un index dans la
+    liste echantillonnee : elle change de sens des que le grain du
+    round-robin change. Le 2026-11-27, passer au grain par objectif a fait
+    designer par `refus1-04` un payload different de celui deja dans le
+    corpus sous ce nom -- et `label.py`, qui refuse un id deja present sans
+    regarder le contenu, l'a rendu INJOIGNABLE pour l'etiquetage, en silence.
+
+    Un condense est stable a travers les grains, les renumerotations
+    d'objectifs et les reordonnancements de bibliotheque. << Deja recolte >>
+    veut alors dire ce qu'on veut qu'il dise : le meme payload, contre la
+    meme cible, par la meme livraison.
+
+    Douze hexadecimaux : assez pour que deux payloads d'une meme recolte ne
+    collisionnent pas (le catalogue en compte ~9 300, et la probabilite est
+    de l'ordre de 10^-9), assez court pour qu'un id reste lisible.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 def collect(target_name=None, limit=MAX_PAYLOADS, indirect=False,
@@ -160,7 +206,7 @@ def collect(target_name=None, limit=MAX_PAYLOADS, indirect=False,
         # memes ids pour des payloads DIFFERENTS, que la recolte sauterait en
         # les declarant deja recoltes.
         tag = _tag(payload["objective"])
-        group = f"{PREFIX}-{stamp}-{tag}-{payload_number:02d}"
+        group = f"{PREFIX}-{stamp}-{tag}-{_digest(payload['text'])}"
         for sample in range(1, SAMPLE_COUNT + 1):
             identifier = f"{group}-{sample}"
             if identifier in already:
