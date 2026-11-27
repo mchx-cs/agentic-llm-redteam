@@ -268,3 +268,96 @@ def test_the_README_corpus_figures_are_the_real_ones():
         f"le README annonce {announced}, le corpus porte "
         f"{[len(corpus), by_author, by_model]}. Corriger le README, pas ce "
         f"test.")
+
+
+def test_the_attack_surface_table_names_EVERY_criterion():
+    """
+    LE TABLEAU DE LA VITRINE CONTRE `report.SEVERITIES`, et il ne nommait que
+    TROIS criteres sur six -- trouve par Clement, pas par un test.
+
+    `fuite_donnees_tiers` (2026-11-18), `fingerprinting` (11-26) et
+    `fuite_permissions` (11-27) manquaient tous les trois. La colonne
+    << Judge criterion >> est au SINGULIER : elle supposait une relation 1
+    pour 1 entre famille OWASP et critere, qui n'existe plus depuis que LLM02
+    en porte deux.
+
+    Ce tableau est l'endroit du README qui DIT a un lecteur ce que l'arbitre
+    sait noter. Un critere absent s'y lit comme un registre que l'outil ne
+    couvre pas -- une SOUS-estimation, le miroir de la surestimation que le
+    reste du document combat.
+
+    On compare a `SEVERITIES`, et non a une liste ecrite a la main : c'est la
+    porte que la severite franchit, donc l'ensemble des criteres qu'un rapport
+    peut vraiment GRADER. Meme forme que le garde de completude de la table de
+    severite, et pour la meme raison -- une liste a la main ne voit pas
+    arriver un septieme critere.
+    """
+    import report
+
+    readme = _readme()
+    start = readme.index("## Attack surface targeted")
+    # BORNE : le tableau s'arrete a la premiere ligne qui n'est pas une
+    # rangee. Sans elle, le balayage ramassait le tableau de reference du
+    # cablage de cible, 1 000 lignes plus bas -- defaut de mon propre garde,
+    # trouve a son premier lancement.
+    after = readme[start:].splitlines()
+    first = next(i for i, line in enumerate(after) if line.startswith("|"))
+    rows = []
+    for line in after[first:]:
+        if not line.startswith("|"):
+            break
+        rows.append(line)
+    assert len(rows) > 3, (
+        "le tableau de la surface d'attaque ne se reconnait plus a des lignes "
+        "`|` sous son titre : ce garde ne compare plus rien. Corriger la "
+        "lecture, pas le supprimer.")
+
+    named = set()
+    for row in rows[2:]:            # [0] l'en-tete, [1] le separateur
+        last = row.rstrip("|").rsplit("|", 1)[-1].strip()
+        if last.startswith("`") and last.endswith("`"):
+            named.add(last.strip("`"))
+
+    graded = {criterion for criterion, _ in report.SEVERITIES}
+    assert named == graded, (
+        f"le tableau nomme {sorted(named)}, le juge grade {sorted(graded)}. "
+        f"Manquants : {sorted(graded - named)} ; inconnus du code : "
+        f"{sorted(named - graded)}. Corriger le README, pas ce test.")
+
+
+def test_and_the_sentence_beside_it_carries_the_REAL_counts():
+    """
+    LES DEUX CHIFFRES DE CETTE PHRASE, et ils ne disent pas la meme chose.
+
+    << Six criteria across four families >> est l'affirmation qui explique
+    pourquoi elargir les criteres n'a PAS elargi la couverture. Les deux
+    moities se perimnent separement : un septieme critere qui refine une
+    famille deja couverte bouge la premiere et pas la seconde, et c'est
+    exactement ce qui est arrive deux fois le 2026-11-26 et le 11-27.
+
+    Les familles comptees sont celles que `ATLAS_BY_FAMILY` porte -- les
+    quatre pour lesquelles un identifiant source existe -- et non les dix du
+    Top 10 ni les trois etats de couverture du rapport.
+    """
+    import re
+
+    import report
+
+    found = re.search(
+        r"\*\*(\w+) criteria across (\w+) families", _readme())
+    assert found, (
+        "la phrase qui explique six criteres pour quatre familles a change de "
+        "forme : ce garde ne compare plus rien. La corriger, pas le "
+        "supprimer.")
+
+    WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+             "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+    announced = [WORDS.get(word.lower()) for word in found.groups()]
+    assert None not in announced, (
+        f"un des deux nombres n'est pas ecrit en mots : {found.groups()}")
+
+    real = [len({criterion for criterion, _ in report.SEVERITIES}),
+            len(report.ATLAS_BY_FAMILY)]
+    assert announced == real, (
+        f"le README annonce {announced} (criteres, familles), le code porte "
+        f"{real}. Corriger le README, pas ce test.")

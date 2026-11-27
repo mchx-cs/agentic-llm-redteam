@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **327** entries, 236 `dev` / 91 `test` | **yes** |
 | … of which labelled by the AUTHOR | **211**, against 116 by a model | **yes** |
 | scorable criteria | **6** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers`, `fingerprinting`, `fuite_permissions` | **yes** |
-| `pytest` tests, no LLM call at all | **2,122** | **yes** |
+| `pytest` tests, no LLM call at all | **2,124** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -15623,6 +15623,89 @@ l'attribution et le cadrage, et **ni le code d'ARTEX ni un fork n'ont ete
 lus**. La decision ne demandait pas de les lire -- elle porte sur le MODELE,
 qui est publiquement decrit -- mais une revendication sur son implementation
 en demanderait.
+
+**LE TABLEAU DE LA VITRINE NE NOMMAIT QUE TROIS CRITERES SUR SIX, et
+aucun garde ne le comparait au code (2026-11-27).** Trouve par Clement, en
+lisant le README.
+
+Le tableau de `## Attack surface targeted` est l'endroit qui DIT a un visiteur
+ce que l'arbitre sait noter. Il nommait `obeissance`, `divulgation` et
+`abus_outils`, et manquaient les trois autres : `fuite_donnees_tiers`
+(2026-11-18), `fingerprinting` (11-26) et `fuite_permissions` (11-27).
+
+**LA CAUSE EST DANS SA FORME, et elle etait juste le jour ou il a ete
+ecrit.** Sa colonne s'appelle << Judge criterion >>, au SINGULIER : elle
+suppose une relation 1 pour 1 entre famille OWASP et critere. Cette relation a
+cesse d'exister le 2026-11-18, quand LLM02 en a recu un second -- la fiche
+d'un tiers qu'aucun outil ne rapporte. Chaque critere ajoute depuis avait donc
+besoin d'une RANGEE, pas d'une case, et un tableau a une rangee par famille
+n'avait plus de place pour le dire.
+
+**ET LE DEFAUT EST UNE SOUS-ESTIMATION, ce qui est le miroir de ce que le
+reste du document combat.** Un critere absent de ce tableau se lit comme un
+registre que l'outil ne couvre pas. C'est la meme forme que les trois
+limitations du rapport laissees INCONDITIONNELLES le 2026-11-12 : vraies quand
+elles ont ete ecrites, fausses d'un mode de livraison ajoute apres, et faisant
+alors sous-annoncer le rapport.
+
+**CE QUI MANQUAIT EST LE GARDE, et c'est la phrase que ce projet enregistre
+depuis le 2026-11-12** : << a contradiction between code and documentation
+raises nothing and breaks no test >>. Deux gardes maintenant, et la forme est
+celle du garde de completude de la table de severite livre le matin meme : on
+ne verifie pas une liste que quelqu'un a pense a ecrire, on compare a
+l'ensemble que le CODE porte.
+
+- le tableau doit nommer exactement les criteres de `report.SEVERITIES` --
+  la porte que la severite franchit, donc ceux qu'un rapport peut vraiment
+  GRADER ;
+- et la phrase voisine doit porter les deux vrais comptes, parce qu'ils se
+  periment SEPAREMENT : un septieme critere qui refine une famille deja
+  couverte bouge le premier et pas le second, ce qui est exactement arrive
+  deux fois, les 11-26 et 11-27.
+
+**LA PHRASE AJOUTEE EST PLUS PRECISE QUE CELLE QUE CLAUDE.md PORTAIT.** La
+section d'etat dit << les deux plus recents REFINENT des familles deja
+couvertes >>, ce qui est juste de `fuite_permissions` (LLM07 item 4) et LOUCHE
+de `fingerprinting`, qui n'a aucune famille du Top 10 -- il ne raffine donc
+pas une famille couverte, il vit dehors. Les deux laissent le compte a quatre
+pour deux raisons differentes, et le README les separe desormais.
+
+**UN DEFAUT DANS MON PROPRE GARDE, trouve a son premier lancement : le
+balayage n'etait pas BORNE.** Il prenait toute la suite du document, donc il
+ramassait le tableau de reference du cablage de cible 1 000 lignes plus bas --
+d'ou `content.0.text` et `response` comptes parmi les criteres. Le tableau
+s'arrete a la premiere ligne qui n'est pas une rangee, et c'est la borne a
+lire. Meme lecon que les bornes de `MAPS` : un balayage qui ne sait pas ou il
+s'arrete compare autre chose que ce qu'il annonce.
+
+**ET MON DETECTEUR DE MUTATIONS A LU SIX MORSURES COMME SIX FICHIERS
+CASSES.** Il prouvait un fichier casse par la presence de << error >> dans la
+sortie -- or << AssertionError >> en contient, donc toute morsure etait
+classee CASSE. C'est la lecon du 2026-11-23 commise A L'ENVERS : la, une
+absence de mot-cle servait de preuve ; ici, une presence trop large. Dans les
+deux sens, **un verdict faux enseigne la mefiance envers l'outil plutot
+qu'envers le code**. Le detecteur exige desormais une preuve positive
+(<< during collection >>, une ligne `ERROR`), et les six mutations MORDENT.
+
+**UN DEFAUT SIGNALE ET NON CORRIGE, trouve en suivant la question :
+`AML.T0014` n'atteint aucun livrable.** L'identifiant a ete lu VERBATIM dans
+le snapshot ATLAS le 2026-11-26 -- maturite `Feasible`, plateformes citees --
+et c'est lui qui a decide le resserrement du critere 5 et deux etiquettes de
+l'auteur. Il est absent de `report.py`, et il ne peut pas y etre : la section
+ATLAS du rapport est indexee par FAMILLE OWASP (`atlas_for(owasp_family)`), et
+`fingerprinting` n'en a aucune. **Donc une trouvaille de fingerprinting ne
+porte aucun identifiant ATLAS**, alors qu'un identifiant source existe -- et
+le rapport reserve son << aucun identifiant pour faute de source consultable
+>> aux familles qu'on ne teste pas, ce qui n'est pas cette situation.
+
+Le lever demande de decider si la correspondance ATLAS s'indexe aussi par
+CRITERE, ce qui change la structure de cette section du rapport. La provenance,
+elle, est deja tranchee par le journal du 11-26 : << une cible qui le DIT livre
+gratuitement ce que T0014 obtient par exemples construits. L'identifiant est
+source, la correspondance est notre lecture >> -- donc `OUR_READING`. C'est une
+decision de l'auteur, pas une ligne a glisser ici.
+
+2,124 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 

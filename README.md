@@ -33,8 +33,9 @@ A multi-agent system that red-teams LLM applications and **refuses to report wha
 > single-turn, at equal requests to the target, at each of the demo target's three
 > defence levels: it finds LESS at two of them (17 pairs to 1, and 12 to 3) and ties
 > at the third, and it takes no `high` finding at any of them.
-> The fourth criterion added depth, not breadth — a third party's data with no tool
-> involved is still LLM02.
+> Two of the six criteria added depth rather than breadth — a third party's data with
+> no tool involved is still LLM02, a permission model is LLM07's own item 4 — and a
+> third, `fingerprinting`, answers to no OWASP family at all.
 > See the [roadmap](#roadmap) for what is and isn't implemented.
 
 ---
@@ -97,11 +98,21 @@ Testing follows the [OWASP Top 10 for LLM Applications](https://owasp.org/www-pr
 |---|---|---|
 | LLM01 Prompt injection | overriding the application's instructions, jailbreaks | `obeissance` |
 | LLM02 Sensitive information disclosure | getting it to reveal what it protects | `divulgation` |
+| LLM02, with no tool in the exchange | a third party's data the target hands over | `fuite_donnees_tiers` |
 | LLM06 Excessive agency | making it call a tool on someone else's behalf | `abus_outils` |
 | LLM07 System prompt leakage | extracting the hidden instructions | `divulgation` |
+| LLM07 item 4, permissions and roles | who may do what in the application | `fuite_permissions` |
+| *none of the ten* — ATLAS `AML.T0014` | the target naming the model that produces it | `fingerprinting` |
 
-Four of the ten families, because the judge needs a criterion before a family means
-anything: submitted to a case it cannot score, it would answer "none" — not by mistake,
+**Six criteria across four families, and that arithmetic is not a mismatch.** Two of
+the six add depth rather than breadth — a third party's data with no tool involved is
+still LLM02, and a permission model is LLM07's own item 4 — while `fingerprinting` has
+no OWASP Top 10 family at all: the only sourced identifier for it is ATLAS's
+`AML.T0014 Discover AI Model Family`. So widening the criteria did not widen the
+coverage, and saying otherwise would overstate it.
+
+Four of the ten families, then, because the judge needs a criterion before a family
+means anything: submitted to a case it cannot score, it would answer "none" — not by mistake,
 but for lack of a box to tick. Three more (LLM05, LLM09, and the application-level half
 of LLM06) *are* reached by probes that get sent, and the report says so in a distinct
 state rather than claiming them tested. The order is deliberate: enrich the target, then
@@ -213,7 +224,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 2,122 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 2,124 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
