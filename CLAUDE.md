@@ -12907,6 +12907,56 @@ verifie une empreinte de code.
 Corpus : **306 entrees**, dev 225 / test 81, provenance **190 `author` /
 116 `model`**, et 16 `indirect`.
 
+**PROTOCOLE DECLARE : la premiere mesure du bras `fr5` (2026-11-27), avant de
+la lancer.**
+
+Le critere 5 a ete ecrit le 2026-11-26, resserre sur ce qu'ATLAS couvre le
+meme jour, deux de ses registres revises en negatifs (`A24`, `A27`), ses cas
+mesures UN PAR UN -- et **jamais mesure comme un tout**. Aucune figure
+n'existe pour lui.
+
+**CE QUE LA MESURE COMPARE, et c'est la meme forme que `fr` contre `en` le
+2026-11-14 : UNE SEULE VARIABLE.** Le bras `fr5` est le defaut PLUS le
+cinquieme critere et son enum, rien d'autre -- un test l'epingle en defaisant
+les deux changements. Et le bras `fr` vient d'etre mesure sur le MEME corpus,
+avec le MEME juge, il y a moins d'une heure :
+
+```
+fr   8 821  bfc7432b19344efd                  author 90 / 96 / 94
+fr5  9 608  a8085bc7f151168e                  author  ? /  ? /  ?
+```
+
+**LA QUESTION QUI COMPTE N'EST PAS LA FIGURE DU CRITERE 5.** Elle repose sur
+TROIS positifs (`A17`, `A25`, `A26`), plancher 44 % : un cas y vaut 33 points
+de rappel, donc elle ne peut rien dire au-dela de << les a-t-il trouves >>.
+
+La question qui compte est : **ajouter un cinquieme critere coute-t-il quelque
+chose aux quatre mesures ?** Un critere de plus peut tirer des verdicts hors
+des criteres 1 a 4 -- c'est le risque que la disjonction a ete ecrite pour
+eviter, et il n'a jamais ete verifie. C'est aussi pourquoi les trois positifs
+`fingerprinting` sont ECARTES sous `fr` et non sous `fr5` : la comparaison
+porte sur 222 entrees d'un cote et 225 de l'autre, et ce decalage est dit.
+
+**SEUILS PAR METRIQUE, sur la moitie AUTEUR (138 entrees, 55 positifs)**, la
+seule population que les figures publiees decrivent : un cas y vaut **0,7
+point d'exactitude, ~2 points de precision et ~1,8 de rappel**. Rien en
+dessous de DEUX cas deplaces ne sera interprete. Par metrique et non
+globalement, la correction que le bras anglais a imposee le 2026-11-14.
+
+**CE QUE CETTE MESURE NE PEUT PAS DIRE, declare avant les chiffres plutot
+qu'offert apres comme excuse :**
+- rien sur le critere 5 au-dela de << trouve ou pas >>, faute de positifs ;
+- **rien du tout sur des cas jamais regardes** : le jeu gele n'a AUCUN cas
+  `fingerprinting`, et c'est precisement l'item 2 de la liste des taches ;
+- rien sur `A16` ni sur les hallucinations, qui sont des defauts mesures et
+  independants du bras.
+
+**PREDICTION, posee avant les chiffres** : les quatre criteres mesures ne
+bougent pas de plus d'un cas, et le critere 5 trouve ses trois positifs. Si
+les quatre BOUGENT, le cinquieme critere coute quelque chose et la disjonction
+est a revoir -- ce qui serait le resultat le plus utile de la mesure, et le
+moins espere.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
