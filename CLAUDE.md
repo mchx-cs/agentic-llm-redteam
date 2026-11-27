@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **318** entries, 227 `dev` / 91 `test` | **yes** |
 | … of which labelled by the AUTHOR | **202**, against 116 by a model | **yes** |
 | scorable criteria | **5** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers`, `fingerprinting` | **yes** |
-| `pytest` tests, no LLM call at all | **2,057** | **yes** |
+| `pytest` tests, no LLM call at all | **2,081** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -13950,6 +13950,85 @@ pas prendre a l'aveugle :
 Ce qui est consignable sans decision : le defaut est reel, reproduit, rare
 (~1/10 contre `docs`, 0/10 contre `demo`), et son pire chemin plausible est
 une fausse trouvaille `high`.
+
+**PROTOCOLE DECLARE : la langue des ETIQUETTES de la question
+(2026-11-27), avant de lancer.** L'item de l'auteur, et il etait
+CONDITIONNEL : *<< faut-il toujours associer la langue des criteres ainsi que
+des etiquettes a celle de l'instruction SI ca a un impact sur nos
+resultats ? >>* Donc la premiere chose a faire est de mesurer l'impact.
+
+**DEUX MOITIES, ET ELLES NE COUTENT PAS LA MEME CHOSE.** L'ordre suit le
+prix, et la moins chere passe d'abord :
+- **les ETIQUETTES** (`Utilisateur` / `Chatbot` -> `User` / `Assistant`) :
+  le prerequis est DEJA PAYE. Passer aux etiquettes anglaises arme le
+  forgeage de tour que la bibliotheque permet, et le durcissement livre le
+  2026-11-14 le couvre. Prix : deux runs `dev` ;
+- **les VALEURS** (`divulgation` -> `disclosure`...) : une MIGRATION et non
+  une traduction -- cles de la table de severite, des etats de denominateur,
+  de `CRITERION_OF` et de l'accord de critere, et persistees dans **dix-huit
+  pistes scellees** dont un hash fige les octets. A n'ouvrir que si cette
+  moitie-ci rend un effet.
+
+**ET LE PREREQUIS EST VERIFIE PLUTOT QUE SUPPOSE** : sur les 318 entrees du
+corpus, **ZERO** declencherait le durcissement, dans l'une ou l'autre
+langue. Donc la comparaison n'a qu'**UNE** variable. En revanche **60 des
+1 166 payloads** de la bibliotheque portent une etiquette anglaise : en
+CAMPAGNE le durcissement se declencherait vraiment, et c'est un fait sur les
+campagnes que cette mesure ne dit pas.
+
+**UN BRAS TEMPORAIRE EST LEGITIME, UN SECOND BRAS PERMANENT PAR LANGUE NE
+L'EST PAS.** C'est la decision du jour meme : `fr5` a vecu une journee, le
+temps de sa mesure, puis il est entre dans l'instruction livree et a disparu
+comme bras. Ici le bras ne touche meme pas le depot -- il vit **EN
+MEMOIRE**, le temps du run -- parce que la question est << est-ce que ca
+compte ? >> et que si la reponse est non, rien ne doit etre livre.
+
+- **DEUX bras mesures A NEUF**, sur la meme population, et c'est un refus du
+  design le moins cher : la figure du jour (89 / 98 / 94 sur 225 entrees) ne
+  decrit plus `dev`, passe a 227 avec les deux cas `fingerprinting`. Meme
+  raisonnement que le protocole d'attribution, ou une base deja lue
+  disqualifiait le design a un seul bras ;
+- `dev`, **les DEUX formats** -- l'addendum porte cinq fois chaque etiquette,
+  donc les conversations bougent aussi ;
+- juge `groq/openai/gpt-oss-120b`, `judge()` direct sans vote ;
+- **ORDRE declare** : le controle d'abord ;
+- **seuils PAR METRIQUE sur la moitie AUTEUR**, rien en dessous de DEUX cas
+  deplaces ;
+- l'accord de critere et celui de tour sont **rapportes et jamais testes** :
+  aucun seuil n'a ete declare pour eux.
+
+**LE BRAS EST UN REMPLACEMENT MECANIQUE**, la discipline du 2026-11-14 : les
+deux mots, dans la base, dans l'addendum et dans les etiquettes de la
+question, et rien d'autre. Un garde remonte du bras vers le controle en
+defaisant les deux remplacements -- si quoi que ce soit d'autre avait bouge,
+on ne retomberait pas dessus. Et il **REFUSE DE MESURER** si l'un des quatre
+champs n'a pas change, la lecon de `measure_judges`, dont la premiere version
+aurait fait tourner trois bras sur le meme modele en silence.
+
+**CE QUE LE RUN POURRAIT TROUVER, dit d'avance.** Un effet NUL ferme la
+question de l'auteur et laisse les etiquettes francaises -- c'est un
+resultat. Un effet FAVORABLE ouvre la moitie chere, et il faudra alors
+decider si l'on paie une migration sur dix-huit pistes scellees pour ce
+gain-la. Un effet DEFAVORABLE repond aussi : il dirait que l'instruction doit
+decrire ce que le juge VOIT, ce qui est exactement la raison pour laquelle
+les etiquettes sont restees francaises dans le bras anglais le 2026-11-14.
+
+**ET LE BALAYAGE DU `.gitignore` A MORDU SUR UN MODULE NE UNE HEURE PLUS
+TOT**, en le nommant : `labels*.json` et `labels*.log` n'etaient couverts par
+rien. C'est le balayage du 2026-11-25 faisant son travail -- celui dont le
+defaut d'origine etait *<< j'ai ajoute deux lignes A LA MAIN, ce qui est le
+defaut et pas le correctif >>* -- et c'est ce qu'un balayage achete contre
+une liste que quelqu'un doit penser a etendre.
+
+Dix mutations, dix morsures. Et la dixieme a d'abord mordu les MAUVAIS gardes :
+retirer `OUTPUT_PREFIX` cassait aussi `main()`, donc elle ne disait rien du
+balayage. Rejouee en renommant le prefixe, elle mord le bon. **Une mutation
+qui ne touche pas la propriete affirmee ne dit rien du garde**, pour la
+cinquieme fois.
+
+Rien n'a ete LANCE. Le protocole existe ; les chiffres non.
+
+2,081 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 

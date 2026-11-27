@@ -68,6 +68,7 @@ delivery*.json
 attribution*.json
 recall*.json
 judges*.json
+labels*.json
 # And their LOGS, which is the half I forgot and had to untrack: a campaign's
 # stdout carries the complete payloads and the target's complete replies, and
 # keeping those out of a public repository is the whole reason `--abridge`
@@ -78,6 +79,7 @@ delivery*.log
 attribution*.log
 recall*.log
 judges*.log
+labels*.log
 *-report.log
 
 # Snapshot MITRE ATLAS : hors git, comme celui de garak.
