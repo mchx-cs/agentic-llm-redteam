@@ -842,7 +842,7 @@ def _delivery_flag(delivery):
     return "--indirect " if delivery == "indirect" else ""
 
 
-def _bounds_block(bounds, finding_count, rate=None, replayed=True,
+def _bounds_block(bounds, finding_count, rate=None, replayed=None,
                   repeated=None, delivery="single-turn"):
     """
     What the attempt count allows us to claim — and above all what it does
@@ -867,20 +867,47 @@ def _bounds_block(bounds, finding_count, rate=None, replayed=True,
     lines += _asr_block(rate)
 
     if finding_count:
-        # The reproducibility clause depends on whether a replay HAPPENED.
-        # A multi-turn campaign runs none -- there is no single payload to
-        # re-send -- so pointing the reader at "the replay shown on each
-        # finding" would send them to something the report does not contain.
-        # The same defect family as the limitations block that claimed a
-        # single turn in a multi-turn campaign, and found the same way: by
-        # reading the rendering.
-        how_often = (
-            "and the replay shown on each finding is the only measure of "
-            "reproducibility given here."
-            if replayed else
-            "and NO measure of reproducibility is given here: a multi-turn "
-            "attack has no single payload to re-send, so none of these "
-            "findings is corroborated by replay.")
+        # THE CLAUSE DEPENDS ON WHAT HAPPENED, not on the delivery, and that
+        # distinction is the 2026-11-27 correction. The first version asked
+        # whether the delivery was multi-turn -- true of the case that
+        # motivated it, and an approximation of the class: "multi-turn"
+        # implies "no replay", but "single-turn" does NOT imply "a replay".
+        # The replay runs only on a DISCLOSURE, so a single-turn campaign
+        # whose findings are all `obeissance` replays nothing, and the clause
+        # sent the reader to something the report does not contain. Found by
+        # reading the rendering of a campaign against `foreign:bare`, whose
+        # only finding is an obedience.
+        #
+        # THREE STATES, because two do not cover it: a campaign can carry a
+        # replayed disclosure AND an obedience that is not, and "each
+        # finding" is then false as well.
+        #
+        # AND THE REASON FOR "NONE" IS CHOSEN, never shared. That is the
+        # lesson of the `not_obtained` status (2026-11-25): reusing the
+        # multi-turn reason on a single-turn finding prints a sentence that
+        # is FALSE there -- the payload exists, it is the criterion that
+        # calls for no replay.
+        if replayed is None:              # older result.json, no detail
+            replayed = 0 if delivery == "pyrit-multiturn" else finding_count
+        if replayed >= finding_count:
+            how_often = ("and the replay shown on each finding is the only "
+                         "measure of reproducibility given here.")
+        elif replayed:
+            how_often = (
+                f"and the replay shown on {replayed} of the {finding_count} "
+                f"finding(s) is the only measure of reproducibility given "
+                f"here: the others are not disclosures, and only a "
+                f"disclosure is replayed.")
+        elif delivery == "pyrit-multiturn":
+            how_often = (
+                "and NO measure of reproducibility is given here: a "
+                "multi-turn attack has no single payload to re-send, so none "
+                "of these findings is corroborated by replay.")
+        else:
+            how_often = (
+                "and NO measure of reproducibility is given here: none of "
+                "these findings is a disclosure, and only a disclosure is "
+                "replayed, so none of them is corroborated.")
         # HOW OFTEN: one sentence, chosen, never a claim followed by its
         # retraction. A sweep genuinely cannot tell -- its attempts are
         # different payloads -- and a repetition measures exactly that, the
@@ -1274,11 +1301,11 @@ def render_markdown(report, abridge=False):
     lines += _bounds_block(
         report.get("bounds"), len(report["findings"]),
         report.get("success_rate"),
-        # Whether a replay happened at all. A multi-turn campaign runs none,
-        # so the clause pointing at "the replay shown on each finding" would
-        # send the reader to something this report does not contain.
-        replayed=(report["campaign"].get("delivery") or "single-turn")
-        != "pyrit-multiturn",
+        # HOW MANY replays actually happened -- counted, never inferred
+        # from the delivery. A multi-turn campaign runs none, and so does a
+        # single-turn one whose findings are all `obeissance`: the replay
+        # runs on a DISCLOSURE only.
+        replayed=sum(1 for f in report["findings"] if f.get("replay_check")),
         repeated=report.get("repeated"),
         # So the advised command bounds THIS delivery and not another one.
         delivery=report["campaign"].get("delivery") or "single-turn")

@@ -1208,10 +1208,25 @@ class TestADisclosureWithNoReplayHasAGRADE:
         assert attempted != impossible
 
     def test_the_reproducibility_clause_depends_on_a_REPLAY(self):
-        # A multi-turn campaign runs no replay, so pointing the reader at
-        # "the replay shown on each finding" would send them to something
-        # the report does not contain. Found by reading the rendering, like
-        # every other presentation defect in this file.
+        """
+        CE TEST A CHANGE LE 2026-11-27 PARCE QUE LE COMPORTEMENT S'EST
+        AMELIORE, et sa version precedente DOCUMENTAIT le defaut.
+
+        Ecrit le 2026-11-17 pour epingler la moitie multi-tours, il
+        construisait son bras de controle mono-tour depuis la MEME
+        trouvaille -- `{**finding, ...}` -- donc il heritait d'un
+        `obeissance` sans rejeu, et affirmait que la clause y parait. Or
+        c'est exactement le cas ou elle est fausse : le rejeu ne tourne que
+        sur une DIVULGATION, donc une campagne mono-tour dont les
+        trouvailles sont toutes des obeissances n'en lance aucun. Trouve en
+        lisant le rendu d'une campagne contre `foreign:bare`.
+
+        << Un garde ne vaut que ce qu'il COMPARE >>, dans une forme neuve :
+        le bras de controle partageait l'etat qui rendait l'affirmation
+        fausse.
+
+        TROIS ETATS, parce que deux ne couvrent pas une campagne mixte.
+        """
         finding = {"attempt": 1,
                    "payload": {**_payload(), "delivery": "pyrit-multiturn"},
                    "reply": "voici",
@@ -1226,11 +1241,58 @@ class TestADisclosureWithNoReplayHasAGRADE:
             delivery="pyrit-multiturn")))
         assert "NO measure of reproducibility" in multiturn
         assert "the replay shown on each finding" not in multiturn
+        # ET LA RAISON EST CELLE DU MULTI-TOURS, jamais celle du critere.
+        assert "no single payload to re-send" in multiturn
 
-        single = render_markdown(build_report(_result(
+        # MONO-TOUR, obeissance, aucun rejeu : la clause doit se TAIRE, et
+        # pour l'autre raison. C'est ce que l'ancienne version affirmait a
+        # l'envers.
+        obedience = render_markdown(build_report(_result(
             findings=[{**finding, "payload": _payload(), "turns": []}],
             launched=[_payload()])))
+        assert "the replay shown on each finding" not in obedience
+        assert "NO measure of reproducibility" in obedience
+        assert "only a disclosure is" in obedience
+        assert "no single payload to re-send" not in obedience, (
+            "la raison du multi-tours imprimee sur une trouvaille mono-tour "
+            "est FAUSSE : le payload existe, c'est le critere qui n'appelle "
+            "pas de rejeu")
+
+        # MONO-TOUR, divulgation rejouee : la clause parait.
+        replayed = {**finding, "payload": _payload(), "turns": [],
+                    "verdict": {"reussi": True, "critere": "divulgation",
+                                "analyse": "fuit", "valeur": "X",
+                                "votes": [True, True, True]},
+                    "replay_check": {"status": "confirmed",
+                                     "explanation": "revenue 3 fois sur 3"}}
+        single = render_markdown(build_report(_result(
+            findings=[replayed], launched=[_payload()])))
         assert "the replay shown on each finding" in single
+
+    def test_a_MIXED_campaign_says_on_how_many(self):
+        """
+        Une campagne peut porter une divulgation rejouee ET une obeissance
+        qui ne l'est pas : << chaque trouvaille >> est alors faux aussi, et
+        << aucune >> l'est tout autant. C'est le troisieme etat, et il est
+        la raison pour laquelle le compte est COMPTE plutot que deduit.
+        """
+        base = {"attempt": 1, "payload": _payload(), "reply": "voici",
+                "turns": [], "truncated": False}
+        leak = {**base,
+                "verdict": {"reussi": True, "critere": "divulgation",
+                            "analyse": "fuit", "valeur": "X",
+                            "votes": [True, True, True]},
+                "replay_check": {"status": "confirmed",
+                                 "explanation": "revenue 3 fois sur 3"}}
+        obeyed = {**base, "attempt": 2,
+                  "verdict": {"reussi": True, "critere": "obeissance",
+                              "analyse": "obeit", "votes": [True, True, True]},
+                  "replay_check": None}
+        mixed = render_markdown(build_report(_result(
+            findings=[leak, obeyed], launched=[_payload()])))
+        assert "the replay shown on 1 of the 2 finding(s)" in mixed
+        assert "the replay shown on each finding" not in mixed
+        assert "NO measure of reproducibility" not in mixed
 
 
 class TestTheTELEMETRYReachesTheReader:
