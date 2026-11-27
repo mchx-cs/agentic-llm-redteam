@@ -15564,6 +15564,66 @@ rejeu et declare nulle part, et une ligne de la table retiree.
 
 2,122 `pytest` tests, toujours sans aucun appel a un modele.
 
+**ARTEX N'EST PAS LA BASE, et la question valait d'etre posee
+(2026-11-27).** Clement a demande : << si on part sur la meme base de modele
+que le projet ARTEX mais adapte aux LLM, on est en bonne voie ? >> La reponse
+est OUI pour la trajectoire et NON pour ARTEX, et les deux moities comptent.
+
+**CE QU'EST ARTEX**, d'apres du renseignement editeur de novembre 2026 :
+framework Go publie le 2026-07-26 (`Autumn-27/ARTEX`, **AGPL-3.0**), passe
+closed-source le 2026-10-08 apres documentation par Microsoft et le FBI en
+intrusions reelles -- ciblage puis acces privilegie en **moins de trois
+heures**. Son modele : un **Planner** qui transforme un objectif en intentions,
+des **Workers** qui les reclament et lancent `nmap` et consorts, et un
+**graphe d'actifs** ou tout le monde reecrit.
+
+**POURQUOI CE N'EST PAS LA BASE, par ordre de poids.**
+
+1. **La premisse ne se transpose pas, et c'est le coeur.** Un pentest web a une
+   verification DETERMINISTE -- le port est ouvert ou non, on a un shell ou
+   non -- donc ARTEX peut etre << un planner au-dessus d'outils existants >> et
+   s'arreter la. Une cible LLM n'a aucune verification de ce genre : c'est
+   precisement pourquoi ce projet a un juge mesure, un rejeu et des planchers
+   de rappel. **Copier l'orchestration, c'est copier la partie facile du
+   probleme.**
+2. **L'axe d'ARTEX est la VITESSE, et ce journal a deja tranche cet axe** a
+   propos d'arXiv:2605.04019 : ne pas courir apres la vitesse, courir apres la
+   qualite probante. << Moins de trois heures >> en est la version extreme, et
+   c'est un espace occupe par des gens serieux.
+3. **Le modele existe deja ici en miniature** : `reconnaissance -> planner ->
+   attacker -> adaptation` EST un planner/workers.
+4. **Ce qui separe les deux projets n'est pas l'architecture, ce sont les
+   garde-fous** -- les phases 9, 11 et 14 : mandat exige avant demarrage avec
+   perimetre et fenetre, coupe-circuit de budget, piste scellee SHA-256,
+   secrets fictifs. Prendre << la meme base >> au pied de la lettre voudrait
+   dire retirer ce qui rend l'outil defendable sur un engagement.
+
+**DEUX RISQUES CONCRETS, qui ne sont pas des opinions** : un fork a livre une
+image Docker piegee donnant un shell root non authentifie a qui connaissait le
+declencheur -- donc cloner un fork pour << partir de sa base >> est un risque
+chaine d'approvisionnement ACTUEL ; et **l'AGPL-3.0 est contaminante**,
+reprendre du code forcerait ce depot public en AGPL.
+
+**LE SEUL EMPRUNT RETENU : le graphe d'actifs, REFORMULE.** Un etat partage
+PERSISTANT que la reconnaissance, le plan et l'adaptation ecrivent, au lieu
+d'un profil qui ne vit que le temps d'une campagne. Ce qu'ARTEX en tire et qui
+manque ici : des intentions tardives qui s'appuient sur ce que les precedentes
+ont decouvert.
+
+**Ce n'est ni concu ni planifie -- une DIRECTION et pas une tache.** Le profil
+de cible et les quatre signaux d'adaptation en sont deja la moitie, et une
+piece qui PERSISTE entre campagnes touche la reproductibilite : deux campagnes
+identiques doivent envoyer les memes payloads, ce qui est la condition pour
+comparer deux rapports par `git diff`. Resoudre cette tension est le premier
+travail de conception, pas une consequence a decouvrir.
+
+**RESERVE DE METHODE, gardee avec la decision** : tout ce qui precede vient de
+renseignement editeur publie en novembre 2026, les sources divergent sur
+l'attribution et le cadrage, et **ni le code d'ARTEX ni un fork n'ont ete
+lus**. La decision ne demandait pas de les lire -- elle porte sur le MODELE,
+qui est publiquement decrit -- mais une revendication sur son implementation
+en demanderait.
+
 ## Legal framing
 
 A security research project. LLM red teaming is only lawful against systems you own or are
