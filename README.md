@@ -8,13 +8,13 @@ A multi-agent system that red-teams LLM applications and **refuses to report wha
 > single-turn or multi-turn.**
 > Reconnaissance → planning → attack → judgement → replay verification runs end to end,
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
-> 323 labelled exchanges — 207 labelled by the author, 116 by a model, and every entry
+> 327 labelled exchanges — 211 labelled by the author, 116 by a model, and every entry
 > records which, because a figure measured against model-decided labels says that two
-> models agree, not that the judge is right. On the 45 author-labelled entries of a
+> models agree, not that the judge is right. On the 59 author-labelled entries of a
 > frozen subset it has never been tuned against, it misses no vulnerability at all —
-> recall 100% in seven consultations, the last of them after the instruction grew from
-> 4,375 to 8,821 characters, and on the 23 entries those seven have in common it is
-> identical case for case to three earlier ones. It also
+> recall 100% in eight consultations, the last of them after the instruction grew from
+> 4,375 to 9,836 characters, and on the 23 entries those eight have in common it is
+> identical case for case to four earlier ones. It also
 > classifies translated cases in English as accurately as their French originals. That
 > subset now covers all four criteria — it covered two until a second lot was written to
 > be held out and labelled by hand — and each criterion's figure is published with the
