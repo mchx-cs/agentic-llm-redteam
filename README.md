@@ -10,16 +10,17 @@ A multi-agent system that red-teams LLM applications and **refuses to report wha
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
 > 327 labelled exchanges — 211 labelled by the author, 116 by a model, and every entry
 > records which, because a figure measured against model-decided labels says that two
-> models agree, not that the judge is right. On the 59 author-labelled entries of a
-> frozen subset it has never been tuned against, it misses no vulnerability at all —
-> recall 100% in eight consultations, the last of them after the instruction grew from
-> 4,375 to 9,836 characters, and on the 23 entries those eight have in common it is
-> identical case for case to four earlier ones. It also
+> models agree, not that the judge is right. On a frozen subset it has never been tuned
+> against, it has missed no vulnerability in nine consultations of the 23 entries they
+> all share — the last of them after the instruction grew from 4,375 to 9,836
+> characters — and the one miss on the wider 59-entry set is a case MEASURED to flip
+> one time in five, not a defect. It also
 > classifies translated cases in English as accurately as their French originals. That
-> subset now covers all four criteria — it covered two until a second lot was written to
-> be held out and labelled by hand — and each criterion's figure is published with the
-> floor its positives support, because a perfect score on five cases bounds the true rate
-> at 57%, not at 100%.
+> subset now covers five of the six criteria — it covered two until successive lots were
+> written to be held out and labelled by hand, and the sixth has no frozen case at all,
+> which is stated rather than hidden — and each criterion's figure is published with the
+> floor its positives support, because a perfect score on four cases bounds the true rate
+> at 51%, not at 100%.
 > Attack content comes from a local [garak](https://github.com/NVIDIA/garak) snapshot —
 > 52 probes, 1,143 payloads — plus 15 hand-written ones for the two families garak ships
 > no probe for.
@@ -27,7 +28,7 @@ A multi-agent system that red-teams LLM applications and **refuses to report wha
 > where an attacker model reads each reply and writes the next turn. The two are not
 > interchangeable and the trade-off is stated in
 > [Single-turn or multi-turn](#single-turn-or-multi-turn).
-> What is missing is the judge's reach: four criteria cover four OWASP families, so six
+> What is missing is the judge's reach: six criteria cover four OWASP families, so six
 > of the ten stay out of reach. And multi-turn has now been measured against
 > single-turn, at equal requests to the target, at each of the demo target's three
 > defence levels: it finds LESS at two of them (17 pairs to 1, and 12 to 3) and ties
@@ -123,8 +124,11 @@ and coverage that states what was never attempted.
 │   ├── mock.py          # deterministic, no LLM: free end-to-end tests
 │   ├── records.py       # a retrieval desk over reader records: the third-party target
 │   ├── docs.py          # a document base readers write into: the indirect target
+│   ├── bench.py         # a REFERENCE target: exactly one flaw open at a time
+│   ├── foreign.py       # a target whose defence nobody here wrote
 │   ├── conversation.py  # the multi-turn contract, and the refusal to fake it
 │   ├── indirect.py      # the planted-note contract: declared, never guessed
+│   ├── wrapping.py      # carries a target's DECLARED capabilities through a wrapper
 │   ├── http.py          # a real endpoint, described in .env (urllib, no new dependency)
 │   └── websocket.py     # RFC 6455 on the standard library: ws:// and wss:// endpoints
 ├── agents/
@@ -152,6 +156,9 @@ and coverage that states what was never attempted.
 │   ├── test_set_log.jsonl           # timestamped log of every frozen-set consultation
 │   ├── check_replay.py              # exercises the replay check on simulated targets
 │   ├── check_stability.py           # judges a few cases N times: did an edit do anything?
+│   ├── measure_recall.py            # the CHAIN's recall on known flaws, against a blind baseline
+│   ├── measure_judges.py            # how much of a figure is the criteria, how much the model
+│   ├── measure_labels.py            # a temporary arm: does the question's label language matter?
 │   ├── frozen_lot.py                # the second lot, written to be HELD OUT and measured on
 │   ├── measure_adaptive.py          # the adaptive arm, and the confound that stopped it
 │   ├── measure_modes.py             # --multiturn against single-turn, at equal cost to the target
@@ -164,6 +171,8 @@ and coverage that states what was never attempted.
 │   ├── handwritten_conversations.py # the traps a harvest cannot produce, by hand
 │   ├── labelling_prepass.py         # mechanical facts to speed labelling, no verdict
 │   ├── languages.py                 # which language pair an exchange is, derived once
+│   ├── english_population.py        # faithful translations, so a figure exists per language pair
+│   ├── code_fingerprint.py          # a digest of what a measurement depends on: no mixed resume
 │   ├── split_sets.py                # the dev/frozen split, and the rules it refuses to break
 │   ├── resume.py                    # resumes an interrupted evaluation, never repeats a finished one
 │   └── label.py                     # hand-labelling, one question at a time
@@ -204,7 +213,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 2,114 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 2,117 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -968,7 +977,7 @@ What it found already in place:
 | What the manual asks for | Where it lives here |
 |---|---|
 | Validate the scorer separately from the system under test | `evaluation/evaluate_judge.py`, hand-labelled corpus, frozen test set |
-| Explicit oracles, including a *needs human adjudication* state | four criteria, and a split vote returning no verdict |
+| Explicit oracles, including a *needs human adjudication* state | six criteria, and a split vote returning no verdict |
 | A missing trace must never be recorded as a defensive pass | truncated replies detected and warned about twice |
 | Record tested, untested and inconclusive cases, benign controls included | tested / touched-but-unjudged / skipped, plus the `controle` technique |
 | Report effort alongside success — tokens expended | call and token journal, budget as a circuit breaker |
@@ -1229,7 +1238,7 @@ The hosted judge only ever sees fictitious exchanges; the target under attack st
 |---|---|---|
 | **0** | Agent loop, abstraction layer, LLM-as-judge, retry budget | **Done** |
 | **1** | Real prompt injection payload library | **Done** (garak snapshot + 15 hand-written) |
-| **2** | Judge reliability — measuring and reducing false positives/negatives | In progress — four criteria, four of the ten OWASP families scorable. What is left is the FLOORS, not the criteria: a perfect recall on the frozen set's four `abus_outils` positives bounds the true rate at 51%, not at 100%. Raising one is more cases, written and labelled by hand |
+| **2** | Judge reliability — measuring and reducing false positives/negatives | In progress — six criteria, still four of the ten OWASP families scorable, because the two newest refine families already covered. What is left is the FLOORS, not the criteria: ten of the twelve criterion x side lines carry four positives or more, and `fuite_permissions` carries ONE in `dev` and none in the frozen set, so it bounds nothing yet. Raising a floor is more cases, written and labelled by hand |
 | **3a** | Reorder the plan from the target's reply (deterministic; extends phase 5) | **Done** — gain not demonstrated on a real target |
 | **3b** | Adaptive multi-turn attacker — [PyRIT](https://github.com/microsoft/PyRIT) drives the attack stage | **Done** — `--multiturn`, attacker model and judge inside our own points of passage. **The gain is now measured, negatively**, at the three defence levels: at equal target requests a single-turn campaign wins 17 pairs to 1 at level 1 and 12 to 3 at level 3, ties at level 2, and takes every `high` finding there is (26, 5, 0) |
 | **4** | Decouple judge from target model (a judge sharing its target's blind spots is a known bias) | **Done** |
