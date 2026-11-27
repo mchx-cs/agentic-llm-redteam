@@ -350,7 +350,7 @@ class TestTheARMReachesTheConversationPath:
         prompt = system_prompt_for(True, DEFAULT_LANGUAGE)
         assert prompt == system_prompt_for(True)
         digest = hashlib.sha256(prompt.encode()).hexdigest()
-        assert digest.startswith("6b95c0ba94b5c380920b991b75e87eee7f9dd98555e2c2f9fbd898ad324748b2"), (
+        assert digest.startswith("19ab68ddac7a5ce49400813b7b8a70bb58ea113e7e243bef9fd3d89c46dda566"), (
             "l'instruction de conversation par defaut a bouge : toute figure "
             "de conversation publiee cesse de la decrire, et une remesure "
             "doit etre enregistree a cote de ce chiffre")

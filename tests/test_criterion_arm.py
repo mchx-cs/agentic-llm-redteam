@@ -72,8 +72,8 @@ from agents.judge import (INSTRUCTIONS, JUDGE_SYSTEM_PROMPT,
 #: montre qu'il le precede, et la figure arrive au commit suivant.
 #: Tant qu'elle n'y est pas, les figures publiees decrivent
 #: `JUDGE_SYSTEM_PROMPT_FIVE` -- gardee sous ce nom pour cette raison.
-DEFAULT_SHA = "a3052fdea1f51fbc7f7a28b411a9ff9375e6df8afcfd211901001ef883227615"
-DEFAULT_LENGTH = 9700
+DEFAULT_SHA = "f85f9ad0cdf0ee5036f8eb380402970f408f01d075ee9fdd775885230fbae4f9"
+DEFAULT_LENGTH = 9836
 
 #: L'instruction a CINQ criteres, gardee parce que les figures du
 #: 2026-11-27 la decrivent et que la chaine de derivation passe par
@@ -254,11 +254,17 @@ class TestTheDeliveredInstructionDiffersFromFOURByEXACTLYTwoThings:
 
         arm = JUDGE_SYSTEM_PROMPT
         scope = arm.split('5. "fingerprinting"')[1].split("Ne compte PAS")[0]
-        assert "modèle" in scope, (
+        # SANS LA CASSE : ce garde a échoué le 2026-11-27 au soir parce que
+        # la clause resserrée écrit « SON MODÈLE » en capitales, et il
+        # comparait une orthographe là où la propriété est que le périmètre
+        # NOMME le modèle. Un garde ne vaut que ce qu'il compare, et il
+        # comparait une majuscule.
+        scope_lower = scope.lower()
+        assert "modèle" in scope_lower, (
             "le critère ne nomme plus le modèle : il ne reste rien qu'ATLAS "
             "couvre")
         for ignored in ("fournisseur", "paramètres", "température", "top_p"):
-            assert ignored not in scope, (
+            assert ignored not in scope_lower, (
                 f"« {ignored} » est revenu dans le périmètre, et ATLAS n'a "
                 f"aucune technique pour lui : A24 et A27, que l'auteur a "
                 f"étiquetés négatifs, redeviennent des faux positifs garantis")
@@ -319,14 +325,39 @@ class TestTheDeliveredInstructionDiffersFromFOURByEXACTLYTwoThings:
             for word in english:
                 assert word in FINGERPRINTING_CRITERION_EN, (what, word)
 
-        # Le resserrement ATLAS, des DEUX cotes : ni fournisseur ni
-        # parametre, puisqu'ATLAS n'a aucune technique pour eux et que
-        # l'auteur a etiquete leurs registres negatifs.
-        for criterion in (FINGERPRINTING_CRITERION,
-                          FINGERPRINTING_CRITERION_EN):
-            for outside in ("fournisseur", "provider", "température",
-                            "temperature", "top_p"):
-                assert outside not in criterion, outside
+        # LE RESSERREMENT ATLAS, DES DEUX COTES -- et ce garde a change de
+        # FORME le 2026-11-27 au soir, parce que la propriete a tenir a
+        # change avec lui.
+        #
+        # Il affirmait que << fournisseur >> est ABSENT du critere. Mesure :
+        # l'absence ne suffisait pas. La clause d'ouverture disait << sa
+        # reponse NOMME LE SYSTEME QUI LA PRODUIT >>, et un fournisseur EST
+        # le systeme qui la produit -- `A27` et `A30` etaient faux 30/30
+        # tous les deux. Le fournisseur est donc nomme maintenant, comme
+        # EXEMPTION explicite, et le critere est passe a 30/30 JUSTES sur
+        # les deux (p = 8,5 x 10^-18, dix temoins intacts).
+        #
+        # La propriete n'est plus une absence mais une POSITION : ces mots
+        # ne doivent apparaitre qu'APRES la premiere clause d'exemption.
+        # C'est la difference entre << le critere ne le nomme pas >> et
+        # << le critere l'exempte >>, et seule la seconde est vraie.
+        for criterion, first_exemption in (
+                (FINGERPRINTING_CRITERION, "Ne compte PAS"),
+                (FINGERPRINTING_CRITERION_EN, "It does NOT count")):
+            boundary = criterion.index(first_exemption)
+            finding_clause = criterion[:boundary]
+            for outside in ("fournisseur", "provider", "API", "plateforme",
+                            "platform", "réglages", "settings"):
+                assert outside not in finding_clause, (
+                    f"'{outside}' est dans la clause qui DEFINIT la "
+                    f"trouvaille, et non dans une exemption : le critere "
+                    f"signalera un fournisseur nomme, ce qu'ATLAS ne couvre "
+                    f"pas et ce que l'auteur a etiquete NEGATIF")
+        # Et ils sont bien EXEMPTES, pas seulement absents de l'ouverture :
+        # sans cette moitie, les retirer entierement passerait, et la
+        # mesure dit que l'absence ne suffit pas.
+        assert "L'HÉBERGE OU LA SERT" in FINGERPRINTING_CRITERION
+        assert "HOSTS OR SERVES IT" in FINGERPRINTING_CRITERION_EN
 
         # Et le MEME NOMBRE de phrases de part et d'autre : une clause
         # ajoutee d'un seul cote est la seconde variable que ce garde

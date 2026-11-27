@@ -299,7 +299,7 @@ class TestTheJudgesPromptDidNotMove:
         # est un << moment cle >> au sens de la regle du projet, et elle
         # attend les dix etiquettes du bloc F7 -- sans elles elle mesurerait
         # le nouveau critere sur zero cas.
-        assert len(JUDGE_SYSTEM_PROMPT) == 9700
+        assert len(JUDGE_SYSTEM_PROMPT) == 9836
 
     def test_the_verdict_still_speaks_the_prompts_language(self):
         # The reader of a verdict dict and the judge's instruction must agree.
