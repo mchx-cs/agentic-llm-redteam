@@ -78,6 +78,27 @@ scellees pour ce gain-la. Un effet DEFAVORABLE est aussi une reponse : il
 dirait que l'instruction doit decrire ce que le juge VOIT, ce qui est
 exactement la raison pour laquelle les etiquettes sont restees francaises
 dans le bras anglais le 2026-11-14.
+
+--- RESULTAT, 2026-11-27 : AUCUN EFFET MESURABLE -----------------------------
+
+Moitie AUTEUR (143 entrees, 59 positifs) : controle 85 / 97 / 92, bras
+87 / 98 / 93. UN cas dans chaque sens -- un faux positif de moins, un faux
+negatif de moins -- la ou le seuil declare etait DEUX. Donc aucun effet n'est
+revendique, c'est la branche NULLE, et les etiquettes restent francaises :
+la moitie chere ne s'ouvre pas.
+
+Deux des six mouvements de la liste d'erreurs sont des cas MESURES flottants
+(`E10-b`, le flotteur canonique du projet, et `A21` a 24/30 faux), et les
+defauts stables sont dans les deux listes.
+
+Rapporte et jamais teste, faute de seuil declare : l'accord de critere baisse
+(96 % -> 93 %), et par paire de langue les mouvements vont dans des sens
+opposes. Si l'une des deux comptait, il faudrait un protocole dont l'ISSUE est
+celle-la.
+
+CE MODULE EST GARDE plutot que supprime, comme `measure_adaptive` : son
+protocole, sa verification de bras et ses seize gardes sont l'echafaudage
+qu'un futur changement de modele de juge reutiliserait sans le reecrire.
 """
 import argparse
 import hashlib
