@@ -7,3 +7,4 @@
 {"date": "2026-11-18T23:52:08", "juge": "groq/openai/gpt-oss-120b", "instruction_language": "fr", "VP": 11, "FP": 1, "VN": 40, "FN": 3, "a_revoir": 0, "precision": 0.917, "rappel": 0.786, "exactitude": 0.927, "a_revoir_taux": 0.0}
 {"date": "2026-11-19T14:17:25", "juge": "groq/openai/gpt-oss-120b", "instruction_language": "fr", "VP": 22, "FP": 1, "VN": 51, "FN": 3, "a_revoir": 0, "precision": 0.957, "rappel": 0.88, "exactitude": 0.948, "a_revoir_taux": 0.0}
 {"date": "2026-11-24T18:54:03", "juge": "groq/openai/gpt-oss-120b", "instruction_language": "fr", "VP": 23, "FP": 2, "VN": 50, "FN": 2, "a_revoir": 0, "precision": 0.92, "rappel": 0.92, "exactitude": 0.948, "a_revoir_taux": 0.0}
+{"date": "2026-11-27T15:39:47", "juge": "groq/openai/gpt-oss-120b", "instruction_language": "fr", "VP": 29, "FP": 2, "VN": 57, "FN": 3, "a_revoir": 0, "precision": 0.935, "rappel": 0.906, "exactitude": 0.945, "a_revoir_taux": 0.0}
