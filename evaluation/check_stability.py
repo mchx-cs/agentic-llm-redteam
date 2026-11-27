@@ -52,7 +52,8 @@ import json
 from pathlib import Path
 
 import stats
-from agents.judge import judge, judge_conversation
+from agents.judge import (DEFAULT_LANGUAGE, INSTRUCTIONS, judge,
+                         judge_conversation)
 from console import write_in_utf8
 
 CORPUS_FILE = Path(__file__).with_name("labelled_exchanges.json")
@@ -92,16 +93,35 @@ ROUNDS = 10
 from evaluation.label import is_conversation  # noqa: E402,F401
 
 
-def judge_entry(entry):
-    """One verdict on one entry, in the format the entry declares."""
+def judge_entry(entry, language=DEFAULT_LANGUAGE):
+    """
+    One verdict on one entry, in the format the entry declares.
+
+    `language` CHOISIT LE BRAS, et sans elle cet instrument ne pouvait pas
+    mesurer `fr5` : `fingerprinting` n'existe pas dans le defaut, donc `A23`
+    et `A24` y rendaient « jamais signale » -- une exemption qui aurait eu
+    l'air de tenir alors que le critere n'etait pas la.
+    """
     if is_conversation(entry):
+        # REFUSE plutot qu'ignore. `judge_conversation` ne prend aucune
+        # langue -- seule l'instruction francaise a ete mesuree sur ce format
+        # -- donc accepter le drapeau ici rendrait des manches mesurees par
+        # une autre instruction que celle annoncee.
+        if language != DEFAULT_LANGUAGE:
+            raise SystemExit(
+                f"{entry['id']} est une CONVERSATION, et seule l'instruction "
+                f"`{DEFAULT_LANGUAGE}` a ete mesuree sur ce format : "
+                f"`--language {language}` n'a pas de sens ici.\n"
+                f"Mesure les conversations sans le drapeau, ou nomme des "
+                f"entrees mono-tour.")
         return judge_conversation(entry["turns"])
     if entry.get("turns"):
         # A single exchange stored as `turns`: judged single-turn, because
         # that is what it is. Passing it to the conversation path would judge
         # it with an addendum written for several turns.
-        return judge(entry["turns"][0]["content"], entry["turns"][1]["content"])
-    return judge(entry["payload"], entry["reply"])
+        return judge(entry["turns"][0]["content"],
+                     entry["turns"][1]["content"], language)
+    return judge(entry["payload"], entry["reply"], language)
 
 
 def expected_criterion(entry):
@@ -178,7 +198,7 @@ def reading(votes, expected, rounds):
 
 
 def check(ids, rounds=ROUNDS, corpus=None, show=print, judge_one=None,
-          criterion=False):
+          criterion=False, language=DEFAULT_LANGUAGE):
     """
     Judge each named entry `rounds` times and report what is stable.
 
@@ -187,7 +207,16 @@ def check(ids, rounds=ROUNDS, corpus=None, show=print, judge_one=None,
     `verify_by_replay` takes its target and its judge.
     """
     corpus = corpus if corpus is not None else read_corpus()
-    judge_one = judge_one or judge_entry
+    judge_one = judge_one or (lambda entry: judge_entry(entry, language))
+
+    # UN AUTRE BRAS S'ANNONCE, en tete et avant les lignes. Un chiffre qui
+    # RESSEMBLE a celui du defaut sans en etre est la forme de defaut la plus
+    # couteuse de ce projet, et toutes les lectures enregistrees ici sont sur
+    # le defaut.
+    if language != DEFAULT_LANGUAGE:
+        show(f"/!\\ Bras `{language}` et non le defaut `{DEFAULT_LANGUAGE}` :"
+             f" ces lignes ne sont PAS comparables aux lectures deja "
+             f"enregistrees, qui sont toutes sur le defaut.")
 
     show(f"{rounds} judgement(s) of each case, to tell a stable verdict from "
          f"a coin.")
@@ -269,9 +298,18 @@ def main(arguments=None):
                              "finds every breach and names the wrong "
                              "criterion scores 100%% on precision, recall "
                              "and accuracy, so nothing published can see it.")
+    parser.add_argument(
+        "--language", "--langue", default=DEFAULT_LANGUAGE,
+        choices=sorted(INSTRUCTIONS),
+        help=f"arm of the judge's INSTRUCTION (default: "
+             f"{DEFAULT_LANGUAGE}, the one every recorded reading is on). "
+             f"`fr5` carries the fifth criterion, which the default cannot "
+             f"name at all: without this flag a `fingerprinting` case reads "
+             f"as never flagged, which would look like an exemption holding "
+             f"where the criterion simply was not there.")
     arguments = parser.parse_args(arguments)
     check(arguments.ids, rounds=arguments.rounds,
-          criterion=arguments.criterion)
+          criterion=arguments.criterion, language=arguments.language)
     return 0
 
 

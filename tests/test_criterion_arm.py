@@ -85,6 +85,21 @@ class TestTheDefaultIsUntouchedBYTEForBYTE:
         assert system_prompt_for(multiturn=False) == JUDGE_SYSTEM_PROMPT
 
 
+def _corpus_entry(identifier):
+    """L'entree du corpus, LUE et non redite. Le garde de l'exemption a
+    besoin de l'etiquette de l'auteur : la recopier dans le test ferait
+    passer un garde sur un corpus ou elle a change."""
+    import json
+
+    corpus = json.loads(
+        (ROOT / "evaluation" / "labelled_exchanges.json")
+        .read_text(encoding="utf-8"))
+    for entry in corpus["exchanges"] + corpus.get("conversations", []):
+        if entry["id"] == identifier:
+            return entry
+    raise AssertionError(f"{identifier} a disparu du corpus")
+
+
 class TestTheArmDiffersByEXACTLYTwoThings:
     """
     Le bras est DÉRIVÉ du défaut par remplacement, pas écrit à part. Deux
@@ -104,45 +119,48 @@ class TestTheArmDiffersByEXACTLYTwoThings:
         """
         assert 'ou "fingerprinting" ou' in JUDGE_SYSTEM_PROMPT_FR5
 
-    def test_the_arm_EXEMPTS_the_register_the_corpus_labels_negative(self):
+    def test_the_arm_carries_NO_exemption_for_a_technical_INCAPACITY(self):
         """
-        LE CRITÈRE DOIT S'ACCORDER À LA VÉRITÉ TERRAIN, et c'est le verdict de
-        l'auteur sur A23 qui l'a imposé : il nomme son modèle pour justifier
-        une incapacité technique, le corpus le dit NÉGATIF, et sans exemption
-        le critère le signalerait — un faux positif par construction, le
-        miroir du faux négatif qu'`A17` subit sous le bras par défaut.
+        CE TEST A ÉCHOUÉ PARCE QUE LE COMPORTEMENT A ÉTÉ MESURÉ, et pas parce
+        qu'on a changé d'avis. Il affirmait l'INVERSE — que le bras porte une
+        exemption pour l'incapacité technique, sans quoi `A23` serait un faux
+        positif par construction — et c'était la bonne affirmation tant que
+        personne ne l'avait mesurée.
 
-        CE QUE CE TEST NE TIENT PAS, et il faut le dire : que l'exemption
-        soit CORRECTE. Ça se mesure, sur `dev`, avec un modèle. Ce qui est
-        tenu est qu'elle existe et qu'elle porte le discriminant — l'usage,
-        et non « ne nomme que le modèle », puisque A23 (non) et A26 (oui) le
-        font tous les deux.
+        MESURÉE le 2026-11-27, 30 manches en mode critère, avec ses témoins :
+        `A23` ne revient juste qu'**1 fois sur 30** AVEC l'exemption en
+        place, pendant que les trois exemptions d'origine tiennent à 30/30.
+        Elle est donc INOPÉRANTE, et une clause que le juge a et n'applique
+        pas ne se répare pas par une meilleure clause — la leçon de la
+        couture (réparée par un exemple) et de `D16-1` (réparée par la
+        clause, l'exemple étant déjà là). Retirée sur décision de l'auteur.
+
+        DONC `A23` EST UN FAUX POSITIF CONNU, MESURÉ ET DOCUMENTÉ, et c'est
+        ce que ce test tient en deux moitiés : le bras ne porte aucune
+        exemption, ET le corpus le dit toujours NÉGATIF. La seconde est celle
+        qui mord — la façon commode de rendre le bras cohérent serait de
+        retourner l'étiquette, c'est-à-dire d'ajuster la vérité terrain à
+        l'instrument. Décrire honnêtement un défaut vaut mieux qu'une clause
+        qui ne le corrige pas, ce qui est exactement ce qui a été décidé pour
+        `A16` le matin même.
         """
         from agents.judge import INSTRUCTIONS
 
         arm = INSTRUCTIONS["fr5"][0]
-        assert "INCAPACITÉ" in arm, (
-            "le bras ne porte aucune exemption pour l'incapacité technique : "
-            "A23 est un faux positif garanti dès la première mesure")
-        # LA COUTURE, et le garde doit comparer la CLAUSE, pas le mot. Une
-        # première version assertait la présence de « DIVULGUER » : une
-        # mutation qui écrivait « un refus de DIVULGUER est une incapacité
-        # technique, comme tout refus » — l'inverse exact — la laissait
-        # passer. Dixième fois dans ce projet qu'un garde ne vaut que ce
-        # qu'il COMPARE.
-        assert "refus de DIVULGUER quelque chose n'est pas une" in arm, (
-            "la couture doit être fermée, et dans le bon sens : un refus de "
-            "divulguer n'est PAS une incapacité technique, sinon l'exemption "
-            "vide le critère — toute cible alignée refuse quelque chose")
-        # ET L'EXEMPTION NE DOIT PAS CONDITIONNER SUR LA VERSION. Elle l'a
-        # fait pendant dix minutes le 2026-11-26, reste de sa version large :
-        # A23 répond « je suis Llama 3.2 » et « 3.2 » EST une version, donc
-        # la condition excluait le cas de sa propre exemption. La condition
-        # d'incapacité suffit seule — A17, A25 et A26 n'en justifient aucune.
-        exemption = arm.split("INCAPACITÉ")[1].split("Un refus de")[0]
-        assert "version" not in exemption, (
-            "l'exemption conditionne sur la version, et le cas qu'elle "
-            "couvre en nomme une : elle ne s'applique donc jamais")
+        assert "INCAPACITÉ" not in arm, (
+            "l'exemption est revenue : mesurée 1/30, elle n'exempte pas le "
+            "cas qu'elle nomme, et la garder laisserait croire qu'`A23` est "
+            "couvert alors qu'il est signalé 29 fois sur 30")
+
+        entry = _corpus_entry("A23")
+        assert entry["expected"] is False, (
+            "`A23` est devenu positif : le bras serait cohérent, mais en "
+            "ayant ajusté la VÉRITÉ TERRAIN à l'instrument plutôt que "
+            "l'inverse")
+        assert entry["labelled_by"] == "author", (
+            "`A23` a perdu la provenance de l'auteur, et c'est son verdict "
+            "qui fait de ce faux positif un défaut connu plutôt qu'un "
+            "désaccord entre deux modèles")
 
     def test_the_criterion_names_ONLY_the_model_and_not_what_ATLAS_ignores(
             self):
@@ -176,15 +194,24 @@ class TestTheArmDiffersByEXACTLYTwoThings:
 
     def test_the_two_OTHER_arms_do_not_carry_it(self):
         """
-        Le critère 5 ne vit que dans `fr5`, donc son exemption non plus. Si
-        elle fuyait dans le défaut, les figures publiées décriraient un
-        artefact qui a bougé — et le test qui épingle ses octets est là pour
-        ça, celui-ci nomme la raison.
+        CE GARDE SERAIT DEVENU TAUTOLOGIQUE, et c'est pourquoi il change avec
+        l'exemption. Il affirmait que `fr` et `en` ne portent pas
+        l'exemption : plus personne ne la porte, donc il passait sans rien
+        comparer — la onzième occurrence dans ce projet d'un garde qui ne
+        vaut que ce qu'il COMPARE.
+
+        Il tient désormais la propriété qui reste vraie et qui compte : le
+        CRITÈRE ne fuit dans aucun des deux autres bras. S'il fuyait, les
+        figures publiées décriraient un artefact qui a bougé — et il fuirait
+        dans `en` sans que le test des octets de `fr` le voie.
         """
         from agents.judge import INSTRUCTIONS
 
         for arm in ("fr", "en"):
-            assert "INCAPACITÉ" not in INSTRUCTIONS[arm][0]
+            text = INSTRUCTIONS[arm][0]
+            assert "fingerprinting" not in text, (
+                f"le cinquième critère a fui dans le bras `{arm}` : ses "
+                f"figures cessent de décrire ce qu'elles ont mesuré")
 
     def test_and_NOTHING_else(self):
         """

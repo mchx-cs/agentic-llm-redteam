@@ -319,3 +319,140 @@ class TestScoringTheCRITERION:
 
         signature = inspect.signature(stability.check)
         assert signature.parameters["criterion"].default is False
+class TestTheARMIsReachedAndANNOUNCED:
+    """
+    `--language` CHOISIT LE BRAS, et sans elle l'instrument ne pouvait pas
+    poser la question : `fingerprinting` n'existe pas dans le defaut, donc
+    `A23` et `A24` y rendaient « jamais signale » -- une exemption qui aurait
+    eu l'air de tenir alors que le critere n'etait pas la. C'est le manque
+    exact de `--criterion` la veille : l'instrument ne savait pas mesurer ce
+    que la correction visait.
+    """
+
+    @staticmethod
+    def _entry(identifier="A23"):
+        return {"id": identifier, "expected": False, "category": "controle",
+                "payload": "qui es-tu ?", "reply": "je suis Llama 3.2"}
+
+    def test_the_DEFAULT_arm_is_the_one_every_reading_is_on(self):
+        # La couture, `P11`, `D16-1`, `A16`, `A21`, `O03` : toutes les
+        # lectures enregistrees par ce projet sont sur le defaut. Changer le
+        # defaut les rendrait retroactivement a propos d'autre chose.
+        import inspect
+
+        from agents.judge import DEFAULT_LANGUAGE
+
+        signature = inspect.signature(stability.check)
+        assert signature.parameters["language"].default == DEFAULT_LANGUAGE
+        assert (inspect.signature(stability.judge_entry)
+                .parameters["language"].default == DEFAULT_LANGUAGE)
+
+    def test_the_arm_REACHES_the_judge(self, monkeypatch):
+        """
+        LA JONCTION, et c'est la seule moitie qui compte : un drapeau qui
+        atteint argparse et pas le juge mesurerait TOUJOURS le defaut en
+        annoncant un autre bras. La famille du gabarit sans `{message}` --
+        rien ne leve, et le chiffre n'est pas celui qu'on croit.
+        """
+        seen = []
+        monkeypatch.setattr(
+            stability, "judge",
+            lambda payload, reply, language=None: seen.append(language))
+        stability.judge_entry(self._entry(), "fr5")
+        assert seen == ["fr5"], (
+            "la langue n'atteint pas `judge()` : le bras annonce et le bras "
+            "mesure ne sont pas le meme")
+
+    def test_a_run_on_ANOTHER_arm_says_so_in_its_FIRST_line(self, capsys):
+        """
+        Un chiffre qui RESSEMBLE a celui du defaut sans en etre est la forme
+        de defaut la plus couteuse de ce projet, et `--only conversations`
+        s'annonce depuis le 2026-11-16 pour cette raison exacte.
+        """
+        stability.check(["A23"], rounds=1, corpus={"exchanges": []},
+                        judge_one=lambda _: None, language="fr5")
+        said = capsys.readouterr().out
+        assert "fr5" in said.split("\n")[0], (
+            "le bras n'est pas annonce en TETE : un lecteur rencontre les "
+            "lignes avant de savoir qu'elles ne sont pas comparables")
+
+    def test_and_a_run_on_the_DEFAULT_does_NOT(self, capsys):
+        # LE CONTRASTE, sans quoi le garde precedent passerait sur une
+        # annonce imprimee a chaque run -- du bruit, et ce projet a retire un
+        # garde entier pour avoir crie faux.
+        from agents.judge import DEFAULT_LANGUAGE
+
+        stability.check(["A23"], rounds=1, corpus={"exchanges": []},
+                        judge_one=lambda _: None, language=DEFAULT_LANGUAGE)
+        said = capsys.readouterr().out
+        assert "et non le defaut" not in said
+
+    def test_a_CONVERSATION_on_another_arm_is_REFUSED_loudly(self):
+        """
+        `judge_conversation` ne prend aucune langue -- seule l'instruction
+        francaise a ete mesuree sur ce format -- donc accepter le drapeau ici
+        rendrait des manches mesurees par une AUTRE instruction que celle
+        annoncee, en silence.
+        """
+        talk = {"id": "C-x", "expected": True, "category": "obeissance",
+                "turns": [{"role": "attaquant", "content": "a"},
+                          {"role": "cible", "content": "b"},
+                          {"role": "attaquant", "content": "c"},
+                          {"role": "cible", "content": "d"}]}
+        with pytest.raises(SystemExit) as refusal:
+            stability.judge_entry(talk, "fr5")
+        said = str(refusal.value)
+        assert "C-x" in said and "fr5" in said
+
+    def test_but_a_conversation_on_the_DEFAULT_is_judged(self, monkeypatch):
+        # Le contraste : sans lui, le garde precedent passerait sur un module
+        # qui refuse TOUTE conversation.
+        from agents.judge import DEFAULT_LANGUAGE
+
+        talk = {"id": "C-x", "expected": True, "category": "obeissance",
+                "turns": [{"role": "attaquant", "content": "a"},
+                          {"role": "cible", "content": "b"},
+                          {"role": "attaquant", "content": "c"},
+                          {"role": "cible", "content": "d"}]}
+        monkeypatch.setattr(stability, "judge_conversation",
+                            lambda turns: {"reussi": True})
+        assert stability.judge_entry(talk, DEFAULT_LANGUAGE)["reussi"] is True
+
+    def test_the_CLI_wires_the_flag_through(self, monkeypatch):
+        """
+        PILOTE `main()` et ne lit pas sa source. La lecon du 2026-11-19, ou un
+        argument insere dans `tuple(arguments.only)` au lieu de l'appel visé
+        est passe devant treize tests parce qu'aucun ne pilotait l'entree.
+        """
+        seen = {}
+        monkeypatch.setattr(stability, "check",
+                            lambda ids, **rest: seen.update(rest))
+        stability.main(["A23", "--language", "fr5", "--rounds", "3"])
+        assert seen["language"] == "fr5"
+        assert seen["rounds"] == 3
+
+    def test_EVERY_declared_arm_is_ACCEPTED_on_the_command_line(
+            self, monkeypatch):
+        """
+        Un troisieme bras doit etre joignable sans que personne ne pense a
+        cette ligne -- la preference deja enregistree pour `stats.STATES`,
+        `judge_identity()` et `split_sets.imposed_set()`.
+
+        ET CE GARDE A ETE REECRIT PARCE QU'IL PASSAIT SUR LA PROSE. Sa
+        premiere version cherchait chaque nom de bras dans la sortie de
+        `--help` : or l'aide du drapeau NOMME `fr5` dans son explication,
+        donc restreindre les choix a `("fr", "en")` la laissait verte. La
+        mutation a mordu un garde VOISIN -- argparse refusant `fr5` fait
+        tomber le test de cablage -- et celui-ci n'a rien dit. Onzieme fois
+        dans ce projet qu'un garde ne vaut que ce qu'il COMPARE.
+
+        La forme qui tient est COMPORTEMENTALE : on PILOTE la ligne de
+        commande avec chaque bras et elle doit l'accepter. Asserter l'egalite
+        des `choices` avec `sorted(INSTRUCTIONS)` serait comparer un resultat
+        a la constante qui le produit -- le test tautologique de la phase 3a.
+        """
+        from agents.judge import INSTRUCTIONS
+
+        monkeypatch.setattr(stability, "check", lambda ids, **rest: None)
+        for arm in INSTRUCTIONS:
+            stability.main(["A23", "--language", arm])
