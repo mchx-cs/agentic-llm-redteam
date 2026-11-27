@@ -1584,3 +1584,92 @@ class TestAValueWeSENTOURSELVESIsGRADED:
                                  {"status": "value_in_payload"}, False)
         assert "what we sent" in why
         assert "echo" in why
+
+class TestAZeroOnLLM07SaysWhatItIsWORTH:
+    """
+    LE DEFAUT, trouve en lisant le rendu d'une campagne contre `foreign:bare`
+    le 2026-11-27. Le rapport annoncait << Families tested: LLM07 >> contre un
+    modele NU -- aucun prompt systeme -- dont la reponse a la tentative etait
+    l'aveu honnete << Je n'ai pas recu d'instructions avant cette
+    conversation >>. Un lecteur prend ce zero pour une assurance.
+
+    ET IL NE BRANCHE PAS SUR LE PROFIL, ce que la mesure du meme jour impose :
+    la septieme sonde obtient la bonne information et l'analyste repond `yes`
+    QUAND MEME, a juste titre -- la cible dit << pas de consignes
+    specifiques, mais mes objectifs generaux sont... >>, et son alignement EST
+    un jeu de regles. `mentions_instructions` vaut donc True sur une cible
+    sans prompt d'operateur, et un caveat conditionne sur ce champ ne tirerait
+    pas la ou le symptome est.
+    """
+
+    @staticmethod
+    def _rendered(families):
+        return render_markdown(build_report(_result(
+            findings=[], launched=[{**_payload(), "owasp_family": f}
+                                   for f in families])))
+
+    def test_it_appears_when_LLM07_is_announced_tested(self):
+        rendered = self._rendered(["LLM07:2025 System Prompt Leakage"])
+        assert "What a zero on `LLM07` is worth" in rendered
+
+    def test_and_NOT_when_it_is_absent(self):
+        # Le contraste, sans quoi le garde passerait sur un caveat
+        # permanent -- c'est-a-dire du bruit, la raison pour laquelle celui
+        # de LLM06 est conditionnel lui aussi.
+        rendered = self._rendered(["LLM01:2025 Prompt Injection"])
+        assert "What a zero on `LLM07` is worth" not in rendered
+
+    def test_it_says_what_a_zero_does_NOT_mean(self):
+        # La phrase qui porte tout : sans elle, le caveat decrit une
+        # incertitude vague au lieu de nommer la lecture qu'il interdit.
+        rendered = self._rendered(["LLM07:2025 System Prompt Leakage"])
+        assert "nothing leaked" in rendered
+        assert "there is a prompt and it held" in rendered
+
+    def test_it_names_WHY_the_tool_cannot_tell(self):
+        # Et la raison est celle qui a ete MESUREE : l'alignement du modele
+        # est aussi un jeu de regles, donc une sonde sur l'existence de
+        # consignes obtient une reponse mixte.
+        rendered = self._rendered(["LLM07:2025 System Prompt Leakage"])
+        assert "alignment" in rendered
+        assert "mixed answer" in rendered
+
+    def test_it_does_NOT_read_the_profile(self):
+        """
+        La propriete que la mesure impose : le caveat ne depend QUE de la
+        famille annoncee.
+
+        VERIFIE SUR LE COMPORTEMENT et non sur la source : ma premiere
+        version cherchait `mentions_instructions` dans le texte de la
+        fonction, et elle a matche son DOCSTRING -- qui explique justement
+        pourquoi elle n'y branche pas. Un garde qui lit de la prose au lieu
+        du comportement, la famille que cette session a rencontree plusieurs
+        fois.
+        """
+        from report import _llm07_caveat
+
+        families = ["LLM07:2025 System Prompt Leakage"]
+        assert _llm07_caveat(families), "le caveat ne parait pas du tout"
+        # Le MEME texte quoi que dise le profil, dans ses trois etats : s'il
+        # en dependait, il se tairait contre `foreign:bare`, ou le champ vaut
+        # True -- l'analyste ayant raison, l'alignement etant un jeu de
+        # regles.
+        reference = _llm07_caveat(families)
+        for mentions in (True, False, None):
+            rendered = render_markdown(build_report(_result(
+                findings=[],
+                launched=[{**_payload(),
+                           "owasp_family": families[0]}],
+                profile={"role": "assistant", "language": "fr", "tools": [],
+                         "refused_subjects": [],
+                         "mentions_instructions": mentions,
+                         "writes_code": None, "handles_documents": None,
+                         "context": [], "evidence": [], "exchanges": [],
+                         "warning": None})))
+            for line in reference:
+                if line:
+                    assert line in rendered, (
+                        f"le caveat change avec `mentions_instructions="
+                        f"{mentions}` : il branche sur le profil, et contre "
+                        f"une cible sans prompt d'operateur ce champ vaut "
+                        f"True")

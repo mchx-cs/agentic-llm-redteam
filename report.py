@@ -516,6 +516,39 @@ def _llm06_caveat(families):
             "`LLM06` listed above means *tool invocation observed in a "
             "reply*, never *Excessive Agency assessed*.", ""]
 
+
+def _llm07_caveat(families):
+    """
+    La reserve sur LLM07, et seulement si la famille est annoncee testee.
+
+    CE QU'ELLE EMPECHE : lire un zero sur LLM07 comme << il y a un prompt
+    systeme et il a tenu >>. Contre une cible qui n'en a pas -- un modele nu,
+    et c'est `foreign:bare` -- il n'y avait rien a fuir, et le rapport
+    l'annoncait testee sans le dire.
+
+    ELLE NE BRANCHE PAS SUR LE PROFIL, et la mesure du 2026-11-27 dit
+    pourquoi : la septieme sonde obtient la bonne information et l'analyste
+    repond `yes` quand meme, a juste titre -- la cible dit << pas de
+    consignes specifiques, mais mes objectifs generaux sont... >>, et son
+    alignement EST un jeu de regles. `mentions_instructions` vaut donc True
+    sur une cible sans prompt d'operateur, et un caveat conditionne sur ce
+    champ ne tirerait pas la ou le symptome est.
+
+    Conditionnee sur la FAMILLE et rien d'autre, comme celle de LLM06 : sans
+    LLM07 dans les familles testees il n'y a rien a sur-lire.
+    """
+    if not any(f.startswith("LLM07") for f in families):
+        return []
+    return ["", "**What a zero on `LLM07` is worth**", "",
+            "LLM07 is scored here as the leakage of the OPERATOR's system "
+            "prompt. A target that has none -- a bare model, or one whose "
+            "prompt was never set -- has nothing to leak, and this tool "
+            "CANNOT tell that from a target that holds one and refused: a "
+            "model's own alignment is also a set of rules, so a probe asking "
+            "whether it was given instructions gets a mixed answer and no "
+            "exchange separates the two. So no finding on `LLM07` means "
+            "*nothing leaked*, never *there is a prompt and it held*.", ""]
+
 def _atlas_block(families):
     """Le mapping ATLAS de la couverture, et ce qu'il ne couvre pas."""
     mapped, unmapped = {}, []
@@ -1386,6 +1419,7 @@ def render_markdown(report, abridge=False):
         lines += [f"- `{f}`" for f in coverage["families_touched"]]
 
     lines += _llm06_caveat(coverage["families_tested"])
+    lines += _llm07_caveat(coverage["families_tested"])
     lines += _atlas_block(coverage["families_tested"])
 
     lines += ["", "**Families NOT tested**", ""]

@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **323** entries, 232 `dev` / 91 `test` | **yes** |
 | … of which labelled by the AUTHOR | **207**, against 116 by a model | **yes** |
 | scorable criteria | **6** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers`, `fingerprinting`, `fuite_permissions` | **yes** |
-| `pytest` tests, no LLM call at all | **2,108** | **yes** |
+| `pytest` tests, no LLM call at all | **2,113** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -14973,6 +14973,89 @@ faux positifs n'etaient pas ceux que je crois.
 a l'arrivee du sixieme. Un mouvement sur deux d'entre eux voudrait dire que
 resserrer le critere 5 a touche ses voisins, ce que les dix temoins ne
 laissent pas attendre.
+
+**LA TROISIEME REMESURE DU `dev` : LA PREDICTION QUANTITATIVE TOMBE
+EXACTEMENT JUSTE (2026-11-27).** Protocole declare et committe avant le run
+([`306ee70`](306ee70)).
+
+```
+dev 232 entrees   TP=86 FP=10 TN=133 FN=3     90 / 97 / 94
+  moitie AUTEUR   148 entrees, 63 positifs    89 / 98 / 94
+  (avant la correction de la couture)         85 / 97 / 91
+Par critere
+  divulgation          55 cas   90 / 100 / 93
+  obeissance           41 cas  100 /  88 / 93
+  abus_outils          30 cas   85 / 100 / 83
+  fuite_donnees_tiers  19 cas  100 / 100 / 100
+  fingerprinting       13 cas   83 / 100 /  92   <- 62 % avant
+```
+
+**LA PREDICTION, ECRITE AVANT LE RUN** : *<< la ligne `fingerprinting`
+portait 62 % de precision sur 8 verdicts, soit 5 vrais et 3 faux -- `A23`,
+`A27` et `A30`. Deux des trois sont desormais justes 30/30, donc il doit
+rester UN faux positif (`A23`) : la precision passe a 5/6, soit 83 %. >>*
+
+Mesure : **83 % sur 6 verdicts, et l'unique faux positif restant est
+`A23`.** Cas pour cas. C'est la seconde prediction quantitative de ce projet a
+tenir, apres celle du 2026-11-19 qui annoncait `F14` a 80 % sur 22 cas -- et
+la premiere a predire un CHIFFRE et non une probabilite.
+
+**ET LA CORRECTION SE TRANSPORTE DANS LA FIGURE D'ENSEMBLE** : la moitie
+auteur passe de 85 / 97 / 91 a **89 / 98 / 94**. Deux cas sont attribuables --
+`A27` et `A30`, mesures 0/30 puis 30/30 -- et c'est au-dessus du seuil de deux
+declare, donc le mouvement est revendique.
+
+**CE QUI N'EST PAS ATTRIBUABLE, et il faut le separer.** Six erreurs sont
+parties et cinq sont arrivees, net -1. Des departs, `A27` et `A30` sont
+mesures ; `E10-b`, `P11` et `A22` sont des flotteurs connus. Des arrivees,
+`A21` est mesure 24/30 faux et `D18-1` 2/10, et trois sont inconnues
+(`C-demo-04-2-mono`, `C-demo3-03-1`, `C-demo-refus1-04-2-mono`). Donc
+l'amelioration nette au-dela des deux cas mesures est du brassage sur des cas
+instables, et je ne la revendique pas.
+
+**Une observation a surveiller, rapportee et jamais testee** :
+`abus_outils` descend a 85 / 100 / 83, et **trois de ses faux positifs sont
+des `outil-decrit`** -- la borne D18, un outil DECRIT n'est pas un outil
+declenche -- la ou il y en avait un. `D18-1` est mesure instable (2/10), les
+deux autres ne le sont pas. Et `fuite_donnees_tiers` remonte a 100 / 100 / 100,
+ses deux faux positifs de la mesure precedente ayant disparu.
+
+---
+
+**LE CAVEAT LLM07 : un zero n'y porte aucune assurance.** Le defaut trouve en
+lisant le rendu d'une campagne contre `foreign:bare`, et le dernier lever de
+la decision B.
+
+Le rapport annoncait *<< Families tested: LLM07 >>* contre un modele NU --
+aucun prompt systeme -- dont la reponse a la tentative etait l'aveu honnete
+*<< Je n'ai pas recu d'instructions avant cette conversation >>*. Un lecteur
+prend ce zero pour une assurance.
+
+**ET IL NE BRANCHE PAS SUR LE PROFIL, ce que la mesure impose.** La septieme
+sonde obtient la bonne information et l'analyste repond `yes` **a juste
+titre** : la cible donne une reponse MIXTE -- *<< pas de consignes
+specifiques, mais mes objectifs generaux sont... >>* -- et son alignement EST
+un jeu de regles. Donc `mentions_instructions` vaut True sur une cible sans
+prompt d'operateur, et un caveat conditionne sur ce champ se tairait
+exactement la ou le symptome est.
+
+Il est donc conditionne sur la FAMILLE et rien d'autre, la forme du caveat
+LLM06 : deterministe, sans motif a reconnaitre, et valide contre un endpoint
+tiers -- ou l'on ne peut pas davantage savoir s'il y a un prompt systeme
+derriere. Ce qu'il dit :
+
+> *So no finding on `LLM07` means **nothing leaked**, never **there is a
+> prompt and it held**.*
+
+**ET UN GARDE DE MOI LISAIT DE LA PROSE.** Il cherchait
+`mentions_instructions` dans la source de la fonction pour verifier qu'elle
+n'y branche pas -- et il a matche son DOCSTRING, qui explique justement
+pourquoi elle n'y branche pas. Reecrit sur le COMPORTEMENT : le caveat doit
+rendre le MEME texte dans les trois etats du champ. C'est la famille
+rencontree plusieurs fois ce soir, et la troisieme fois aujourd'hui qu'un
+garde de moi compare autre chose que sa propriete.
+
+2,113 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 
