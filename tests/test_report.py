@@ -1673,3 +1673,157 @@ class TestAZeroOnLLM07SaysWhatItIsWORTH:
                         f"{mentions}` : il branche sur le profil, et contre "
                         f"une cible sans prompt d'operateur ce champ vaut "
                         f"True")
+import pathlib
+
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+class TestTheSeverityTableCoversWhatIsREACHABLE:
+    """
+    LA PROPRIETE, et elle remplace une liste par un ensemble DERIVE.
+
+    42 des combinaisons (critere x statut) existent, et 26 tombent dans le
+    repli -- correctement, parce qu'elles sont INATTEIGNABLES : un rejeu n'est
+    tente que pour `verifier.REPLAYABLE_CRITERIA`, donc les autres criteres
+    voient toujours `replay_check = None`, qui a sa ligne. Ajouter 26 lignes
+    que personne ne peut atteindre serait du bruit.
+
+    CE QUE CE GARDE EXISTE POUR ATTRAPER : la porte qui s'elargit. Le jour ou
+    `fuite_donnees_tiers` devient rejouable -- la fiche d'un tiers l'est
+    parfaitement -- six combinaisons atterriraient en silence sur << a case
+    the severity rules do not foresee >>, un aveu de regle manquante imprime
+    comme une notation dans un rapport de securite. C'est le defaut du
+    2026-11-17 en attente de se reproduire, et les gardes par combinaison ne
+    le verraient pas.
+
+    L'ensemble atteignable est donc DERIVE de `REPLAYABLE_CRITERIA` et de
+    `GRADED_STATUSES`, lus et non redits.
+    """
+
+    @staticmethod
+    def _criteria():
+        """
+        Les criteres que le juge peut EMETTRE, lus dans son instruction.
+
+        Derive plutot que liste : un critere ajoute a l'enum du juge et oublie
+        dans la table est exactement le defaut du 2026-11-17.
+        """
+        import re
+
+        from agents.judge import system_prompt_for
+
+        prompt = system_prompt_for(False, "fr")
+        found = re.findall(r'"(divulgation|obeissance|abus_outils|'
+                           r'fuite_donnees_tiers|fingerprinting|'
+                           r'fuite_permissions)"', prompt)
+        assert found, (
+            "aucun critere lu dans l'instruction : ce garde comparerait un "
+            "ensemble vide. Corriger la lecture, pas le supprimer.")
+        return sorted(set(found))
+
+    def test_every_criterion_is_graded_WITHOUT_a_replay(self):
+        # Universellement atteignable : les criteres non rejouables voient
+        # toujours `None`, et un rejeu peut echouer avant de rendre un statut.
+        for criterion in self._criteria():
+            severity, why = assess_severity({"critere": criterion}, None, False)
+            assert "do not foresee" not in why, (
+                f"({criterion}, None) tombe dans le repli, et c'est le cas "
+                f"LE PLUS atteignable : tout critere non rejouable le voit")
+            assert severity in ("low", "medium", "high", "to_verify"), severity
+
+    def test_and_every_REPLAYABLE_criterion_is_graded_for_every_status(self):
+        from agents.verifier import GRADED_STATUSES, REPLAYABLE_CRITERIA
+
+        missing = []
+        for criterion in REPLAYABLE_CRITERIA:
+            for status in GRADED_STATUSES:
+                _, why = assess_severity({"critere": criterion},
+                                         {"status": status}, False)
+                if "do not foresee" in why:
+                    missing.append((criterion, status))
+        assert not missing, (
+            f"{len(missing)} combinaison(s) ATTEIGNABLE(S) tombent dans le "
+            f"repli : {missing}. La porte du rejeu s'est elargie sans que la "
+            f"table suive, et chacune imprimerait un aveu de regle manquante "
+            f"comme une notation.")
+
+    def test_a_status_that_NEVER_becomes_a_finding_needs_no_row(self):
+        """
+        L'autre moitie, et c'est ce qui autorise la table a rester courte :
+        `likely_hallucination` est intercepte par `main.py`, qui ECARTE la
+        trouvaille -- la cible a invente la valeur. Lui donner une ligne de
+        severite suggererait qu'il peut etre note.
+        """
+        from agents.verifier import GRADED_STATUSES, STATUSES_NEVER_GRADED
+
+        for status in STATUSES_NEVER_GRADED:
+            assert status not in GRADED_STATUSES, (
+                f"{status} est declare a la fois note et jamais note")
+
+        source = (_ROOT / "main.py").read_text(encoding="utf-8")
+        for status in STATUSES_NEVER_GRADED:
+            assert f'"{status}"' in source, (
+                f"{status} est declare intercepte et `main.py` ne le "
+                f"mentionne plus : soit l'interception a disparu -- et il "
+                f"lui faut alors une ligne de severite -- soit le statut "
+                f"n'existe plus")
+
+    def test_the_statuses_DECLARED_are_the_ones_the_replay_can_RETURN(self):
+        """
+        La jonction : `GRADED_STATUSES` est une declaration, et un statut
+        neuf dans `verify_by_replay` qui ne s'y ajoute pas rendrait le garde
+        ci-dessus muet sur lui.
+
+        Lit les litteraux `"status": "..."` de `verifier.py`, un motif etroit
+        et sans ambiguite. La limite est dite : un statut construit
+        dynamiquement echapperait a cette lecture, et aucun ne l'est.
+        """
+        import re
+
+        from agents.verifier import GRADED_STATUSES, STATUSES_NEVER_GRADED
+
+        source = (_ROOT / "agents" / "verifier.py").read_text(encoding="utf-8")
+        returned = set(re.findall(r'"status": "([a-z_]+)"', source))
+        assert returned, "aucun statut lu : ce garde ne compare plus rien"
+
+        declared = set(GRADED_STATUSES) | set(STATUSES_NEVER_GRADED)
+        unknown = sorted(returned - declared)
+        assert not unknown, (
+            f"{unknown} : `verify_by_replay` rend un statut que ni "
+            f"`GRADED_STATUSES` ni `STATUSES_NEVER_GRADED` ne declare, donc "
+            f"la completude de la table n'est pas verifiee pour lui. "
+            f"Decider s'il se note, et l'ajouter a la bonne liste.")
+
+
+    def test_main_READS_the_gate_and_does_not_restate_it(self):
+        """
+        LA JONCTION, et elle etait MUETTE : ce garde-ci repose sur
+        `main.py` lisant `REPLAYABLE_CRITERIA`. Elargir la porte en dur ne
+        touche pas la constante, donc le garde de completude ci-dessus
+        resterait muet sur les combinaisons devenues atteignables -- trouve
+        par mutation quelques minutes apres l'avoir ecrit.
+
+        Lit la source : un garde comportemental butait sur une reference
+        LIEE, `main` important le NOM, donc patcher la constante dans
+        `agents.verifier` ne change pas ce que `main` voit. Le motif est
+        etroit, et son absence fait echouer le garde plutot que le taire.
+        """
+        source = (_ROOT / "main.py").read_text(encoding="utf-8")
+
+        assert "from agents.verifier import" in source and \
+               "REPLAYABLE_CRITERIA" in source, (
+            "`main.py` n'importe plus `REPLAYABLE_CRITERIA` : la porte du "
+            "rejeu est redite quelque part, et le garde de completude "
+            "ci-dessus ne verifie plus l'ensemble atteignable")
+
+        gate = [line for line in source.splitlines()
+                if 'verdict["critere"]' in line and "if " in line]
+        assert gate, (
+            "la porte du rejeu ne se reconnait plus a "
+            '`if verdict["critere"] ...` : ce garde ne compare plus rien. '
+            "Corriger la lecture, pas le supprimer.")
+        for line in gate:
+            assert "REPLAYABLE_CRITERIA" in line, (
+                f"la porte du rejeu nomme un critere en dur : {line.strip()} "
+                f"-- elargir ainsi laisserait le garde de completude muet "
+                f"sur les combinaisons devenues atteignables")

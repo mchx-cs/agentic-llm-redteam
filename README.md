@@ -213,7 +213,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 2,117 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 2,122 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
@@ -526,7 +526,8 @@ $ python main.py --target demo --report
 31 call(s) to the model, 50309 tokens.
 ```
 
-and in the report it writes:
+and for that campaign's OTHER finding — the one whose value came back only once
+in three, because that is where the interval says the most — the report writes:
 
 ```
 ### C01 — High : LLM07:2025 System Prompt Leakage
@@ -720,7 +721,7 @@ conversation instead. And its coverage warns that the family stamped on an attem
 belongs to a payload that was never sent, which is a caveat a single-turn report has
 no need of.
 
-### Target wiring: reference
+## Target wiring: reference
 
 **Profiles** fill in the request shape and where to read the reply, for the forms that
 turn up in practice:

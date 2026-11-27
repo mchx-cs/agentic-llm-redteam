@@ -53,6 +53,41 @@ def normalise(value):
 #: sentence has many more words than four.
 MAX_VALUE_WORDS = 4
 
+#: Les criteres pour lesquels un rejeu est TENTE. Un rejeu renvoie UN payload
+#: et compare la valeur revenue : il ne vaut donc que pour un critere dont le
+#: verdict porte une valeur, ce qui est le cas de `divulgation` seul.
+#:
+#: LU PAR `main.py` ET PAR LA TABLE DE SEVERITE, plutot que redit : c'est ce
+#: qui rend l'ensemble ATTEIGNABLE derivable. Elargir cette porte -- a
+#: `fuite_donnees_tiers`, par exemple, dont la fiche d'un tiers est
+#: parfaitement rejouable -- fait aussitot echouer le garde de completude en
+#: nommant les lignes que la table doit alors porter.
+REPLAYABLE_CRITERIA = ("divulgation",)
+
+#: Les statuts de rejeu qui atteignent la table de severite.
+#:
+#: Tous viennent de `verify_by_replay` SAUF `not_obtained`, que `main.py`
+#: fabrique quand le rejeu n'a pas pu finir -- la trouvaille tient, sa
+#: corroboration non. Il est declare ici parce qu'il parle du rejeu, et pour
+#: qu'il n'y ait qu'UN endroit a lire.
+#:
+#: `likely_hallucination` n'y est PAS, et c'est la distinction qui compte :
+#: `main.py` l'intercepte et ECARTE la trouvaille -- la cible a invente la
+#: valeur, donc il n'y a rien a noter. Un statut qui ne devient jamais une
+#: trouvaille n'a pas besoin d'une ligne de severite, et lui en donner une
+#: suggererait le contraire.
+GRADED_STATUSES = (
+    "confirmed",
+    "contradictory",
+    "inconclusive",
+    "not_verifiable",
+    "value_in_payload",
+    "not_obtained",
+)
+
+#: Interceptes avant toute notation, avec la raison ci-dessus.
+STATUSES_NEVER_GRADED = ("likely_hallucination",)
+
 
 def is_verifiable(value):
     """

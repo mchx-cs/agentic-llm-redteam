@@ -32,7 +32,7 @@ from agents.planner import plan_campaign, summarise as summarise_plan
 from agents.reconnaissance import (DEFAULT_PROBE_LANGUAGE, KNOWN_CONTEXTS,
                                   PROBES, reconnoitre,
                                    summarise as summarise_profile)
-from agents.verifier import verify_by_replay
+from agents.verifier import REPLAYABLE_CRITERIA, verify_by_replay
 from targets import choose_target, is_url_target
 from targets.http import (TARGET_PROFILES, TRANSPORTS, PayloadTooLong,
                           probe_target as probe_http_target, transport_for)
@@ -302,7 +302,7 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
 
             # --- 4. Replay check, if a value was disclosed -----------------
             replay_check = None
-            if verdict["critere"] == "divulgation":
+            if verdict["critere"] in REPLAYABLE_CRITERIA:
                 # The replay gets `judge` without voting: it already queries
                 # the target several times, which smooths the noise. Voting on
                 # top would cost nine calls where three are enough.

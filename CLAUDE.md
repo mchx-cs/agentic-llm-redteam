@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **327** entries, 236 `dev` / 91 `test` | **yes** |
 | … of which labelled by the AUTHOR | **211**, against 116 by a model | **yes** |
 | scorable criteria | **6** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers`, `fingerprinting`, `fuite_permissions` | **yes** |
-| `pytest` tests, no LLM call at all | **2,117** | **yes** |
+| `pytest` tests, no LLM call at all | **2,122** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -15457,6 +15457,105 @@ dans CLAUDE.md la ou il y en avait huit. Etre nomme dans une entree datee
 n'est pas etre dans la CARTE, qui est ce qu'un lecteur utilise pour naviguer.
 
 2,117 `pytest` tests, toujours sans aucun appel a un modele.
+
+**LA REVIEW, seconde moitie : la lecture STRUCTURELLE, et la table de
+severite verifiee par ENUMERATION (2026-11-27).**
+
+**LA STRUCTURE, et deux de mes trois trouvailles etaient des faux positifs de
+mon propre balayage -- ce qui se dit.**
+
+- un titre `###` portant << C01 -- High : LLM07 System Prompt Leakage >>, donc
+  une trouvaille de rapport dans la table des matieres du README. **Faux
+  positif** : il est a l'INTERIEUR d'un bloc de code, et mon `grep` ne voyait
+  pas les blocs. Refait en les sautant : **29 titres reels, aucun saut de
+  niveau, hierarchie propre.** La passe du 2026-11-12 tient ;
+- **zero phrase repetee mot pour mot** sur 313, hors extraits -- une
+  repetition DANS un extrait est de la preuve. Les trois repetitions corrigees
+  le 2026-11-12 ne sont pas revenues.
+
+**UN VRAI DEFAUT STRUCTUREL : `## Getting started` avait repris 690
+lignes.** C'est le defaut exact du 2026-11-12 -- << dix sous-sections `###`
+imbriquees sous Getting started, dont 580 lignes qui n'ont rien a voir avec le
+demarrage >> -- reconstitue. `### Target wiring: reference`, 161 lignes de
+materiel de REFERENCE, est promue en `##` : rien ne pointait vers son ancre,
+donc la promotion ne casse aucun lien, et elle apparait desormais comme son
+propre theme dans la table des matieres de GitHub.
+
+`### Single-turn or multi-turn` RESTE sous Getting started, et c'est une
+decision deja enregistree : elle est << placee la ou un operateur CHOISIT
+vraiment, plutot que dans une section a elle >>.
+
+**ET UNE JUXTAPOSITION QUI INDUISAIT EN ERREUR, les deux moities etant
+vraies.** Le log de campagne affiche `[Replay] confirmed: La valeur revient 3
+fois sur 3`, puis la phrase << and in the report it writes: >> et un extrait
+annoncant `La valeur revient 1 fois sur 3`. Verifie contre le rapport
+committe : ce sont **deux trouvailles differentes** -- `C02` a 3/3 et `C01` a
+1/3 -- donc aucune contradiction, et un lecteur y voit pourtant la meme
+trouvaille se contredire.
+
+`C01` a ete choisie pour une bonne raison, enregistree le 2026-11-19 : son
+intervalle large (6-79 % sur 1/3) est precisement ce qui montre la nature
+probabiliste de ces attaques. Donc la phrase de liaison est corrigee et **pas
+l'extrait**, qui est une PREUVE : elle nomme desormais qu'il s'agit de
+l'AUTRE trouvaille, et pourquoi c'est celle-la qu'on montre.
+
+---
+
+**LA TABLE DE SEVERITE : 26 des 42 combinaisons tombent dans le repli, et les
+26 sont INATTEIGNABLES.** Enumerees plutot que lues, apres qu'un critere et un
+statut de rejeu y sont nes le meme jour -- et c'est la que
+`("divulgation", None)` etait tombee le 2026-11-17.
+
+Verifie dans le code et non suppose : `main.py` ne rejoue que sur
+`divulgation`, donc les cinq autres criteres voient toujours
+`replay_check = None`, qui a sa ligne. **La table est donc complete pour les
+entrees atteignables**, et ajouter 26 lignes que personne ne peut atteindre
+serait du bruit.
+
+**CE QUI MANQUAIT EST LE GARDE, et les gardes existants ne pouvaient pas le
+faire.** Ils verifient les combinaisons que quelqu'un a pensees a lister --
+(critere, None) une par une -- jamais l'ensemble ATTEIGNABLE. C'est
+<< un garde ne vaut que ce qu'il COMPARE >> en version POPULATION : la liste
+comparee ne voit pas une combinaison qui DEVIENT atteignable.
+
+Or elle peut le devenir : le jour ou `fuite_donnees_tiers` est rejoue -- la
+fiche d'un tiers l'est parfaitement -- **six combinaisons atterriraient en
+silence sur << a case the severity rules do not foresee >>**, un aveu de regle
+manquante imprime comme une notation dans un rapport de securite.
+
+**D'OU UNE CONSTANTE, LUE ET NON REDITE** : `verifier.REPLAYABLE_CRITERIA`,
+plus `GRADED_STATUSES` (les statuts qui atteignent la table) et
+`STATUSES_NEVER_GRADED`. La preference deja enregistree pour `stats.STATES`,
+`split_sets.imposed_set` et `judge_identity`. Elargir la porte est desormais
+une ligne dans UN endroit, et le garde exige aussitot les lignes que la table
+doit porter.
+
+`likely_hallucination` est dans la seconde liste, et la distinction compte :
+`main.py` l'intercepte et ECARTE la trouvaille -- la cible a invente la
+valeur -- donc un statut qui ne devient jamais une trouvaille n'a pas besoin
+d'une ligne, et lui en donner une suggererait le contraire.
+
+**ET MON PROPRE GARDE AVAIT UN TROU, trouve par mutation quelques minutes
+apres l'avoir ecrit.** Elargir la porte **EN DUR** dans `main.py` ne touche
+pas la constante, donc le garde de completude continuait de ne verifier que
+`divulgation` : **MUET sur les six combinaisons devenues atteignables.** Il
+reposait sur une premisse -- que `main.py` LIT la constante -- qu'il ne
+verifiait pas.
+
+C'est la jonction entre deux modules corrects separement, la forme de defaut
+la plus frequente de ce projet, et c'est la deuxieme fois aujourd'hui qu'elle
+se presente dans un garde que je venais d'ecrire. Ferme par un garde de
+jonction, avec sa LIMITE dite : il lit la SOURCE de `main.py`, parce qu'un
+garde comportemental butait sur une reference LIEE -- `main` importe le NOM,
+donc patcher la constante dans `agents.verifier` ne change pas ce que `main`
+voit, le piege rencontre le meme jour sur `llm_client.PROFILES`.
+
+**Quatre mutations, quatre morsures** : la porte elargie en dur (le garde de
+jonction), la porte elargie VIA la constante sans que la table suive (le garde
+de completude, exactement ce pour quoi il existe), un statut rendu par le
+rejeu et declare nulle part, et une ligne de la table retiree.
+
+2,122 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 
