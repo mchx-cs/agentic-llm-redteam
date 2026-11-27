@@ -48,6 +48,14 @@ WATCHED = (
     "agents/adaptation.py",
     # Decides which attempts exist at all, and in what order.
     "agents/planner.py",
+    # EN AMONT DU PLANIFICATEUR, et ajoute le 2026-11-27 : `objectives_for`
+    # construit les objectifs depuis le PROFIL, donc le jeu de sondes et le
+    # prompt de l'analyste decident de ce qu'une campagne envoie. Ce jour-la
+    # `RECON_BUDGET` est passe de 6 a 7 -- une reprise aurait mesure ses
+    # premieres paires avec six sondes et les suivantes avec sept, sous un
+    # seul test des signes, et le compte de requetes par campagne change
+    # avec lui.
+    "agents/reconnaissance.py",
     # Builds the payload text from technique x objective x transformation.
     "agents/attacker.py",
     # Decides whether a disclosed value is replayable, hence `high` severity.

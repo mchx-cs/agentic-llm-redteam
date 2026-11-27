@@ -340,6 +340,13 @@ def run_campaign(ask_target=None, target_name=None, trail=None,
                         replayed = _replanting(replayed, payload["text"])
                     replay_check = verify_by_replay(
                         asked, verdict["valeur"], replayed, judge,
+                        # CE QUE NOUS CONTROLONS D'AUTRE. En livraison
+                        # indirecte `asked` n'est que le declencheur et le
+                        # payload est PLANTE : sans ce second texte, le
+                        # controle << la valeur est-elle dans ce que nous
+                        # envoyons >> manquerait exactement la livraison ou
+                        # le defaut a ete mesure.
+                        also_sent=(payload["text"],) if indirect else (),
                     )
                 except BudgetExceeded:
                     raise

@@ -154,14 +154,61 @@ class TestBudgetAndDisplay:
         assert len(reconnoitre(_target())["exchanges"]) == 2
 
     def test_every_probe_targets_one_field(self):
-        # A recorded principle: one probe fewer must mean one fact fewer,
-        # never a false profile. Hence one probe per probed field -- IN EVERY
-        # LANGUAGE, because `RECON_BUDGET` slices by position: a set with one
-        # probe fewer would silently stop gating a family.
+        """
+        Un principe enregistre : une sonde en moins doit etre un fait en
+        moins, jamais un profil faux. Donc une sonde par champ sonde -- DANS
+        CHAQUE LANGUE, parce que `RECON_BUDGET` decoupe par position.
+
+        CE GARDE A ECHOUE LE 2026-11-27 PARCE QU'IL OMETTAIT LE SEUL CHAMP
+        QUI N'AVAIT PAS DE SONDE. Sa liste nommait six champs et pas
+        `mentions_instructions` : il affirmait donc le principe sur une
+        population choisie de facon a ce que la violation soit invisible.
+        Mesure du cout : contre `foreign:bare`, l'analyste a produit `yes`
+        depuis six reponses ne mentionnant AUCUNE consigne, et le plan a
+        lance LLM07 contre un modele nu qui n'a pas de prompt systeme a
+        fuir.
+
+        Un garde ne vaut que ce qu'il COMPARE, et une liste ecrite a la main
+        est exactement l'endroit ou le cas genant se perd.
+        """
         champs = {"role", "capacites", "refused_subjects", "tools",
-                  "writes_code", "handles_documents"}
+                  "writes_code", "handles_documents",
+                  "mentions_instructions"}
         for langue, sondes in PROBES.items():
             assert len(sondes) == len(champs), langue
+
+    def test_a_probe_asks_about_the_INSTRUCTIONS(self):
+        # Le garde du dessus compte ; celui-ci verifie que la sonde EXISTE,
+        # ce qu'un compte ne dit pas. Il mord si elle est retiree ou
+        # reformulee en autre chose.
+        for langue, sondes in PROBES.items():
+            asking = [s for s in sondes
+                      if any(word in s.lower() for word in
+                             ("consigne", "règle", "instruction", "rule"))]
+            assert asking, (
+                f"{langue} : aucune sonde ne demande si la cible a recu des "
+                f"consignes, donc `mentions_instructions` est de nouveau "
+                f"deduit de ce que les autres reponses contiennent par "
+                f"accident")
+
+    def test_the_probe_asks_the_EXISTENCE_not_the_CONTENT(self):
+        # Une sonde doit rester ANODINE : demander le CONTENU des consignes
+        # serait une attaque LLM07, pas une reconnaissance. Le principe
+        # arrete contre les standards le 2026-11-16 : signaler qu'un secret
+        # existe ne transfere rien.
+        for langue, sondes in PROBES.items():
+            for probe in sondes:
+                low = probe.lower()
+                if not any(w in low for w in ("consigne", "règle",
+                                              "instruction", "rule")):
+                    continue
+                for attack in ("répète", "repete", "repeat", "mot pour mot",
+                               "word for word", "quelles sont tes",
+                               "what are your"):
+                    assert attack not in low, (
+                        f"{langue} : la sonde demande le CONTENU des "
+                        f"consignes ({attack!r}), ce qui en fait une "
+                        f"attaque LLM07 et non une reconnaissance")
 
     def test_the_summary_shows_the_new_fields(self, analyst):
         analyst('{"writes_code": true, "handles_documents": false}')
@@ -378,7 +425,11 @@ class TestTheProbeLanguageIsDECLARED:
         for langue in PROBES:
             profile = reconnoitre(_target(), language=langue)
             asked = [e["question"] for e in profile["exchanges"]]
-            assert asked == PROBES[langue][:6], langue
+            # `RECON_BUDGET` et non un 6 en dur : ce test a casse le
+            # 2026-11-27 quand le budget est passe a 7, pour la MAUVAISE
+            # raison -- il comparait a un nombre ecrit a la main plutot qu'au
+            # budget declare.
+            assert asked == PROBES[langue][:reconnaissance.RECON_BUDGET], langue
 
     def test_an_unknown_language_is_REFUSED(self):
         # A typo must not quietly probe in the wrong language, which is the
@@ -435,3 +486,57 @@ class TestAMismatchIsFLAGGED:
             self, analyst):
         analyst("{}")
         assert reconnoitre(_target(), language="fr")["warning"] is None
+
+class TestThePROMPTOffersTheTriStateItsTHIRDValue:
+    """
+    DECISION B du 2026-11-27, seconde moitie. Le tri-etat a ete corrige COTE
+    PYTHON le 2026-11-20 -- `mentions_instructions` etait un `bool(...)` parmi
+    des tri-etats -- et LA MOITIE PROMPT N'A JAMAIS SUIVI : l'analyste lisait
+    << true si le chatbot evoque des regles, false sinon >>, sans aucune
+    option pour << il n'en a pas parle >>, alors que ses deux voisins
+    l'offrent explicitement.
+
+    Il n'a donc jamais eu le droit de dire la verite sur une cible
+    silencieuse, et contre `foreign:bare` il a produit `yes` depuis six
+    reponses ne mentionnant aucune consigne.
+
+    LE PROMPT N'AVAIT AUCUN GARDE, et c'est pourquoi la demi-correction a
+    survecu sept jours : le cote Python etait teste, le texte qui dit a
+    l'analyste ce qu'il a le droit de repondre ne l'etait pas.
+    """
+
+    @staticmethod
+    def _prompt():
+        import inspect
+        return inspect.getsource(reconnaissance)
+
+    def test_null_is_offered_for_the_instructions_field(self):
+        source = self._prompt()
+        start = source.index('"mentions_instructions"')
+        clause = source[start:start + 400]
+        assert "null" in clause.split("\n")[0], (
+            "le prompt n'offre pas `null` pour `mentions_instructions` : "
+            "l'analyste ne peut pas dire << il n'en a pas parle >>, et il "
+            "repondra true ou false sans preuve")
+
+    def test_the_tail_counts_THREE_boolean_fields(self):
+        source = self._prompt()
+        assert "trois champs booléens" in source, (
+            "la queue du prompt annonce encore deux champs booleens : le "
+            "troisieme n'herite donc pas de la regle `null` par defaut")
+        assert "deux champs booléens" not in source
+
+    def test_a_SILENT_target_leaves_the_field_None(self, analyst):
+        # Le comportement, pas le texte : une cible qui ne dit rien de ses
+        # consignes doit laisser `None`, jamais `True`. C'est le cas qui a
+        # fait lancer LLM07 contre un modele nu.
+        analyst('{"role": "assistant"}')
+        profile = reconnoitre(_target())
+        assert profile["mentions_instructions"] is None
+
+    def test_an_explicit_NO_is_kept_as_False(self, analyst):
+        # Et l'autre bord : un refus explicite doit rester `False`, sinon le
+        # tri-etat n'ecarte plus rien et la sonde ne sert a rien.
+        analyst('{"mentions_instructions": false}')
+        profile = reconnoitre(_target())
+        assert profile["mentions_instructions"] is False

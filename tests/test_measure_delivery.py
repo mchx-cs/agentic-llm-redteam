@@ -551,7 +551,15 @@ class TestTheCODEFingerprint:
         # sends and how its outcome is counted.
         for name in ("agents/adaptation.py", "agents/verifier.py",
                      "agents/planner.py", "main.py", "stats.py",
-                     "payloads/library.json"):
+                     "payloads/library.json",
+                     # EN AMONT DU PLANIFICATEUR (2026-11-27) :
+                     # `objectives_for` construit les objectifs depuis le
+                     # PROFIL, donc le jeu de sondes decide de ce qu'une
+                     # campagne envoie. Ce jour-la `RECON_BUDGET` est passe
+                     # de 6 a 7, et le compte de requetes par campagne avec
+                     # lui -- le protocole d'attribution avait verifie
+                     # << 432 requetes chacun, a la requete pres >>.
+                     "agents/reconnaissance.py"):
             assert name in WATCHED, name
         assert "report.py" not in WATCHED, (
             "the rendering cannot change a count, and watching it would "
