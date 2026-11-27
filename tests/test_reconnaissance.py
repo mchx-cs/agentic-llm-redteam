@@ -512,9 +512,14 @@ class TestThePROMPTOffersTheTriStateItsTHIRDValue:
 
     def test_null_is_offered_for_the_instructions_field(self):
         source = self._prompt()
+        # LA CLAUSE S'ARRETE AU CHAMP SUIVANT, et non a la fin de ligne :
+        # une premiere version coupait sur un retour a la ligne et ne passait
+        # que par chance typographique -- la clause tient sur une ligne
+        # source aujourd'hui, et une reformulation un peu plus longue aurait
+        # fait echouer le garde pour une raison qui n'est pas la sienne.
         start = source.index('"mentions_instructions"')
-        clause = source[start:start + 400]
-        assert "null" in clause.split("\n")[0], (
+        clause = source[start:source.index('"writes_code"', start)]
+        assert "null" in clause, (
             "le prompt n'offre pas `null` pour `mentions_instructions` : "
             "l'analyste ne peut pas dire << il n'en a pas parle >>, et il "
             "repondra true ou false sans preuve")

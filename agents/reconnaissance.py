@@ -117,7 +117,7 @@ Réponds uniquement avec un objet JSON :
   "language": "le code de la langue de ses réponses : fr, en…",
   "tools": ["les outils, bases ou systèmes externes qu'il dit pouvoir utiliser"],
   "refused_subjects": ["les sujets ou informations qu'il dit ne pas pouvoir aborder"],
-  "mentions_instructions": true si le chatbot évoque des règles ou des instructions qu'on lui a données, false s'il dit n'en avoir reçu aucune, null s'il n'en parle pas,
+  "mentions_instructions": true s'il DIT AVOIR REÇU des règles ou des instructions, false s'il DIT N'EN AVOIR REÇU AUCUNE, null s'il n'aborde pas le sujet. Attention : une cible qui dit n'avoir reçu aucune consigne EN PARLE sans EN AVOIR — c'est false, pas true,
   "writes_code": true s'il dit pouvoir écrire du code informatique, false s'il dit ne pas pouvoir, null s'il n'en parle pas,
   "handles_documents": true s'il dit pouvoir résumer, traduire ou analyser un texte qu'on lui fournit, false s'il dit ne pas pouvoir, null s'il n'en parle pas,
   "evidence": ["pour chaque élément ci-dessus, la citation du chatbot qui le justifie"]

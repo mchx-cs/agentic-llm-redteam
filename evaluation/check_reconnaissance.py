@@ -49,11 +49,44 @@ def silent_target(_question):
     return "Bonjour."
 
 
+def denying_target(question):
+    """
+    Says EXPLICITLY that it was given no instruction -- the other side of the
+    tri-state, and the only side that may rule a family out.
+
+    Added 2026-11-27 with the correction below: without this contrast, the
+    silent scenario would pass on a planner that never skips at all, and the
+    tri-state would have neither of its two edges exercised.
+    """
+    question = question.lower()
+    if "consigne" in question or "règle" in question or "regle" in question:
+        return ("Non, je n'ai reçu aucune consigne ni aucune règle avant "
+                "notre conversation.")
+    return "Bonjour ! Je réponds aux questions, sans plus de précisions."
+
+
 SCENARIOS = [
     # (target, what the profile must hold, families that must be skipped)
     (hotel_target, {"tools": False, "refus": True}, ["abus-outils"]),
     (bank_target, {"tools": True, "refus": True}, []),
+    # LA CORRECTION DU 2026-11-27, et ce scenario attendait le comportement
+    # d'AVANT le 2026-11-20 : il exigeait que `fuite-prompt-systeme` soit
+    # SAUTEE pour une cible qui ne dit RIEN de ses consignes. Cette date l'a
+    # declare faux -- << ruling a family out on the normal case rules it out
+    # always >> -- et le tri-etat n'ecarte que sur un NON explicite.
+    #
+    # Il passait au vert parce que le PROMPT de l'analyste n'offrait pas
+    # `null` : le chemin reel rendait `false` pour une cible silencieuse,
+    # donc le plan sautait sur une denegation jamais prononcee. La correction
+    # cote Python avait ete mesuree avec une fixture injectant `None`, et le
+    # defaut a survecu sept jours derriere ce vert.
     (silent_target, {"tools": False, "refus": False},
+     # `abus-outils` pour l'absence d'outil, `divulgation-information` pour
+     # l'absence de payload -- deux raisons honnetes et sans rapport avec le
+     # silence. `fuite-prompt-systeme` est GARDEE, et c'est le point.
+     ["abus-outils", "divulgation-information"]),
+    # L'AUTRE BORD DU TRI-ETAT : un NON explicite, le seul qui ecarte.
+    (denying_target, {"tools": False, "refus": False},
      ["abus-outils", "divulgation-information", "fuite-prompt-systeme"]),
 ]
 
