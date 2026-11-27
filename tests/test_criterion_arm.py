@@ -62,8 +62,25 @@ from agents.judge import (INSTRUCTIONS, JUDGE_SYSTEM_PROMPT,
 #: Ce que cette empreinte NE couvre pas : les SEPT consultations du jeu gelé,
 #: qui décrivent l'instruction à quatre critères. La prochaine est un
 #: « moment clé » et attend les dix étiquettes du bloc F7.
-DEFAULT_SHA = "c9549f48ca1e39e2db614ebf6dec9f28595c906fc9425747a56a5573b198fda6"
-DEFAULT_LENGTH = 9293
+#: L'INSTRUCTION LIVREE, et elle porte SIX criteres depuis le
+#: 2026-11-27 au soir : `fuite_permissions`, le modele de roles et de
+#: permissions de l'application, l'item 4 enumere de LLM07.
+#:
+#: LE PRIX EST UNE REMESURE DU `dev`, et la regle << ce nombre ne
+#: bouge pas sans une mesure a cote >> est honoree en DEUX commits :
+#: le protocole est declare et committe AVANT le run, pour que git
+#: montre qu'il le precede, et la figure arrive au commit suivant.
+#: Tant qu'elle n'y est pas, les figures publiees decrivent
+#: `JUDGE_SYSTEM_PROMPT_FIVE` -- gardee sous ce nom pour cette raison.
+DEFAULT_SHA = "a3052fdea1f51fbc7f7a28b411a9ff9375e6df8afcfd211901001ef883227615"
+DEFAULT_LENGTH = 9700
+
+#: L'instruction a CINQ criteres, gardee parce que les figures du
+#: 2026-11-27 la decrivent et que la chaine de derivation passe par
+#: elle : quatre -> cinq -> six, chaque etage etant exactement deux
+#: remplacements.
+FIVE_SHA = "c9549f48ca1e39e2db614ebf6dec9f28595c906fc9425747a56a5573b198fda6"
+FIVE_LENGTH = 9293
 
 #: L'instruction à QUATRE critères, celle que les figures publiées jusqu'au
 #: 2026-11-27 décrivent. Gardée pour que le garde de dérivation puisse
@@ -342,23 +359,37 @@ class TestTheDeliveredInstructionDiffersFromFOURByEXACTLYTwoThings:
         inattribuable.
         """
         from agents.judge import (FINGERPRINTING_CRITERION,
-                                  FINGERPRINTING_CRITERION_EN, _ENUMS)
+                                  FINGERPRINTING_CRITERION_EN,
+                                  PERMISSIONS_CRITERION,
+                                  PERMISSIONS_CRITERION_EN,
+                                  _ENUMS, _ENUMS_SIX)
 
         # On REMONTE de l'instruction livrée vers celle à quatre critères en
-        # défaisant les deux changements, dans les DEUX langues : si quoi que
-        # ce soit d'autre avait bougé, on ne retomberait pas dessus.
-        for arm, criterion, four in (
-                ("fr", FINGERPRINTING_CRITERION, JUDGE_SYSTEM_PROMPT_FOUR),
+        # défaisant les changements ÉTAGE PAR ÉTAGE, dans les DEUX langues :
+        # six -> cinq -> quatre, chaque étage étant exactement un critère et
+        # un énum. Si quoi que ce soit d'autre avait bougé, on ne
+        # retomberait pas dessus.
+        #
+        # DEUX ÉTAGES depuis le 2026-11-27, et c'est pourquoi ce test a
+        # changé : le critère 6 s'ajoute au 5 au lieu de le remplacer, donc
+        # « exactement deux choses » n'était plus la bonne affirmation.
+        for arm, five_crit, six_crit, four in (
+                ("fr", FINGERPRINTING_CRITERION, PERMISSIONS_CRITERION,
+                 JUDGE_SYSTEM_PROMPT_FOUR),
                 ("en", FINGERPRINTING_CRITERION_EN,
-                 JUDGE_SYSTEM_PROMPT_EN_FOUR)):
-            without, with_it = _ENUMS[arm]
+                 PERMISSIONS_CRITERION_EN, JUDGE_SYSTEM_PROMPT_EN_FOUR)):
+            without_five, with_five = _ENUMS[arm]
+            without_six, with_six = _ENUMS_SIX[arm]
             back = (INSTRUCTIONS[arm][0]
-                    .replace("\n" + criterion, "", 1)
-                    .replace(with_it, without, 1))
+                    .replace("\n" + six_crit, "", 1)
+                    .replace(with_six, without_six, 1)
+                    .replace("\n" + five_crit, "", 1)
+                    .replace(with_five, without_five, 1))
             assert back == four, (
                 f"le bras `{arm}` diffère de son instruction à quatre "
-                f"critères par autre chose que le critère et son enum : les "
-                f"figures publiées avant le 2026-11-27 perdent leur référent")
+                f"critères par autre chose que les deux critères et leurs "
+                f"énums : les figures publiées avant le 2026-11-27 perdent "
+                f"leur référent")
 
     def test_both_arms_keep_their_OWN_ADDENDUM(self):
         # Le critère porte sur une réponse, pas sur un format de

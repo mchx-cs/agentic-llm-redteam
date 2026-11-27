@@ -257,10 +257,13 @@ class TestTheFiguresTheMachineCanCHECK:
 
         by_default = {c for c in CRITERION_OF.values()
                       if c and f'"{c}"' in JUDGE_SYSTEM_PROMPT}
-        # CINQ depuis le 2026-11-27 : `fingerprinting` est entre dans
-        # l'instruction livree, donc le tableau d'etat doit le nommer aussi.
-        assert len(by_default) == 5, (
-            f"le tableau annonce 5 critères et l'instruction par défaut en "
+        # SIX depuis le 2026-11-27 au soir : `fuite_permissions` est
+        # entre dans l'instruction livree avec le cinquieme, donc le tableau
+        # d'etat doit le nommer aussi. Le chiffre est ici et non derive,
+        # pour que l'ajout d'un septieme critere force une decision au lieu
+        # d'etre absorbe en silence.
+        assert len(by_default) == 6, (
+            f"le tableau annonce 6 critères et l'instruction par défaut en "
             f"score {len(by_default)} : {sorted(by_default)}")
         for criterion in by_default:
             assert f"`{criterion}`" in state, (

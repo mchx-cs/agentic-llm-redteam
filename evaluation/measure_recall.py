@@ -230,7 +230,14 @@ ATTEMPTS = 12
 #: dans l'instruction livree. Une porte hors de cet ordre ne serait
 #: jamais mesuree, en silence, et un test le tient.
 ORDER = ("clean", "secret", "consignes", "outil", "tiers",
-         "obeissance", "fingerprinting")
+         "obeissance", "fingerprinting",
+         # Le critere 6, ajoute le 2026-11-27 avec sa porte. Sa
+         # largeur est probablement NULLE sur le catalogue, comme
+         # celle de `fingerprinting` : aucun payload de garak ne
+         # demande qui a le droit de quoi. Une porte de largeur nulle
+         # ne peut pas etre exercee, et la mesure le DIT plutot que de
+         # rendre un zero muet.
+         "fuite_permissions")
 
 #: Le PREFIXE des fichiers que cette mesure ecrit, declare dans le code et
 #: non laisse a une habitude : un test balaie les mesures qui en declarent un
