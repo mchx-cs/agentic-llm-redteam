@@ -4482,8 +4482,10 @@ cannot be acted on from there at all.
   the secret its target declares. The sampling POLICY stays the author's:
   `MAX_PAYLOADS = 60` and `--payloads N`, one visible number rather than a
   rule in a loop. What is still theirs to decide is whether 60 x 2 is the
-  right size, and whether the existing 18,536-entry harvest is worth keeping
-  at all now that a fresh one is 120 entries.
+  right size. The old 18,536-entry harvest was DISCARDED on 2026-11-27, after
+  a backup and after verifying none of it was labelled: `to_label.json` keeps
+  only the 57 indirect entries, so `label.py` without arguments is usable
+  again.
 - **MITRE ATLAS is DONE (2026-11-20)**: four families, read from
   `dist/v6/ATLAS-2026.10.yaml`, each identifier carrying how its OWASP match
   was established — ATLAS cites the entry itself for LLM02 and LLM07. What
@@ -4506,9 +4508,14 @@ cannot be acted on from there at all.
   only one whose Coverage section MEASURES a rate instead of bounding or
   declining. The bounded null stays unshown, for the reason in the pass@k item
   above.
-- **`.env` still uses `PROFIL_ARBITRE`**, which prints a deprecation note on
-  every command. It is the author's own config file, so it is theirs to
-  rename.
+- **The three EXAMPLE reports have DRIFTED from the renderer.** All three
+  name LLM07, so all three would now carry the `What a zero on LLM07 is
+  worth` caveat added on 2026-11-27, and none has it. And they cannot be
+  re-rendered for free: no `result.json` is kept anywhere, so the lever
+  "the JSON is the source of truth" -- which has paid in cash six times -- is
+  UNAVAILABLE here. Re-rendering them needs a campaign, or an abridged
+  `result.json` committed beside each one, which is a decision about
+  publishing a campaign's verbatim replies.
 - **GET, multipart and WebSocket endpoints are REACHED (2026-11-20)**, as
   profiles or `--target-transport`, single-turn and multi-turn alike. The
   WebSocket client is RFC 6455 on the standard library rather than an extra,
