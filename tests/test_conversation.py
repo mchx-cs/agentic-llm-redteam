@@ -292,3 +292,96 @@ class TestTheJudgesInstruction:
 
         assert verdict["votes"] == [True] * judge.VOTE_COUNT
         assert all(s == judge.system_prompt_for(True) for s in calls)
+class TestTheARMReachesTheConversationPath:
+    """
+    UNE CONVERSATION ETAIT TOUJOURS JUGEE PAR LE BRAS PAR DEFAUT, et 2 027
+    tests ne le voyaient pas : les gardes voisins comparent
+    `system_prompt_for(True)` -- le DEFAUT -- ce qui etait vrai avant comme
+    apres. **Un garde ne peut pas voir une langue manquer s'il ne compare
+    jamais que la langue par defaut.**
+
+    Le cout, mesure : un run `--language fr5` jugeait ses 174 mono-tours sur
+    `fr5` et ses 51 conversations sur `fr`, en ANNONCANT `fr5`.
+    """
+
+    @staticmethod
+    def _turns():
+        return [{"role": "attacker", "content": "a"},
+                {"role": "target", "content": "b"},
+                {"role": "attacker", "content": "c"},
+                {"role": "target", "content": "d"}]
+
+    def _prompts(self, monkeypatch, call):
+        import agents.judge as judge
+
+        seen = []
+
+        def fake(question, system=None, **_):
+            seen.append(system)
+            return '{"analyse": "a", "enfreint": false, "critere": "aucun"}'
+
+        monkeypatch.setattr(judge, "ask_llm", fake)
+        call(judge)
+        return seen
+
+    def test_EVERY_arm_reaches_it_with_its_OWN_instruction(self, monkeypatch):
+        import agents.judge as judge
+
+        for arm in judge.INSTRUCTIONS:
+            seen = self._prompts(
+                monkeypatch,
+                lambda j, arm=arm: j.judge_conversation(self._turns(), arm))
+            assert seen == [judge.system_prompt_for(True, arm)], (
+                f"une conversation sur le bras `{arm}` n'est pas jugee par "
+                f"son instruction : le bras ANNONCE et le bras MESURE "
+                f"diffèrent, en silence")
+
+    def test_and_the_DEFAULT_conversation_instruction_is_UNCHANGED(self):
+        """
+        Le defaut doit rester identique a l'octet, sans quoi toute figure de
+        conversation publiee cesserait de decrire ce qu'elle a mesure. Epingle
+        par une EMPREINTE et non par une longueur : deux editions qui se
+        compensent laissent la longueur intacte.
+        """
+        import hashlib
+
+        from agents.judge import DEFAULT_LANGUAGE, system_prompt_for
+
+        prompt = system_prompt_for(True, DEFAULT_LANGUAGE)
+        assert prompt == system_prompt_for(True)
+        digest = hashlib.sha256(prompt.encode()).hexdigest()
+        assert digest.startswith("595ee56c8281693f"), (
+            "l'instruction de conversation par defaut a bouge : toute figure "
+            "de conversation publiee cesse de la decrire, et une remesure "
+            "doit etre enregistree a cote de ce chiffre")
+
+    def test_the_EVALUATION_passes_the_arm_to_the_conversation_path(
+            self, monkeypatch):
+        """
+        LA JONCTION, et c'est la ou le defaut vivait : `judge_conversation`
+        aurait pu prendre une langue sans que personne ne la lui donne. Les
+        deux modules etaient corrects separement.
+        """
+        import agents.judge as judge
+        import evaluation.evaluate_judge as evaluation
+
+        seen = []
+        monkeypatch.setattr(evaluation, "judge_conversation",
+                            lambda turns, language=None: seen.append(language))
+        evaluation.ask_the_judge({"id": "C-x", "turns": self._turns()}, "fr5")
+        assert seen == ["fr5"]
+        assert "fr5" in judge.INSTRUCTIONS
+
+    def test_the_VOTE_takes_no_arm_and_that_is_deliberate(self):
+        """
+        Le vote sert les CAMPAGNES, qui mesurent une cible et non le juge, et
+        une campagne n'a aucune raison de choisir un bras. `--language`
+        existe pour MESURER, et l'evaluation appelle `judge_conversation`
+        directement, sans vote.
+        """
+        import inspect
+
+        from agents.judge import judge_conversation_by_vote
+
+        parameters = inspect.signature(judge_conversation_by_vote).parameters
+        assert "language" not in parameters

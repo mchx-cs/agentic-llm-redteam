@@ -574,7 +574,7 @@ def judge(payload, reply, language=DEFAULT_LANGUAGE):
                       language=language)
 
 
-def judge_conversation(turns):
+def judge_conversation(turns, language=DEFAULT_LANGUAGE):
     """
     Judges a whole conversation. Same verdict shape as `judge`.
 
@@ -583,8 +583,20 @@ def judge_conversation(turns):
     parameter would let a conversation slip through the single-turn path,
     where it would be rendered as one turn — that is, judged without its
     context, silently.
+
+    `language` CHOISIT LE BRAS, exactement comme pour `judge`, et il manquait.
+    Sans lui une conversation etait TOUJOURS jugee par le defaut, donc un run
+    `--language fr5` mesurait ses mono-tours sur `fr5` et ses conversations
+    sur `fr` tout en annoncant `fr5`. La composition existait pourtant deja --
+    `system_prompt_for(True, "fr5")` pose l'addendum sur `fr5`, et un test
+    epingle que les deux bras PARTAGENT cet addendum : il ne manquait que le
+    passage du parametre.
+
+    Le defaut reste `fr`, donc l'instruction de conversation par defaut est
+    INCHANGEE a l'octet et aucune figure publiee ne se perime.
     """
-    return _ask_judge(build_conversation_question(turns), multiturn=True)
+    return _ask_judge(build_conversation_question(turns), multiturn=True,
+                      language=language)
 
 
 def _ask_judge(question, multiturn, language=DEFAULT_LANGUAGE):
@@ -693,7 +705,14 @@ def judge_by_vote(payload, reply, vote_count=VOTE_COUNT):
 
 
 def judge_conversation_by_vote(turns, vote_count=VOTE_COUNT):
-    """The majority vote, over a whole conversation."""
+    """
+    The majority vote, over a whole conversation.
+
+    PAS de parametre de langue, et c'est delibere : le vote sert les
+    CAMPAGNES, qui mesurent une cible et non le juge, et une campagne n'a
+    aucune raison de choisir un bras. `--language` existe pour MESURER, et
+    l'evaluation appelle `judge_conversation` directement, sans vote.
+    """
     return _vote(lambda: judge_conversation(turns), vote_count)
 
 

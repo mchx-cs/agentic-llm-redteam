@@ -131,7 +131,11 @@ def ask_the_judge(exchange, language):
         # No `language` here: only the French instruction has been measured on
         # conversations, and there is nothing yet to compare an English one
         # against. Passing it silently would suggest a choice had been made.
-        return judge_conversation(exchange["turns"])
+        # LA LANGUE PASSE ICI AUSSI, et elle ne passait pas : un run
+        # `--language fr5` jugeait ses mono-tours sur `fr5` et ses
+        # conversations sur le DEFAUT, en annoncant `fr5`. Prouve par
+        # les empreintes d'instruction le 2026-11-27.
+        return judge_conversation(exchange["turns"], language)
     if exchange.get("turns"):
         # Stored as turns, but a single exchange: flatten to the two strings
         # the frozen instruction expects, rather than sending a one-turn

@@ -387,26 +387,37 @@ class TestTheARMIsReachedAndANNOUNCED:
         said = capsys.readouterr().out
         assert "et non le defaut" not in said
 
-    def test_a_CONVERSATION_on_another_arm_is_REFUSED_loudly(self):
+    def test_a_CONVERSATION_is_judged_by_the_arm_ASKED_FOR(self, monkeypatch):
         """
-        `judge_conversation` ne prend aucune langue -- seule l'instruction
-        francaise a ete mesuree sur ce format -- donc accepter le drapeau ici
-        rendrait des manches mesurees par une AUTRE instruction que celle
-        annoncee, en silence.
+        CE TEST A CHANGE PARCE QUE LE COMPORTEMENT S'EST AMELIORE, et il faut
+        le dire : il affirmait un REFUS. Sa raison etait vraie le temps
+        qu'elle a tenu -- `judge_conversation` ne prenait aucune langue, donc
+        accepter le drapeau aurait rendu des manches mesurees par une AUTRE
+        instruction que celle annoncee, la famille du gabarit sans
+        `{message}`.
+
+        La plomberie posee le 2026-11-27, le refus interdirait une mesure
+        POSSIBLE. Ce qui reste vrai n'est plus un interdit mais un FAIT :
+        aucun bras autre que le defaut n'a encore ete mesure sur ce format,
+        et l'annonce en tete le dit.
         """
         talk = {"id": "C-x", "expected": True, "category": "obeissance",
                 "turns": [{"role": "attaquant", "content": "a"},
                           {"role": "cible", "content": "b"},
                           {"role": "attaquant", "content": "c"},
                           {"role": "cible", "content": "d"}]}
-        with pytest.raises(SystemExit) as refusal:
-            stability.judge_entry(talk, "fr5")
-        said = str(refusal.value)
-        assert "C-x" in said and "fr5" in said
+        seen = []
+        monkeypatch.setattr(
+            stability, "judge_conversation",
+            lambda turns, language=None: seen.append(language))
+        stability.judge_entry(talk, "fr5")
+        assert seen == ["fr5"], (
+            "la langue n'atteint pas la voie conversation : un run sur `fr5` "
+            "mesurerait ses conversations sur le defaut en annoncant `fr5`")
 
-    def test_but_a_conversation_on_the_DEFAULT_is_judged(self, monkeypatch):
+    def test_and_the_DEFAULT_still_reaches_it(self, monkeypatch):
         # Le contraste : sans lui, le garde precedent passerait sur un module
-        # qui refuse TOUTE conversation.
+        # qui envoie TOUT sur un bras non-defaut.
         from agents.judge import DEFAULT_LANGUAGE
 
         talk = {"id": "C-x", "expected": True, "category": "obeissance",
@@ -414,9 +425,12 @@ class TestTheARMIsReachedAndANNOUNCED:
                           {"role": "cible", "content": "b"},
                           {"role": "attaquant", "content": "c"},
                           {"role": "cible", "content": "d"}]}
-        monkeypatch.setattr(stability, "judge_conversation",
-                            lambda turns: {"reussi": True})
-        assert stability.judge_entry(talk, DEFAULT_LANGUAGE)["reussi"] is True
+        seen = []
+        monkeypatch.setattr(
+            stability, "judge_conversation",
+            lambda turns, language=None: seen.append(language))
+        stability.judge_entry(talk)
+        assert seen == [DEFAULT_LANGUAGE]
 
     def test_the_CLI_wires_the_flag_through(self, monkeypatch):
         """

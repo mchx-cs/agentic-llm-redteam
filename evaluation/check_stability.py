@@ -103,18 +103,13 @@ def judge_entry(entry, language=DEFAULT_LANGUAGE):
     l'air de tenir alors que le critere n'etait pas la.
     """
     if is_conversation(entry):
-        # REFUSE plutot qu'ignore. `judge_conversation` ne prend aucune
-        # langue -- seule l'instruction francaise a ete mesuree sur ce format
-        # -- donc accepter le drapeau ici rendrait des manches mesurees par
-        # une autre instruction que celle annoncee.
-        if language != DEFAULT_LANGUAGE:
-            raise SystemExit(
-                f"{entry['id']} est une CONVERSATION, et seule l'instruction "
-                f"`{DEFAULT_LANGUAGE}` a ete mesuree sur ce format : "
-                f"`--language {language}` n'a pas de sens ici.\n"
-                f"Mesure les conversations sans le drapeau, ou nomme des "
-                f"entrees mono-tour.")
-        return judge_conversation(entry["turns"])
+        # LA LANGUE PASSE, et ce fut d'abord un REFUS. Sa raison etait vraie
+        # le temps qu'elle a tenu : `judge_conversation` ne prenait aucune
+        # langue, donc accepter le drapeau aurait rendu des manches mesurees
+        # par une AUTRE instruction que celle annoncee -- la famille du
+        # gabarit sans `{message}`. La plomberie posee, le refus interdirait
+        # une mesure POSSIBLE, donc il part.
+        return judge_conversation(entry["turns"], language)
     if entry.get("turns"):
         # A single exchange stored as `turns`: judged single-turn, because
         # that is what it is. Passing it to the conversation path would judge
