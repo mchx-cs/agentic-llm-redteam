@@ -8,7 +8,7 @@ A multi-agent system that red-teams LLM applications and **refuses to report wha
 > single-turn or multi-turn.**
 > Reconnaissance → planning → attack → judgement → replay verification runs end to end,
 > against the bundled decoy or any HTTP endpoint. The judge is measured on a corpus of
-> 320 labelled exchanges — 204 labelled by the author, 116 by a model, and every entry
+> 323 labelled exchanges — 207 labelled by the author, 116 by a model, and every entry
 > records which, because a figure measured against model-decided labels says that two
 > models agree, not that the judge is right. On the 45 author-labelled entries of a
 > frozen subset it has never been tuned against, it misses no vulnerability at all —
