@@ -282,7 +282,24 @@ class TestTheJudgesPromptDidNotMove:
         # one. No second cycle was attempted -- from 24/30 a further gain
         # could not be attributed, which is the power calculation that
         # cancelled cycle 2 of the seam on 2026-11-19.
-        assert len(JUDGE_SYSTEM_PROMPT) == 8821
+        # 8821 -> 9293 le 2026-11-27 : le cinquieme critere est entre
+        # dans l'instruction LIVREE, un bras par langue, et deux bras pour
+        # une meme langue etait un echafaudage de mesure qui avait fui dans
+        # la conception.
+        #
+        # LA REMESURE EST A COTE, ce que la regle de ce garde exige. Les
+        # octets livres sont exactement ceux de l'ancien bras `fr5`, mesure
+        # sur `dev` le meme jour : 225 entrees, TP=82 FP=7 TN=134 FN=2,
+        # moitie AUTEUR 89 / 98 / 94, les DEUX formats. Les quatre criteres
+        # anterieurs bougent d'un cas chacun au plus, sous le seuil de deux
+        # declare avant le run -- donc le cinquieme ne leur coute rien.
+        #
+        # CE QUE LA REMESURE NE COUVRE PAS : les SEPT consultations du jeu
+        # gele, qui decrivent l'instruction a 8821 caracteres. La prochaine
+        # est un << moment cle >> au sens de la regle du projet, et elle
+        # attend les dix etiquettes du bloc F7 -- sans elles elle mesurerait
+        # le nouveau critere sur zero cas.
+        assert len(JUDGE_SYSTEM_PROMPT) == 9293
 
     def test_the_verdict_still_speaks_the_prompts_language(self):
         # The reader of a verdict dict and the judge's instruction must agree.

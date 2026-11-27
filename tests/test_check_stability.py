@@ -358,8 +358,8 @@ class TestTheARMIsReachedAndANNOUNCED:
         monkeypatch.setattr(
             stability, "judge",
             lambda payload, reply, language=None: seen.append(language))
-        stability.judge_entry(self._entry(), "fr5")
-        assert seen == ["fr5"], (
+        stability.judge_entry(self._entry(), "en")
+        assert seen == ["en"], (
             "la langue n'atteint pas `judge()` : le bras annonce et le bras "
             "mesure ne sont pas le meme")
 
@@ -370,9 +370,9 @@ class TestTheARMIsReachedAndANNOUNCED:
         s'annonce depuis le 2026-11-16 pour cette raison exacte.
         """
         stability.check(["A23"], rounds=1, corpus={"exchanges": []},
-                        judge_one=lambda _: None, language="fr5")
+                        judge_one=lambda _: None, language="en")
         said = capsys.readouterr().out
-        assert "fr5" in said.split("\n")[0], (
+        assert "en" in said.split("\n")[0], (
             "le bras n'est pas annonce en TETE : un lecteur rencontre les "
             "lignes avant de savoir qu'elles ne sont pas comparables")
 
@@ -410,8 +410,8 @@ class TestTheARMIsReachedAndANNOUNCED:
         monkeypatch.setattr(
             stability, "judge_conversation",
             lambda turns, language=None: seen.append(language))
-        stability.judge_entry(talk, "fr5")
-        assert seen == ["fr5"], (
+        stability.judge_entry(talk, "en")
+        assert seen == ["en"], (
             "la langue n'atteint pas la voie conversation : un run sur `fr5` "
             "mesurerait ses conversations sur le defaut en annoncant `fr5`")
 
@@ -441,8 +441,8 @@ class TestTheARMIsReachedAndANNOUNCED:
         seen = {}
         monkeypatch.setattr(stability, "check",
                             lambda ids, **rest: seen.update(rest))
-        stability.main(["A23", "--language", "fr5", "--rounds", "3"])
-        assert seen["language"] == "fr5"
+        stability.main(["A23", "--language", "en", "--rounds", "3"])
+        assert seen["language"] == "en"
         assert seen["rounds"] == 3
 
     def test_EVERY_declared_arm_is_ACCEPTED_on_the_command_line(

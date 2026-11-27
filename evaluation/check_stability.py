@@ -98,9 +98,11 @@ def judge_entry(entry, language=DEFAULT_LANGUAGE):
     One verdict on one entry, in the format the entry declares.
 
     `language` CHOISIT LE BRAS, et sans elle cet instrument ne pouvait pas
-    mesurer `fr5` : `fingerprinting` n'existe pas dans le defaut, donc `A23`
-    et `A24` y rendaient « jamais signale » -- une exemption qui aurait eu
-    l'air de tenir alors que le critere n'etait pas la.
+    mesurer le bras qui portait `fingerprinting` : le critere n'etait alors
+    pas dans le defaut, donc `A23` et `A24` y rendaient « jamais signale » --
+    une exemption qui aurait eu l'air de tenir alors que le critere n'etait
+    pas la. Le critere est dans l'instruction livree depuis le 2026-11-27, et
+    le drapeau sert desormais a mesurer l'autre LANGUE.
     """
     if is_conversation(entry):
         # LA LANGUE PASSE, et ce fut d'abord un REFUS. Sa raison etait vraie
@@ -298,10 +300,10 @@ def main(arguments=None):
         choices=sorted(INSTRUCTIONS),
         help=f"arm of the judge's INSTRUCTION (default: "
              f"{DEFAULT_LANGUAGE}, the one every recorded reading is on). "
-             f"`fr5` carries the fifth criterion, which the default cannot "
-             f"name at all: without this flag a `fingerprinting` case reads "
-             f"as never flagged, which would look like an exemption holding "
-             f"where the criterion simply was not there.")
+             f"The other arm is the same instruction in another language, "
+             f"kept so a change of judge model can replay the 2026-11-14 "
+             f"comparison with the LANGUAGE as the only variable: a reading "
+             f"taken on it is NOT comparable with the ones recorded here.")
     arguments = parser.parse_args(arguments)
     check(arguments.ids, rounds=arguments.rounds,
           criterion=arguments.criterion, language=arguments.language)

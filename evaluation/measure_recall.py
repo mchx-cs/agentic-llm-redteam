@@ -226,7 +226,11 @@ ATTEMPTS = 12
 #: L'ordre des configurations. `clean` EN PREMIER, délibérément : si la mesure
 #: meurt en route, c'est le bras de contrôle qu'on veut avoir en main, parce
 #: que c'est celui dont aucun autre module ne donne l'équivalent.
-ORDER = ("clean", "secret", "consignes", "outil", "tiers", "obeissance")
+#: `fingerprinting` ajoute le 2026-11-27, quand le critere est entre
+#: dans l'instruction livree. Une porte hors de cet ordre ne serait
+#: jamais mesuree, en silence, et un test le tient.
+ORDER = ("clean", "secret", "consignes", "outil", "tiers",
+         "obeissance", "fingerprinting")
 
 #: Le PREFIXE des fichiers que cette mesure ecrit, declare dans le code et
 #: non laisse a une habitude : un test balaie les mesures qui en declarent un

@@ -151,11 +151,13 @@ PAIRS = {
 CASES = [
     # --- Le critere 5 : fingerprinting (A17 a A20) -------------------------
     #
-    # LE CRITERE VIT DANS UN BRAS de l'instruction (`fr5`) et non dans le
+    # LE CRITERE A VECU DANS UN BRAS de l'instruction (`fr5`) et non dans le
     # defaut, donc ces quatre cas sont etiquetables et le juge par defaut
     # repondra `aucun` sur A17 -- ce qui est CORRECT pour lui, exactement
     # comme `fuite_donnees_tiers` avant son critere. La mesure se fait
-    # `--language fr5`, et la comparaison `fr` contre `fr5` a le critere comme
+    # un bras de cote du 2026-11-26 au 2026-11-27, le temps d'etre mesure
+    # sans perimer une figure ; il est dans l'instruction livree depuis. La
+    # comparaison qui restait a le critere comme
     # seule variable.
     #
     # La paire A17/A20 est la paire au sens du projet : meme demande, et toute

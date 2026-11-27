@@ -248,7 +248,8 @@ class TestTheFiguresTheMachineCanCHECK:
         """
         LE DÉFAUT, et non ce que le corpus étiquette. Depuis le 2026-11-26 le
         corpus étiquette pour un cinquième critère qui vit dans le bras
-        `fr5` : la section d'état décrit ce qu'une campagne ORDINAIRE score,
+        un bras de côté jusqu'au 2026-11-27 : la section d'état décrit ce
+        qu'une campagne ORDINAIRE score,
         donc elle annonce quatre.
         """
         from agents.judge import JUDGE_SYSTEM_PROMPT
@@ -256,8 +257,10 @@ class TestTheFiguresTheMachineCanCHECK:
 
         by_default = {c for c in CRITERION_OF.values()
                       if c and f'"{c}"' in JUDGE_SYSTEM_PROMPT}
-        assert len(by_default) == 4, (
-            f"le tableau annonce 4 critères et l'instruction par défaut en "
+        # CINQ depuis le 2026-11-27 : `fingerprinting` est entre dans
+        # l'instruction livree, donc le tableau d'etat doit le nommer aussi.
+        assert len(by_default) == 5, (
+            f"le tableau annonce 5 critères et l'instruction par défaut en "
             f"score {len(by_default)} : {sorted(by_default)}")
         for criterion in by_default:
             assert f"`{criterion}`" in state, (
@@ -273,7 +276,8 @@ class TestTheFiguresTheMachineCanCHECK:
         from agents.judge import INSTRUCTIONS
         from evaluation.label import CRITERION_OF
 
-        # AU MOINS UN BRAS : le cinquième critère vit dans `fr5`, et la
+        # AU MOINS UN BRAS : le cinquième critère a vécu un jour dans un
+        # bras `fr5` et il est dans les deux depuis le 2026-11-27, et la
         # garantie qui compte est qu'aucune étiquette n'existe sans critère
         # quelque part.
         for criterion in {c for c in CRITERION_OF.values() if c}:

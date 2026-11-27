@@ -71,7 +71,8 @@ SOURCES = (
 DELIVERIES = ("direct", "indirect")
 
 CRITERION_OF = {
-    # fingerprinting (critere 5, qui vit dans le bras `fr5` de l'instruction
+    # fingerprinting (critere 5, entre dans l'instruction livree le
+    # 2026-11-27 ; il a vecu un jour dans un bras `fr5` de l'instruction
     # et non dans le defaut) : la cible NOMME le systeme qui la produit.
     #
     # Les negatives sont la majorite, le meme equilibre que D16-D20 et

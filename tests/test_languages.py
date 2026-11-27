@@ -730,8 +730,23 @@ class TestTheCriteriaGapsThatAPentestWouldHit:
             "a third role exists now: an indirect-injection criterion and its "
             "labels become possible")
 
-    def test_nothing_covers_fingerprinting_BY_DEFAULT(self):
+    def test_fingerprinting_IS_covered_by_default_now(self):
         """
+        CE DOCSTRING SE CONTREDISAIT, et c'est pire que périmé : ses
+        premiers paragraphes disaient que le critère vit dans un BRAS et sa
+        fin dit que le trou est clos. Ils décrivaient l'état du 2026-11-26,
+        gardé tel quel quand la fin a été réécrite le 2026-11-27.
+
+        L'HISTOIRE, au passé, parce qu'elle explique ce que le bras a acheté.
+        Une cible nommant son modèle est une trouvaille de reconnaissance sur
+        un vrai engagement, et elle rendait `aucun` sous les quatre critères
+        du défaut — à raison, le juge n'ayant pas de case pour le dire. Le
+        critère a été écrit le 2026-11-26 dans un bras `fr5` plutôt que dans
+        le défaut, parce que les trois trous encore épinglés coûtaient le
+        MÊME prix (une remesure plus une consultation) et que celui-là était
+        le moins précieux : le bras l'a rendu mesurable pour un drapeau, sans
+        déplacer le défaut d'un octet.
+
         A target naming its model, provider and sampling parameters. A
         reconnaissance finding on a real engagement; `aucun` by default, and
         arguably right under the four criteria the default instruction has.
@@ -752,27 +767,34 @@ class TestTheCriteriaGapsThatAPentestWouldHit:
         the default by zero bytes, which is the route the English arm already
         took on 2026-11-14.
 
-        This guard therefore keeps holding the DEFAULT, which is what the
-        figures describe. It closes for good the day the arm is adopted.
+        CLOSED FOR GOOD on 2026-11-27, and this guard said in advance
+        what would close it: "the arm has been adopted, so the published
+        figures must be re-measured and this guard retired". Both halves
+        happened. The arm was adopted because the measurement said the fifth
+        criterion costs the four others nothing, and the figures were
+        re-measured on exactly the bytes now delivered — 225 entries, author
+        89 / 98 / 94, both formats.
+
+        What this guard holds now is the other direction: the criterion is in
+        the DELIVERED instruction, so a campaign scores it without any flag,
+        and the corpus can label for it.
         """
         from agents.judge import JUDGE_SYSTEM_PROMPT as prompt
-        for word in ("modèle", "fournisseur", "température"):
-            assert word not in prompt, (
-                f"'{word}' appears in the DEFAULT criteria now: the arm has "
-                f"been adopted, so the published figures must be re-measured "
-                f"and this guard retired")
-
-    def test_but_the_ARM_covers_it_and_the_corpus_can_label_for_it(self):
-        """
-        Le contraste, sans lequel le garde ci-dessus se lirait comme « rien
-        n'existe pour le fingerprinting » — ce qui a cessé d'être vrai le
-        2026-11-26.
-        """
-        from agents.judge import JUDGE_SYSTEM_PROMPT_FR5
         from evaluation.label import CRITERION_OF
 
-        assert '5. "fingerprinting"' in JUDGE_SYSTEM_PROMPT_FR5
+        assert '5. "fingerprinting"' in prompt
         assert "fingerprinting" in set(CRITERION_OF.values())
+
+    def test_and_BOTH_arms_carry_it(self):
+        """
+        Le contraste qui compte : un critere dans `fr` seulement rendrait la
+        comparaison du 2026-11-14 impossible a rejouer, la langue cessant
+        d'etre la seule variable.
+        """
+        from agents.judge import INSTRUCTIONS
+
+        for arm in INSTRUCTIONS:
+            assert '5. "fingerprinting"' in INSTRUCTIONS[arm][0], arm
 
     def test_nothing_covers_a_BYPASSABLE_CONTROL_disclosed(self):
         """
@@ -1322,11 +1344,14 @@ class TestTheFiguresAreReportedPerCRITERION:
         # the project names when it refuses to add a label before its
         # criterion.
         #
-        # AT LEAST ONE ARM, and not the default: since 2026-11-26 the fifth
-        # criterion lives in `fr5`, written and measurable without moving the
-        # default a single byte, so that no published figure goes stale. The
-        # guarantee that matters is unchanged -- no label without a criterion
-        # SOMEWHERE -- and the contrast below holds the other half.
+        # AT LEAST ONE ARM, and not the default. The distinction was
+        # load-bearing from 2026-11-26 to 2026-11-27, while the fifth
+        # criterion lived in a `fr5` arm: it was measurable for one flag and
+        # moved the default by zero bytes. It is in both arms now, so the
+        # weaker form holds trivially -- and it is KEPT in the weaker form,
+        # because the guarantee that matters is "no label without a
+        # criterion SOMEWHERE" and the next criterion will take the same
+        # route through an arm.
         from agents.judge import INSTRUCTIONS
         from evaluation.label import CRITERION_OF
         for criterion in {c for c in CRITERION_OF.values() if c}:
@@ -1350,9 +1375,12 @@ class TestTheFiguresAreReportedPerCRITERION:
         labelled = {c for c in CRITERION_OF.values() if c}
         by_default = {c for c in labelled
                       if f'"{c}"' in JUDGE_SYSTEM_PROMPT}
-        assert len(by_default) == 4, (
+        # CINQ depuis le 2026-11-27. Ce nombre ne se met pas a jour sans une
+        # remesure enregistree a cote : celle-ci est du meme jour, sur les
+        # octets exacts de l'instruction livree.
+        assert len(by_default) == 5, (
             f"l'instruction par defaut nomme {sorted(by_default)} : les "
-            f"figures publiees decrivent QUATRE criteres")
+            f"figures publiees decrivent CINQ criteres")
 
     def test_each_criterion_is_printed_with_its_FLOOR(self, capsys):
         # The floor is the point: "caught 5 of 5" bounds the true rate at 57%,

@@ -350,7 +350,7 @@ class TestTheARMReachesTheConversationPath:
         prompt = system_prompt_for(True, DEFAULT_LANGUAGE)
         assert prompt == system_prompt_for(True)
         digest = hashlib.sha256(prompt.encode()).hexdigest()
-        assert digest.startswith("595ee56c8281693f"), (
+        assert digest.startswith("58fd9cc38dcfc737"), (
             "l'instruction de conversation par defaut a bouge : toute figure "
             "de conversation publiee cesse de la decrire, et une remesure "
             "doit etre enregistree a cote de ce chiffre")
@@ -368,9 +368,10 @@ class TestTheARMReachesTheConversationPath:
         seen = []
         monkeypatch.setattr(evaluation, "judge_conversation",
                             lambda turns, language=None: seen.append(language))
-        evaluation.ask_the_judge({"id": "C-x", "turns": self._turns()}, "fr5")
-        assert seen == ["fr5"]
-        assert "fr5" in judge.INSTRUCTIONS
+        evaluation.ask_the_judge({"id": "C-x", "turns": self._turns()},
+                                 "en")
+        assert seen == ["en"]
+        assert "en" in judge.INSTRUCTIONS
 
     def test_the_VOTE_takes_no_arm_and_that_is_deliberate(self):
         """

@@ -1,27 +1,34 @@
 """
-Le troisième bras de l'instruction : le critère 5, et le prix qu'il ne coûte
-pas.
+Le critère 5, dans l'instruction LIVRÉE — un bras par langue.
 
-POURQUOI UN BRAS ET PAS UN REMPLACEMENT. L'instruction du juge est l'artefact
-MESURÉ : les figures publiées — `dev` 95 / 100 / 98, les sept consultations du
-jeu gelé — décrivent ses octets. Ajouter un critère au défaut les périme
-toutes et coûte une remesure des deux formats plus une consultation.
+CE FICHIER A ÉTÉ RETOURNÉ, et il faut le dire. Sa prémisse était « le critère
+vit dans un troisième bras `fr5`, et le défaut ne bouge pas d'un octet », et
+les deux moitiés sont fausses depuis le 2026-11-27 : le critère est dans les
+DEUX bras, et le défaut a bougé.
 
-Les trois trous encore épinglés coûtent ce même prix et ne valent pas la même
-chose : l'obéissance indirecte est la plus précieuse et demande un TROISIÈME
-RÔLE dans le format de la question ; le contrôle contournable touche la
-couture du critère 1, la phrase la plus délicatement réglée du projet ; le
-fingerprinting est le moins précieux et le seul sans blocage.
+POURQUOI LE BRAS A EXISTÉ, parce que ça explique ce qu'il a acheté. Ajouter un
+critère au défaut périme toutes les figures qui décrivent ses octets, et coûte
+une remesure des deux formats plus une consultation du jeu gelé. Les trois
+trous encore épinglés coûtent ce MÊME prix et ne valent pas la même chose, et
+le fingerprinting est le moins précieux des trois. Le bras a donc permis de le
+mesurer AVANT de payer — la voie que l'instruction anglaise avait déjà
+empruntée le 2026-11-14.
 
-D'où le bras, qui est la voie que ce projet a déjà empruntée le 2026-11-14 :
-l'instruction anglaise a été écrite, MESURÉE sur `dev`, trouvée sans gain, et
-GARDÉE à côté du défaut. Le critère est donc écrit et mesurable d'un drapeau,
-le défaut ne bouge pas d'un octet, et l'adopter devient un changement d'une
-ligne avec les chiffres déjà en main.
+POURQUOI IL A DISPARU. La mesure est tombée et elle dit que le cinquième
+critère ne coûte RIEN aux quatre autres : chaque ligne par critère bouge d'un
+cas au plus, sous le seuil déclaré avant le run. Le calcul économique qui
+justifiait le bras n'existe donc plus — et deux bras pour une même langue
+était un échafaudage de MESURE qui avait fui dans la conception.
 
-CE QUE CE FICHIER NE TIENT PAS : si le critère est BON. Ça demande les
-étiquettes de l'auteur sur les quatre cas A17–A20, puis `--language fr5` sur
-`dev`. Un test qui le devinerait serait pire qu'absent.
+ET LE PRIX ÉTAIT DÉJÀ PAYÉ : le défaut fusionné est BYTE-IDENTIQUE à l'ancien
+`fr5`, donc la mesure du 2026-11-27 — 225 entrées, author 89 / 98 / 94, les
+deux formats — décrit exactement ces octets. L'empreinte figée plus bas tient
+cette identité.
+
+CE QUE CE FICHIER NE TIENT PAS : si le critère est BON sur des cas jamais
+regardés. Ça demande les dix étiquettes du bloc F7, puis une consultation du
+jeu gelé — qui est désormais un « moment clé » au sens de la règle, puisque
+l'artefact mesuré a grossi d'un sixième.
 """
 
 import hashlib
@@ -32,16 +39,36 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 from agents.judge import (INSTRUCTIONS, JUDGE_SYSTEM_PROMPT,
-                          JUDGE_SYSTEM_PROMPT_EN, JUDGE_SYSTEM_PROMPT_FR5,
+                          JUDGE_SYSTEM_PROMPT_EN,
+                          JUDGE_SYSTEM_PROMPT_EN_FOUR,
+                          JUDGE_SYSTEM_PROMPT_FOUR,
                           MULTI_TURN_ADDENDUM, system_prompt_for)
 
-#: L'empreinte de l'instruction par défaut au moment où le bras a été ajouté.
+#: L'empreinte de l'instruction LIVRÉE, celle que toute campagne et toute
+#: mesure reçoivent.
 #:
 #: FIGÉE ICI, et c'est le test le plus important du fichier : si elle bouge,
 #: les figures publiées cessent de décrire ce qui tourne, et ce n'est pas une
 #: ligne à mettre à jour sans une remesure enregistrée à côté.
-DEFAULT_SHA = "bfc7432b19344efd8159a34cdd37774ff36b8598c4eea9f0fe656daa9d9bd17e"
-DEFAULT_LENGTH = 8821
+#:
+#: CELLE-CI EST ACCOMPAGNÉE DE SA REMESURE, ce que la règle exige. Ces octets
+#: sont exactement ceux de l'ancien bras `fr5`, mesuré sur `dev` le
+#: 2026-11-27 : 225 entrées, TP=82 FP=7 TN=134 FN=2, moitié AUTEUR
+#: 89 / 98 / 94, les DEUX formats (la plomberie de conversation ayant été
+#: corrigée le même jour). Les quatre critères antérieurs bougent d'un cas
+#: chacun au plus par rapport à l'instruction à quatre critères, sous le
+#: seuil de deux déclaré avant le run.
+#:
+#: Ce que cette empreinte NE couvre pas : les SEPT consultations du jeu gelé,
+#: qui décrivent l'instruction à quatre critères. La prochaine est un
+#: « moment clé » et attend les dix étiquettes du bloc F7.
+DEFAULT_SHA = "c9549f48ca1e39e2db614ebf6dec9f28595c906fc9425747a56a5573b198fda6"
+DEFAULT_LENGTH = 9293
+
+#: L'instruction à QUATRE critères, celle que les figures publiées jusqu'au
+#: 2026-11-27 décrivent. Gardée pour que le garde de dérivation puisse
+#: REMONTER de l'instruction livrée vers elle.
+FOUR_LENGTH = 8821
 
 
 def _corpus():
@@ -56,30 +83,51 @@ def _corpus():
             encoding="utf-8"))["exchanges"]
 
 
-class TestTheDefaultIsUntouchedBYTEForBYTE:
+class TestTheDeliveredInstructionIsPinnedBYTEForBYTE:
     """
-    La propriété pour laquelle le bras existe. Sans elle, le critère 5 aurait
-    coûté une remesure complète pour le moins précieux des trois trous.
+    CETTE CLASSE AFFIRMAIT L'INVERSE, et c'est le comportement qui a changé :
+    elle tenait que le défaut ne porte AUCUN cinquième critère, parce que le
+    critère vivait dans un bras. Il est dans le défaut depuis le 2026-11-27,
+    et le prix a été payé avec la mesure à côté — ce que l'empreinte plus
+    haut porte désormais.
+
+    Ce qui ne change pas, et c'est pourquoi la classe reste : l'instruction
+    LIVRÉE est l'artefact mesuré, et toute figure publiée décrit ses octets.
     """
 
-    def test_its_length_has_not_moved(self):
+    def test_its_length_is_the_pinned_one(self):
         assert len(JUDGE_SYSTEM_PROMPT) == DEFAULT_LENGTH, (
-            f"l'instruction par défaut fait {len(JUDGE_SYSTEM_PROMPT)} "
+            f"l'instruction livrée fait {len(JUDGE_SYSTEM_PROMPT)} "
             f"caractères contre {DEFAULT_LENGTH} figés.\n"
             f"Mettre ce nombre à jour SANS une remesure enregistrée à côté "
             f"transforme les figures publiées en affirmation sur rien.")
 
-    def test_and_neither_has_a_single_byte_of_it(self):
+    def test_and_so_is_every_byte_of_it(self):
         # La longueur seule laisserait passer un échange de deux mots de même
         # taille. Un garde ne vaut que ce qu'il COMPARE.
         got = hashlib.sha256(JUDGE_SYSTEM_PROMPT.encode("utf-8")).hexdigest()
         assert got == DEFAULT_SHA, (
-            "l'instruction par défaut a changé sans que sa longueur bouge")
+            "l'instruction livrée a changé sans que sa longueur bouge")
 
-    def test_the_default_names_NO_fifth_criterion(self):
-        assert "fingerprinting" not in JUDGE_SYSTEM_PROMPT, (
-            "le cinquième critère est entré dans le défaut : toutes les "
-            "figures publiées cessent de le décrire")
+    def test_the_FOUR_criteria_base_is_pinned_too(self):
+        """
+        Les figures publiées jusqu'au 2026-11-27 — dont les SEPT
+        consultations du jeu gelé — décrivent l'instruction à quatre
+        critères. Elle est donc épinglée aussi : si elle bougeait, le garde
+        de dérivation retomberait sur autre chose et ces figures perdraient
+        leur référent sans que rien le dise.
+        """
+        assert len(JUDGE_SYSTEM_PROMPT_FOUR) == FOUR_LENGTH
+
+    def test_the_delivered_instruction_NAMES_the_fifth_criterion(self):
+        """
+        L'INVERSE DE CE QUE CE TEST AFFIRMAIT. Il tenait que le cinquième
+        critère n'est PAS dans le défaut, et c'était la bonne affirmation
+        tant que le bras existait. Ce qui est tenu maintenant est qu'un
+        utilisateur le reçoit : le critère était écrit, mesurable et NON
+        LIVRÉ, et c'est ce que la fusion change.
+        """
+        assert "fingerprinting" in JUDGE_SYSTEM_PROMPT
 
     def test_a_single_turn_question_is_judged_by_the_default(self):
         assert system_prompt_for(multiturn=False) == JUDGE_SYSTEM_PROMPT
@@ -100,16 +148,22 @@ def _corpus_entry(identifier):
     raise AssertionError(f"{identifier} a disparu du corpus")
 
 
-class TestTheArmDiffersByEXACTLYTwoThings:
+class TestTheDeliveredInstructionDiffersFromFOURByEXACTLYTwoThings:
     """
-    Le bras est DÉRIVÉ du défaut par remplacement, pas écrit à part. Deux
-    instructions écrites séparément dériveraient au premier ajustement, et
-    tout devrait être remesuré deux fois — l'argument que la composition de
-    l'addendum a déjà tranché le 2026-11-13.
+    L'instruction livrée est DÉRIVÉE de celle à quatre critères par
+    remplacement, pas écrite à part. Deux instructions écrites séparément
+    dériveraient au premier ajustement, et tout devrait être remesuré deux
+    fois — l'argument que la composition de l'addendum a déjà tranché le
+    2026-11-13.
+
+    La dérivation est ce qui rend le garde du bas possible : on REMONTE de
+    l'instruction livrée vers celle à quatre critères en défaisant exactement
+    deux remplacements, et si quoi que ce soit d'autre avait bougé on ne
+    retomberait pas dessus.
     """
 
     def test_it_adds_the_criterion(self):
-        assert '5. "fingerprinting"' in JUDGE_SYSTEM_PROMPT_FR5
+        assert '5. "fingerprinting"' in JUDGE_SYSTEM_PROMPT
 
     def test_it_adds_the_criterion_to_the_JSON_enum(self):
         """
@@ -117,7 +171,7 @@ class TestTheArmDiffersByEXACTLYTwoThings:
         NOMMER est un faux négatif garanti. C'est la raison pour laquelle
         `fuite_donnees_tiers` a attendu le sien, et un test l'a tenu alors.
         """
-        assert 'ou "fingerprinting" ou' in JUDGE_SYSTEM_PROMPT_FR5
+        assert 'ou "fingerprinting" ou' in JUDGE_SYSTEM_PROMPT
 
     def test_the_arm_carries_NO_exemption_for_a_technical_INCAPACITY(self):
         """
@@ -146,7 +200,7 @@ class TestTheArmDiffersByEXACTLYTwoThings:
         """
         from agents.judge import INSTRUCTIONS
 
-        arm = INSTRUCTIONS["fr5"][0]
+        arm = JUDGE_SYSTEM_PROMPT
         assert "INCAPACITÉ" not in arm, (
             "l'exemption est revenue : mesurée 1/30, elle n'exempte pas le "
             "cas qu'elle nomme, et la garder laisserait croire qu'`A23` est "
@@ -181,7 +235,7 @@ class TestTheArmDiffersByEXACTLYTwoThings:
         """
         from agents.judge import INSTRUCTIONS
 
-        arm = INSTRUCTIONS["fr5"][0]
+        arm = JUDGE_SYSTEM_PROMPT
         scope = arm.split('5. "fingerprinting"')[1].split("Ne compte PAS")[0]
         assert "modèle" in scope, (
             "le critère ne nomme plus le modèle : il ne reste rien qu'ATLAS "
@@ -192,67 +246,155 @@ class TestTheArmDiffersByEXACTLYTwoThings:
                 f"aucune technique pour lui : A24 et A27, que l'auteur a "
                 f"étiquetés négatifs, redeviennent des faux positifs garantis")
 
-    def test_the_two_OTHER_arms_do_not_carry_it(self):
+    def test_BOTH_arms_carry_it(self):
         """
-        CE GARDE SERAIT DEVENU TAUTOLOGIQUE, et c'est pourquoi il change avec
-        l'exemption. Il affirmait que `fr` et `en` ne portent pas
-        l'exemption : plus personne ne la porte, donc il passait sans rien
-        comparer — la onzième occurrence dans ce projet d'un garde qui ne
-        vaut que ce qu'il COMPARE.
+        CE GARDE A ÉTÉ RETOURNÉ DEUX FOIS EN DEUX JOURS, et chaque fois pour
+        la bonne raison. Il a d'abord affirmé que `fr` et `en` ne portent pas
+        l'EXEMPTION d'A23 ; l'exemption retirée, plus personne ne la portait,
+        donc il passait sans rien comparer et il a été réécrit sur le
+        CRITÈRE. Aujourd'hui le critère est dans les deux bras, donc
+        l'affirmation s'inverse une seconde fois.
 
-        Il tient désormais la propriété qui reste vraie et qui compte : le
-        CRITÈRE ne fuit dans aucun des deux autres bras. S'il fuyait, les
-        figures publiées décriraient un artefact qui a bougé — et il fuirait
-        dans `en` sans que le test des octets de `fr` le voie.
+        Ce qu'il tient maintenant est la RÈGLE DU MIROIR, et elle n'est pas
+        cosmétique : le bras `en` existe pour qu'un futur changement de
+        modèle de juge rejoue la comparaison du 2026-11-14 avec la LANGUE
+        comme seule variable. Un critère dans `fr` seulement rendrait cette
+        comparaison impossible — c'est ce qui est écrit le 2026-11-18, et
+        c'est le défaut que j'ai créé le 2026-11-27 en oubliant le miroir,
+        l'écart montant alors à 1 494 caractères.
         """
-        from agents.judge import INSTRUCTIONS
-
         for arm in ("fr", "en"):
-            text = INSTRUCTIONS[arm][0]
-            assert "fingerprinting" not in text, (
-                f"le cinquième critère a fui dans le bras `{arm}` : ses "
-                f"figures cessent de décrire ce qu'elles ont mesuré")
+            carried = INSTRUCTIONS[arm][0]
+            assert "fingerprinting" in carried, (
+                f"le bras `{arm}` ne porte pas le cinquième critère : la "
+                f"langue cesse d'être la seule variable, et la comparaison "
+                f"du 2026-11-14 devient impossible à rejouer")
+
+    def test_the_english_criterion_is_FAITHFUL_clause_for_clause(self):
+        """
+        LE TROU QUE LE BALAYAGE A TROUVE, et il n'etait pas un detail :
+        retirer une exemption du critere anglais ne faisait RIEN tomber, le
+        garde de taille tolerant 500 caracteres d'ecart.
+
+        Or le miroir existe pour que la LANGUE soit la seule variable de la
+        comparaison du 2026-11-14 : une exemption de moins d'un cote est une
+        SECONDE variable, et un futur ecart deviendrait inattribuable. C'est
+        la discipline qui a impose une traduction FIDELE plutot que mieux
+        ecrite -- une version aussi amelioree aurait rendu le gain illisible.
+
+        Tenu CLAUSE PAR CLAUSE et non par la longueur : les deux criteres
+        doivent nommer le modele, porter l'exemption du nom tu et celle du
+        ROLE, et ne nommer ni fournisseur ni parametre (le resserrement
+        ATLAS du 2026-11-26).
+        """
+        from agents.judge import (FINGERPRINTING_CRITERION,
+                                  FINGERPRINTING_CRITERION_EN)
+
+        clauses = {
+            "le modele nomme": (("modèle",), ("model",)),
+            "l'exemption du nom tu": (("sans nommer lequel",),
+                                      ("without naming which",)),
+            "l'exemption du ROLE": (("RÔLE",), ("ROLE",)),
+        }
+        for what, (french, english) in clauses.items():
+            for word in french:
+                assert word in FINGERPRINTING_CRITERION, (what, word)
+            for word in english:
+                assert word in FINGERPRINTING_CRITERION_EN, (what, word)
+
+        # Le resserrement ATLAS, des DEUX cotes : ni fournisseur ni
+        # parametre, puisqu'ATLAS n'a aucune technique pour eux et que
+        # l'auteur a etiquete leurs registres negatifs.
+        for criterion in (FINGERPRINTING_CRITERION,
+                          FINGERPRINTING_CRITERION_EN):
+            for outside in ("fournisseur", "provider", "température",
+                            "temperature", "top_p"):
+                assert outside not in criterion, outside
+
+        # Et le MEME NOMBRE de phrases de part et d'autre : une clause
+        # ajoutee d'un seul cote est la seconde variable que ce garde
+        # interdit, et la longueur ne la verrait pas.
+        assert (FINGERPRINTING_CRITERION.count(".")
+                == FINGERPRINTING_CRITERION_EN.count(".")), (
+            "les deux criteres n'ont plus le meme nombre de phrases : une "
+            "clause a ete ajoutee ou retiree d'un seul cote")
+
+    def test_the_two_arms_stay_the_SAME_SIZE_apart(self):
+        """
+        LE REPÈRE QUI A TROUVÉ LE MIROIR MANQUÉ. L'écart de longueur entre
+        les deux bras est celui de la prose — le français est plus verbeux —
+        et il vaut quelques centaines de caractères. Un écart de l'ordre du
+        MILLIER signale qu'une édition n'a été faite que d'un côté : c'était
+        1 494 le 2026-11-27, et c'est comme ça que le défaut s'est vu.
+        """
+        gap = abs(len(INSTRUCTIONS["fr"][0]) - len(INSTRUCTIONS["en"][0]))
+        assert gap < 500, (
+            f"les deux bras diffèrent de {gap} caractères : une édition n'a "
+            f"probablement été faite que d'un côté")
 
     def test_and_NOTHING_else(self):
         """
-        LE GARDE QUI COMPTE : la comparaison `fr` contre `fr5` n'a de sens
-        que si le critère est la SEULE variable. C'est la discipline que le
+        LE GARDE QUI COMPTE : la remontée vers l'instruction à quatre
+        critères n'a de sens que si le critère et son énum sont les SEULES
+        différences. C'est la discipline que le
         bras anglais a imposée le 2026-11-14 — la traduction devait être
         FIDÈLE, parce qu'une version aussi mieux écrite aurait rendu le gain
         inattribuable.
         """
-        from agents.judge import (FINGERPRINTING_CRITERION, _ENUM_WITH,
-                                  _ENUM_WITHOUT)
+        from agents.judge import (FINGERPRINTING_CRITERION,
+                                  FINGERPRINTING_CRITERION_EN, _ENUMS)
 
-        # On remonte du bras vers le défaut en défaisant les deux
-        # changements : si quoi que ce soit d'autre a bougé, on ne retombe pas
-        # sur le défaut.
-        back = (JUDGE_SYSTEM_PROMPT_FR5
-                .replace("\n" + FINGERPRINTING_CRITERION, "", 1)
-                .replace(_ENUM_WITH, _ENUM_WITHOUT, 1))
-        assert back == JUDGE_SYSTEM_PROMPT, (
-            "le bras diffère du défaut par autre chose que le critère et son "
-            "enum : la comparaison `fr` contre `fr5` n'aurait plus une seule "
-            "variable")
+        # On REMONTE de l'instruction livrée vers celle à quatre critères en
+        # défaisant les deux changements, dans les DEUX langues : si quoi que
+        # ce soit d'autre avait bougé, on ne retomberait pas dessus.
+        for arm, criterion, four in (
+                ("fr", FINGERPRINTING_CRITERION, JUDGE_SYSTEM_PROMPT_FOUR),
+                ("en", FINGERPRINTING_CRITERION_EN,
+                 JUDGE_SYSTEM_PROMPT_EN_FOUR)):
+            without, with_it = _ENUMS[arm]
+            back = (INSTRUCTIONS[arm][0]
+                    .replace("\n" + criterion, "", 1)
+                    .replace(with_it, without, 1))
+            assert back == four, (
+                f"le bras `{arm}` diffère de son instruction à quatre "
+                f"critères par autre chose que le critère et son enum : les "
+                f"figures publiées avant le 2026-11-27 perdent leur référent")
 
-    def test_the_arm_shares_the_default_s_ADDENDUM(self):
+    def test_both_arms_keep_their_OWN_ADDENDUM(self):
         # Le critère porte sur une réponse, pas sur un format de
         # conversation : lui donner un addendum à lui ferait DEUX variables.
-        assert INSTRUCTIONS["fr5"][1] is MULTI_TURN_ADDENDUM
+        # Chaque langue garde le sien, qui est sa propre traduction.
+        from agents.judge import MULTI_TURN_ADDENDUM_EN
+
         assert INSTRUCTIONS["fr"][1] is MULTI_TURN_ADDENDUM
+        assert INSTRUCTIONS["en"][1] is MULTI_TURN_ADDENDUM_EN
 
 
-class TestTheArmIsReachableAndDeclared:
+class TestThereIsExactlyONEArmPerLanguage:
+    """
+    CETTE CLASSE TENAIT QUE `fr5` EST JOIGNABLE, et c'était la bonne
+    affirmation tant que le bras existait. Ce qu'elle tient maintenant est
+    l'architecture : UN bras par langue. Deux bras pour une même langue était
+    un échafaudage de MESURE qui avait fui dans la conception, et le remettre
+    livrerait aux utilisateurs une instruction dont une moitié n'est pas
+    mesurée.
+    """
 
-    def test_it_is_in_INSTRUCTIONS(self):
-        assert "fr5" in INSTRUCTIONS
+    def test_fr5_is_GONE(self):
+        assert "fr5" not in INSTRUCTIONS, (
+            "le troisième bras est revenu : il a existé un jour, le temps "
+            "d'être mesuré, et son calcul économique n'existe plus")
+
+    def test_one_arm_per_language(self):
+        assert set(INSTRUCTIONS) == {"fr", "en"}
 
     def test_the_default_is_still_fr(self):
         from agents.judge import DEFAULT_LANGUAGE
         assert DEFAULT_LANGUAGE == "fr"
 
-    def test_system_prompt_for_serves_it(self):
-        assert system_prompt_for(language="fr5") == JUDGE_SYSTEM_PROMPT_FR5
+    def test_system_prompt_for_serves_each_one(self):
+        for arm in INSTRUCTIONS:
+            assert system_prompt_for(language=arm) == INSTRUCTIONS[arm][0]
 
     def test_an_unknown_arm_is_REFUSED_with_the_valid_names(self):
         with pytest.raises(ValueError) as problem:

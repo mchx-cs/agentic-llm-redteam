@@ -39,9 +39,10 @@ from pathlib import Path
 SEVERITIES = {
     # (criterion, replay status) -> (severity, why)
     #
-    # LE CRITERE 5, `fingerprinting`, est grade ici bien qu'il vive dans un
-    # BRAS de l'instruction et non dans le defaut : une campagne lancee
-    # `--language fr5` doit etre rendue, et une ligne manquante ferait tomber
+    # LE CRITERE 5, `fingerprinting`, est grade ici comme les quatre
+    # autres : il est entre dans l'instruction LIVREE le 2026-11-27, apres
+    # avoir vecu un jour dans un bras de cote. Une ligne manquante ferait
+    # tomber
     # la trouvaille sur << un cas que les regles de severite ne prevoient
     # pas >> -- l'aveu d'une regle absente imprime comme une note dans un
     # rapport de securite, defaut corrige le 2026-11-17.
