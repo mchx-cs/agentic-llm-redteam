@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **327** entries, 236 `dev` / 91 `test` | **yes** |
 | … of which labelled by the AUTHOR | **211**, against 116 by a model | **yes** |
 | scorable criteria | **6** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers`, `fingerprinting`, `fuite_permissions` | **yes** |
-| `pytest` tests, no LLM call at all | **2,113** | **yes** |
+| `pytest` tests, no LLM call at all | **2,114** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -15140,6 +15140,112 @@ et **aucune question de set** (impose `dev` par la convention `A-`).
 `--check` ne rapporte rien.
 
 2,113 `pytest` tests, toujours sans aucun appel a un modele.
+
+**LES DEUX DECISIONS DE L'ITEM 8 -- et renommer une cle a expose TROIS tests
+qui dependaient du `.env` ambiant (2026-11-27).**
+
+**DECISION 1 : la vieille recolte ne garde que ses 57 entrees indirectes.**
+`evaluation/to_label.json` portait **18 593 entrees, 32 Mo, aucune
+etiquetee**, et deux populations qui n'ont rien a voir :
+
+| | entrees | |
+|---|---|---|
+| prefixe `R...` | **18 536** | le balayage NON BORNE, anterieur a `MAX_PAYLOADS = 60` du 2026-11-20 -- donc relancer ne les reproduirait pas |
+| prefixe `H-docs0i...` | **57** | la recolte INDIRECTE du jour contre `docs:0`, toutes `delivery: indirect` |
+
+Les 18 536 viennent d'une politique d'echantillonnage que le projet a
+REMPLACEE, et aucune n'est etiquetee. Les 57 sont la seule matiere indirecte
+du projet au-dela des 3 integrees, et leur recolte n'est pas reproductible non
+plus -- la reconnaissance ne l'est pas, mesure le matin meme. Le fichier passe
+donc de **33 644 795 a 72 989 octets**, et `label.py` sans argument redevient
+utilisable : il ouvre sur 57 entrees au lieu de 18 593.
+
+Sauvegarde d'abord, et le garde qui compte a tourne avant : **zero entree
+etiquetee dans le lot jete**, verifie et non suppose -- le precedent des 42
+entrees supprimees le 2026-11-27 au matin.
+
+**DECISION 2 : `PROFIL_ARBITRE` devient `JUDGE_PROFILE`.** Une ligne dans un
+`.env` gitignore, la note de depreciation disparait de toutes les sorties, et
+`config` continue de supporter l'alias herite pour quiconque ne l'a pas
+renomme.
+
+**ET C'EST CETTE LIGNE QUI A FAIT TOMBER DEUX TESTS, en CORRIGEANT une
+configuration.** `TestTheNoteToTheOperator` posait `PROFIL_ARBITRE` par
+`monkeypatch` et attendait la note. Mais `_load_env_file` relit le `.env` a
+CHAQUE reload et y fait `os.environ.setdefault`, donc le nom NEUF etait
+desormais pose pendant le reload -- et la regle voisine dit que le nom neuf
+gagne et que rien n'est alors signale comme perime. **Les deux tests etaient
+verts PARCE QUE la configuration de l'auteur etait perimee.**
+
+**ET LE TROISIEME EST PIRE, parce qu'il ne tombait pas.** La sonde de
+`JUDGE_PROFILE` dans la table vaut `"groq"` -- exactement la valeur qu'un vrai
+`.env` porte -- donc `test_the_old_french_name_still_works[JUDGE_PROFILE]`
+passait que le chemin herite marche ou que l'ambiant gagne. **Il ne comparait
+rien**, et aucune autre sonde ne le repare : le fichier repose le nom neuf a
+chaque reload, donc une sonde differente le rendrait ROUGE en local et vert en
+CI, la fragilite exacte qu'on corrige.
+
+**LA DIRECTION EST L'INVERSE DE LA LECON QUE CE PROJET ENREGISTRE QUATRE
+FOIS.** Elle dit << un environnement de developpement plus RICHE que
+l'integration continue masque ce qu'on vient d'ajouter >> -- les tests du
+collecteur qui appelaient un modele parce qu'Ollama tourne ici, la fixture qui
+cachait un test devenu tautologique, le snapshot garak gitignore qui a mis la
+CI au rouge six jours. Ici le local etait plus riche **et le test dependait de
+ce qu'il soit PERIME** : vert en CI, ou il n'y a pas de `.env`, et rouge des
+que la configuration est reparee. Premiere fois dans ce sens.
+
+**LA CORRECTION EST A LA RACINE ET NON CAS PAR CAS**, en trois pieces :
+
+- une fixture `autouse` fait partir chaque test d'un environnement ou AUCUNE
+  cle de configuration n'est posee, la liste DERIVEE de `KEYS` et de
+  `config.LEGACY_ENV` -- une liste ecrite a la main est l'endroit ou la cle
+  genante se perd, la lecon du garde qui omettait `mentions_instructions` de
+  sa propre liste ;
+- `_supplied_by_the_env_file()` **OBSERVE** ce que le fichier pose -- on
+  recharge avec l'environnement vide et ce qui s'y retrouve vient du
+  FICHIER -- au lieu de le reparser : un second analyseur de `.env`
+  divergerait du premier a la premiere retouche ;
+- les tests de la note **DERIVENT** leur couple herite au lieu de le coder en
+  dur, restreint a `KEYS` pour avoir une sonde valide (plusieurs cles sont
+  lues en entier, et `int("sonde")` ferait echouer l'import pour une raison
+  qui n'est pas celle du test). S'il n'existe aucun couple libre, le test le
+  DIT au lieu de passer en silence.
+
+**ET UN SKIP EXPLICITE, parce que la note est intestable sur un couple que
+l'operateur configure.** Ce n'est pas un contournement, c'est un fait sur
+`config` : le fichier repose le nom neuf, le nom neuf gagne. Le skip est
+visible dans le resume, il se nomme (`le .env du depot pose JUDGE_PROFILE`),
+et **il ne se declenche pas en CI** -- la couverture est pleine la ou elle
+compte. Verifie dans les deux sens : avec `.env` **2 111 passes / 3 skips**,
+sans `.env` **2 112 / 2**, et c'est le meme total.
+
+**LE BALAYAGE A RENDU 1/3, ET LES DEUX MUETTES NE SE LISENT PAS PAREIL.**
+
+| mutation | |
+|---|---|
+| le couple redevient code en dur | **MORD** -- c'est le defaut lui-meme |
+| la fixture n'est plus `autouse` | **MUETTE**, puis corrigee |
+| le skip retire | **MUETTE, et par construction** |
+
+La premiere muette etait un vrai trou : la fixture ne gardait rien de
+mesurable. Une fixture decorative est soit a rendre mesurable, soit a
+retirer -- ce projet a supprime un garde entier pour avoir crie faux -- donc
+un garde affirme desormais la propriete qu'elle tient : **un test de ce
+fichier demarre sans aucune cle de configuration posee**. Rejouee, la mutation
+mord.
+
+La seconde est muette **et doit le rester**, ce qui est la remarque de methode
+du jour : **un skip n'est pas un garde, c'est un refus de revendiquer.** Le
+retirer fait repasser le test -- tautologiquement, c'est-a-dire dans l'etat
+d'ou il vient. Lire cette muette comme un trou aurait conduit a << renforcer >>
+le skip, qui n'a rien a renforcer.
+
+**Rien de SUIVI n'a bouge pour les deux decisions** : `to_label.json` et
+`.env` sont tous deux gitignores. Ce commit ne porte donc que la correction
+des tests et cette entree -- et les sauvegardes des deux fichiers sont dans le
+scratchpad de la session, donc ephemeres.
+
+2,114 `pytest` tests, toujours sans aucun appel a un modele.
 
 ## Legal framing
 

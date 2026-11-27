@@ -12,6 +12,7 @@ Dropping a key from `LEGACY_ENV`, or forgetting to route one read through
 `_from_env`, fails it — a map that merely lists names would prove nothing.
 """
 
+import os
 import importlib
 
 import pytest
@@ -72,8 +73,97 @@ def configuration_put_back():
 BORN_IN_ENGLISH = {"TARGET_TRANSPORT", "TARGET_URL_LIMIT", "TARGET_WS_QUIET"}
 
 
+def _supplied_by_the_env_file():
+    """
+    Les noms de cle que le `.env` du depot pose, OBSERVES et non reparses.
+
+    `_load_env_file` relit le fichier a CHAQUE reload et y fait
+    `os.environ.setdefault`, donc vider `os.environ` ne suffit pas : ce qui
+    s'y retrouve apres un reload a environnement vide vient du FICHIER. La
+    fixture `no_ambient_config` garantit cet environnement vide.
+
+    Observer plutot que reparser : un second analyseur de `.env` divergerait
+    du premier a la premiere retouche, la derive par duplication que ce projet
+    refuse partout ou une regle est redite au lieu d'etre lue.
+    """
+    importlib.reload(config)
+    names = set(KEYS) | set(config.LEGACY_ENV.values())
+    return {name for name in names if name in os.environ}
+
+
+@pytest.fixture(autouse=True)
+def no_ambient_config(monkeypatch):
+    """
+    Chaque test de ce fichier part d'un environnement SANS cle de
+    configuration, et c'est ce qui rend ses assertions lisibles.
+
+    LE DEFAUT QU'IL FERME, trouve le 2026-11-27 en renommant
+    `PROFIL_ARBITRE` -> `JUDGE_PROFILE` dans le `.env` de l'auteur : `config`
+    charge le `.env` dans `os.environ`, donc un test qui posait la cle
+    HERITEE voyait aussi le nom NEUF, le nom neuf gagnait, et la note de
+    depreciation ne partait plus. Les deux tests de la note etaient verts
+    PARCE QUE la configuration etait perimee.
+
+    Et le cas qui ne tombait pas est le pire : la sonde de `JUDGE_PROFILE`
+    vaut "groq", la valeur qu'un vrai `.env` porte, donc le test du nom
+    francais passait que le chemin herite marche ou que l'ambiant gagne.
+
+    La liste est DERIVEE de `KEYS` et de `config.LEGACY_ENV` : une liste
+    ecrite a la main est l'endroit ou la cle genante se perd.
+    """
+    for name in set(KEYS) | set(config.LEGACY_ENV.values()):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_the_fixture_leaves_NO_config_key_posed():
+    """
+    La propriete que `no_ambient_config` tient, et ce test est ce qui lui
+    fait gagner sa place : un balayage de mutations l'a d'abord lue MUETTE.
+
+    Sans elle, l'import initial de `config` a deja mis le `.env` dans
+    `os.environ`, donc ce qu'un test POSE n'est pas ce que `config` VOIT. Les
+    deux tests de la note vivaient exactement la : ils etaient verts parce que
+    la configuration de l'auteur etait perimee.
+
+    Et c'est aussi ce qui rend le nom de `_supplied_by_the_env_file` vrai --
+    sans environnement vide au depart, il attribuerait au FICHIER une variable
+    venue du shell, et sauterait un cas pour la mauvaise raison.
+    """
+    posed = {name for name in set(KEYS) | set(config.LEGACY_ENV.values())
+             if name in os.environ}
+    assert posed == set(), (
+        f"un test de ce fichier demarre avec {sorted(posed)} deja pose(s) : "
+        f"ce qu'il met dans l'environnement n'est pas ce que `config` lit, "
+        f"et ses assertions ne disent plus ce qu'elles ont l'air de dire")
+
+
 @pytest.mark.parametrize("new", sorted(set(KEYS) - BORN_IN_ENGLISH))
-def test_the_old_french_name_still_works(new, monkeypatch):
+def test_the_old_french_name_still_works(new, monkeypatch, capsys):
+    """
+    LE SKIP EST HONNETE ET NON UN CONTOURNEMENT, trouve le 2026-11-27.
+
+    Quand le `.env` du depot pose le nom NEUF, le chemin herite ne peut pas
+    etre exerce : `_load_env_file` relit le fichier a chaque reload, le nom
+    neuf est donc toujours la, et il gagne -- la precedence documentee, que
+    `test_the_new_name_wins` couvre deja.
+
+    Sans ce skip le cas passait TAUTOLOGIQUEMENT : la sonde de
+    `JUDGE_PROFILE` vaut "groq", exactement ce qu'un vrai `.env` porte, donc
+    l'assertion tenait que le chemin herite marche ou que l'ambiant gagne. Et
+    une autre sonde ne le repare pas, elle le rend rouge en local et vert en
+    CI.
+
+    En CI il n'y a pas de `.env`, donc rien ne se saute : la couverture est
+    pleine la ou elle compte.
+    """
+    supplied = _supplied_by_the_env_file()
+    capsys.readouterr()
+    if new in supplied:
+        pytest.skip(
+            f"le .env du depot pose {new}, donc le chemin herite est "
+            f"inexercable ici : le fichier le repose a chaque reload et le "
+            f"nom neuf gagne. Vert en CI, ou il n'y a pas de .env.")
+
     probe, expected, read = KEYS[new]
     monkeypatch.setenv(config.LEGACY_ENV[new], probe)
     reloaded = importlib.reload(config)
@@ -117,25 +207,75 @@ class TestWhenBothAreSet:
 
 
 class TestTheNoteToTheOperator:
+    """
+    LE COUPLE EST DERIVE, et il etait code en dur jusqu'au 2026-11-27.
+
+    Ces deux tests posaient `PROFIL_ARBITRE` et attendaient la note. Ils sont
+    devenus rouges le jour ou le `.env` de l'auteur a ete CORRIGE -- parce que
+    `_load_env_file` relit le fichier a CHAQUE reload et y fait
+    `os.environ.setdefault`, donc un couple que le fichier porte voit son nom
+    NEUF pose pendant le reload, le nom neuf gagne, et la note ne part plus.
+
+    La note est donc intestable sur un couple que l'operateur a configure, et
+    ce n'est pas un contournement : c'est un fait sur `config`. Vider
+    `os.environ` n'y change rien -- le fichier le repeuple.
+
+    Ils etaient donc verts PARCE QUE la configuration de l'auteur etait
+    perimee. Et c'est la direction INVERSE de la lecon que ce projet
+    enregistre quatre fois : ici le local etait plus riche que la CI et le
+    test dependait de ce qu'il soit PERIME, donc vert en CI -- ou il n'y a
+    pas de `.env` -- et rouge des que la configuration est reparee.
+    """
+
+    @staticmethod
+    def _a_pair_the_file_cannot_supply(capsys):
+        """
+        Un couple (ancien, neuf, sonde) que le `.env` ne fournit pas.
+
+        OBSERVE plutot que reparse : on recharge avec l'environnement vide --
+        la fixture s'en charge -- et ce qui s'y retrouve vient du FICHIER. Un
+        second analyseur de `.env` divergerait du premier a la premiere
+        retouche, la derive par duplication que ce projet refuse partout.
+
+        Restreint a `KEYS` pour avoir une sonde VALIDE : plusieurs cles sont
+        lues en entier ou en flottant, et `int("sonde")` ferait echouer
+        l'import pour une raison qui n'est pas celle du test.
+        """
+        supplied = _supplied_by_the_env_file()
+        capsys.readouterr()               # sa note eventuelle ne compte pas
+        for new, old in sorted(config.LEGACY_ENV.items()):
+            if new in KEYS and new not in supplied and old not in supplied:
+                return old, new, KEYS[new][0]
+        raise AssertionError(
+            "chaque couple herite est fourni par le .env, donc la note est "
+            "intestable ici. Ce n'est pas un defaut de ce test : `config` "
+            "relit le fichier a chaque reload et le nom neuf gagne.")
+
     def test_an_old_key_is_named_with_its_replacement(self, monkeypatch,
                                                       capsys):
-        monkeypatch.setenv("PROFIL_ARBITRE", "groq")
+        old, new, probe = self._a_pair_the_file_cannot_supply(capsys)
+        monkeypatch.setenv(old, probe)
         importlib.reload(config)
-        assert "PROFIL_ARBITRE -> JUDGE_PROFILE" in capsys.readouterr().err
+        assert f"{old} -> {new}" in capsys.readouterr().err
 
     def test_it_goes_to_stderr_and_not_to_stdout(self, monkeypatch, capsys):
         # A report is piped to a file; a note about the configuration has no
         # business inside it.
-        monkeypatch.setenv("PROFIL_ARBITRE", "groq")
+        old, new, probe = self._a_pair_the_file_cannot_supply(capsys)
+        monkeypatch.setenv(old, probe)
         importlib.reload(config)
         captured = capsys.readouterr()
         assert captured.out == ""
-        assert captured.err != ""
+        assert f"{old} -> {new}" in captured.err
 
     def test_a_current_env_says_nothing_at_all(self, monkeypatch, capsys):
+        # L'assertion porte sur LE COUPLE pose, et non sur un stderr vide :
+        # un `.env` qui porterait une autre cle heritee ferait partir la note
+        # a son sujet, et ce test se mettrait au rouge pour quelque chose
+        # qu'il ne mesure pas.
         monkeypatch.setenv("JUDGE_PROFILE", "groq")
         importlib.reload(config)
-        assert capsys.readouterr().err == ""
+        assert "PROFIL_ARBITRE -> JUDGE_PROFILE" not in capsys.readouterr().err
 
 
 class TestWhatTheMapMustNotContain:
