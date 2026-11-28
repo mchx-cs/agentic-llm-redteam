@@ -31,9 +31,9 @@ second month adds its own section to this table.
 | [2026-11-25](2026-11-25.md) | 11 | 1 521 |
 | [2026-11-26](2026-11-26.md) | 15 | 1 574 |
 | [2026-11-27](2026-11-27.md) | 32 | 3 167 |
-| [2026-11-28](2026-11-28.md) | 1 | 143 |
+| [2026-11-28](2026-11-28.md) | 2 | 303 |
 
-**111 entries over 11 working days.**
+**112 entries over 11 working days.**
 
 ## These files were MOVED  not rewritten
 
@@ -58,7 +58,7 @@ One thing was rewritten rather than moved: the paragraph that introduced the
 entries inside `CLAUDE.md`. It opened on *"Everything below is dated"*, and
 after the split nothing is below it — so keeping it verbatim there would have
 left a false sentence in a section that describes the present. It is quoted
-here instead, whole, because 803 bytes of explanation are worth preserving and
+here instead, whole, because 745 bytes of explanation are worth preserving and
 because *nothing was lost* should be checkable rather than claimed:
 
 > **This file has TWO regimes of truth, and only one of them rots.** Everything

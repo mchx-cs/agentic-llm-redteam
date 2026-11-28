@@ -171,7 +171,8 @@ class TestTheDenominatorStatesAreNOTREDECLARED:
 
     It is not hypothetical: writing those names from memory produced
     `juge_indecis`, `faille` and `resiste` -- the FRENCH names, which
-    CLAUDE.md still describes, for keys the code calls `judge_undecided`,
+    `docs/decisions.md` still describes, for keys the code calls
+    `judge_undecided`,
     `vulnerability` and `resisted`. A contradiction between code and prose
     raises nothing and breaks no test, so the test has to be this one.
     """

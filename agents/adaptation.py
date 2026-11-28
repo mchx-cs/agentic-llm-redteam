@@ -1,7 +1,8 @@
 """
 agents/adaptation.py — Reorder the plan from what the target actually replied.
 
-This is LEVEL B of the adaptive attacker (see CLAUDE.md). Three levels exist,
+This is LEVEL B of the adaptive attacker (see `docs/decisions.md`).
+Three levels exist,
 and confusing them makes the work look an order of magnitude smaller:
 
   A. an attempt fails, move on to the next one in the plan  — done (main.py)

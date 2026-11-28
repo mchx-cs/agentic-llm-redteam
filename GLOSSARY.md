@@ -94,7 +94,8 @@ Two other vocabularies stay French for their own reasons:
 
 - **the labelling categories** (`controle`, `fuite-directe`,
   `multitours-reussi`…): the author's taxonomy, named by its labels throughout
-  CLAUDE.md and in the labelling menu. Renaming buys nothing functional and
+  the project's record (`docs/decisions.md`, `docs/journal/`) and in the
+  labelling menu. Renaming buys nothing functional and
   moves a vocabulary the author uses by hand.
 - **the kept target name** `leurre`: `--target decoy` is the name now, but
   `leurre` still resolves to the same target, and still needs no mandate. The

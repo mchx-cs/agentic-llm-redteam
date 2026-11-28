@@ -33,7 +33,8 @@ _API_ROLE = {ATTACKER_ROLE: "user", TARGET_ROLE: "assistant"}
 # single source of truth, and it carries for each one whether the attempt
 # counts in the ASR denominator. A copy in this file would have drifted on the
 # first change -- and it nearly did: these names were French until the switch,
-# and CLAUDE.md still describes them that way, so writing them from memory
+# and `docs/decisions.md` still describes them that way, so writing them
+# from memory
 # produced `juge_indecis` for a key the code calls `judge_undecided`. A
 # contradiction between code and prose raises nothing and breaks no test.
 # The multi-turn attacks the bridge exposes, declared HERE because this

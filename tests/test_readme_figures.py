@@ -148,13 +148,24 @@ def test_and_the_DATED_journal_entries_are_exempt():
     commits français et les 18 pistes scellées.
 
     Ce test tient la propriété qui JUSTIFIE l'ancre : il y a bien plusieurs
-    chiffres dans le fichier, et ils ne sont pas tous égaux. Sans ça,
-    viser la phase 10 serait une précaution décorative.
+    chiffres datés, et ils ne sont pas tous égaux. Sans ça, viser la ligne
+    d'état serait une précaution décorative.
+
+    ET IL A PERDU SA POPULATION LE 2026-11-28, pas sa propriété. Il lisait
+    `CLAUDE.md`, où ces comptes vivaient ; les deux déplacements du jour --
+    le journal, puis les décisions -- les ont tous emportés, et le fichier
+    n'en porte plus un seul. Le repointer était donc la correction, et le
+    supprimer aurait retiré ce qu'il tient. C'est le même geste que pour les
+    quatre gardes du journal, le même jour, pour la même raison.
     """
-    every = re.findall(r"([\d,]+) `pytest` tests", _claude_md())
+    dated = "\n".join(
+        p.read_text(encoding="utf-8")
+        for p in [ROOT / "docs" / "decisions.md",
+                  *sorted((ROOT / "docs" / "journal").glob("20*.md"))])
+    every = re.findall(r"([\d,]+) `pytest` tests", dated)
     assert len(every) > 5, (
-        "le journal ne porte plus ses comptes datés : l'ancre ciblée n'a "
-        "plus de raison d'être")
+        "le journal et les décisions ne portent plus leurs comptes datés : "
+        "l'ancre ciblée n'a plus de raison d'être")
     assert len(set(every)) > 1, (
         "tous les comptes du fichier sont égaux, donc rien ne distingue "
         "l'en-tête d'une entrée datée — ce garde ne comparerait rien")
@@ -361,3 +372,67 @@ def test_and_the_sentence_beside_it_carries_the_REAL_counts():
     assert announced == real, (
         f"le README annonce {announced} (criteres, familles), le code porte "
         f"{real}. Corriger le README, pas ce test.")
+
+
+#: Le journal est un repertoire depuis le 2026-11-28, et son index tient le
+#: compte. Ce qui suit ne RECALCULE pas ce compte : voir le garde.
+JOURNAL_DIR = ROOT / "docs" / "journal"
+
+WORDS_FOR_DAYS = {
+    1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+    7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven",
+    12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
+}
+
+#: Une ligne de la table de l'index : | [2026-11-19](2026-11-19.md) | 18 | … |
+INDEX_ROW = re.compile(
+    r"^\| \[(20\d\d-\d\d-\d\d)\]\([^)]+\) \| (\d+) \|", re.M)
+
+
+def test_the_journal_counts_AGREE_across_the_three_documents():
+    """
+    LE GARDE NE DERIVE RIEN, ET C'EST LA MOITIE INTERESSANTE.
+
+    Une premiere version comptait les entrees dans les fichiers de jour.
+    Mesure : les lignes en gras donnent 1 112, les titres portant une date
+    35, les paragraphes dates 207 -- et l'index en annonce 111. Le compte
+    d'ENTREES n'est donc pas derivable des fichiers : la frontiere d'entree
+    etait une notion du decoupage, et elle n'a pas survecu dedans. Un garde
+    qui la redeviserait inventerait une regle, puis forcerait les documents
+    a suivre son invention.
+
+    Ce qui EST verifiable est l'accord : l'index tient le compte par jour, et
+    `CLAUDE.md` comme le README le recopient. Trois copies, et le README en
+    porte deux a lui seul -- la phrase de la section methode et la ligne de
+    l'arbre. C'est par la que 110 a survecu a l'ecriture du 111.
+    """
+    index = (JOURNAL_DIR / "README.md").read_text(encoding="utf-8")
+    rows = INDEX_ROW.findall(index)
+    assert rows, (
+        "la table de docs/journal/README.md n'a plus de lignes lisibles : "
+        "ce garde ne compare plus rien. Corriger sa regexp, pas le supprimer.")
+
+    entries = sum(int(count) for _, count in rows)
+    days = sorted(JOURNAL_DIR.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md"))
+    assert len(rows) == len(days), (
+        f"l'index liste {len(rows)} jour(s) pour {len(days)} fichier(s) "
+        f"presents : un jour ecrit sans sa ligne d'index, ou l'inverse")
+
+    claude = _claude_md()
+    assert f"{entries} entries" in claude, (
+        f"CLAUDE.md n'annonce pas les {entries} entrees que son propre index "
+        f"compte : corriger CLAUDE.md, pas ce test")
+
+    readme = _readme()
+    found = readme.count(f"{entries} entries")
+    assert found == 2, (
+        f"<< {entries} entries >> apparait {found} fois dans le README au "
+        f"lieu de 2 : la section methode et l'arbre du depot le portent tous "
+        f"les deux, et un seul corrige laisse l'autre mentir -- ce qui est "
+        f"exactement ce qui s'est passe le 2026-11-28")
+
+    word = WORDS_FOR_DAYS.get(len(days))
+    assert word, f"{len(days)} jours : etendre WORDS_FOR_DAYS"
+    assert f"{word} working days" in readme, (
+        f"le README n'annonce pas << {word} working days >> pour les "
+        f"{len(days)} fichiers de jour presents")

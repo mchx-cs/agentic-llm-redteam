@@ -54,6 +54,14 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 STATE_SECTIONS = {
     "## Current state": 50,
     "## What remains": 240,
+    # AJOUTE LE 2026-11-28, ET C'EST LA CORRECTION STRUCTURELLE DU JOUR.
+    # « Decisions taken » etait une section en FORME d'etat -- son titre
+    # promet « voici les decisions » -- et c'etait la seule a n'avoir aucun
+    # plafond. Elle a atteint 4 083 lignes, 88 % du fichier une fois le
+    # journal sorti. Les deux sections capees ne l'ont pas fait. Le pointeur
+    # qui la remplace est donc cape comme ses voisines, parce qu'un renvoi
+    # qui se remet a accumuler redevient la section qu'il remplace.
+    "## Decisions taken": 40,
 }
 
 
@@ -82,6 +90,18 @@ JOURNAL_DIR = ROOT / "docs" / "journal"
 #: verifiable : un octet de derive et la suite tombe.
 JOURNAL_SHA = (
     "4860acb178b2fbaadb5d89af614be40ce7f06ce7752c0326887f141b8459e309")
+
+#: Les decisions sont un FICHIER depuis le 2026-11-28, et ce digest porte sur
+#: les octets deplaces : la queue de `docs/decisions.md`, apres la sentinelle.
+DECISIONS_FILE = ROOT / "docs" / "decisions.md"
+DECISIONS_SHA = (
+    "5583df491cc24dcee058637503367ab3eab35e0960162a38424afb65e12f6d8d")
+
+#: LA SENTINELLE EST DANS LE FICHIER, PAS ICI, et c'est deliberé : la
+#: frontiere entre ce qui a ete reecrit et ce qui a ete deplace devient un
+#: fait du document, visible par un lecteur humain, au lieu d'une convention
+#: que seul ce garde connaitrait.
+DECISIONS_MARK = "MOVED VERBATIM FROM CLAUDE.md ON 2026-11-28"
 
 
 @pytest.fixture(scope="module")
@@ -480,6 +500,21 @@ class TestTheMoveOf20261128LostNothing:
             f"devenait fausse ; sa version d'origine n'existe donc plus "
             f"qu'ici, et une citation approximative la perd.")
 
+        # ET LE COMPTE ANNONCE A COTE, parce qu'il a ete FAUX. Les deux
+        # documents disaient « 803 bytes » pour une citation qui en fait
+        # 745 : le chiffre avait ete ecrit avant que la citation soit
+        # normalisee, et il est reste. Le digest tenait le CONTENU et
+        # personne ne tenait le COMPTE -- un garde ne vaut que ce qu'il
+        # compare, et il ne comparait pas celui-la.
+        for name, doc in (("CLAUDE.md", ROOT / "CLAUDE.md"),
+                          ("l'index", JOURNAL_DIR / "README.md")):
+            body = doc.read_text(encoding="utf-8")
+            assert f"{len(restored)} bytes" in body, (
+                f"{name} n'annonce pas les {len(restored)} octets que la "
+                f"citation fait reellement : un compte faux a cote d'un "
+                f"digest juste se lit comme verifie alors qu'il ne l'est "
+                f"pas")
+
     def test_every_day_file_is_named_by_a_DATE_it_contains(self, day_files):
         """
         Un fichier nomme `2026-11-19.md` dont les entrees sont du 20 serait
@@ -491,3 +526,123 @@ class TestTheMoveOf20261128LostNothing:
                 f"{path.name} ne contient pas sa propre date : le "
                 f"regroupement par jour a mis une entree dans le mauvais "
                 f"fichier")
+class TestTheDECISIONSMoveLostNothing:
+    """
+    LE MEME INVARIANT QUE POUR LE JOURNAL, SUR UNE AUTRE POPULATION.
+
+    Le 2026-11-28, apres le journal, << Decisions taken, and why >> a quitte
+    `CLAUDE.md` a son tour : 4 076 lignes, 88 % de ce que le premier
+    deplacement avait laisse. Elles ont ete DEPLACEES en bloc, sans tri,
+    parce que la frontiere durable/date demande une lecture par bloc qui est
+    l'intention de l'auteur et pas une regle -- le meme principe que le
+    partage dev/test, ou ce qui decide est l'intention declaree et jamais le
+    texte.
+
+    DONC RIEN NE JUSTIFIE UNE RELECTURE : si rien n'a ete trie ni reecrit, la
+    propriete est une EGALITE, et elle se verifie comme telle.
+    """
+
+    def test_the_moved_bytes_are_IDENTICAL_to_what_CLAUDE_md_held(self):
+        assert DECISIONS_FILE.exists(), (
+            "docs/decisions.md a disparu : CLAUDE.md renvoie vers un "
+            "fichier absent, ce qui est pire qu'une section trop longue")
+        text = DECISIONS_FILE.read_text(encoding="utf-8")
+
+        halves = text.split(DECISIONS_MARK, 1)
+        assert len(halves) == 2, (
+            f"la sentinelle << {DECISIONS_MARK} >> n'est plus dans "
+            f"docs/decisions.md : plus rien ne dit ou s'arrete le cadre "
+            f"reecrit et ou commencent les octets deplaces")
+        # LA FRONTIERE EST ECRITE DANS LES OCTETS QUE LE FICHIER PORTE, et
+        # la premiere version de cette ligne ne l'etait pas : elle coupait
+        # sur « -->\n » et mangeait donc le premier retour a la ligne des
+        # octets deplaces. Le garde a mordu sur UN octet, ce qui est son
+        # travail -- mais le tort etait le sien et pas celui du fichier. On
+        # coupe apres la fermeture du commentaire, rien de plus.
+        tail = halves[1].split("-->", 1)[1]
+
+        digest = hashlib.sha256(tail.encode("utf-8")).hexdigest()
+        assert digest == DECISIONS_SHA, (
+            f"LE DEPLACEMENT A PERDU OU ALTERE DU TEXTE.\n"
+            f"  trouve  : {len(tail)} octets, sha {digest}\n"
+            f"  attendu : sha {DECISIONS_SHA}\n"
+            f"Ces blocs ont ete deplaces en bloc et jamais reecrits. Si une "
+            f"correction est voulue, elle s'ecrit comme une entree NEUVE "
+            f"dans docs/journal/, et ce digest reste celui de l'original.")
+
+    def test_and_the_digest_is_the_one_CLAUDE_md_publishes(self, sections):
+        """
+        LA JONCTION, dixieme fois que ce projet la rencontre : le garde peut
+        comparer au bon digest pendant que `CLAUDE.md` en annonce un autre,
+        et un lecteur n'aurait alors aucun moyen de verifier la revendication
+        qu'il lit.
+        """
+        titles = [t for t in sections if t.startswith("## Decisions taken")]
+        assert titles, "aucune section « ## Decisions taken » dans CLAUDE.md"
+        body = sections[titles[0]]
+        assert DECISIONS_SHA[:16] in body, (
+            f"CLAUDE.md n'annonce plus le digest que ce garde verifie "
+            f"({DECISIONS_SHA[:16]}…) : la revendication et sa preuve ont "
+            f"divergé")
+        assert "docs/decisions.md" in body, (
+            "la section ne renvoie plus vers `docs/decisions.md` : les "
+            "decisions sont ailleurs et rien ne dit ou")
+
+    #: Le sha256 du paragraphe qui introduisait les decisions dans CLAUDE.md
+    #: jusqu'au 2026-11-28. Comme pour le journal, c'est la seule partie
+    #: REECRITE -- il disait « they are not moved », ce que ce deplacement a
+    #: rendu faux, et comptait « 39 dated entries », mesure faux la veille.
+    PREAMBLE_SHA = (
+        "6613802b23e2764b3ce38f9b1d1b3782fd088996fb86a6df1291f83aa0c98155")
+
+    def test_the_REWRITTEN_preamble_is_preserved_verbatim(self):
+        """
+        DEUX PHRASES DEVENUES FAUSSES, donc un cadre reecrit, donc un
+        original a preserver ailleurs qu'en le deplacant.
+
+        Et le garde compare une EGALITE plutot que de chercher des phrases :
+        la premiere version de son jumeau, cote journal, se satisfaisait de
+        ma propre prose, parce que la phrase qu'elle cherchait figurait dans
+        le paragraphe ou j'expliquais pourquoi elle etait devenue fausse.
+        """
+        text = DECISIONS_FILE.read_text(encoding="utf-8")
+        frame = text.split(DECISIONS_MARK, 1)[0]
+
+        quoted = [ln for ln in frame.splitlines() if ln.startswith(">")]
+        assert quoted, (
+            "aucun bloc de citation avant la sentinelle : le preambule "
+            "d'origine n'est plus preserve, et c'etait la seule partie "
+            "REECRITE du deplacement")
+
+        restored = "\n".join(
+            ln[2:] if ln.startswith("> ") else ln[1:]
+            for ln in quoted).strip()
+        digest = hashlib.sha256(restored.encode("utf-8")).hexdigest()
+        assert digest == self.PREAMBLE_SHA, (
+            f"LA CITATION N'EST PLUS LE PREAMBULE D'ORIGINE.\n"
+            f"  cite    : {len(restored)} octets, sha {digest}\n"
+            f"  attendu : sha {self.PREAMBLE_SHA}\n"
+            f"Il a ete reecrit parce que deux de ses phrases devenaient "
+            f"fausses ; sa version d'origine n'existe donc plus qu'ici, et "
+            f"une citation approximative la perd.")
+
+    def test_the_file_SAYS_which_of_its_halves_rots(self):
+        """
+        LA PHRASE SANS LAQUELLE LE FICHIER MENT PAR OMISSION, et c'est le
+        motif que ce projet a rencontre seize fois : un document qui ne dit
+        pas de quand datent ses chiffres les fait lire comme le present.
+
+        Ici le melange est reel -- une decision ne rouille pas, un compte de
+        tests oui -- donc le fichier doit le DECLARER. Compare sur les mots
+        et non sur le texte brut : l'espace est a nous, les mots sont la
+        revendication, la methode de `check_excerpt.py`.
+        """
+        text = DECISIONS_FILE.read_text(encoding="utf-8")
+        frame = " ".join(text.split(DECISIONS_MARK, 1)[0].split())
+        for claim in ("read a figure here as dated",
+                      "MOVED, never rewritten"):
+            assert " ".join(claim.split()) in frame, (
+                f"<< {claim} >> absent du cadre de docs/decisions.md : "
+                f"sans cette declaration un lecteur prend un chiffre de 2026 "
+                f"pour l'etat present, ce qui est le defaut que la separation "
+                f"des deux regimes existe pour empecher")

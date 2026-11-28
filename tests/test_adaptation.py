@@ -552,8 +552,9 @@ class TestStaticControl:
     for six days before anyone pushed again.
 
     The fixture below is the same one `test_garak.py` uses, with a pool large
-    enough for the property to be observable. CLAUDE.md promised that the
-    tests do not depend on the snapshot; this file was the one that did.
+    enough for the property to be observable. The phase-7 record promised
+    (`docs/decisions.md`) that the tests do not depend on the snapshot;
+    this file was the one that did.
     """
 
     @pytest.fixture(autouse=True)
