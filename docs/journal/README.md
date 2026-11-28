@@ -31,9 +31,9 @@ second month adds its own section to this table.
 | [2026-11-25](2026-11-25.md) | 11 | 1 521 |
 | [2026-11-26](2026-11-26.md) | 15 | 1 574 |
 | [2026-11-27](2026-11-27.md) | 32 | 3 167 |
-| [2026-11-28](2026-11-28.md) | 2 | 303 |
+| [2026-11-28](2026-11-28.md) | 3 | 389 |
 
-**112 entries over 11 working days.**
+**113 entries over 11 working days.**
 
 ## These files were MOVED  not rewritten
 

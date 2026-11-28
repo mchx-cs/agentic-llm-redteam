@@ -45,6 +45,34 @@ above.
 > relocating thousands of lines of it would be rewriting rather than tidying.
 > **New dated entries go under `## Journal`.**
 
+## How to read what follows, and three things it cannot fix
+
+**The bytes below were written to live inside `CLAUDE.md`, and they were moved
+without a word changed.** That is what makes them checkable, and it is also
+what leaves three seams a reader has to know about. They are declared here
+rather than patched, because patching them would break the digest — the same
+choice this project makes for the payload figures, which *declare themselves
+unguarded* instead of pretending.
+
+**1. Inside the moved bytes, *"this file"* and *"here"* mean `CLAUDE.md` as it
+stood before 2026-11-28** — 12 such references, measured. Three more name
+`CLAUDE.md` outright while pointing at text that is now in this very file.
+Read them as *the project's written record*, which is what they always meant.
+
+**2. The commit links do not resolve, and never did.** 21 of them are written
+`[`0ae778f`](0ae778f)`, which GitHub reads as a file beside the document. They
+were already broken in `CLAUDE.md` — verified against the last pushed commit,
+so this is not something the move caused. The working form would be
+`../../commit/0ae778f`; writing it would change the bytes, so the hashes stay
+as they are and are used by hand: `git show 0ae778f`.
+
+**3. There are no headings below, so finding a decision is a SEARCH, not a
+table of contents.** 378 blocks, each opening on a bold sentence, in rough
+chronological order: the design decisions first, then the record as it
+accumulated. GitHub's outline will therefore show only this frame. A heading
+inside the moved bytes would change them, so the navigation stays a `Ctrl-F`
+here or a `grep` in a clone — which is how an agent reads it anyway.
+
 <!-- MOVED VERBATIM FROM CLAUDE.md ON 2026-11-28. Everything below this line is byte-identical to what stood there, and tests/test_claude_md_structure.py compares its sha256. Do not reflow, retitle or tidy it: a correction is written as a NEW entry in docs/journal/. -->
 
 

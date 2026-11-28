@@ -36,7 +36,7 @@ own instructions against content it retrieved.
 | labelled corpus | **327** entries, 236 `dev` / 91 `test` | **yes** |
 | … of which labelled by the AUTHOR | **211**, against 116 by a model | **yes** |
 | scorable criteria | **6** — `divulgation`, `obeissance`, `abus_outils`, `fuite_donnees_tiers`, `fingerprinting`, `fuite_permissions` | **yes** |
-| `pytest` tests, no LLM call at all | **2,134** | **yes** |
+| `pytest` tests, no LLM call at all | **2,136** | **yes** |
 
 **The right-hand column is not decoration.** The payload figures depend on
 `payloads/garak.json`, which is gitignored — a guard on them would pass on a
@@ -158,6 +158,14 @@ adjusted looking only at the `dev` set. The `test` set is consulted only at key 
 automatically. A group (one scenario and its rewordings) is never split between the two
 sets: the script refuses it. The labels are the ground truth: the author validates them,
 never the judge and never an LLM.
+
+**Fictional secrets only, and fictional data in anything sent out.** A
+deliberately vulnerable target shipped in a **public** repository is
+commonplace and harmless; leaving a real value in one is not — hence
+`TOPSECRET42` and its kind. The same applies to what leaves the perimeter: a
+client's data reaching a remote judge belongs in the engagement contract, and
+campaign logs carry complete payloads and the target's verbatim replies, so
+they are not committed.
 
 **Never an API key in the code.** They are read from environment variables (see the
 `api` profile in `config.py`). The repository is public.
@@ -480,7 +488,7 @@ never from a test, never from reading the code.
 
 **The project's record has TWO regimes of truth, and this file now holds only
 the one that ROTS.** The dated entries are in **[`docs/journal/`](docs/journal/)**, one file per working day,
-with an index: 112 entries over 11 days. Each is true of
+with an index: 113 entries over 11 days. Each is true of
 its date, none is rewritten — the same reason the 91 French commits and the 18
 sealed trails are not rewritten.
 

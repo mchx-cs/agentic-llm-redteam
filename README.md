@@ -124,7 +124,7 @@ is where the reporting rules below come from — bounded nulls, a declared denom
 and coverage that states what was never attempted.
 
 And the method has a **dated record**: [`docs/journal/`](docs/journal/) holds
-112 entries over eleven working days — every protocol declared and committed
+113 entries over eleven working days — every protocol declared and committed
 before its run, the predictions that held and the one that fell, the
 corrections measured and then withdrawn because the measurement did not
 support them, and the defects with how each was found. It is the evidence
@@ -199,7 +199,7 @@ to be read by someone deciding whether to trust them.
 │   ├── demo-report.md   # a committed example report, abridged, rendered by GitHub
 │   ├── demo-multiturn-report.md  # the same target, attacked over several turns
 │   └── demo-pass-at-k-report.md  # one payload thirty times: a measured rate, with its interval
-├── docs/journal/        # the dated record: 112 entries, what was measured and what broke
+├── docs/journal/        # the dated record: 113 entries, what was measured and what broke
 ├── docs/decisions.md    # 378 decisions and why — moved verbatim out of CLAUDE.md
 ├── audit.py             # authorisation gate + append-as-you-go JSONL audit trail
 ├── stats.py             # what a result bounds — and the refusal to bound dependent trials
@@ -234,7 +234,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 2,134 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 2,136 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:

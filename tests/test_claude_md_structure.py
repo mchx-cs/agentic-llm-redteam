@@ -640,9 +640,85 @@ class TestTheDECISIONSMoveLostNothing:
         text = DECISIONS_FILE.read_text(encoding="utf-8")
         frame = " ".join(text.split(DECISIONS_MARK, 1)[0].split())
         for claim in ("read a figure here as dated",
-                      "MOVED, never rewritten"):
+                      "MOVED, never rewritten",
+                      # LES TROIS COUTURES MESUREES LE 2026-11-28, que le
+                      # digest interdit de corriger sur place : les renvois
+                      # deictiques dont le referent a change, les 21 liens de
+                      # commit qui n'ont jamais resolu, et l'absence de
+                      # titres. Un fichier qui les taisait serait illisible
+                      # a l'endroit precis ou il se croit verifie.
+                      'mean `CLAUDE.md` as it',
+                      "The commit links do not resolve",
+                      "finding a decision is a SEARCH"):
             assert " ".join(claim.split()) in frame, (
                 f"<< {claim} >> absent du cadre de docs/decisions.md : "
                 f"sans cette declaration un lecteur prend un chiffre de 2026 "
                 f"pour l'etat present, ce qui est le defaut que la separation "
                 f"des deux regimes existe pour empecher")
+class TestNoRULEWasOrphanedByTheMoves:
+    """
+    LE SEUL DEFAUT GRAVE QUE LES DEUX DEPLACEMENTS POUVAIENT CAUSER.
+
+    Le reste du bilan du 2026-11-28 est de la lisibilite : des renvois
+    deictiques dont le referent a change, des liens deja casses, l'absence de
+    titres. Tout cela se declare. Mais une REGLE que l'agent doit suivre, si
+    elle part dans un fichier qui n'est plus charge a chaque session, cesse
+    d'etre lue -- et le fichier a alors cesse d'etre reutilisable au sens
+    fort.
+
+    IL Y EN AVAIT UNE, trouvee par balayage du normatif : << Fictional
+    secrets only >>, une regle de depot PUBLIC, que ni les quatre regles
+    survivantes ni `## Legal framing` ne disaient. Elle etait mal classee
+    depuis le debut -- une regle qu'on suit, rangee parmi les decisions qu'on
+    raconte -- et le deplacement n'a fait que le reveler.
+
+    CE GARDE NE LISTE PAS LES REGLES, il tient leurs SUJETS. Une liste de
+    phrases exactes casserait au premier reformulage et passerait sur une
+    regle retiree ; un sujet absent est ce qui compte.
+    """
+
+    #: Ce qu'un agent ne peut PAS deduire du code et doit donc lire. Chaque
+    #: entree est un sujet, avec plusieurs formulations acceptees : ce qui
+    #: est garde est que le sujet soit DIT, pas qu'il le soit ainsi.
+    RULES = {
+        "l'appel indirect aux modeles": ("ask_llm()",),
+        "les boucles bornees": ("bound your loops", "MAX_ATTEMPTS"),
+        "le jeu gele": ("tune the judge against the test set",),
+        "les cles d'API": ("API key in the code", "API keys"),
+        "les secrets fictifs": ("Fictional secrets only", "fictional"),
+        "l'autorisation ecrite": ("explicitly authorised", "authorisation"),
+    }
+
+    def test_every_rule_an_agent_must_FOLLOW_is_still_in_CLAUDE_md(
+            self, document):
+        missing = [
+            subject for subject, forms in self.RULES.items()
+            if not any(form in document for form in forms)]
+        assert not missing, (
+            f"REGLE(S) ORPHELINE(S) : {missing}.\n"
+            f"Elles ont quitte CLAUDE.md, donc l'agent ne les lit plus a "
+            f"chaque session. Une regle vit dans le fichier charge, jamais "
+            f"dans un fichier vers lequel il renvoie -- c'est la difference "
+            f"entre une regle et une decision, et c'est ce que les "
+            f"deplacements du 2026-11-28 ont failli perdre.")
+
+    def test_and_the_RULES_section_is_where_they_live(self, sections):
+        """
+        LA JONCTION : une regle presente ailleurs dans le fichier -- dans la
+        carte d'architecture, dans un titre de section -- satisferait le
+        garde ci-dessus sans etre une regle pour autant. Celui-la verifie
+        qu'elles sont bien sous le titre qui les annonce.
+        """
+        titles = [t for t in sections if t.startswith("## Rules")]
+        assert titles, "la section « ## Rules that MUST be respected » a disparu"
+        body = sections[titles[0]]
+
+        here = ("ask_llm()", "bound your loops",
+                "tune the judge against the test set",
+                "API key in the code", "Fictional secrets only")
+        absent = [claim for claim in here if claim not in body]
+        assert not absent, (
+            f"ces regles ne sont plus dans la section des REGLES : "
+            f"{absent}. Elles peuvent etre ailleurs dans le fichier et le "
+            f"garde voisin passerait quand meme ; une regle rangee ailleurs "
+            f"qu'avec les regles se lit comme une anecdote.")
