@@ -35,6 +35,7 @@ qu'absent. C'est le pendant de `test_readme_figures.py`, qui tient le compte
 de tests du README.
 """
 
+import hashlib
 import json
 import pathlib
 import re
@@ -73,11 +74,38 @@ def sections(document):
     return out
 
 
+#: Le journal est un REPERTOIRE depuis le 2026-11-28, un fichier par jour.
+JOURNAL_DIR = ROOT / "docs" / "journal"
+
+#: Le sha256 du corps du journal tel qu'il etait dans CLAUDE.md juste avant
+#: le decoupage. C'est la seule chose qui rend « rien n'a ete perdu »
+#: verifiable : un octet de derive et la suite tombe.
+JOURNAL_SHA = (
+    "4860acb178b2fbaadb5d89af614be40ce7f06ce7752c0326887f141b8459e309")
+
+
 @pytest.fixture(scope="module")
-def journal(sections):
+def pointer(sections):
+    """La section « ## Journal » de CLAUDE.md : le preambule et le renvoi."""
     titles = [t for t in sections if t.startswith("## Journal")]
     assert titles, "aucune section « ## Journal »"
     return sections[titles[0]]
+
+
+@pytest.fixture(scope="module")
+def day_files():
+    """Les fichiers du jour, par date croissante."""
+    found = sorted(JOURNAL_DIR.glob("20[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md"))
+    assert found, (
+        f"aucun fichier de jour dans {JOURNAL_DIR} : le journal a disparu, "
+        f"ou son nommage a change et ce fichier ne compare plus rien")
+    return found
+
+
+@pytest.fixture(scope="module")
+def journal(day_files):
+    """Tout le journal, concatene -- la population que ces gardes mesurent."""
+    return "\n".join(p.read_text(encoding="utf-8") for p in day_files)
 
 
 @pytest.fixture(scope="module")
@@ -115,7 +143,7 @@ class TestTheJournalIsASectionOfItsOwn:
             "une section d'état, et la table des matières de GitHub "
             "présenterait l'historique comme l'état du projet")
 
-    def test_the_journal_says_which_half_of_the_file_rots(self, journal):
+    def test_the_journal_says_which_half_of_the_file_rots(self, pointer):
         """
         Sans cette phrase, le titre range les entrees sans dire POURQUOI
         elles ne vieillissent pas, et un relecteur << corrigerait >> un
@@ -126,12 +154,36 @@ class TestTheJournalIsASectionOfItsOwn:
         parce que la phrase voisine contient le meme mot. Un garde ne vaut que
         ce qu'il COMPARE -- septieme fois dans ce projet.
         """
-        opening = journal[:900]
+        # L'ESPACE EST A NOUS, LES MOTS SONT LA REVENDICATION : une
+        # premiere version comparait le texte brut, donc un retour a la
+        # ligne tombant entre « true of » et « its date » la faisait
+        # echouer sur une phrase parfaitement presente. C'est la methode de
+        # `check_excerpt.py`, et elle vaut ici pour la meme raison.
+        opening = " ".join(pointer[:1400].split())
         for claim in ("true of its date", "none is rewritten"):
             assert claim in opening, (
                 f"<< {claim} >> absent du titre du journal : il doit dire que "
                 f"ses entrees sont vraies de leur date et jamais reecrites, "
                 f"sinon quelqu'un les mettra << a jour >>")
+
+    def test_and_it_SAYS_where_the_entries_live(self, pointer, day_files):
+        """
+        LE RENVOI, et sans lui le titre promet une histoire qu'il ne porte
+        plus. Un lecteur de `CLAUDE.md` doit pouvoir aller la lire sans
+        deviner, et un chemin qui ne resout pas est pire qu'absent.
+        """
+        assert "docs/journal/" in pointer, (
+            "la section « ## Journal » ne renvoie plus vers "
+            "`docs/journal/` : ses entrees sont ailleurs et rien ne le dit")
+        assert (JOURNAL_DIR / "README.md").exists(), (
+            "pas d'index dans docs/journal/ : dix fichiers de dates sans "
+            "table de matieres, ce qui est le defaut que le decoupage "
+            "existait pour corriger")
+        announced = len(day_files)
+        assert f"{announced} days" in pointer or \
+               f"{announced} working days" in pointer, (
+            f"le renvoi n'annonce pas les {announced} jours reellement "
+            f"presents : corriger CLAUDE.md, pas ce test")
 
     def test_it_holds_MORE_history_than_any_state_section(
             self, journal, sections):
@@ -156,7 +208,7 @@ class TestTheJournalIsASectionOfItsOwn:
                 f"contre {len(here)} pour le journal : l'histoire n'est pas "
                 f"la ou son titre la promet")
 
-    def test_and_the_journal_is_NOT_capped(self, journal):
+    def test_and_the_journal_is_NOT_capped(self, day_files):
         """
         Le contraste, sans lequel les plafonds d'à-côté se liraient comme
         « le fichier ne doit pas grossir ».
@@ -164,9 +216,13 @@ class TestTheJournalIsASectionOfItsOwn:
         Le journal est le seul endroit qui DOIT croître librement : il
         enregistre ce qui a eu lieu, et ce qui a eu lieu ne se résume pas.
         """
-        assert len(journal.splitlines()) > max(STATE_SECTIONS.values()), (
-            "si le journal tenait dans le plafond d'une section d'état, il "
-            "n'y aurait rien à séparer et ce fichier ne servirait à rien")
+        biggest = max(len(p.read_text(encoding="utf-8").splitlines())
+                      for p in day_files)
+        assert biggest > max(STATE_SECTIONS.values()), (
+            f"le plus gros fichier de jour fait {biggest} lignes, sous le "
+            f"plafond le plus large ({max(STATE_SECTIONS.values())}) : si une "
+            f"journee entiere tenait dans une section d'etat, il n'y aurait "
+            f"rien a separer et ce fichier ne servirait a rien")
 
 
 class TestTheStateSectionsStayOnAScreen:
@@ -303,3 +359,135 @@ class TestTheFiguresTheMachineCanCHECK:
             "gardés, et pourquoi")
         assert "guard what CI can see" in state, (
             "la règle doit être écrite, pas seulement appliquée")
+
+
+class TestTheMoveOf20261128LostNothing:
+    """
+    << RIEN N'A ETE PERDU >> EST UNE PROPRIETE, PAS UNE AFFIRMATION.
+
+    Le 2026-11-28 le journal a quitte `CLAUDE.md` -- 11 170 lignes, 69 %
+    d'un fichier de 900 Ko charge en entier a chaque session, contre 3 % qui
+    sont vraiment une instruction. Les entrees ont ete DEPLACEES et jamais
+    reecrites, ce que la regle du projet impose : une entree est vraie de sa
+    date.
+
+    Donc le garde reconcatene et compare au sha256 du texte qui etait la.
+    Relire le resultat ne prouverait rien -- ce projet a enregistre assez de
+    defauts muets pour savoir qu'une relecture n'est pas une preuve -- et
+    c'est la forme que `audit.py` emploie deja pour une piste scellee : si le
+    contenu bouge, le digest le dit.
+
+    CE QUE LE GARDE NE TIENT PAS, et il faut le dire : il n'interdit pas
+    d'AJOUTER une entree. Un jour neuf change la concatenation, donc le
+    digest cesse de correspondre -- et c'est pour ca qu'il porte sur le
+    PREFIXE historique et non sur la totalite. La frontiere est le dernier
+    jour migre, nomme ici.
+    """
+
+    #: Le dernier jour present au moment du decoupage. Ce qui est ecrit
+    #: APRES n'entre pas dans le digest, sinon le garde interdirait au
+    #: journal de croitre -- exactement ce que le non-plafonnement dit.
+    LAST_MIGRATED = "2026-11-27"
+
+    def test_the_migrated_days_reassemble_to_the_ORIGINAL_bytes(
+            self, day_files):
+        migrated = [p for p in day_files if p.stem <= self.LAST_MIGRATED]
+        assert migrated, "aucun jour migre : le garde ne compare plus rien"
+
+        pieces = []
+        for path in migrated:
+            body = path.read_text(encoding="utf-8")
+            head = f"# Journal — {path.stem}\n\n"
+            assert body.startswith(head), (
+                f"{path.name} n'ouvre plus sur « {head.strip()} » : le "
+                f"garde retire un en-tete qu'il connait exactement, donc "
+                f"un en-tete different fausserait la comparaison")
+            pieces.append(body[len(head):])
+
+        # LE DIGEST PORTE SUR LES ENTREES, ET PAS SUR LE PREAMBULE, pour
+        # une raison qui est un fait et non une commodite : le preambule a
+        # ete REECRIT au deplacement, parce qu'il ouvrait sur « Everything
+        # BELOW is dated » et que plus rien n'est en dessous. Le garder
+        # verbatim aurait garde une phrase fausse dans une section d'etat.
+        #
+        # Ses 803 octets d'origine ne sont pas perdus : ils sont cites
+        # verbatim dans `docs/journal/README.md`, et un garde voisin le
+        # verifie. Ce qui est couvert par une preuve est donc exactement ce
+        # que la regle protege -- les entrees, vraies de leur date.
+        rebuilt = "".join(pieces)
+
+        digest = hashlib.sha256(rebuilt.encode("utf-8")).hexdigest()
+        assert digest == JOURNAL_SHA, (
+            f"LA MIGRATION A PERDU OU ALTERE DU TEXTE.\n"
+            f"  reconstruit : {len(rebuilt)} octets, sha {digest}\n"
+            f"  attendu     : sha {JOURNAL_SHA}\n"
+            f"Les entrees datees ne se reecrivent pas : une entree est vraie "
+            f"de sa date. Si une correction etait voulue, elle s'ecrit comme "
+            f"une entree NEUVE et ce digest reste celui de l'original.")
+
+    def test_and_the_digest_is_the_one_CLAUDE_md_publishes(self, pointer):
+        """
+        LA JONCTION, et c'est la forme de defaut la plus frequente ici : le
+        garde pourrait comparer au bon digest pendant que `CLAUDE.md` en
+        annonce un autre, et un lecteur n'aurait aucun moyen de verifier.
+        """
+        assert JOURNAL_SHA[:16] in pointer, (
+            f"CLAUDE.md n'annonce plus le digest que ce garde verifie "
+            f"({JOURNAL_SHA[:16]}…) : la revendication et sa preuve ont "
+            f"divergé")
+
+    #: Le sha256 du paragraphe qui introduisait les entrees dans CLAUDE.md
+    #: jusqu'au 2026-11-28. C'est la SEULE partie du deplacement qui a ete
+    #: reecrite -- elle ouvrait sur « Everything BELOW is dated », rendu faux
+    #: par le decoupage -- donc la seule qui devait etre preservee ailleurs
+    #: qu'en la deplacant.
+    PREAMBLE_SHA = (
+        "8583cf8ce148d78cfc947175aada40ea953a9c89473f58a34f039a0a873ebd30")
+
+    def test_the_REWRITTEN_preamble_is_preserved_verbatim(self):
+        """
+        ET LA PREMIERE VERSION DE CE GARDE SE SATISFAISAIT DE MA PROSE.
+
+        Elle cherchait trois PHRASES dans tout l'index, et l'une d'elles --
+        « Everything below is dated » -- est dans le paragraphe ou j'explique
+        pourquoi elle est devenue fausse. Donc retirer la citation preservee
+        ne faisait rien echouer : le garde lisait le commentaire a la place
+        de la preuve. Trouve par mutation, treizieme fois dans ce projet
+        qu'un garde ne vaut que ce qu'il COMPARE.
+
+        D'ou le BLOC DE CITATION et son digest, plutot qu'une meilleure
+        recherche de phrases : « preserve verbatim » est une egalite, donc le
+        garde doit comparer une egalite.
+        """
+        index = (JOURNAL_DIR / "README.md").read_text(encoding="utf-8")
+
+        quoted = [line for line in index.splitlines()
+                  if line.startswith(">")]
+        assert quoted, (
+            "aucun bloc de citation dans docs/journal/README.md : le "
+            "preambule d'origine n'y est plus, et c'etait la seule partie "
+            "REECRITE du deplacement du 2026-11-28")
+
+        restored = "\n".join(
+            line[2:] if line.startswith("> ") else line[1:]
+            for line in quoted).strip()
+        digest = hashlib.sha256(restored.encode("utf-8")).hexdigest()
+        assert digest == self.PREAMBLE_SHA, (
+            f"LA CITATION N'EST PLUS LE PREAMBULE D'ORIGINE.\n"
+            f"  cite    : {len(restored)} octets, sha {digest}\n"
+            f"  attendu : sha {self.PREAMBLE_SHA}\n"
+            f"Il a ete reecrit dans CLAUDE.md parce qu'une de ses phrases y "
+            f"devenait fausse ; sa version d'origine n'existe donc plus "
+            f"qu'ici, et une citation approximative la perd.")
+
+    def test_every_day_file_is_named_by_a_DATE_it_contains(self, day_files):
+        """
+        Un fichier nomme `2026-11-19.md` dont les entrees sont du 20 serait
+        un decoupage faux qui se lit juste. Mesure plutot que suppose.
+        """
+        for path in day_files:
+            body = path.read_text(encoding="utf-8")
+            assert path.stem in body, (
+                f"{path.name} ne contient pas sa propre date : le "
+                f"regroupement par jour a mis une entree dans le mauvais "
+                f"fichier")

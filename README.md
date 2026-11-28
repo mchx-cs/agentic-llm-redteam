@@ -123,6 +123,14 @@ The *method* follows a second document: the project is audited against OWASP's
 is where the reporting rules below come from — bounded nulls, a declared denominator,
 and coverage that states what was never attempted.
 
+And the method has a **dated record**: [`docs/journal/`](docs/journal/) holds
+110 entries over ten working days — every protocol declared and committed
+before its run, the predictions that held and the one that fell, the
+corrections measured and then withdrawn because the measurement did not
+support them, and the defects with how each was found. It is the evidence
+behind the figures above rather than a supplement to them, and it is written
+to be read by someone deciding whether to trust them.
+
 ## Project structure
 
 ```
@@ -191,6 +199,7 @@ and coverage that states what was never attempted.
 │   ├── demo-report.md   # a committed example report, abridged, rendered by GitHub
 │   ├── demo-multiturn-report.md  # the same target, attacked over several turns
 │   └── demo-pass-at-k-report.md  # one payload thirty times: a measured rate, with its interval
+├── docs/journal/        # the dated record: 110 entries, what was measured and what broke
 ├── audit.py             # authorisation gate + append-as-you-go JSONL audit trail
 ├── stats.py             # what a result bounds — and the refusal to bound dependent trials
 ├── migration.py         # reads data written before the names were translated
@@ -224,7 +233,7 @@ single dependency, so the command above works everywhere the project supports.
 
 **Verification is split in two, and the split matters.**
 
-`tests/` never calls a model — 2,124 pytest tests over the detectors, the replay logic,
+`tests/` never calls a model — 2,129 pytest tests over the detectors, the replay logic,
 verdict parsing and vote arithmetic, the planner's rules, the target adapters and the
 report's severity rules. Under half a minute, no cost, and GitHub Actions runs them on every
 push across Ubuntu and Windows, Python 3.10 and 3.13:
